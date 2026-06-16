@@ -249,10 +249,17 @@ textarea{font-family:var(--font)}
 
 /* ── Event Log ── */
 #event-log-wrap{
-  position:fixed;bottom:0;right:0;width:340px;z-index:50;
-  background:var(--bg1);border-top:.5px solid var(--bd0);border-left:.5px solid var(--bd0);
-  border-radius:8px 0 0 0;max-height:260px;display:flex;flex-direction:column;
+  position:fixed;bottom:0;left:0;width:300px;z-index:50;
+  background:var(--bg1);border-top:.5px solid var(--bd0);border-right:.5px solid var(--bd0);
+  border-radius:0 8px 0 0;max-height:240px;display:flex;flex-direction:column;
   box-shadow:0 -4px 20px rgba(0,0,0,.4)
+}
+/* In landscape on tablet, keep log on left so it never covers right panel */
+@media(orientation:landscape) and (max-height:600px){
+  #event-log-wrap{width:260px;max-height:180px}
+}
+@media(max-width:640px){
+  #event-log-wrap{width:100%;border-radius:0;left:0;right:0;border-right:none}
 }
 #event-log-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -289,6 +296,135 @@ textarea{font-family:var(--font)}
   letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
 }
 #btn-enter-station:hover{background:#16447A}
+
+/* ── Orrery animations ── */
+@keyframes star-pulse {
+  0%,100% { opacity: 0.06; r: 52; }
+  50%      { opacity: 0.14; r: 58; }
+}
+@keyframes star-pulse-mid {
+  0%,100% { opacity: 0.12; r: 38; }
+  50%      { opacity: 0.22; r: 42; }
+}
+@keyframes star-twinkle {
+  0%,100% { opacity: 0.15; }
+  33%      { opacity: 0.55; }
+  66%      { opacity: 0.25; }
+}
+#star-glow-outer { animation: star-pulse 4s ease-in-out infinite; }
+#star-glow-mid   { animation: star-pulse-mid 4s ease-in-out infinite; }
+/* Stagger a few background stars */
+.twinkle-a { animation: star-twinkle 3.1s ease-in-out infinite; }
+.twinkle-b { animation: star-twinkle 4.7s ease-in-out infinite 1.2s; }
+.twinkle-c { animation: star-twinkle 5.3s ease-in-out infinite 2.4s; }
+
+
+/* ── Asteroid vibration ── */
+@keyframes vibe-a { 0%,100%{transform:translate(0,0)}   25%{transform:translate(.4px,-.3px)}  75%{transform:translate(-.3px,.4px)} }
+@keyframes vibe-b { 0%,100%{transform:translate(0,0)}   33%{transform:translate(-.4px,-.4px)} 66%{transform:translate(.3px,.3px)} }
+@keyframes vibe-c { 0%,100%{transform:translate(0,0)}   40%{transform:translate(.5px,.2px)}   80%{transform:translate(-.2px,-.5px)} }
+@keyframes vibe-d { 0%,100%{transform:translate(0,0)}   20%{transform:translate(-.3px,.5px)}  60%{transform:translate(.4px,-.2px)} }
+@keyframes vibe-e { 0%,100%{transform:translate(0,0)}   50%{transform:translate(.3px,.4px)} }
+@keyframes vibe-f { 0%,100%{transform:translate(0,0)}   35%{transform:translate(-.5px,.3px)}  70%{transform:translate(.2px,-.4px)} }
+@keyframes vibe-g { 0%,100%{transform:translate(0,0)}   45%{transform:translate(.4px,-.4px)}  85%{transform:translate(-.3px,.2px)} }
+@keyframes vibe-h { 0%,100%{transform:translate(0,0)}   30%{transform:translate(-.4px,-.3px)} 65%{transform:translate(.5px,.5px)} }
+.ast { animation-fill-mode: both; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+.va { animation-name: vibe-a; }
+.vb { animation-name: vibe-b; }
+.vc { animation-name: vibe-c; }
+.vd { animation-name: vibe-d; }
+.ve { animation-name: vibe-e; }
+.vf { animation-name: vibe-f; }
+.vg { animation-name: vibe-g; }
+.vh { animation-name: vibe-h; }
+
+/* ── Aurelia page ── */
+@keyframes station-pulse {
+  0%,100% { opacity: 0.7; }
+  50%      { opacity: 1.0; }
+}
+#station-icon-group { animation: station-pulse 3s ease-in-out infinite; }
+
+/* Scrolling planet surface — permanent div, never touched by buildAureliaMap */
+#planet-surface {
+  position: absolute;
+  width: 20%;
+  aspect-ratio: 1 / 1;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    /* ── Land masses — spread across all quadrants, ~38% coverage ── */
+    /* Northern continent — large, upper left */
+    radial-gradient(ellipse 30% 18% at 32% 24%, #2d6040 0%, #2a5838 50%, transparent 100%),
+    radial-gradient(ellipse 18% 11% at 48% 18%, #346848 0%, #2d6040 45%, transparent 100%),
+    radial-gradient(ellipse 12% 8%  at 60% 26%, #2a5838 0%, transparent 75%),
+    /* North polar ice */
+    radial-gradient(ellipse 20% 7%  at 44% 6%,  #ddeef8 0%, #c8e0f0 55%, transparent 100%),
+    /* Eastern continent */
+    radial-gradient(ellipse 16% 22% at 78% 34%, #2a6040 0%, #256035 50%, transparent 100%),
+    radial-gradient(ellipse 10% 12% at 88% 48%, #2d6848 0%, transparent 70%),
+    /* Western island chain */
+    radial-gradient(ellipse 9%  15% at 14% 38%, #2a6040 0%, #246035 55%, transparent 100%),
+    radial-gradient(ellipse 7%  9%  at 10% 54%, #256035 0%, transparent 75%),
+    radial-gradient(ellipse 5%  7%  at 18% 65%, #2a5838 0%, transparent 70%),
+    /* Equatorial belt — broken landmass */
+    radial-gradient(ellipse 20% 11% at 55% 50%, #2d6848 0%, #256038 50%, transparent 100%),
+    radial-gradient(ellipse 14% 9%  at 36% 55%, #2a6040 0%, transparent 70%),
+    radial-gradient(ellipse 8%  10% at 70% 60%, #256035 0%, transparent 70%),
+    /* Southern continent — large */
+    radial-gradient(ellipse 26% 15% at 40% 72%, #256035 0%, #2a5838 50%, transparent 100%),
+    radial-gradient(ellipse 16% 11% at 24% 78%, #2d6040 0%, transparent 65%),
+    radial-gradient(ellipse 12% 8%  at 58% 76%, #246035 0%, transparent 70%),
+    radial-gradient(ellipse 10% 7%  at 70% 82%, #2a6040 0%, transparent 65%),
+    /* South polar ice */
+    radial-gradient(ellipse 16% 6%  at 46% 95%, #d0e8f5 0%, #c0d8e8 50%, transparent 100%),
+    /* Far east islands */
+    radial-gradient(ellipse 6%  9%  at 92% 62%, #2a6040 0%, transparent 70%),
+    radial-gradient(ellipse 5%  6%  at 86% 74%, #256035 0%, transparent 70%),
+    /* Central scatter */
+    radial-gradient(ellipse 7%  5%  at 48% 40%, #2d6040 0%, transparent 80%),
+    radial-gradient(ellipse 5%  8%  at 25% 46%, #246035 0%, transparent 75%),
+    /* ── Ocean base ── */
+    radial-gradient(circle at 38% 32%, #2a6a8a 0%, #1a4a6a 45%, #0d2a40 100%);
+}
+
+/* Atmosphere + lighting overlay — sits above surface, below SVG */
+#planet-atmos {
+  position: absolute;
+  width: 22%;
+  aspect-ratio: 1 / 1;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    /* Pole darkening — top and bottom get darker */
+    linear-gradient(
+      180deg,
+      rgba(0,8,20,0.45) 0%,
+      transparent 25%,
+      transparent 75%,
+      rgba(0,8,20,0.40) 100%
+    ),
+    radial-gradient(circle at 35% 30%,
+      rgba(106,176,212,0.18) 0%,
+      rgba(74,144,217,0.04) 55%,
+      transparent 70%
+    );
+  box-shadow:
+    inset -22px -10px 38px rgba(0,8,32,0.60),
+    inset 10px 8px 20px rgba(106,176,212,0.08),
+    0 0 28px 8px rgba(74,144,217,0.08);
+}
+
+/* SVG on top, absolute fill */
+#aurelia-panel { position: relative; }
+#aurelia-svg   { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; }
 </style>
 </head>
 <body>
@@ -361,6 +497,8 @@ textarea{font-family:var(--font)}
   <div id="view-aurelia" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
     <div style="display:flex;flex:1;overflow:hidden;min-height:0">
       <div id="aurelia-panel">
+        <div id="planet-surface"></div>
+        <div id="planet-atmos"></div>
         <svg id="aurelia-svg" viewBox="0 0 800 600"></svg>
       </div>
       <div id="aurelia-detail">
@@ -891,9 +1029,9 @@ const ORBIT_X = {1:0.13,2:0.26,3:0.40,4:0.50,5:0.65,6:0.82};
 
 function buildOrrery(){
   const svg = document.getElementById("orrery-svg");
-  const W=800, H=500, CY=H/2;
+  const W=800, H=500;
 
-  // Body list table
+  // ── Body list table ────────────────────────────────────────
   const tbl = document.getElementById("body-list-table");
   tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>UWP</th><th></th></tr>`;
   BODIES.forEach(b => {
@@ -911,62 +1049,241 @@ function buildOrrery(){
   });
 
   let html = "";
-  // Background stars — fixed positions
-  const STARS = [[50,40],[120,80],[200,30],[300,60],[400,20],[500,50],[600,80],[700,30],[760,60],[80,120],[180,150],[350,110],[450,140],[580,100],[680,130],[750,120],[30,200],[150,220],[250,180],[420,210],[550,190],[700,210],[780,180],[60,300],[170,320],[280,280],[400,310],[520,300],[650,290],[760,330],[100,380],[220,400],[380,360],[480,420],[620,380],[720,400]];
-  STARS.forEach(([x,y]) => html += `<circle cx="${x}" cy="${y}" r="1" fill="white" opacity="0.35"/>`);
 
-  // Orbital guide lines
-  [1,2,3,4,5,6].forEach(i => {
-    const x = ORBIT_X[i]*W;
-    html += `<line x1="${x}" y1="${CY-70}" x2="${x}" y2="${CY+70}" stroke="#444466" stroke-width="0.5" stroke-dasharray="3,5" opacity="0.35"/>`;
+  // ── Defs — gradients used for planet shading ───────────────
+  html += `<defs>
+    <radialGradient id="bg-grad" cx="70%" cy="15%" r="80%">
+      <stop offset="0%" stop-color="#0d1a35"/>
+      <stop offset="100%" stop-color="#070a10"/>
+    </radialGradient>`;
+
+  // Per-planet radial gradients: lighter upper-right (toward Auros), dark lower-left
+  // This replaces the shadow ellipse hack entirely
+  const PLANET_COLORS = {
+    scoria:"#887755", aurelia:"#4A90D9", greymantle:"#9999AA",
+    tanath:"#C87941", ouros:"#2AABB8"
+  };
+  Object.entries(PLANET_COLORS).forEach(([id, col]) => {
+    // Lighten for highlight
+    html += `<radialGradient id="pg-${id}" cx="65%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="35%" stop-color="${col}" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000820" stop-opacity="0.45"/>
+    </radialGradient>`;
   });
-  html += `<line x1="50" y1="${CY}" x2="${W-40}" y2="${CY}" stroke="#444466" stroke-width="0.5" opacity="0.25"/>`;
 
-  // Draw each body
-  BODIES.forEach(b => {
+  html += `</defs>`;
+  html += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#bg-grad)"/>`;
+
+  // ── Background stars ───────────────────────────────────────
+  const STARS = [
+    [30,30],[80,15],[145,45],[230,22],[320,8],[430,35],[520,18],[610,42],[690,25],[755,15],
+    [15,85],[95,70],[190,90],[285,65],[375,80],[465,58],[555,72],[640,68],[720,80],[775,65],
+    [22,140],[120,158],[210,132],[300,145],[410,135],[500,150],[590,130],[680,142],[760,128],
+    [40,195],[130,210],[220,185],[350,202],[450,188],[560,205],[660,192],[758,200],
+    [18,255],[100,268],[195,245],[310,260],[420,250],[540,265],[648,252],[755,262],
+    [55,320],[160,335],[255,315],[365,328],[470,318],[575,332],[672,320],[760,330],
+    [35,385],[140,398],[245,378],[355,392],[465,382],[570,395],[668,385],[762,395],
+    [60,448],[155,460],[270,442],[380,455],[490,445],[595,458],[695,448],[762,460]
+  ];
+  STARS.forEach(([x,y],i) => {
+    const r = i%7===0?1.5:i%3===0?1.2:0.8;
+    const op = 0.15+((i*7)%5)*0.1;
+    const cls = i%13===0?'twinkle-a':i%17===0?'twinkle-b':i%19===0?'twinkle-c':'';
+    html += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}"${cls?' class="'+cls+'"':''} pointer-events="none"/>`;
+  });
+
+  // ── Isometric layout ───────────────────────────────────────
+  // Star sits top-right. Orbits are tilted ellipses. Planets fan bottom-left.
+  // To centre the system: the outermost orbit (Ouros, a=440) at tilt -28°
+  // spans roughly x: SX-440*cos28 to SX+440*cos28 = SX ± 388
+  // We want the visual centre of the fan to sit at ~W*0.42, H*0.38
+  // So star goes at approx (W*0.42 + 388*0.82, H*0.38 - 440*sin28*0.5) ≈ (660, 120)
+  // After tuning: SX=652, SY=105 centres the system nicely in 800×500
+
+  const SX = 652, SY = 105;
+  const TILT = -28 * Math.PI / 180;
+  const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
+
+  function orbitPoint(a, b, t){
+    const ex = a * Math.cos(t);
+    const ey = b * Math.sin(t);
+    return [
+      SX + ex*cosT - ey*sinT,
+      SY + ex*sinT + ey*cosT
+    ];
+  }
+
+  const ORBITS = {
+    1: [75,  30],
+    2: [142, 56],
+    3: [205, 81],
+    4: [262, 103],
+    5: [345, 136],
+    6: [435, 172],
+  };
+
+  const PLANET_T = {
+    1: 205 * Math.PI/180,
+    2: 215 * Math.PI/180,
+    3: 210 * Math.PI/180,
+    4: 208 * Math.PI/180,
+    5: 205 * Math.PI/180,
+    6: 200 * Math.PI/180,
+  };
+
+  // ── Orbit ellipses ─────────────────────────────────────────
+  const tiltDeg = (TILT * 180 / Math.PI).toFixed(1);
+  [6,5,4,3,2,1].forEach(i => {
+    const [a,b] = ORBITS[i];
+    const isVeil = i===4;
+    html += `<ellipse cx="${SX}" cy="${SY}" rx="${a}" ry="${b}" fill="none"
+      stroke="${isVeil ? '#8B735566' : '#1a3a6a'}"
+      stroke-width="${isVeil ? '3' : '1'}"
+      stroke-dasharray="${isVeil ? '2,3' : '5,6'}"
+      opacity="${isVeil ? '0.7' : '0.55'}"
+      transform="rotate(${tiltDeg},${SX},${SY})"/>`;
+  });
+
+  // ── Seeded pseudo-random asteroid belt (Veil) ─────────────
+  // Asteroids use absolute screen coords (simpler, no group transform needed).
+  // Each gets a CSS vibration class for subtle shimmer.
+  const veilOrb = ORBITS[4];
+  const VEIL_COLOR = '#8B7355';
+  function lcg(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
+  const VIBE_NAMES = ['va','vb','vc','vd','ve','vf','vg','vh'];
+  let rng = 42;
+  const VEIL_COUNT = 120;
+  for(let i=0; i<VEIL_COUNT; i++){
+    rng = lcg(rng);
+    // Arc: full visible sweep ~140° to ~265° (wider than before)
+    const arcFrac = (rng % 10000) / 10000;
+    rng = lcg(rng);
+    // Wider radial spread — ±22% of orbit size
+    const radialJitter = ((rng % 10000) / 10000 - 0.5) * 0.20;
+    rng = lcg(rng);
+    const dotSize = 0.7 + (rng % 10000)/10000 * 1.8;
+    rng = lcg(rng);
+    const op = 0.3 + (rng % 10000)/10000 * 0.6;
+    rng = lcg(rng);
+    // Vibration: random class, random duration 1.8–4.2s, random delay 0–3s
+    const vibeClass = VIBE_NAMES[rng % 8];
+    rng = lcg(rng);
+    const vibeDur = (1.8 + (rng % 10000)/10000 * 2.4).toFixed(2);
+    rng = lcg(rng);
+    const vibeDelay = ((rng % 10000)/10000 * 3.0).toFixed(2);
+
+    const baseAngle = (175 + arcFrac * 62) * Math.PI / 180;
+    const [va2, vb2] = veilOrb;
+    const ra = va2 * (1 + radialJitter);
+    const rb = vb2 * (1 + radialJitter);
+    const ex = ra * Math.cos(baseAngle);
+    const ey = rb * Math.sin(baseAngle);
+    const vx = SX + ex*cosT - ey*sinT;
+    const vy = SY + ex*sinT + ey*cosT;
+    html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${VEIL_COLOR}" opacity="${op.toFixed(2)}" class="ast ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s" pointer-events="none"/>`;
+  }
+
+  // ── Draw bodies back-to-front ──────────────────────────────
+  const drawOrder = [
+    BODIES.find(b=>b.id==='ouros'),
+    BODIES.find(b=>b.id==='tanath'),
+    ...BODIES.filter(b=>b.parentId==='tanath'),
+    BODIES.find(b=>b.id==='greymantle'),
+    BODIES.find(b=>b.id==='aurelia'),
+    BODIES.find(b=>b.id==='pallor'),
+    BODIES.find(b=>b.id==='scoria'),
+    BODIES.find(b=>b.isStar),
+  ].filter(Boolean);
+
+  // Veil click target — draw before other bodies so planets render on top
+  {
+    const [vpx,vpy] = orbitPoint(...ORBITS[4], PLANET_T[4]);
+    const veil = BODIES.find(b=>b.id==='veil');
+    if(selectedBody==='veil') html += `<ellipse cx="${SX}" cy="${SY}" rx="${ORBITS[4][0]+2}" ry="${ORBITS[4][1]+2}" fill="${veil.color}" opacity="0.08" transform="rotate(${tiltDeg},${SX},${SY})" pointer-events="none"/>`;
+    html += `<circle cx="${vpx.toFixed(1)}" cy="${vpy.toFixed(1)}" r="28" fill="transparent" data-body="veil" class="body-node" style="cursor:pointer"/>`;
+    html += `<text x="${vpx.toFixed(1)}" y="${(vpy+32).toFixed(1)}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">The Veil</text>`;
+    html += `<text x="${(vpx+18).toFixed(1)}" y="${(vpy-12).toFixed(1)}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+  }
+
+  drawOrder.forEach(b => {
     if(b.isStar){
-      const x=55, y=CY;
-      html += `<circle cx="${x}" cy="${y}" r="34" fill="${b.color}" opacity="0.1"/>`;
-      html += `<circle cx="${x}" cy="${y}" r="26" fill="${b.color}" opacity="0.15"/>`;
-      html += `<circle cx="${x}" cy="${y}" r="20" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(selectedBody===b.id) html += `<circle cx="${x}" cy="${y}" r="26" fill="none" stroke="${b.color}" stroke-width="1.5" opacity="0.8" pointer-events="none"/>`;
-      html += `<text x="${x}" y="${CY+42}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace">${b.name}</text>`;
-    } else if(b.id==="veil"){
-      const veilX=ORBIT_X[4]*W, veilY=CY+15; // already computed above
-      VEIL_DOTS.forEach(([dx,dy]) => html += `<circle cx="${dx}" cy="${dy}" r="1.5" fill="${b.color}" opacity="0.6" pointer-events="none"/>`);
-      html += `<circle cx="${veilX}" cy="${veilY}" r="22" fill="transparent" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(selectedBody===b.id) html += `<circle cx="${veilX}" cy="${veilY}" r="22" fill="${b.color}" opacity="0.15" pointer-events="none"/>`;
-      // Hook indicator
-      html += `<text x="${veilX+14}" y="${veilY-14}" fill="#E8A020" font-size="12" font-weight="700" pointer-events="none">!</text>`;
-      html += `<text x="${veilX}" y="${CY+75}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace">The Veil</text>`;
-    } else if(!b.isMoon){
-      const x = ORBIT_X[b.orbitPos]*W;
-      const yOff = b.id==="tanath"?-18:b.id==="ouros"?12:b.id==="aurelia"?-12:b.id==="scoria"?15:b.id==="greymantle"?8:0;
-      const y = CY + yOff;
-      const r = b.id==="tanath"?14:b.id==="ouros"?10:b.id==="aurelia"?9:6;
-      if(selectedBody===b.id) html += `<circle cx="${x}" cy="${y}" r="${r+5}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
-      html += `<circle cx="${x}" cy="${y}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(b.hook) html += `<text x="${x+r+1}" y="${y-r-1}" font-size="11" fill="#E8A020" font-weight="700" pointer-events="none">!</text>`;
-      html += `<text x="${x}" y="${CY+75}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace">${b.name}</text>`;
-    } else {
-      // Moon
-      const parent = BODIES.find(p=>p.id===b.parentId);
-      if(!parent) return;
-      const parentX = b.parentId==="aurelia"?ORBIT_X[2]*W:ORBIT_X[5]*W;
-      const parentY = b.parentId==="aurelia"?CY-12:CY-18;
-      const offsets = {pallor:[22,-18],esk:[-22,18],nara:[28,-5],darkmoon:[18,28]};
-      const [ox,oy] = offsets[b.id]||[18,-18];
-      const mx=parentX+ox, my=parentY+oy;
-      html += `<line x1="${parentX}" y1="${parentY}" x2="${mx}" y2="${my}" stroke="#444466" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
-      html += `<circle cx="${mx}" cy="${my}" r="3" fill="${b.color}" ${b.id==="darkmoon"?'opacity="0.4"':''} data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(b.hook) html += `<text x="${mx+5}" y="${my-5}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
-      html += `<text x="${mx+6}" y="${my+4}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle">${b.name}</text>`;
+      html += `<circle id="star-glow-outer" cx="${SX}" cy="${SY}" r="52" fill="${b.color}" opacity="0.06"/>`;
+      html += `<circle id="star-glow-mid" cx="${SX}" cy="${SY}" r="38" fill="${b.color}" opacity="0.12"/>`;
+      html += `<circle cx="${SX}" cy="${SY}" r="26" fill="${b.color}" opacity="0.22"/>`;
+      html += `<circle cx="${SX}" cy="${SY}" r="18" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(selectedBody===b.id) html += `<circle cx="${SX}" cy="${SY}" r="26" fill="none" stroke="${b.color}" stroke-width="1.5" opacity="0.7" pointer-events="none"/>`;
+      html += `<text x="${SX}" y="${SY+36}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
+      return;
     }
+
+    let px, py, r;
+
+    // ── Pallor (Aurelia moon) ─────────────────────────────────
+    if(b.isMoon && b.parentId==='aurelia'){
+      const [ax,ay] = orbitPoint(...ORBITS[2], PLANET_T[2]);
+      px = ax + 22; py = ay - 15; r = 4;
+      html += `<line x1="${ax}" y1="${ay}" x2="${px}" y2="${py}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="#B0B0B0" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#pg-greymantle)" pointer-events="none"/>`;
+      html += `<text x="${px+7}" y="${py+3}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">Pallor</text>`;
+      return;
+    }
+
+    // ── Tanath moons ─────────────────────────────────────────
+    if(b.isMoon && b.parentId==='tanath'){
+      const [tx,ty] = orbitPoint(...ORBITS[5], PLANET_T[5]);
+      const mOffsets = {esk:[-22,-10], nara:[26,-8], darkmoon:[14,20]};
+      const [mx,my] = mOffsets[b.id] || [20,-10];
+      px = tx+mx; py = ty+my; r = 4;
+      html += `<line x1="${tx}" y1="${ty}" x2="${px}" y2="${py}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" ${b.id==='darkmoon'?'opacity="0.4"':''} data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(b.hook) html += `<text x="${px+5}" y="${py-4}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
+      html += `<text x="${px+8}" y="${py+3}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">${b.name}</text>`;
+      return;
+    }
+
+    // ── Skip veil — handled above ──────────────────────────────
+    if(b.id==='veil') return;
+
+    // ── Regular planets ───────────────────────────────────────
+    [px,py] = orbitPoint(...ORBITS[b.orbitPos], PLANET_T[b.orbitPos]);
+    r = b.id==='tanath'?18:b.id==='ouros'?13:b.id==='aurelia'?11:b.id==='greymantle'?8:7;
+    const gid = `pg-${b.id}`;
+
+    // Outer glow
+    if(selectedBody===b.id) html += `<circle cx="${px}" cy="${py}" r="${r+7}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
+    html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
+
+    // Planet base colour — group wraps planet + label for animation
+    html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${PLANET_T[b.orbitPos]}">`;
+    html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+
+    // Shading gradient overlay
+    html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" pointer-events="none"/>`;
+
+    // Tanath rings — drawn before the planet-front-occluder
+    if(b.id==='tanath'){
+      html += `<ellipse cx="${px}" cy="${py}" rx="${r+14}" ry="${(r+14)*0.27}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.3" pointer-events="none"/>`;
+      html += `<ellipse cx="${px}" cy="${py}" rx="${r+9}" ry="${(r+9)*0.27}" fill="none" stroke="${b.color}" stroke-width="3.5" opacity="0.55" pointer-events="none"/>`;
+      // Front of ring passes in front of planet — redraw top half of planet over back ring
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+    }
+
+    // Ouros — subtle ring
+    if(b.id==='ouros'){
+      html += `<ellipse cx="${px}" cy="${py}" rx="${r+8}" ry="${(r+8)*0.22}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.38" pointer-events="none"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+    }
+
+    if(b.hook) html += `<text x="${px+r+2}" y="${py-r-1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+    html += `<text x="${px}" y="${py+r+14}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
+    html += `</g>`; // end anim-planet group
   });
 
   svg.innerHTML = html;
-
-  // Click/touch handlers
   svg.querySelectorAll(".body-node").forEach(el => {
     el.addEventListener("click", () => selectBody(el.getAttribute("data-body")));
     el.addEventListener("touchend", e => { e.preventDefault(); selectBody(el.getAttribute("data-body")); });
@@ -1560,64 +1877,201 @@ let selectedLoc = null;
 function buildAureliaMap(){
   const svg = document.getElementById('aurelia-svg');
   if(!svg) return;
-  const W=800, H=600, CX=W/2, CY=H/2;
-  const planetR = 90;
-  let svgHTML = '';
+  const W=800, H=600, CX=400, CY=300;
+  const PR = 110; // planet radius
+  let s = '';
 
-  // Background stars
-  const STARS = [[40,30],[110,70],[190,25],[290,55],[390,15],[510,45],[620,75],[710,25],[760,55],[75,110],[175,140],[345,105],[445,135],[575,95],[685,125],[750,110],[25,195],[145,215],[245,175],[425,205],[545,185],[705,205],[780,175],[55,295],[165,315],[275,275],[405,305],[525,295],[655,285],[760,325],[95,375],[215,395],[385,355],[485,415],[625,375],[725,395]];
-  STARS.forEach(([x,y]) => svgHTML += `<circle cx="${x}" cy="${y}" r="1" fill="white" opacity="0.3"/>`);
-
-  // Subtle orbit ring
-  svgHTML += `<ellipse cx="${CX}" cy="${CY}" rx="${CX*0.75}" ry="${CY*0.65}" fill="none" stroke="#444466" stroke-width="0.5" stroke-dasharray="4,6" opacity="0.3"/>`;
-
-  // Connection lines from planet to nodes
-  AURELIA_LOCS.forEach(loc => {
-    const rad = loc.angle * Math.PI / 180;
-    const nx = CX + Math.cos(rad) * (CX * loc.dist);
-    const ny = CY + Math.sin(rad) * (CY * loc.dist);
-    // Line from planet edge to node
-    const ex = CX + Math.cos(rad) * (planetR + 8);
-    const ey = CY + Math.sin(rad) * (planetR + 8);
-    svgHTML += `<line x1="${ex}" y1="${ey}" x2="${nx}" y2="${ny}" stroke="${loc.color}" stroke-width="0.5" stroke-dasharray="3,5" opacity="0.4"/>`;
+  // ── Background stars ───────────────────────────────────────
+  const STARS = [
+    [32,22],[88,55],[155,18],[245,48],[348,12],[472,38],[588,68],[672,22],[748,50],
+    [62,105],[152,132],[318,98],[428,128],[548,88],[648,118],[740,105],
+    [22,188],[138,208],[232,168],[408,198],[528,178],[688,198],[772,168],
+    [48,278],[158,298],[268,258],[398,288],[512,278],[638,268],[752,308],
+    [88,368],[208,388],[372,348],[468,408],[608,368],[712,388],
+    [30,455],[140,478],[280,442],[430,465],[570,445],[700,470],[770,445],
+    [60,525],[180,548],[350,515],[490,538],[650,518],[750,540]
+  ];
+  STARS.forEach(([x,y],i) => {
+    const r = i%5===0 ? 1.5 : 1;
+    const op = 0.2 + (i%3)*0.15;
+    s += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}" pointer-events="none"/>`;
   });
 
-  // Planet — layered glow
-  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+25}" fill="#4A90D9" opacity="0.04"/>`;
-  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+12}" fill="#4A90D9" opacity="0.08"/>`;
-  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR}" fill="#1a3a5a"/>`;
-  // Continent patches (stylised)
-  svgHTML += `<ellipse cx="${CX-20}" cy="${CY-25}" rx="35" ry="22" fill="#2a5a3a" opacity="0.7" transform="rotate(-20,${CX-20},${CY-25})"/>`;
-  svgHTML += `<ellipse cx="${CX+30}" cy="${CY+15}" rx="28" ry="18" fill="#2a5a3a" opacity="0.6" transform="rotate(15,${CX+30},${CY+15})"/>`;
-  svgHTML += `<ellipse cx="${CX-10}" cy="${CY+30}" rx="18" ry="12" fill="#2a5a3a" opacity="0.5" transform="rotate(-5,${CX-10},${CY+30})"/>`;
-  // Atmosphere rim
-  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR}" fill="none" stroke="#4A90D9" stroke-width="3" opacity="0.4"/>`;
-  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+4}" fill="none" stroke="#4A90D9" stroke-width="1.5" opacity="0.15"/>`;
-  // Planet label
-  svgHTML += `<text x="${CX}" y="${CY+5}" text-anchor="middle" fill="#4A90D9" font-size="11" font-family="monospace" opacity="0.6">AURELIA</text>`;
+  // Auros ambient glow
+  s += `<defs>
+    <radialGradient id="auros-light" cx="85%" cy="10%" r="60%">
+      <stop offset="0%" stop-color="#E07030" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#E07030" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pallor-grad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#d0d0d0"/>
+      <stop offset="60%" stop-color="#a0a0a8"/>
+      <stop offset="100%" stop-color="#6a6a72"/>
+    </radialGradient>
+    <clipPath id="planet-clip">
+      <circle cx="${CX}" cy="${CY}" r="${PR}"/>
+    </clipPath>
+  </defs>`;
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#auros-light)"/>`;
 
-  // Location nodes
+  // ── Pallor orbit ring — wider than before ─────────────────
+  const PALLOR_A = 230, PALLOR_B = 72; // wider orbit
+  const PALLOR_ANGLE = 210;
+  const palRad = PALLOR_ANGLE * Math.PI / 180;
+  const pallX = Math.round(CX + Math.cos(palRad) * PALLOR_A);
+  const pallY = Math.round(CY + Math.sin(palRad) * PALLOR_B);
+
+  s += `<ellipse cx="${CX}" cy="${CY}" rx="${PALLOR_A}" ry="${PALLOR_B}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.35"/>`;
+
+  // ── Connection lines (behind planet) ─────────────────────
   AURELIA_LOCS.forEach(loc => {
     const rad = loc.angle * Math.PI / 180;
-    const nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist));
-    const ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist));
+    const nx = CX + Math.cos(rad) * (CX * loc.dist * 0.92);
+    const ny = CY + Math.sin(rad) * (CY * loc.dist * 0.92);
+    const ex = CX + Math.cos(rad) * (PR + 6);
+    const ey = CY + Math.sin(rad) * (PR + 6);
+    s += `<line x1="${ex}" y1="${ey}" x2="${nx}" y2="${ny}" stroke="${loc.color}" stroke-width="0.6" stroke-dasharray="3,5" opacity="0.35"/>`;
+  });
+
+  // ── Planet SVG layer — transparent circle for hit-testing + overlays ──
+  // The actual texture is the CSS #planet-surface div beneath the SVG.
+  // The SVG adds: terminator shadow, limb brightening, atmosphere rim, label.
+  // A transparent circle catches the planet's click area.
+
+  // Terminator + light overlays (clipped to planet circle)
+  s += `<g clip-path="url(#planet-clip)">`;
+  s += `<ellipse cx="${CX+32}" cy="${CY}" rx="${PR*0.7}" ry="${PR}" fill="#000820" opacity="0.32" transform="rotate(15,${CX+32},${CY})"/>`;
+  s += `<ellipse cx="${CX+28}" cy="${CY-38}" rx="${PR*0.55}" ry="${PR*0.45}" fill="#E07030" opacity="0.05"/>`;
+  s += `</g>`;
+
+  // Limb brightening / atmosphere edge
+  s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="none" stroke="#5ab0e8" stroke-width="5" opacity="0.16" pointer-events="none"/>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="${PR+1}" fill="none" stroke="#4a90D9" stroke-width="2" opacity="0.09" pointer-events="none"/>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="${PR+10}" fill="none" stroke="#4a90D9" stroke-width="6" opacity="0.05" pointer-events="none"/>`;
+
+  s += `<text x="${CX}" y="${CY+6}" text-anchor="middle" fill="#6ab8e8" font-size="10" font-family="monospace" font-weight="700" opacity="0.35" letter-spacing="3" pointer-events="none">AURELIA</text>`;
+
+  // ── Pallor (moon) ────────────────────────────────────────
+  s += `<circle cx="${pallX}" cy="${pallY}" r="18" fill="#5a5a62" opacity="0.12" pointer-events="none"/>`;
+  s += `<circle cx="${pallX}" cy="${pallY}" r="14" fill="url(#pallor-grad)" data-body="pallor" class="body-node" style="cursor:pointer"/>`;
+  s += `<circle cx="${pallX-4}" cy="${pallY-3}" r="3" fill="none" stroke="#888890" stroke-width="0.8" opacity="0.5" pointer-events="none"/>`;
+  s += `<circle cx="${pallX+5}" cy="${pallY+4}" r="2" fill="none" stroke="#888890" stroke-width="0.6" opacity="0.4" pointer-events="none"/>`;
+  s += `<ellipse cx="${pallX+5}" cy="${pallY}" rx="8" ry="14" fill="#000820" opacity="0.38" pointer-events="none"/>`;
+  s += `<text x="${pallX}" y="${pallY+28}" text-anchor="middle" fill="#B0B0B0" font-size="8" font-family="monospace" pointer-events="none">Pallor</text>`;
+  s += `<text x="${pallX}" y="${pallY+38}" text-anchor="middle" fill="#555570" font-size="7" font-family="monospace" pointer-events="none">moon · 18.3d</text>`;
+
+  // ── Location nodes ───────────────────────────────────────
+  AURELIA_LOCS.forEach(loc => {
+    const rad = loc.angle * Math.PI / 180;
+    const nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist * 0.92));
+    const ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist * 0.92));
     const isSelected = selectedLoc === loc.id;
-    const r = 10;
 
-    if(isSelected) svgHTML += `<circle cx="${nx}" cy="${ny}" r="${r+6}" fill="${loc.color}" opacity="0.2" pointer-events="none"/>`;
+    if(loc.isStation){
+      // ── Orbital station icon ─────────────────────────────
+      // Drawn as a mini space station: central hub + cross arms + solar panels
+      const sel = isSelected;
+      const sc = sel ? 1.4 : 1.0; // scale up when selected
+      const col = loc.color; // #4A90D9
 
-    svgHTML += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'55' : '#16213E'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.2}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+      s += `<g id="station-icon-group" data-loc="${loc.id}" class="loc-node" style="cursor:pointer" transform="translate(${nx},${ny}) scale(${sc})">`;
 
-    if(loc.hook) svgHTML += `<text x="${nx+r+2}" y="${ny-r+2}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+      // Selection glow
+      if(sel){
+        s += `<circle cx="0" cy="0" r="22" fill="${col}" opacity="0.12" pointer-events="none"/>`;
+        s += `<circle cx="0" cy="0" r="16" fill="${col}" opacity="0.18" pointer-events="none"/>`;
+      }
 
-    // Label — position to avoid overlap
-    const labelX = nx + (Math.cos(rad) > 0 ? r+4 : -(r+4));
-    const anchor = Math.cos(rad) > 0 ? 'start' : 'end';
-    const labelY = ny + (Math.sin(rad) > 0.5 ? r+12 : Math.sin(rad) < -0.5 ? -(r+4) : 4);
-    svgHTML += `<text x="${labelX}" y="${labelY}" text-anchor="${anchor}" fill="${loc.hook?'#E8A020':loc.color}" font-size="9" font-family="monospace" pointer-events="none">${loc.name}</text>`;
+      // Docking ring (outer torus suggestion — two concentric circles)
+      s += `<circle cx="0" cy="0" r="13" fill="none" stroke="${col}" stroke-width="1" opacity="${sel?0.6:0.35}" pointer-events="none"/>`;
+
+      // Central hub
+      s += `<circle cx="0" cy="0" r="5" fill="${sel?col+'88':'#0d1828'}" stroke="${col}" stroke-width="1.2" pointer-events="all"/>`;
+
+      // Cross arms (station spine)
+      s += `<line x1="-13" y1="0" x2="13" y2="0" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
+      s += `<line x1="0" y1="-13" x2="0" y2="13" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
+
+      // Solar panels — left arm
+      s += `<rect x="-18" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
+      s += `<rect x="-24" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
+      // Solar panels — right arm
+      s += `<rect x="13" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
+      s += `<rect x="19" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
+
+      // Docking arm (extending down)
+      s += `<rect x="-1.5" y="7" width="3" height="7" fill="${col}" opacity="${sel?0.8:0.5}" pointer-events="none"/>`;
+      s += `<rect x="-4" y="13" width="8" height="2.5" rx="1" fill="${col}" opacity="${sel?0.7:0.4}" pointer-events="none"/>`;
+
+      // Antenna (top)
+      s += `<line x1="0" y1="-14" x2="0" y2="-19" stroke="${col}" stroke-width="0.8" opacity="0.6" pointer-events="none"/>`;
+      s += `<circle cx="0" cy="-20" r="1.2" fill="${col}" opacity="0.7" pointer-events="none"/>`;
+
+      s += `</g>`;
+
+      // Label
+      if(loc.hook) s += `<text x="${nx+20}" y="${ny-14}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+      const nameColor = '#E8A020';
+      s += `<text x="${nx+28}" y="${ny+4}" text-anchor="start" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
+
+    } else {
+      // Regular location node
+      const r = 9;
+      if(isSelected){
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+10}" fill="${loc.color}" opacity="0.12" pointer-events="none"/>`;
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+5}" fill="${loc.color}" opacity="0.18" pointer-events="none"/>`;
+      }
+      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'44' : '#0d1828'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.2}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?4:2}" fill="${loc.color}" opacity="${isSelected?0.9:0.6}" pointer-events="none"/>`;
+
+      if(loc.hook) s += `<text x="${nx+r+2}" y="${ny-r+1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+
+      const cosA = Math.cos(rad), sinA = Math.sin(rad);
+      const labelDist = r + 5;
+      let lx, ly, anchor;
+      if(Math.abs(cosA) > 0.3){
+        lx = nx + (cosA > 0 ? labelDist : -labelDist);
+        ly = ny + (Math.abs(sinA) > 0.6 ? (sinA > 0 ? 12 : -4) : 4);
+        anchor = cosA > 0 ? 'start' : 'end';
+      } else {
+        lx = nx; ly = ny + (sinA > 0 ? r+13 : -(r+4)); anchor = 'middle';
+      }
+      const nameColor = loc.hook ? '#E8A020' : loc.color;
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
+    }
   });
 
-  svg.innerHTML = svgHTML;
+  svg.innerHTML = s;
+
+  // Pallor click
+  svg.querySelectorAll('.body-node[data-body="pallor"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const pallor = BODIES.find(b => b.id === 'pallor');
+      if(!pallor) return;
+      document.getElementById('aur-dname').textContent = 'PALLOR';
+      document.getElementById('aur-dname').style.color = '#B0B0B0';
+      document.getElementById('aur-dtype').textContent = 'MOON · TIDALLY LOCKED · Y200000-0';
+      document.getElementById('aur-overview').classList.add('v-hidden');
+      document.getElementById('btn-enter-station').classList.add('v-hidden');
+      const det = document.getElementById('aur-loc-detail');
+      det.classList.remove('v-hidden');
+      const pm = pmCheck.checked;
+      det.innerHTML = `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
+        <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
+        <div class="s-desc" style="font-size:12px;line-height:1.65">${pallor.desc}</div>
+      </div>
+      ${!pm && pallor.refNote ? '<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>' + pallor.refNote + '</div>' : ''}`;
+      selectedLoc = null;
+      buildAureliaMap();
+    });
+    el.addEventListener('touchend', e => { e.preventDefault(); e.target.dispatchEvent(new Event('click')); });
+  });
+
+  // Station icon click
+  svg.querySelectorAll('#station-icon-group').forEach(el => {
+    el.addEventListener('click', () => selectLoc(el.getAttribute('data-loc')));
+    el.addEventListener('touchend', e => { e.preventDefault(); selectLoc(el.getAttribute('data-loc')); });
+  });
 
   svg.querySelectorAll('.loc-node').forEach(el => {
     el.addEventListener('click', () => selectLoc(el.getAttribute('data-loc')));
