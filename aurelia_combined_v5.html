@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Aurelian System — Referee Map</title>
+<style>
+/* ── Variables ── */
+:root{
+  --bg0:#0f1117;--bg1:#181c27;--bg2:#1e2333;
+  --bd0:#2e3347;--bd1:#252a3a;--bd2:#1e2333;
+  --tx0:#e8eaf0;--tx1:#8b91a8;
+  --txI:#5b8ef0;--bgI:#1a2650;
+  --txS:#4caf82;--bgS:#0f2e20;
+  --txW:#d4913a;--bgW:#2e1f0a;
+  --txD:#d45050;--bgD:#2e1010;
+  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --rad:6px;
+}
+/* ── Reset ── */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;width:100%;overflow:hidden;font-family:var(--font);background:#070a10;color:var(--tx0)}
+button{font-family:var(--font);cursor:pointer;border:none;background:none}
+textarea{font-family:var(--font)}
+
+/* ── Root shell ── */
+#root{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg2)}
+
+/* ── Header ── */
+#hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
+  flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
+}
+#hdr-title{font-size:13px;font-weight:700;color:#D4A843;letter-spacing:1px;font-family:monospace;white-space:nowrap}
+#breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
+#breadcrumb .bc-link{color:#D4A843;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#breadcrumb .bc-link:hover{color:#E8A020}
+#breadcrumb .bc-sep{color:var(--bd0)}
+
+/* ── Station clock ── */
+#clock-wrap{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:6px;padding:4px 8px;
+}
+#clock-display{
+  font-family:monospace;font-size:15px;font-weight:700;
+  color:#D4A843;letter-spacing:2px;min-width:42px;text-align:center;
+  cursor:pointer;user-select:none
+}
+#clock-display:hover{color:#E8A020}
+#clock-sep{width:.5px;height:18px;background:var(--bd0);flex-shrink:0}
+.clk-btn{
+  font-size:10px;font-family:monospace;font-weight:700;
+  color:var(--tx1);padding:2px 5px;border-radius:3px;
+  border:.5px solid var(--bd0);background:transparent;
+  cursor:pointer;transition:background .12s,color .12s;white-space:nowrap;flex-shrink:0
+}
+.clk-btn:hover{background:var(--bd0);color:var(--tx0)}
+#clock-reset{
+  font-size:9px;font-family:monospace;color:var(--tx1);
+  padding:2px 5px;border-radius:3px;border:.5px solid var(--bd0);
+  background:transparent;cursor:pointer;opacity:.6
+}
+#clock-reset:hover{opacity:1;color:#C0392B;border-color:#C0392B}
+/* Clock edit popover */
+#clock-edit{
+  position:fixed;z-index:100;background:var(--bg1);
+  border:.5px solid var(--bd0);border-radius:8px;
+  padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,.5);
+  display:none;flex-direction:column;gap:8px;min-width:180px
+}
+#clock-edit.open{display:flex}
+#clock-edit label{font-size:10px;color:var(--tx1);font-family:monospace;letter-spacing:1px}
+#clock-edit input{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  color:var(--tx0);font-family:monospace;font-size:14px;padding:5px 8px;
+  width:100%;outline:none
+}
+#clock-edit input:focus{border-color:#D4A843}
+#clock-edit-ok{
+  background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:4px;padding:5px;font-size:11px;font-family:monospace;cursor:pointer
+}
+
+/* ── Player mode toggle ── */
+.pm-row{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.pm-label{font-size:11px;color:var(--tx1);user-select:none;cursor:pointer}
+.pm-toggle{position:relative;width:34px;height:19px;flex-shrink:0}
+.pm-toggle input{opacity:0;width:0;height:0;position:absolute}
+.pm-slider{position:absolute;inset:0;background:var(--bd0);border-radius:10px;cursor:pointer;transition:background .2s}
+.pm-toggle input:checked+.pm-slider{background:var(--txI)}
+.pm-slider:before{content:"";position:absolute;width:13px;height:13px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+.pm-toggle input:checked+.pm-slider:before{transform:translateX(15px)}
+
+/* ── Player mode hides ── */
+#root.pm-active .ref-only{display:none!important}
+#root.pm-active .rsr-marker{display:none!important}
+#root.pm-active .rsr-legend{display:none!important}
+#root.pm-active .top-bar-sub{display:none}
+
+/* ── Views ── */
+#view-system,#view-station{display:flex;flex:1;overflow:hidden;min-height:0}
+.v-hidden{display:none!important}
+
+/* ═══════════════════════════════════════════
+   SYSTEM MAP
+═══════════════════════════════════════════ */
+#sys-wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+#orrery-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
+#orrery-svg{width:100%;height:100%;display:block}
+
+#sys-detail{
+  width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
+  display:flex;flex-direction:column;overflow:hidden
+}
+#sys-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
+#sys-dname{font-size:15px;font-weight:700;color:#D4A843}
+#sys-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
+#sys-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+
+/* system body table */
+.btbl{width:100%;border-collapse:collapse;font-size:11px}
+.btbl th{color:var(--tx1);font-size:9px;font-family:monospace;letter-spacing:1px;text-align:left;padding:4px 6px 4px 0;border-bottom:.5px solid var(--bd0);text-transform:uppercase}
+.btbl td{padding:6px 6px 6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer;vertical-align:middle}
+.btbl tr:hover td{background:var(--bg1)}
+
+/* system detail blocks */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
+.sg-l{color:var(--tx1)}.sg-v{color:var(--tx0)}
+.s-sec{margin-top:14px}
+.s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
+.s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
+.s-blk{border-radius:5px;padding:9px 11px;margin-top:9px;font-size:12px;line-height:1.55}
+.s-blk.ref{background:#3D2B1F;border-left:3px solid #D4A843}
+.s-blk.read{background:#1A2A3B;border-left:3px solid #4A90D9}
+.s-blk-lbl{font-size:9px;font-family:monospace;letter-spacing:2px;opacity:.65;margin-bottom:4px;text-transform:uppercase}
+
+/* NPC cards (shared) */
+.npc-card{background:#2A1A3B;border:1px solid #9B59B699;border-radius:6px;margin-bottom:9px;overflow:hidden}
+.npc-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer}
+.npc-name{font-size:13px;font-weight:700;color:#9B59B6}
+.npc-role{font-size:10px;color:var(--tx1);margin-top:1px}
+.chev{color:#9B59B6;font-size:11px;transition:transform .15s}
+.chev.open{transform:rotate(180deg)}
+.npc-body{padding:0 10px 10px;display:none}
+.npc-body.open{display:block}
+.stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin:7px 0}
+.sc{background:var(--bg0);border-radius:3px;padding:4px 2px;text-align:center}
+.sk{font-size:8px;color:var(--tx1);font-family:monospace}
+.sv{font-size:13px;font-weight:700;color:#9B59B6}
+.skill-row{font-size:11px;color:#4CAF50;margin-bottom:6px;padding:4px 6px;background:#1A3B1A;border-radius:3px}
+.npc-row{display:grid;grid-template-columns:85px 1fr;gap:4px;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg0)}
+.npc-row:last-child{border-bottom:none}
+.nrl{color:var(--tx1);font-weight:700}.nrv{color:var(--tx0)}
+
+/* station-only "view station" button */
+#btn-view-station{
+  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
+  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
+  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
+  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
+}
+#btn-view-station:hover{background:#16447A}
+
+/* Checks */
+.chk{background:#1A3B1A;border:1px solid #4CAF5066;border-radius:5px;margin-bottom:8px;overflow:hidden}
+.chk-t{font-size:11px;font-weight:700;color:#4CAF50;padding:7px 10px;border-bottom:.5px solid #4CAF5033}
+.deg-row{display:grid;grid-template-columns:88px 1fr;gap:6px;padding:5px 10px;font-size:11px;border-bottom:.5px solid var(--bg0)}
+.deg-row:last-child{border-bottom:none}
+.deg-s{color:#4CAF50;font-weight:700}.deg-p{color:#E8A020;font-weight:700}.deg-f{color:#C0392B;font-weight:700}
+
+/* Events */
+.evt{border-left:3px solid #2AABB8;padding:6px 10px;margin-bottom:6px;background:var(--bg1);font-size:12px;line-height:1.5}
+.evt-t{font-size:9px;font-family:monospace;color:#2AABB8;letter-spacing:1px;margin-bottom:3px;text-transform:uppercase}
+
+/* Notes */
+.note-ta{width:100%;background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:12px;padding:8px;resize:vertical;min-height:110px;line-height:1.5;outline:none}
+.save-btn{padding:5px 16px;background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);border-radius:4px;font-size:11px;cursor:pointer}
+.saved-msg{font-size:10px;color:var(--txS);display:none}
+
+/* ═══════════════════════════════════════════
+   STATION MAP
+═══════════════════════════════════════════ */
+#sta-wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+#map-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
+#mapsvg{width:100%;height:100%;display:block}
+#right-panel{
+  width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
+  display:flex;flex-direction:column;overflow:hidden
+}
+.top-bar{background:var(--bg1);border-bottom:.5px solid var(--bd2);padding:8px 12px;flex-shrink:0;text-align:center}
+.top-bar-title{font-size:13px;font-weight:600;color:var(--tx0)}
+.top-bar-sub{font-size:10px;color:var(--tx1);margin-top:2px}
+#area-hdr{padding:10px 14px;border-bottom:.5px solid var(--bd2);flex-shrink:0;background:var(--bg0);text-align:center;display:none}
+.atag{display:inline-block;font-size:9px;font-family:monospace;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-weight:700;margin-bottom:4px}
+.aname{font-size:15px;font-weight:600;color:var(--tx0)}
+.asub{font-size:11px;color:var(--tx1);margin-top:2px}
+#tab-bar{display:flex;border-bottom:.5px solid var(--bd2);background:var(--bg1);flex-shrink:0;overflow-x:auto;scrollbar-width:none;display:none}
+.tab{border:none;background:none;padding:9px 10px;font-size:11px;font-family:var(--font);color:var(--tx1);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0;flex:1;text-align:center}
+.tab.on{color:var(--tx0);font-weight:600;border-bottom-color:var(--txI)}
+#detail{flex:1;overflow-y:auto;padding:12px 12px 80px 12px;background:var(--bg0);-webkit-overflow-scrolling:touch;min-height:0}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--tx1);gap:8px;font-size:12px}
+.empty-icon{font-size:28px}
+
+/* Station detail content */
+.blk{background:var(--bg1);border-radius:5px;padding:10px;margin-bottom:9px}
+.blk-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.blk-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap}
+.read-blk{background:#1A2A3B;border-left:3px solid #4A90D9;border-radius:0 5px 5px 0;padding:10px;margin-bottom:9px}
+.read-lbl{font-size:9px;color:#4A90D9;font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.read-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap}
+.rsr-tag{background:#2e1010;border-left:3px solid #d45050;border-radius:0 5px 5px 0;padding:8px 10px;font-size:11px;color:var(--tx0);margin-bottom:9px}
+.back-btn{display:inline-flex;align-items:center;gap:5px;margin-bottom:9px;padding:4px 10px;border:.5px solid var(--bd0);border-radius:var(--rad);background:var(--bg1);color:var(--tx1);font-size:11px;cursor:pointer}
+.sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sub-btn{border:.5px solid var(--bd0);border-radius:var(--rad);background:var(--bg1);padding:10px 12px;cursor:pointer;text-align:left}
+.sub-btn:hover{background:var(--bg2)}
+.sub-btn-name{font-size:12px;font-weight:600;color:var(--tx0)}
+.sub-btn-desc{font-size:10px;color:var(--tx1);margin-top:2px}
+.sr{font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg0);color:var(--tx0)}
+.sr:last-child{border-bottom:none}
+#foot{border-top:.5px solid var(--bd2);padding:8px 12px;flex-shrink:0;background:var(--bg1);display:none;position:sticky;bottom:0;z-index:2}
+.conn-lbl{font-size:9px;color:var(--tx1);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+#conn-row{display:flex;flex-wrap:wrap;gap:6px}
+.conn-btn{font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;border:.5px solid;background:transparent}
+
+/* Map back button (mobile) */
+.map-back-btn{display:none;align-items:center;gap:6px;padding:6px 12px;background:var(--bg1);border-bottom:.5px solid var(--bd0);font-size:12px;color:var(--tx0);cursor:pointer;flex-shrink:0;width:100%;text-align:left}
+
+/* ── Responsive ── */
+@media(max-width:640px){
+  #sys-detail,#right-panel{width:100%;border-left:none;border-top:.5px solid var(--bd2)}
+  #sys-wrap,#sta-wrap{flex-direction:column}
+  #orrery-panel,#map-panel{flex:none;height:40vh}
+  #sys-detail,#right-panel{flex:1;min-height:0}
+  .tab{padding:10px 7px;font-size:10px}
+  .aname{font-size:14px}
+  .map-back-btn{display:flex}
+}
+@media(orientation:landscape) and (max-height:500px){
+  #sys-wrap,#sta-wrap{flex-direction:row}
+  #orrery-panel,#map-panel{flex:1;height:auto}
+  #sys-detail,#right-panel{width:50%;flex:none}
+}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+
+/* ── Event Log ── */
+#event-log-wrap{
+  position:fixed;bottom:0;right:0;width:340px;z-index:50;
+  background:var(--bg1);border-top:.5px solid var(--bd0);border-left:.5px solid var(--bd0);
+  border-radius:8px 0 0 0;max-height:260px;display:flex;flex-direction:column;
+  box-shadow:0 -4px 20px rgba(0,0,0,.4)
+}
+#event-log-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;cursor:pointer
+}
+#event-log-title{font-size:11px;font-family:monospace;color:#D4A843;letter-spacing:1px}
+#event-log-count{font-size:10px;background:#3D2B1F;color:#D4A843;border-radius:10px;padding:1px 7px;font-family:monospace}
+#event-log-toggle{font-size:10px;color:var(--tx1);cursor:pointer}
+#event-log-body{overflow-y:auto;flex:1;padding:6px 10px;-webkit-overflow-scrolling:touch}
+#event-log-body.collapsed{display:none}
+.evlog-entry{border-left:2px solid #D4A843;padding:4px 8px;margin-bottom:5px;font-size:11px;line-height:1.45}
+.evlog-time{font-family:monospace;font-size:9px;color:#D4A843;margin-bottom:2px;letter-spacing:1px}
+.evlog-area{font-size:9px;color:var(--tx1);margin-bottom:2px}
+.evlog-text{color:var(--tx0)}
+#event-log-clear{font-size:9px;color:var(--tx1);padding:5px 12px;border-top:.5px solid var(--bd0);cursor:pointer;text-align:right;flex-shrink:0}
+#event-log-clear:hover{color:#C0392B}
+
+/* ── Aurelia page ── */
+#view-aurelia{display:flex;flex:1;overflow:hidden;min-height:0}
+#aurelia-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
+#aurelia-svg{width:100%;height:100%;display:block}
+#aurelia-detail{
+  width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
+  display:flex;flex-direction:column;overflow:hidden
+}
+#aur-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
+#aur-dname{font-size:15px;font-weight:700;color:#4A90D9}
+#aur-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
+#aur-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+#btn-enter-station{
+  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
+  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
+  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
+  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
+}
+#btn-enter-station:hover{background:#16447A}
+</style>
+</head>
+<body>
+<div id="root">
+
+  <!-- ── Header ── -->
+  <div id="hdr">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0">
+      <div id="hdr-title">AURELIAN SYSTEM</div>
+      <div id="breadcrumb"></div>
+    </div>
+    <!-- ── Station Clock ── -->
+    <div id="clock-wrap">
+      <div id="clock-display" onclick="openClockEdit(event)" title="Tap to set time">00:00</div>
+      <div id="clock-sep"></div>
+      <button class="clk-btn" onclick="advanceClock(1)">+1</button>
+      <button class="clk-btn" onclick="advanceClock(5)">+5</button>
+      <button class="clk-btn" onclick="advanceClock(10)">+10</button>
+      <button class="clk-btn" onclick="advanceClock(15)">+15</button>
+      <button class="clk-btn" onclick="advanceClock(30)">+30</button>
+      <div id="clock-sep"></div>
+      <button id="clock-reset" onclick="resetClock()" title="Reset to 00:00">↺</button>
+    </div>
+    <!-- Clock edit popover -->
+    <div id="clock-edit">
+      <label>SET STATION TIME</label>
+      <input type="time" id="clock-input" value="00:00">
+      <button id="clock-edit-ok" onclick="setClockFromInput()">Set time</button>
+    </div>
+    <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
+      <span class="pm-label">Player Mode</span>
+      <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SYSTEM MAP VIEW
+  ══════════════════════════════════════ -->
+  <div id="view-system" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="sys-wrap">
+      <div id="orrery-panel">
+        <svg id="orrery-svg" viewBox="0 0 800 500"></svg>
+      </div>
+      <div id="sys-detail">
+        <div id="sys-dh">
+          <div id="sys-dname">AURELIAN SYSTEM</div>
+          <div id="sys-dtype">SELECT A BODY TO INSPECT</div>
+        </div>
+        <div id="sys-db">
+          <div id="sys-overview">
+            <div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">
+              Star type: <span style="color:#E8A020;font-weight:700">Auros — K3 V Orange Dwarf</span><br>
+              Mass: 0.78 M☉ · Luminosity: 0.42 L☉ · Age: 5.2 Gyr<br>
+              Habitable zone: 0.55–0.85 AU
+            </div>
+            <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">System Bodies</div>
+            <table class="btbl" id="body-list-table"></table>
+          </div>
+          <div id="sys-body-detail" class="v-hidden"></div>
+          <button id="btn-view-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ VIEW AURELIA UP CLOSE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       AURELIA PAGE (intermediary)
+  ══════════════════════════════════════ -->
+  <div id="view-aurelia" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+      <div id="aurelia-panel">
+        <svg id="aurelia-svg" viewBox="0 0 800 600"></svg>
+      </div>
+      <div id="aurelia-detail">
+        <div id="aur-dh">
+          <div id="aur-dname">AURELIA</div>
+          <div id="aur-dtype">SELECT A LOCATION</div>
+        </div>
+        <div id="aur-db">
+          <div id="aur-overview">
+            <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:12px">
+              Jewel world of the Hegemony. Population 800 million. UWP: <span style="color:#D4A843;font-family:monospace">B867976-C</span><br><br>
+              Select a location node to inspect it. The Orbital Station can be entered from here.
+            </div>
+          </div>
+          <div id="aur-loc-detail" class="v-hidden"></div>
+          <button id="btn-enter-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ ENTER AURELIA ORBITAL STATION</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       STATION MAP VIEW
+  ══════════════════════════════════════ -->
+  <div id="view-station" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="sta-wrap">
+      <div id="map-panel">
+        <!-- Static SVG — exact replica of uploaded station file -->
+        <svg id="mapsvg" viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+          <!-- Station rings -->
+          <ellipse cx="200" cy="210" rx="188" ry="165" fill="none" stroke="#1e2333" stroke-width="22"/>
+          <ellipse cx="200" cy="210" rx="118" ry="100" fill="none" stroke="#1e2333" stroke-width="7" opacity=".35"/>
+          <ellipse cx="200" cy="210" rx="38" ry="28" fill="#181c27" stroke="#252a3a" stroke-width="1"/>
+          <text x="200" y="206" text-anchor="middle" font-size="7" fill="#8b91a8" font-family="system-ui,sans-serif">CENTRAL</text>
+          <text x="200" y="216" text-anchor="middle" font-size="7" fill="#8b91a8" font-family="system-ui,sans-serif">HUB</text>
+          <!-- Corridors -->
+          <line x1="200" y1="44" x2="200" y2="182" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="30" y1="210" x2="162" y2="210" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="200" y1="182" x2="200" y2="110" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="238" y1="210" x2="360" y2="210" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="200" y1="238" x2="200" y2="330" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="238" y1="238" x2="330" y2="310" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="162" y1="238" x2="80" y2="310" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="80" y1="322" x2="200" y2="322" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="330" y1="322" x2="200" y2="322" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <!-- Area nodes -->
+          <g id="n-elevator" style="cursor:pointer" onclick="selArea('elevator')">
+            <rect x="155" y="20" width="90" height="34" rx="4" id="r-elevator" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+            <text x="200" y="32" text-anchor="middle" font-size="8" fill="#BA7517" font-weight="600" font-family="system-ui,sans-serif">⚠ OFF LIMITS</text>
+            <text x="200" y="44" text-anchor="middle" font-size="9" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Space Elevator</text>
+          </g>
+          <g id="n-docking" style="cursor:pointer" onclick="selArea('docking')">
+            <rect x="8" y="188" width="122" height="44" rx="4" id="r-docking" fill="#0f1117" stroke="#185FA5" stroke-width="1.5"/>
+            <text x="69" y="201" text-anchor="middle" font-size="8" fill="#185FA5" font-weight="600" font-family="system-ui,sans-serif">ARRIVAL</text>
+            <text x="69" y="213" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">⛵ Docking Hub</text>
+            <text x="69" y="224" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Sector 10 · Bay 15</text>
+          </g>
+          <g id="n-concourse" style="cursor:pointer" onclick="selArea('concourse')">
+            <rect x="148" y="88" width="104" height="44" rx="4" id="r-concourse" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+            <text x="200" y="101" text-anchor="middle" font-size="8" fill="#BA7517" font-weight="600" font-family="system-ui,sans-serif">EXPLORATION</text>
+            <text x="200" y="113" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Main Concourse</text>
+            <text x="200" y="124" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">300m · 4 sub-areas</text>
+          </g>
+          <g id="n-security" style="cursor:pointer" onclick="selArea('security')">
+            <rect x="270" y="188" width="122" height="44" rx="4" id="r-security" fill="#0f1117" stroke="#534AB7" stroke-width="1.5"/>
+            <text x="331" y="201" text-anchor="middle" font-size="8" fill="#534AB7" font-weight="600" font-family="system-ui,sans-serif">RESTRICTED</text>
+            <text x="331" y="213" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Security &amp; Admin</text>
+            <text x="331" y="224" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Upper ring · No entry</text>
+          </g>
+          <g id="n-medical" style="cursor:pointer" onclick="selArea('medical')">
+            <rect x="274" y="298" width="118" height="44" rx="4" id="r-medical" fill="#0f1117" stroke="#0F6E56" stroke-width="1.5"/>
+            <text x="333" y="311" text-anchor="middle" font-size="8" fill="#0F6E56" font-weight="600" font-family="system-ui,sans-serif">KEY NPC</text>
+            <text x="333" y="323" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Medical Suite</text>
+            <text x="333" y="334" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Aurelia Institute</text>
+          </g>
+          <g id="n-maintenance" style="cursor:pointer" onclick="selArea('maintenance')">
+            <rect x="14" y="298" width="118" height="44" rx="4" id="r-maintenance" fill="#0f1117" stroke="#A32D2D" stroke-width="1.5"/>
+            <text x="73" y="311" text-anchor="middle" font-size="8" fill="#A32D2D" font-weight="600" font-family="system-ui,sans-serif">UNDERDECK</text>
+            <text x="73" y="323" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Maintenance Level</text>
+            <text x="73" y="334" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Below · Hidden</text>
+          </g>
+          <!-- RSR markers — top-right corner of each node -->
+          <g class="rsr-marker" id="rsr-g-1" onclick="toggleRsrFound(1)" style="cursor:pointer">
+            <circle id="rsr-c-1" cx="130" cy="188" r="6" fill="#A32D2D"/>
+            <text x="123" y="186" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR①</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-2" onclick="toggleRsrFound(2)" style="cursor:pointer">
+            <circle id="rsr-c-2" cx="252" cy="88" r="6" fill="#A32D2D"/>
+            <text x="245" y="86" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR②</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-3" onclick="toggleRsrFound(3)" style="cursor:pointer">
+            <circle id="rsr-c-3" cx="132" cy="298" r="6" fill="#A32D2D"/>
+            <text x="125" y="296" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR③</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-4" onclick="toggleRsrFound(4)" style="cursor:pointer">
+            <circle id="rsr-c-4" cx="392" cy="298" r="6" fill="#A32D2D"/>
+            <text x="385" y="296" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR④</text>
+          </g>
+          <!-- Legend -->
+          <g class="rsr-legend">
+            <circle cx="14" cy="432" r="5" fill="#A32D2D" opacity=".9"/>
+            <text x="24" y="436" font-size="8" font-weight="700" fill="#d45050" font-family="system-ui,sans-serif">RSR symbol · RECON 10+ / Streetwise 6+</text>
+          </g>
+          <line x1="10" y1="452" x2="18" y2="452" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,2"/>
+          <text x="24" y="456" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">corridor / access route</text>
+          <rect x="10" y="463" width="10" height="10" rx="2" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+          <text x="24" y="471" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">area node · tap to open</text>
+          <text x="210" y="471" font-size="8" fill="#BA7517" font-family="system-ui,sans-serif">⚠ = off limits / warning</text>
+        </svg>
+      </div>
+      <div id="right-panel">
+        <button class="map-back-btn" onclick="showMap()">← Map</button>
+        <div class="top-bar">
+          <div class="top-bar-title">Aurelia Orbital Station</div>
+          <div class="top-bar-sub">Tap an area · sub-areas open inside</div>
+        </div>
+        <div id="area-hdr"></div>
+        <div id="tab-bar"></div>
+        <div id="detail">
+          <div class="empty"><div class="empty-icon">🛰</div><div style="font-size:14px;font-weight:600;color:var(--tx0)">Select an area</div><div style="font-size:12px;max-width:180px;text-align:center">Tap any node on the map.</div></div>
+        </div>
+        <div id="foot">
+          <div class="conn-lbl">CONNECTS TO</div>
+          <div id="conn-row"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Event Log (floating panel) ── -->
+  <div id="event-log-wrap">
+    <div id="event-log-header" onclick="toggleEventLog()">
+      <span id="event-log-title">EVENT LOG</span>
+      <span id="event-log-count">0</span>
+      <span id="event-log-toggle">▼</span>
+    </div>
+    <div id="event-log-body"></div>
+    <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
+  </div>
+</div><!-- #root -->
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM DATA
+// ═══════════════════════════════════════════════════════════════════════════
+const BODIES = [
+  {id:"auros",name:"Auros",type:"K3 V Orange Dwarf · Primary Star",tag:null,color:"#E07030",orbitAU:"—",uwpString:"—",diameter:"~1.08 M☉ diameter",period:"—",isMoon:false,isStar:true,hook:false,
+  desc:"A calm, long-lived orange dwarf approximately 78% the mass of Sol. Its light gives Aurelia's sky its distinctive copper tint and bathes the inner system in warm amber-gold. K-type stars are considered ideal for long-term colonisation: low flare activity, extended main-sequence lifespan, stable output for billions of years.\n\nThe Hegemony chose this system deliberately. Nothing about Aurelia was an accident.",
+  refNote:"K-type stars have significantly lower UV output than G-type. The UV index at Aurelia's surface is roughly 30% lower than a Sol-equivalent world — affecting everything from agriculture to the atmospheric chemistry the Cleaners live with. The Hegemony's xenobiologists know this. The colonists were not told.",
+  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
+
+  {id:"scoria",name:"Scoria",type:"Terrestrial · Scorched Rock",tag:"FLAVOUR",color:"#887755",orbitAU:"0.28 AU",uwpString:"X100000-0",diameter:"~4,800 km",period:"48 standard days",isMoon:false,isStar:false,hook:false,
+  desc:"A tidally locked inner world — ~430°C on the day side, -180°C on the night side. No atmosphere worth naming. A dead archive of early system formation, the night side covered in concentric impact craters.",
+  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:1},
+
+  {id:"aurelia",name:"Aurelia",type:"Terrestrial · Jewel World",tag:"CAMPAIGN HUB",color:"#4A90D9",orbitAU:"0.71 AU",uwpString:"B867976-C",diameter:"~11,400 km",period:"214 standard days",isMoon:false,isStar:false,hook:true,
+  desc:"The campaign's heart. A warm, dense world with extensive ocean coverage, a copper-tinted sky, and a population of 800 million in coastal arcologies and the deep-water city known as the Cradle.\n\nThe Hegemony's showpiece. Every promotional image shows the turquoise south coast and the twin peaks of the Spire Range.\n\nThe atmosphere has a classified taint: long-term unfiltered exposure causes progressive respiratory degradation over 20–30 years. The data is suppressed. The Cleaners know. The surface population does not.",
+  refNote:"The atmospheric taint is the Hegemony's dirtiest secret. The Cleaners living underground aren't just a lower caste — they're the only long-term survivors. Surface residents have a life expectancy 18 years shorter than published health data suggests. The RSR has a copy of the suppressed epidemiological study.",
+  readAloud:"Aurelia from orbit: the atmosphere catches Auros's orange light and scatters it into something the colour of a lit copper kettle. The night side shows city-glow in chains along the coastline. The orbital station sits at L2, permanently in Aurelia's shadow.",
+  npcs:[],checks:[],events:[],orbitPos:2},
+
+  {id:"pallor",name:"Pallor",type:"Moon · Tidally Locked",tag:"FLAVOUR",color:"#B0B0B0",orbitAU:"Aurelia moon",uwpString:"Y200000-0",diameter:"~2,400 km",period:"18.3 standard days",isMoon:true,parentId:"aurelia",isStar:false,hook:false,
+  desc:"Aurelia's sole natural satellite — small, grey, airless, tidally locked. Not beautiful enough to feature in Hegemony promotional material.\n\nThere is a decommissioned relay station on the far side that has been dark for twenty years. The RSR uses it for dead drops.",
+  refNote:"The relay station on the far side: no guards, no power. Navigation requires Vacc Suit 8+ and Navigation 6+ to find the right crater without a working beacon.",
+  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
+
+  {id:"greymantle",name:"Greymantle",type:"Terrestrial · Ice-Rock",tag:"FLAVOUR",color:"#9999AA",orbitAU:"1.8 AU",uwpString:"D200100-4",diameter:"~6,200 km",period:"~2.4 standard years",isMoon:false,isStar:false,hook:false,
+  desc:"A cold, thin-atmosphered mid-system world with ~100 people in a pressurised way-station. Greymantle's main industry is being on the route between Aurelia and the Veil — Class D starport, refuelling tanks, two people who don't ask questions about cargo manifests.",
+  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:3},
+
+  {id:"veil",name:"The Veil",type:"Asteroid Belt",tag:"ADVENTURE HOOK",color:"#8B7355",orbitAU:"1.3 AU",uwpString:"E000200-5",diameter:"Diffuse belt, ~0.4 AU wide",period:"~1.8 standard years (inner edge)",isMoon:false,isStar:false,hook:true,
+  desc:"A dense asteroid belt — remnant of a planet that failed to coalesce, or perhaps one that was broken apart. At certain orbital positions it creates a faint dust haze visible from Aurelia at dawn.\n\nSmall, unlicensed population of ~300 belt miners, scavengers, and people avoiding questions. Their settlement: Cairn Station, Law Level 0.",
+  refNote:"The information broker Sable operates out of Cairn Station. She has authenticated records of the Meridian's Edge's prior registration — the ship's history includes a job the Hegemony would very much like to keep quiet.",
+  readAloud:"The belt doesn't look like much at approach — scattered rocks catching Auros's amber light. Then the density increases and navigation gets serious. Cairn Station announces itself with running lights and a comms challenge.",
+  npcs:[{name:"Sable",role:"Information broker · Cairn Station",stats:{STR:5,DEX:9,END:7,INT:13,EDU:12,SOC:6},skills:"Broker 3, Deception 3, Streetwise 2, Computers 2, Investigate 2",rows:[["Manner","Entirely still. Watches everything. Never volunteers anything."],["Price","Information costs information. She wants the crew's data on the Graveyard incident."],["On the ship","Knows the Meridian's Edge by its previous registration. Will trade this for the Graveyard intel."],["Red line","Will not sell anything that gets her sources killed. Non-negotiable."]]}],
+  checks:[{skill:"Broker 9+ / Streetwise 10+ (negotiate with Sable)",degrees:[{label:"Effect 4+",cls:"deg-s",text:"Sable provides the registration data and volunteers one additional item: a name associated with Project Chimera."},{label:"Success",cls:"deg-s",text:"Standard trade: Graveyard intel for ship registration data."},{label:"Failure",cls:"deg-f",text:"Sable declines. She'll reconsider if the crew comes back with something she actually wants."},{label:"Effect -2",cls:"deg-f",text:"Sable marks the crew as liabilities. Future contact in the Veil is at -2 to all social checks."}]}],
+  events:[{t:"At Cairn Station",e:"A miner with a fresh burn scar on his forearm watches the crew from the bar. He's been there since they arrived. When they move, he repositions — not toward them, just repositioning. Working for someone, or paranoid from too long in the belt. Both are possible."}],
+  orbitPos:4},
+
+  {id:"tanath",name:"Tanath",type:"Gas Giant · Major",tag:"ADVENTURE HOOK",color:"#C87941",orbitAU:"5.4 AU",uwpString:"D——0164-8",diameter:"~140,000 km (est.)",period:"12.3 standard years",isMoon:false,isStar:false,hook:true,
+  desc:"A warm, massive gas giant banded in deep amber and rust-red — a miniature echo of Auros itself. OmniSynth's Extraction Rig Tanath-7 operates in the upper atmosphere, extracting fuel for sale. Technically a licensed commercial operation. In practice also a data relay, crew rotation point, and a place to fence things without clean provenance.",
+  refNote:"Tanath-7 is staffed by ~60 rotating OmniSynth contractors and a permanent administrative staff. Station manager Forlan has been on Tanath-7 longer than any three contractors combined. She knows what the rig is really used for. She has opinions about it.",
+  readAloud:"Tanath fills the screen even at standard approach distance. Deep amber striations over rust-red, white ammonia clouds at the poles in slow spirals. At the terminator, the night side glows faintly from internal heat.",
+  npcs:[{name:"Forlan",role:"Station manager · Tanath-7",stats:{STR:8,DEX:7,END:9,INT:11,EDU:10,SOC:7},skills:"Admin 3, Engineer (power) 2, Persuade 2, Streetwise 2, Gun Combat 1",rows:[["Manner","Flat affect, direct, no small talk. Eleven years on this platform."],["On the Dark Moon","Knows it exists. Will not discuss it. 'Not something you can offer me.'"],["Useful","Will tell the crew when the next Hegemony inspection is scheduled. Voluntarily. She has her own reasons."]]}],
+  checks:[],events:[],orbitPos:5},
+
+  {id:"esk",name:"Esk",type:"Moon · Sensor Array",tag:"RESTRICTED",color:"#4A90D9",orbitAU:"Tanath moon I",uwpString:"C100089-9",diameter:"~3,800 km",period:"7.1 standard days",isMoon:true,parentId:"tanath",isStar:false,hook:false,
+  desc:"A small, airless moon with a large Hegemony sensor array watching the outer system — jump emergence points, approaching traffic. Eight Navy personnel on six-week rotations. They tend not to volunteer twice.",
+  refNote:"Law Level 9 — shoot first if you approach without clearance. The array is pointed outward. A ship running silent from Tanath's shadow side: Pilot 10+ and Stealth 8+ (ship systems).",
+  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
+
+  {id:"nara",name:"Nara",type:"Moon · Rest Station",tag:"FLAVOUR",color:"#9B7B5B",orbitAU:"Tanath moon II",uwpString:"D310112-7",diameter:"~4,200 km",period:"14.4 standard days",isMoon:true,parentId:"tanath",isStar:false,hook:false,
+  desc:"A pressurised rest dome OmniSynth built for Tanath-7 contractor rotation. Utilitarian — bunks, a rec room, a bar that serves two things and neither of them well. ~20 people at any time.",
+  refNote:"Good place to overhear things. Workers talk freely because they don't think anyone important is listening. Rumours about the Dark Moon surface here — seed this hook if needed.",
+  readAloud:null,npcs:[],checks:[],events:[{t:"At the bar",e:"Two off-duty contractors talk in low voices about something they saw on the sensor logs. They stop when they notice the crew listening. One looks at the other. The other shakes his head slightly."}],orbitPos:null},
+
+  {id:"darkmoon",name:"The Dark Moon",type:"Moon · CLASSIFIED",tag:"CLASSIFIED",color:"#2A2A3A",orbitAU:"Tanath moon III (unlisted)",uwpString:"X200000-0",diameter:"~3,100 km",period:"22.7 standard days (retrograde)",isMoon:true,parentId:"tanath",isStar:false,hook:true,
+  desc:"Not on standard charts. Not in the Hegemony's public registry. Not visible on the orbital station's navigation display.\n\nRetrograde orbit — it moves opposite to the other Tanath moons, which means it formed elsewhere, was captured, or was placed there. The Hegemony sensor array on Esk is deliberately pointed away from it.",
+  refNote:"Choose one of the three theories and commit to it before the crew gets here. Seed the other two as plausible distractions — red herrings with enough truth to be convincing.\n\nThree theories:\n1. An Eidolon ruin site — pre-Collapse xenoarchaeology the Hegemony is keeping off the books.\n2. A Project Chimera black site — active research they cannot afford to have inspected.\n3. Something older than either. Nothing that arrived in this system built it.",
+  readAloud:"There is nothing on sensors where there should be nothing. Then — briefly, for eleven seconds — there is something. Then there is nothing again. The sensor logs do not retain the eleven seconds. This is not a glitch.",
+  npcs:[],checks:[],events:[],orbitPos:null},
+
+  {id:"ouros",name:"Ouros",type:"Ice Giant · Outer System",tag:"FLAVOUR",color:"#2AABB8",orbitAU:"14.2 AU",uwpString:"X——0000-0",diameter:"~38,000 km",period:"53.4 standard years",isMoon:false,isStar:false,hook:false,
+  desc:"A pale blue-green ice giant in the deep outer system. No installations. No traffic. Three small unnamed moons, none surveyed beyond preliminary pass data. The Hegemony has no interest in the deep outer system at present. The Archon Collective may.",
+  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:6}
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATION DATA
+// ═══════════════════════════════════════════════════════════════════════════
+const MAIN = {
+elevator:{label:"Space Elevator",sub:"Planet surface · Currently offline",tag:"OFF LIMITS",tagBg:"#2e1f0a",tagColor:"#d4913a",ac:"#BA7517",
+read:"The orbital elevator runs from the equatorial anchor on Aurelia's surface to this platform — a cable 36,000km long, the engineering marvel of the sector. You can feel a faint vibration through the deck plates when the cars are running. Right now you cannot.\n\nThe elevator is offline for 24 hours whilst the surface terminal undergoes a drive system retrofit. A polite notice near the sealed gate explains this. Two security staff stand nearby in the manner of people who have been told to look approachable.",
+desc:"The retrofit story is real. The timing is deliberate — standard Hegemony security protocol during an active trade delegation. Someone is being kept on the surface. The RSR cell below knows who.",
+rsr:null,
+npcs:[],checks:[
+{skill:"Persuade 10+ (approach gate security)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Staff confirms 22-hour window, offers complimentary lounge access."},
+{l:"Success",c:"dp",t:"Confirms offline until tomorrow. No further access granted."},
+{l:"Failure",c:"df",t:"Polite rebuff. Second approach triggers a security flag on the crew."}]},
+{skill:"Streetwise 8+ (read the situation)",degrees:[
+{l:"Success",c:"ds",t:"The timing is too convenient. Hegemony security protocol — someone is being kept groundside during the delegation. Sable knows who."},
+{l:"Failure",c:"df",t:"Nothing beyond the official explanation."}]}],
+events:[
+{t:"Every 4 hrs",e:"Station tannoy: 'The orbital elevator remains temporarily offline for scheduled maintenance. Aurelia Station apologises for the inconvenience. Surface transport via shuttle is available at Bay 3.'"},
+{t:"Hour 22",e:"A low vibration runs through the deck plates as the elevator cable comes back online. Anyone who felt nothing on arrival feels this. The gate seal lights switch from red to amber."},
+{t:"Hour 24",e:"The gate unseals. Three Hegemony administrative staff emerge from the first car looking tired. One of them is the person the RSR cell was watching."}],
+refnotes:"The elevator returning to service at hour 24 is worth a scene if the players are still on station. Who steps off that first car can be a hook, a threat, or a reward depending on where the session has gone.\n\nDos in the maintenance level knows who was kept groundside. He'll mention it if trust is established — and it connects to his risky contact in the trade delegation.",
+conn:["concourse","docking"],subs:{}},
+
+docking:{label:"Docking Hub",sub:"Sector 10 · Hangar Bay 15",tag:"ARRIVAL",tagBg:"#1a2650",tagColor:"#5b8ef0",ac:"#185FA5",
+read:"The docking arm connects with a sound that is almost musical — a tone, not a clunk. The corridor beyond is wider than it needs to be, lit from everywhere at once, no shadows. The floor gives slightly underfoot.\n\nDockmaster Vey's glass-fronted office overlooks the hangar floor. The fuel situation is critical — the jump drive core is depleted.",
+desc:"RSR SYMBOL ①: Scratched beneath the lip of the public comms terminal near the airlock exit. Thumbnail-sized red star, arrow toward the concourse.",
+rsr:"RSR ① — beneath the public comms terminal lip, near the airlock exit. Arrow toward the concourse.",
+npcs:[{name:"Dockmaster Vey",role:"Station logistics, Sector 10",stats:{STR:6,DEX:7,END:8,INT:10,EDU:11,SOC:9},skills:"Admin 3, Broker 2, Persuade 1",rows:[["Manner","Professionally pleasant. Immovable on price. Has never needed to be flexible."],["On fuel","Standard rate. No negotiation. Becomes more polite and less helpful if pressed."],["Marek","If players genuinely cannot pay: mentions a fuel broker in the commercial district. Higher price, flexible terms."],["Alert","Subtle wrist gesture to hidden comms if players become aggressive."]]}],
+checks:[{skill:"Broker 8+ / Persuade 10+ (negotiate fuel)",degrees:[
+{l:"Effect 4+",c:"ds",t:"10% administrative discount. Maximum possible. Vey logs it as a loyalty gesture."},
+{l:"Success",c:"dp",t:"Standard rate. No discount. Pleasant about it."},
+{l:"Failure",c:"dp",t:"Suggests Marek. 15% above standard but flexible terms."},
+{l:"Effect -2",c:"df",t:"Security flag on crew. All future station checks at -1."}]}],
+events:[
+{t:"On arrival",e:"Tannoy: 'Welcome to Aurelia Orbital Station. Please have your vessel registration and passenger manifests available for review. Have a pleasant stay.'"},
+{t:"30 min in",e:"A Hegemony customs skiff does a slow pass of Bay 15, scanning the Meridian's Edge from outside. Does not hail. Does not stop. Files a routine report."},
+{t:"2 hrs in",e:"The berth fee notice appears on the ship's external terminal. Standard 48-hour rate. Payment expected within 6 hours."},
+{t:"6 hrs in",e:"Vey sends a polite automated reminder about the unpaid berth fee, if applicable."}],
+refnotes:"Tell Calder the fuel situation privately — he's the pilot, it's his job to know. Let him deliver it to the crew.\n\nLEAK ROLL: Roll 2D6 here. On a 12, word of the Sanhedrin attack at Graveyard has reached the station. The trade delegation will be briefed within the hour.\n\nThe berth was prepared before the crew announced themselves. Vey doesn't ask for papers. This should unsettle the players slightly.",
+conn:["concourse","elevator","security"],
+subs:{
+"landing-pad":{label:"Landing Pad — Bay 15",sub:"Where the Meridian's Edge sits",
+read:"Bay 15 is a mid-sized berth on the station's docking ring — large enough for a 200-ton vessel, which makes a 100-ton scout look solitary in the space. The Meridian's Edge sits at the centre of a clean composite floor that has been swept recently. Fuel lines and power umbilicals run from the bay wall to the ship's service ports.\n\nThe ship looks exactly like what she is: a hundred-ton scout/courier that has been working for a long time and has not stopped. She is not ugly. She is honest.",
+desc:"",
+ship:{name:"The Meridian's Edge",lines:[
+["Hull","100-ton streamlined wedge. Atmospheric capable. The profile is distinctive — a broad flat ventral surface tapering to a sharp prow, twin engine pods mounted asymmetrically off the port quarter."],
+["Condition","Old. Well-loved. The crystalliron armour plating shows four centuries of minor impacts. The hull is a faded grey-green that was probably a specific shade once."],
+["Engine pods","Port pod is original — smaller, older. Starboard pod is the upgrade: slightly larger, different alloy. Between them the drive output is 2G."],
+["Markings","No name plate. The name MERIDIAN'S EDGE appears on the ship's transponder. Near the portside airlock, someone has welded a small bracket to the hull. Riley made it. She hasn't explained what it was for."],
+["Interior","Cramped in the way of old ships designed by people who understood that space is weight. The mess table has six places. The sixth is in the correct position. Nobody set it there this morning."],
+["Maintenance note","Annual maintenance is 5 years overdue. All Engineering checks aboard ship are at -1 DM until this is addressed. Riley knows."],
+["Jump drive","WARP-2 capable. Originally WARP-3. The jump drive core is currently depleted. Refuelling is the priority."]]},
+npcs:[],checks:[
+{skill:"Engineering (any) 8+ — inspect the ship",degrees:[
+{l:"Effect 2+",c:"ds",t:"Full picture: -1 DM penalty confirmed, identifies three specific systems at elevated failure risk. Riley already knows all of this."},
+{l:"Success",c:"dp",t:"General assessment: overdue maintenance, several items of concern. Nothing immediately critical."},
+{l:"Failure",c:"df",t:"Surface impression only. The ship looks rough. No actionable detail."}]}],
+events:[
+{t:"Ongoing",e:"The ship's power systems emit a faint low-frequency hum. Eleos is running quiet but she is running."},
+{t:"1 hr in",e:"The fuel umbilical status light on the bay wall switches from green to amber — the standard automated reminder that the vessel has not initiated fuelling."},
+{t:"3 hrs in",e:"A station maintenance worker arrives to check the bay's environmental systems. She glances at the Meridian's Edge and does her check and leaves."}],
+refnotes:"This is the only place on the station where the crew can be alone and speak freely — Eleos is present but station surveillance is not aboard the ship.\n\nThe sixth place setting at the mess table is set. Nobody did it this morning. If anyone mentions it, Eleos says nothing."},
+"dockmaster-office":{label:"Dockmaster's Office",sub:"Glass-fronted · Overlooking Bay 15",
+read:"A glass-fronted room that looks out over the entire hangar floor. Vey can see every bay from his desk. He tends to stand rather than sit, hands clasped behind his back, watching.\n\nThe office is functional rather than comfortable — a desk, a terminal, a shelf of physical binders that look like they predate the terminal by twenty years. The binders are organised by date. The dates go back further than Vey has worked here.",
+desc:"",
+npcs:[{name:"Dockmaster Vey",role:"Station logistics, Sector 10",stats:{STR:6,DEX:7,END:8,INT:10,EDU:11,SOC:9},skills:"Admin 3, Broker 2, Persuade 1",rows:[["Manner","Professionally pleasant. Immovable on price."],["Binders","The physical logs go back 40 years. The station has been in continuous operation for 80 years. Pre-Collapse infrastructure, upgraded in sections."],["On Marek","Mentions him only if players are genuinely unable to pay and have not become hostile."],["On the delegation","Aware of the trade delegation. Mentions it only if directly asked. Not his department."]]}],
+checks:[],events:[
+{t:"Every hr",e:"Vey makes a slow circuit of the office, checking each bay monitor in sequence. He pauses at Bay 15 slightly longer than the others."},
+{t:"3 hrs in",e:"A Hegemony liaison officer stops by the office for a brief conversation with Vey — too muffled to hear through the glass. Vey's expression doesn't change. The liaison leaves."}],
+refnotes:"The liaison officer's visit is the leak roll made visible. If the 2D6 roll already came up 12, this conversation is about the Graveyard incident. Vey gives truthful but minimal answers. He is not hostile to the crew but he is not their ally."}}},
+
+concourse:{label:"Main Concourse",sub:"300-metre promenade · 4 sub-areas",tag:"EXPLORATION",tagBg:"#2e1f0a",tagColor:"#d4913a",ac:"#BA7517",
+read:"The station's heart. A high-ceilinged promenade running from the docking hub to the observation dome. The ceiling mimics an idealised sky — blue, clear, slow clouds taking forty minutes to cross. The light shifts with them.\n\nPrices are not displayed in the windows. Everything is beautiful in the way of a museum that has decided you belong here or you don't.",
+desc:"RSR SYMBOL ②: In the bookshop (The Exchange sub-area), on the spine of 'Colonial Infrastructure: A Practical History', bottom shelf. Visible only when tilted. Arrow pointing down.",
+rsr:"RSR ② — bookshop in The Exchange, spine of 'Colonial Infrastructure: A Practical History', bottom shelf.",
+npcs:[{name:"Concourse Security Officer",role:"Plain clothes station security",stats:{STR:9,DEX:8,END:9,INT:7,EDU:7,SOC:6},skills:"Recon 2, Persuade 1, Melee 1, Gun Combat 1",rows:[["Method","Approaches pleasantly. Never hostile first. Escalates in three stages."],["Stage 1","Staff member asks if players need assistance finding something."],["Stage 2","Officer positions nearby without speaking."],["Stage 3","Credentials check. Rhett SOC 8+ can reset the clock by 1D6 minutes."]]}],
+checks:[{skill:"Recon 10+ (spot RSR symbol ②)",degrees:[
+{l:"Success",c:"ds",t:"Symbol located in The Exchange bookshop. Streetwise 6+ now required."},
+{l:"Failure",c:"df",t:"Nothing found this pass. 1D6 minute limit before security notices searching behaviour."}]},
+{skill:"Streetwise 6+ (interpret symbol)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Correctly read plus awareness that the trail is fresh — placed within days."},
+{l:"Success",c:"dp",t:"Directional arrow correctly read. Next symbol location suggested."},
+{l:"Failure",c:"df",t:"Misread as decorative. Retry at -1."}]}],
+events:[
+{t:"Every 40 min",e:"The ceiling clouds complete a full cycle. The light shifts almost imperceptibly toward a slightly warmer tone for about ten minutes, simulating late afternoon, before resetting."},
+{t:"1 hr in",e:"Tannoy: 'Aurelia Station welcomes delegates of the Hegemony Trade Commission. Complimentary refreshments are available in the Stellarview Lounge, Deck 3.'"},
+{t:"2 hrs in",e:"The Cleaner crosses the concourse — grey coveralls, badge inward, service door to service door, gone in ten seconds. Two staff track them with their eyes."},
+{t:"3 hrs in",e:"A small group of Hegemony administrative aides moves through the concourse with the purposeful stride of people with appointments."},
+{t:"4 hrs in",e:"Tannoy: 'The Stellarview Lounge will be reserved for a private function from 1800 to 2200 station time.'"}],
+refnotes:"TONE: Star Trek Starfleet Academy — purposeful, optimistic in presentation. The optimism is performed.\n\nBARTHOLOMEW: Causes a quiet incident at the jewellery display.\n\nRHETT: The tailor's window. The suit would fit him perfectly. No price displayed.",
+conn:["docking","elevator","security","maintenance","medical"],
+subs:{
+"promenade":{label:"The Promenade",sub:"Main thoroughfare · Full length",
+read:"The central walkway of the concourse. Wide enough for six people abreast. The composite floor is pale and slightly warm underfoot — heated from below. Benches at regular intervals, designed to be comfortable but not so comfortable that people linger.",
+desc:"",npcs:[],checks:[],
+events:[
+{t:"Continuous",e:"Soft ambient sound — not music exactly, more like the memory of music. An atmospheric processing note tuned to promote a sense of calm. Anyone with Medic or Science (Biology) 2+ notices it on a check of 8+."},
+{t:"2 hrs in",e:"A child breaks away from a parent and runs a short distance down the promenade before being retrieved. For about four seconds, the child is running freely and laughing."}],
+refnotes:"The promenade is transition space. Use it for movement between sub-areas and for the ambient NPC moments."},
+"stellarview":{label:"Stellarview Bar & Lounge",sub:"Deck 3 · Observation windows",
+read:"The bar occupies the outer curve of the station's tertiary ring — one long wall of floor-to-ceiling transparisteel looking out onto the stars and the planet below. Aurelia fills the lower third of every window.\n\nThe interior is dark wood tones, low lighting, high stools at a long curved bar. The bartender knows your drink before you sit down — very good facial recognition software integrated into the ordering system.",
+desc:"",
+npcs:[{name:"Harlan",role:"Head bartender · Stellarview",stats:{STR:6,DEX:9,END:7,INT:11,EDU:9,SOC:10},skills:"Carouse 3, Persuade 2, Stealth 1, Recon 1",rows:[["Manner","Warm, observant, professionally discreet. Knows everything that happens in his bar."],["On the delegation","Will mention the reservation if asked. Will not say who specifically is attending."],["Carouse 8+","Will share that one of the delegation aides has been drinking alone for two hours and looking at the planet. 'People do that when they're having second thoughts about something.'"],["Drinks","Stocks genuine pre-Collapse era bottles behind the bar — decorative, never opened. Worth a significant sum."]]}],
+checks:[{skill:"Carouse 8+ (extract information from Harlan)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Harlan describes the aide drinking alone — their demeanour, the fact that they ordered water after the third drink. 'Someone who's deciding something.'"},
+{l:"Success",c:"dp",t:"Harlan confirms the delegation's reservation. Names one attendee he recognises from previous visits."},
+{l:"Failure",c:"df",t:"Harlan is pleasant and tells them nothing useful."}]}],
+events:[
+{t:"Open hrs",e:"The ambient music here is real — a musician plays softly in the corner, a stringed instrument the players may not recognise. She's good enough that people stop talking to listen, occasionally."},
+{t:"1800",e:"Staff begin politely redirecting non-delegation guests. The bar closes to the public. Players inside have about four minutes before they are asked to leave."},
+{t:"1800-2200",e:"The delegation function runs behind closed doors. Music is audible from the corridor. One raised voice at approximately 2100, quickly contained."}],
+refnotes:"The aide drinking alone at the window is Dos's contact. If the players speak to them before the delegation function, they can be charmed or pressured.\n\nThe raised voice at 2100 is worth noting. The players will never find out what was said."},
+"exchange":{label:"The Exchange",sub:"Commercial district · Shops & services",
+read:"Six storefronts arranged around a small atrium at the concourse's mid-point. The atrium has a real tree at its centre — not a large one, but genuine, growing in a recessed planter with a small brass plaque. The tree is forty-three years old and was brought from Aurelia's surface as a seedling.",
+desc:"RSR SYMBOL ②: On the spine of 'Colonial Infrastructure: A Practical History', bottom shelf of the bookshop. Visible only when tilted.",
+rsr:"RSR ② — spine of book, bottom shelf of the bookshop.",
+npcs:[{name:"Shop assistant (tailor's)",role:"Tailoring house",stats:{STR:5,DEX:8,END:6,INT:9,EDU:11,SOC:12},skills:"Persuade 2, Art (Fashion) 3, Broker 1",rows:[["On Rhett","Clocks him on entry. Decides not to approach. If Rhett approaches: warm, professional, takes measurements by eye."],["On Curculion","Sees Bartholomew. Professionalism holds. Offers Curculion an appointment."],["Price","Does not state one. 'We'd discuss that at your appointment.'"]]}],
+checks:[{skill:"Recon 10+ (RSR symbol ②) in bookshop",degrees:[
+{l:"Success",c:"ds",t:"Symbol found on the book spine. Must be tilted to see. Streetwise 6+ to interpret."},
+{l:"Failure",c:"df",t:"Nothing found. Can retry — 1D6 minute limit before security notices."}]}],
+events:[
+{t:"Ongoing",e:"The tree in the atrium is real. The plaque says it was planted in 3402 — during the Dark Age, before the Hegemony claimed this system. Someone was tending a tree during the worst years of human history."},
+{t:"2 hrs in",e:"A couple examines the jewellery display. They buy something small. The transaction is handled with the same gravity as a diplomatic treaty."}],
+refnotes:"The tree is forty-three years old. It was planted five years into Hegemony control of Aurelia. Someone chose to do that. Don't annotate it for the players. Just describe it."},
+"dome":{label:"Observation Dome",sub:"End of the promenade · Aurelia below",
+read:"The terminus of the promenade. The dome is exactly what it sounds like — a full hemispheric transparisteel observation space at the station's outermost point. Aurelia fills the lower half of the view: blue and white and impossibly beautiful from up here.\n\nThere are benches arranged in concentric arcs facing the planet. The outermost arc is close enough to the transparisteel that you can press your hand against it and feel the cold of space through the material — a design choice, not an oversight.\n\nPeople come here to think. There is an unspoken agreement that you do not speak to strangers in the dome.",
+desc:"",
+npcs:[],checks:[{skill:"Any character — quiet reflection (no check)",degrees:[
+{l:"Riven",c:"ds",t:"He has seen Aurelia from orbit before, when it was a younger colony and the cities were smaller. He does not say this. He stands at the outer arc for a long time."},
+{l:"Cass",c:"dp",t:"The planet looks clean from here. Everything does, from far enough away."},
+{l:"Rhett",c:"dp",t:"He's been in worse situations. He's been in better ones. He doesn't know which way this one is going yet."}]}],
+events:[
+{t:"Continuous",e:"The planet rotates slowly below. The terminator line — the shadow edge between day and night — is visible as a precise curve."},
+{t:"Dusk on Aurelia",e:"A thin red line appears at Aurelia's horizon as the planet's sun sets. It lasts about four minutes. Anyone in the dome will see it if they're there at the right time."}],
+refnotes:"This is where characters go when they need a moment. Don't force it — but if a player says their character wanders off alone, the dome is where they go.\n\nRiven specifically. If he ends up here alone at any point, describe what he sees. Let the player decide what he thinks about it."}}},
+
+security:{label:"Security & Administration",sub:"Upper ring · Station Operations",tag:"RESTRICTED",tagBg:"#1e1e2e",tagColor:"#8b91a8",ac:"#534AB7",
+read:"Not on the visitor map. Upper ring, behind a door marked STATION OPERATIONS — NO ENTRY. Two guards in white uniforms with slightly different collar markings. Players are intercepted before reaching the door — unless Rhett knows someone inside.",
+desc:"Security and Administration contains four sub-areas: the Guardhouse, the Armoury, Administration Block A, and Administration Block B. There is also a service hatch providing access to the Maintenance Level below.",
+rsr:null,
+npcs:[{name:"CPO Dara Mwenye (ret.)",role:"HNV Resolute · Station security contractor",stats:{STR:9,DEX:8,END:10,INT:9,EDU:8,SOC:7},skills:"Gun Combat 2, Tactics 2, Recon 2, Persuade 1, Admin 1",rows:[["Connection","Served with Rhett on HNV Resolute. Was in the Cypress debrief. Has the notes somewhere."],["What she'll do","Logs the visit as a social call, not a flag. Won't grant access without paperwork."],["What she wants","An honest answer. 'The Cypress incident. You know what I think happened. Do you?'"],["If Rhett is honest","Quietly grants crew a 48-hour unrestricted station pass. Doesn't tell him."]]}],
+checks:[{skill:"Rhett recognised (automatic if Rhett present)",degrees:[
+{l:"Dara present",c:"ds",t:"She comes out alone. The confrontation is available. No check needed to reach her."},
+{l:"Rhett absent",c:"df",t:"Crew is politely intercepted. Admin 10+ or SOC 10+ to get a message inside."}]},
+{skill:"Cypress honesty (no dice — a choice)",degrees:[
+{l:"Honest",c:"ds",t:"Dara nods once. 48-hour unrestricted pass applied silently. She goes inside."},
+{l:"Deflects",c:"dp",t:"She lets him go. Logs nothing. Doesn't offer the pass. Doesn't ask again."},
+{l:"Lies",c:"df",t:"She knows. She lets it go. The crew feel it in how she says goodbye."}]}],
+events:[
+{t:"Every hr",e:"A security patrol of two officers completes a circuit of the upper ring. They are punctual. Anyone observing from the corridor can time them."},
+{t:"Shift change (every 6 hrs)",e:"Four officers rotate in and out of the guardhouse. The five minutes around shift change is the softest point in the security routine."},
+{t:"If leak roll was 12",e:"A senior security officer is seen moving quickly toward Administration Block A with a document folder. The door closes. Raised voices, briefly, then quiet."}],
+refnotes:"No tactical value. No access granted automatically. Its value is entirely personal — Rhett's wound confronted at the table for the first time.\n\nRun the Dara scene short. Let the silence after his answer do the work. Whatever he says, she nods once and goes back inside. That's all.",
+conn:["docking","concourse","maintenance"],
+subs:{
+"guardhouse":{label:"Guardhouse",sub:"Security hub · Upper ring entrance",
+read:"The operational centre of station security. Banks of monitors showing feeds from every public area — the concourse, the docking bays, the medical suite waiting area, the elevator gate. The maintenance level is not monitored from here.",
+desc:"That absence is notable if anyone is looking for it.\n\nFive officers on duty at any time. Armed with sidearms, shock batons. One officer is always watching the concourse feeds.",
+npcs:[{name:"Officer Petra Sousa",role:"Senior duty officer, Guardhouse",stats:{STR:8,DEX:9,END:8,INT:8,EDU:7,SOC:7},skills:"Gun Combat 2, Recon 2, Admin 1, Persuade 1",rows:[["Manner","Professional and courteous. Observant. Has noticed the Meridian's Edge does not match its registration profile exactly."],["On the crew","Has a flag on file from Dockmaster Vey — not hostile, just a note that the crew asked about fuel pricing."],["Leverage","If Dara has vouched for the crew, Sousa treats them as cleared. Otherwise, cautious."]]}],
+checks:[{skill:"Recon 8+ (observe the monitor feeds)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Notes the maintenance level is absent from the feeds. Also notes which feed covers the RSR symbol locations — they are in blind spots."},
+{l:"Success",c:"dp",t:"General layout of what's covered. Docking bays and concourse confirmed monitored."},
+{l:"Failure",c:"df",t:"Can't see enough detail before being moved along."}]}],
+events:[
+{t:"Shift change",e:"Brief handover between outgoing and incoming officers. Sousa stays regardless — she works long shifts and doesn't explain why."},
+{t:"If leak roll was 12",e:"Sousa takes a call on a separate encrypted channel. Her expression doesn't change. She makes a note on her terminal and goes back to watching the feeds."}],
+refnotes:"The maintenance level blind spot is information the players can use — it confirms that whoever placed the RSR symbols knew the security layout."},
+"armoury":{label:"Armoury",sub:"Weapons storage · Restricted access",
+read:"A small room behind a reinforced door with a biometric lock. Standard station security loadout: sidearms, shock batons, two combat rifles in a locked rack, breaching tools, emergency vacc suits. Everything is catalogued and counted after every shift.\n\nThere is a single missile launcher in a separate locker. It has never been removed from its locker since installation. The locker has dust on the seal.",
+desc:"",npcs:[],
+checks:[{skill:"Electronics (Security) 10+ or Dara's clearance (access armoury)",degrees:[
+{l:"Dara vouched + Admin check",c:"ds",t:"Legal access. Crew can draw sidearms as temporary station security — logged, must be returned."},
+{l:"Electronics 10+ (forced)",c:"dp",t:"Access gained. Alarm triggered on a delay — 10 minutes before Sousa notices the log discrepancy."},
+{l:"Failure",c:"df",t:"Lock holds. Alarm triggered immediately."}]}],
+events:[{t:"After each shift",e:"Weapons count conducted by outgoing senior officer. Takes 8 minutes. The armoury door is open during this window."}],
+refnotes:"The dust on the missile launcher seal is a worldbuilding detail — Aurelia is safe enough that it has never been needed. That safety is maintained by the Cleaners below and the security above and the Hegemony's presence everywhere."},
+"admin-a":{label:"Administration Block A",sub:"Station operations & records",
+read:"The administrative heart of the station. Open-plan, twelve workstations, half occupied at any given time. Filing systems for berth allocation, cargo manifests, passenger records going back forty years. The physical binders from Vey's office are duplicated here.",
+desc:"The records include the full manifest of every vessel that has docked at Aurelia in the last four decades. This includes several vessels whose names the players may recognise.",
+npcs:[{name:"Administrator Cho Bin-Ha",role:"Station records, Block A",stats:{STR:5,DEX:6,END:6,INT:11,EDU:13,SOC:8},skills:"Admin 4, Computer 2, Investigate 1, Broker 1",rows:[["Manner","Precise, unhurried, genuinely helpful within the limits of her clearance."],["Records","Will provide public manifest data freely. Flagged vessels require a court order or Hegemony authority."],["Hidden","The Meridian's Edge appears twice in the records — once under its current registration, once under a different name from six years ago. She will mention this only if asked directly about the ship's history."]]}],
+checks:[{skill:"Admin 8+ or SOC 10+ (access historical manifests)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Full access to 40 years of manifests. Can research any vessel, any cargo, any passenger list on record. The Meridian's Edge's prior registration is discoverable."},
+{l:"Success",c:"dp",t:"Access to recent records (last 5 years). Prior registration requires additional clearance."},
+{l:"Failure",c:"df",t:"Cho is polite but cannot assist without authorisation. Suggests formal request process (3 days)."}]}],
+events:[{t:"1 hr in",e:"Cho receives a query from the trade delegation — a passenger search. She processes it without expression. The name on the query is not one the players would recognise. Yet."}],
+refnotes:"The Meridian's Edge appearing under a prior registration is a mystery you can develop or leave. It predates the current crew. Eleos's records for that period are fragmented."},
+"admin-b":{label:"Administration Block B",sub:"Delegation suite · Currently in use",
+read:"Normally a secondary records office. Currently repurposed for the duration of the trade delegation — four Hegemony administrative staff working at temporary terminals, a sealed inner office for the delegation's senior attaché, and a security sweep conducted every two hours.\n\nThe door to Block B requires delegation credentials or Dara's explicit authorisation.",
+desc:"",
+npcs:[{name:"Attaché Mira Saenz",role:"Senior Hegemony trade delegate",stats:{STR:6,DEX:7,END:7,INT:12,EDU:12,SOC:11},skills:"Diplomat 3, Admin 2, Persuade 2, Deception 2",rows:[["Purpose","Negotiating a resource extraction contract for Aurelian coastal minerals. The contract favours the Hegemony considerably."],["On the crew","Has been briefed on the Meridian's Edge by Sousa. Interested but not alarmed. Watching."],["Leverage","If the leak roll was 12: aware of the Graveyard incident. Is deciding whether it's relevant to her mission."],["Weak point","Has not left Block B since arriving. Is developing cabin fever. A reason to step outside is something she would value."]]}],
+checks:[{skill:"Diplomat 10+ or Deception 10+ (gain audience with Saenz)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Saenz is genuinely interested. Grants a private meeting. Will trade information for something she needs — specifically, a reason to leave Block B without raising flags."},
+{l:"Success",c:"dp",t:"Brief exchange through her aide. She asks one question and ends the conversation."},
+{l:"Failure",c:"df",t:"Aide turns crew away. Sousa is notified."}]}],
+events:[{t:"Every 2 hrs",e:"Security sweep of Block B. A single officer enters, does a circuit, leaves. The attaché does not look up from her terminal during the sweep."}],
+refnotes:"Saenz is not a villain. She is a professional doing a job that serves the Hegemony and incidentally harms Aurelia's colony population. She knows this in general terms and has made her peace with it."}}},
+
+medical:{label:"Medical Suite",sub:"Aurelia Medical Institute · Tertiary ring",tag:"KEY NPC",tagBg:"#0f2e20",tagColor:"#4caf82",ac:"#0F6E56",
+read:"The tertiary ring — its own atmospheric processing, power redundancy, acoustic dampening. The smell of a continuous sterilisation cycle. Rotating anatomical models in the waiting area illuminated from within.\n\nThe smell hits Cass before she's ready. The sterilisation compound is the same as Meridian Interstellar Academy. She has half a second where she is twenty-three and the future is uncomplicated.",
+desc:"RSR SYMBOL ④: Floor tile grout near the corridor entrance, filled with reddish compound matching the surrounding colour exactly. Arrow pointing down.",
+rsr:"RSR ④ — floor tile grout near corridor entrance. Reddish compound, nearly invisible. Arrow pointing down.",
+npcs:[{name:"Dr. Yumi Adeyemi",role:"Senior Research Fellow · Meridian alumni",stats:{STR:5,DEX:7,END:6,INT:12,EDU:13,SOC:9},skills:"Medic 4, Science (Biology) 3, Investigate 2, Persuade 2, Diplomat 1",rows:[["Connection","Two years below Cass at Meridian. Admired her. Also formally objected to the roll of honour she was placed on."],["Alignment","Quietly radical. Works here for the resources. Tells herself it's worth it."],["Key line","'I'd heard you left OmniSynth. I didn't know what that meant until just now.'"],["OmniSynth","Knows the Institute has an OmniSynth research contract. Has mapped which colleagues never discuss their work. Close to a conclusion she doesn't want to reach."],["Referral code","A patient six months ago showed Eidolon-adjacent modification and left before she finished. She kept the referral code. Leads toward Project Chimera."]]}],
+checks:[{skill:"Medical resupply",degrees:[
+{l:"Cass present",c:"ds",t:"Full resupply at cost, no consultation. Yumi bypasses the process."},
+{l:"Medic 8+",c:"dp",t:"Advanced supplies accessible. Consultation waived."},
+{l:"Standard",c:"df",t:"Basic supplies, standard price, 1-hour consultation wait."}]},
+{skill:"Persuade 10+ / Cass confides (Yumi intel)",degrees:[
+{l:"Effect 2+ or confession",c:"ds",t:"Yumi shares the OmniSynth contract shape — which departments, which colleagues, duration. Enough to triangulate toward Project Chimera."},
+{l:"Success",c:"dp",t:"Mentions the referral code patient. Doesn't share the code yet."},
+{l:"Failure",c:"df",t:"Professionally warm. Gives nothing."}]},
+{skill:"Cass reveals waferjack to Yumi",degrees:[
+{l:"Trust first",c:"ds",t:"Private examination room. Identifies telemetry function. Cannot remove safely — but knows someone who might."},
+{l:"No trust",c:"dp",t:"Yumi goes quiet. Suggests follow-up appointment. Needs time to think."}]}],
+events:[
+{t:"On Cass arrival",e:"Yumi spots her from across the waiting area. Crosses the room. Does not call out — the acoustic dampening makes calling out feel wrong here."},
+{t:"1 hr in",e:"An OmniSynth contractor arrives for a scheduled meeting with a colleague Yumi has mapped. The meeting is in a room she cannot observe. She notes the time."},
+{t:"End of session",e:"If Cass gave Yumi something to think about: she sends a brief encrypted message to the ship's comms within 6 hours. It contains the referral code and nothing else."}],
+refnotes:"⚠ WAFERJACK: If Cass jacks in anywhere in the medical suite, telemetry ping goes out within 72 hours. Suite systems are partially OmniSynth-contracted. She does not know this.\n\nYumi is a slow-burn NPC. Don't resolve her this session. Leave her in the middle of her decision.\n\nPRIYA in the maintenance level says something similar about Eidolon modification. Two independent sources in one session compounds the effect significantly.",
+conn:["concourse","maintenance"],subs:{}},
+
+maintenance:{label:"Maintenance Level",sub:"Service tunnels · Below the station",tag:"UNDERDECK",tagBg:"#2e1010",tagColor:"#d45050",ac:"#A32D2D",
+read:"The floral additive is gone. Real recycled air — metallic, honest. Narrower corridors. Functional lighting. Panels with visible seams and marker notes nobody erased. The station without its costume.\n\nThe Cleaners live and work here on five-year non-transferable contracts. Their community is real. Their opinions about the floor above them are their own.",
+desc:"RSR SYMBOL ③: Pressed into a service corridor wall near the medical access hatch. Looks decorative. Arrow toward the RSR meeting point.",
+rsr:"RSR ③ — pressed into service corridor wall near medical access hatch. Looks decorative. Arrow toward the RSR meeting point.",
+npcs:[
+{name:"Sable",role:"RSR coordinator · 8 years on-station",stats:{STR:7,DEX:9,END:8,INT:11,EDU:9,SOC:6},skills:"Streetwise 3, Recon 3, Stealth 2, Persuade 2, Admin 1",rows:[["Manner","Forties. Knows every corridor, keypad, shift pattern. Cannot be charmed or rushed."],["RSR chit","Recognises the Graveyard chit immediately. Changes the conversation."],["Elevator intel","Knows who's being held groundside. Won't say without trust established."],["On Dos","'He thinks his contact is an asset. He's wrong. I need a way to manage it before it burns us.'"]]},
+{name:"Priya",role:"RSR cell medic · Part-time medical suite",stats:{STR:5,DEX:7,END:6,INT:10,EDU:12,SOC:7},skills:"Medic 3, Science (Biology) 2, Investigate 1, Stealth 1",rows:[["Key line","'You've had Eidolon-adjacent treatment. I can see it in your bloodwork if you let me look. I've seen it twice before. Neither of those people knew what had been done to them.'"],["PRIORITY","Do not let this line fall through the cracks. Deliver it when Cass is present."],["Her notes","The two previous cases — location, approximate date, OmniSynth-adjacent facilities both times."]]},
+{name:"Dos",role:"RSR logistics · Electronics specialist",stats:{STR:8,DEX:10,END:7,INT:9,EDU:8,SOC:5},skills:"Electronics 3, Streetwise 2, Stealth 2, Gun Combat 1",rows:[["Manner","Twenties. Nervous energy. Wants to help more than Sable thinks is wise."],["Risk","His delegation contact believes they're sympathetic. Sable thinks he's being played. Sable is correct."],["Useful","Encrypted comms access. Three separate exit routes off the station if things go wrong."]]}],
+checks:[{skill:"Access: RSR trail (symbol ③ points here)",degrees:[
+{l:"Full trail",c:"ds",t:"Arrive at correct access grate. Bolt drawn from below when they knock."},
+{l:"Partial trail",c:"dp",t:"Find the general area. Recon 8+ to locate the specific grate."}]},
+{skill:"Riley — Mechanic 8+ (service alcove door)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Opens silently in 20 seconds."},
+{l:"Success",c:"dp",t:"Opens in 40 seconds. Minor noise. Cleaners aware someone came through."},
+{l:"Failure",c:"df",t:"Takes 3 minutes. Visible marks. Security notices at next patrol."}]},
+{skill:"Persuade 8+ (earn Sable's trust)",degrees:[
+{l:"Effect 2+ or RSR chit",c:"ds",t:"Full intel: elevator, Dos's contact, exit routes."},
+{l:"Success",c:"dp",t:"Basic assistance. Sable is watching."},
+{l:"Failure",c:"df",t:"Asked to leave. Politely. No second chance this session."}]}],
+events:[
+{t:"Every 4 hrs",e:"A Cleaner completes a circuit of all four levels, checking systems manually. They know exactly when they'll arrive at each sub-area and adjust if something seems wrong."},
+{t:"2 hrs in",e:"Dos receives a message on his encrypted channel. He reads it, looks pleased, and then looks at Sable. She looks at him. Neither says anything."},
+{t:"If players are here when elevator comes back online",e:"A vibration runs through the maintenance level — deeper and more present than above. Sable looks at the ceiling for a moment. 'Elevator's back. Things are about to get busier up there.'"}],
+refnotes:"THEMATIC PAYLOAD: Players standing here, looking up at the beautiful floor above them, knowing what's underneath it. Don't rush this.\n\nPRIYA'S LINE is a priority beat. Do not skip it.\n\nDOS IS A FUTURE PROBLEM: His contact will burn the cell eventually. Don't resolve it now. Plant it.",
+conn:["concourse","medical","security"],
+subs:{
+"life-support":{label:"Life Support",sub:"Atmospheric processing · Level 1",
+read:"The largest single space in the maintenance level. Tall enough to stand straight in — just. A grid of atmospheric processors running the full length of the room, each one the size of a wardrobe, humming at slightly different frequencies. The combined sound is almost musical in an industrial way.\n\nThis is where the floral additive is produced and distributed. The machine responsible is smaller than expected — a grey box the size of a suitcase, mounted near the ceiling. It has a small label: AMBIENT ATMOSPHERIC SUPPLEMENT — LEVEL 7 FRAGRANCE SYSTEM. Below it someone has written in marker: 'for whom?'\n\nThe air down here is what the station actually breathes. Up above is the edited version.",
+desc:"",
+npcs:[{name:"Senior Tech Owan Frey",role:"Life support systems, Maintenance",stats:{STR:8,DEX:7,END:9,INT:10,EDU:9,SOC:5},skills:"Engineer (Life Support) 3, Mechanic 2, Electronics 1, Science (Chemistry) 1",rows:[["Manner","Quiet, competent, protective of his systems. Has worked here eleven years."],["On the fragrance system","Will explain it without embarrassment. 'It reduces cortisol in visitors by about 12%. Makes them spend more. Standard commercial practice.'"],["To Riley","Immediately identifies her as someone who knows what she's looking at. Will talk to her at length about the maintenance backlog."]]}],
+checks:[{skill:"Engineer (Life Support) 8+ or Science (Chemistry) 8+ (analyse the system)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Full picture: the fragrance system, the cortisol suppression, the maintenance backlog Frey has been quietly managing without reporting upward because the budget for repairs was cut eighteen months ago."},
+{l:"Success",c:"dp",t:"Understands the system. Identifies the fragrance machine. Frey will explain it if asked."}]}],
+events:[
+{t:"Every 2 hrs",e:"One of the processors runs a self-diagnostic cycle, producing a brief shift in the harmonic tone of the room. Frey glances at a gauge and nods to himself."},
+{t:"4 hrs in",e:"A pressure reading fluctuates briefly. Frey moves to the affected processor, makes an adjustment with a tool from his belt, and returns to his station. He enters nothing into the maintenance log."}],
+refnotes:"Frey's off-the-books repairs are the maintenance level's version of the Cleaners' situation — competent people maintaining a system that management has decided doesn't need proper funding. He's not bitter about it. That's the most interesting thing about him."},
+"reactor":{label:"Reactor Level",sub:"Power systems · Level 2",
+read:"Down a level from life support, accessible via a service ladder that requires a keycard. The reactor level is hotter than anywhere else in the station — not dangerously, but noticeably. The fusion plant that powers the station sits at the centre: a dull grey cylinder four metres tall and two metres wide, surrounded by a hexagonal monitoring cage.\n\nThe reactor is 30 years old. It was designed for 25.",
+desc:"It has been maintained, upgraded in sections, and kept running by people who understand it very well and have been asked to do so on a budget that assumes it will last another 10 years. It will not last another 10 years on this budget. Frey knows this. He has filed three reports. The reports are in Administration Block A's archive.",
+npcs:[],
+checks:[{skill:"Engineer (Power) 8+ (assess the reactor)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Full assessment: the reactor is past design life, under-maintained, and the cooling system has a bypass that was installed as a temporary measure seven years ago and is now structural."},
+{l:"Success",c:"dp",t:"Past design life and under-maintained. Nothing immediately critical. Ask Riley."},
+{l:"Failure",c:"df",t:"Warm, loud, apparently functional. No actionable detail without specialised knowledge."}]}],
+events:[{t:"Continuous",e:"The cooling systems cycle in a pattern. Anyone listening for ten minutes can identify the pattern. It repeats every four minutes and twenty seconds, except occasionally it doesn't — a brief irregularity, then back to normal. Frey tracks this. He has a notebook."}],
+refnotes:"The reactor's real condition is a background threat — not for this session, but for a future one. If the players ever need leverage over the station, or if you need a ticking clock, the reactor report in Administration Block A is waiting.\n\nFrey's notebook, if found, contains eleven months of irregular cycle observations and three increasingly urgent annotations."},
+"manufacturing":{label:"Manufacturing Level",sub:"Fabrication & repair · Level 3",
+read:"The lowest accessible level of the station. A fabrication floor: three industrial printers, a machining station, a welding rig, a parts inventory wall covering the entire length of one side. The parts wall is organised with a precision that suggests whoever is responsible for it has strong opinions about organisation.\n\nThis is where the Cleaners' tools come from, where damaged station components are repaired or printed, where Riley would spend a significant amount of time if allowed.",
+desc:"The machines are well-maintained — better maintained than the systems they service, which is the kind of irony that Frey appreciates and does not mention to management.",
+npcs:[{name:"Machinist Teva",role:"Manufacturing level lead · Cleaner",stats:{STR:10,DEX:9,END:10,INT:9,EDU:8,SOC:5},skills:"Mechanic 3, Engineer (Manufacturing) 2, Gunner 1, Melee 1",rows:[["Manner","Large, quiet, precise. Speaks in full sentences when spoken to and not otherwise."],["To Riley","Recognises her as a peer. Offers a tour of the fabrication floor without being asked. This is the highest compliment he gives."],["Hidden","The parts wall contains several components that are not on the official inventory. They are components for personal equipment — not weapons exactly, but useful."],["RSR","Is aware of the cell. Is not a member. Has provided components when asked. Considers this a technical matter, not a political one."]]}],
+checks:[{skill:"Riley — Mechanic 10+ or Engineering 10+ (fabrication work)",degrees:[
+{l:"Effect 2+",c:"ds",t:"Riley can fabricate replacement components for the Meridian's Edge here. Reduces the maintenance penalty from -1 DM to 0 for specific systems. Takes 4 hours and Teva's cooperation."},
+{l:"Success",c:"dp",t:"Can fabricate standard components. Ship maintenance improvement possible but partial."},
+{l:"Failure",c:"df",t:"The equipment is unfamiliar enough to require Teva's direct supervision. He'll provide it but it adds 2 hours."}]}],
+events:[
+{t:"1 hr in",e:"One of the industrial printers completes a job — a replacement panel section for the observation dome, printed from the station's own composite. Teva checks it with callipers."},
+{t:"3 hrs in",e:"Dos appears with a request — a component Teva eyes for a moment before filling. The component is for encrypted communications hardware. Teva says nothing about this."}],
+refnotes:"This is Riley's place. If she comes here, let her have time with Teva and the machines. It is one of the few places in this session where she is completely at home.\n\nThe off-inventory components on the parts wall are a future resource — they're not weapons but they're useful. Leave them for the players to discover if they look."}}}
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED STATE & PLAYER MODE
+// ═══════════════════════════════════════════════════════════════════════════
+let currentView = "system";
+const pmCheck = document.getElementById("pm-check");
+const rootEl = document.getElementById("root");
+
+function togglePM(){
+  pmCheck.checked = !pmCheck.checked;
+  rootEl.classList.toggle("pm-active", pmCheck.checked);
+  try {
+    if(pmCheck.checked) localStorage.setItem("aurelia_pm","1");
+    else localStorage.removeItem("aurelia_pm");
+  } catch(e){}
+  if(currentView === "station" && cur) renderTabs(), renderDetail();
+}
+pmCheck.addEventListener("change", function(){
+  rootEl.classList.toggle("pm-active", this.checked);
+  try {
+    if(this.checked) localStorage.setItem("aurelia_pm","1");
+    else localStorage.removeItem("aurelia_pm");
+  } catch(e){}
+  if(currentView === "station" && cur) renderTabs(), renderDetail();
+});
+try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); } } catch(e){}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM MAP
+// ═══════════════════════════════════════════════════════════════════════════
+let selectedBody = null;
+
+// Fixed positions for veil asteroids (never change)
+const VEIL_DOTS = [
+  [388,238],[400,228],[395,252],[410,242],[378,245],[392,258],[406,264],
+  [418,248],[376,256],[402,272],[388,268],[412,232],[422,258],[380,228],[370,248]
+];
+
+const ORBIT_X = {1:0.13,2:0.26,3:0.40,4:0.50,5:0.65,6:0.82};
+
+function buildOrrery(){
+  const svg = document.getElementById("orrery-svg");
+  const W=800, H=500, CY=H/2;
+
+  // Body list table
+  const tbl = document.getElementById("body-list-table");
+  tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>UWP</th><th></th></tr>`;
+  BODIES.forEach(b => {
+    if(b.isMoon) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
+          <span style="color:${b.hook?'#E8A020':'#e8eaf0'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
+      <td style="color:#8b91a8;font-size:10px">${b.type.split('·')[0].trim()}</td>
+      <td style="color:#D4A843;font-family:monospace;font-size:10px">${b.uwpString}</td>
+      <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
+    tr.style.cursor="pointer";
+    tr.onclick = () => selectBody(b.id);
+    tbl.appendChild(tr);
+  });
+
+  let html = "";
+  // Background stars — fixed positions
+  const STARS = [[50,40],[120,80],[200,30],[300,60],[400,20],[500,50],[600,80],[700,30],[760,60],[80,120],[180,150],[350,110],[450,140],[580,100],[680,130],[750,120],[30,200],[150,220],[250,180],[420,210],[550,190],[700,210],[780,180],[60,300],[170,320],[280,280],[400,310],[520,300],[650,290],[760,330],[100,380],[220,400],[380,360],[480,420],[620,380],[720,400]];
+  STARS.forEach(([x,y]) => html += `<circle cx="${x}" cy="${y}" r="1" fill="white" opacity="0.35"/>`);
+
+  // Orbital guide lines
+  [1,2,3,4,5,6].forEach(i => {
+    const x = ORBIT_X[i]*W;
+    html += `<line x1="${x}" y1="${CY-70}" x2="${x}" y2="${CY+70}" stroke="#444466" stroke-width="0.5" stroke-dasharray="3,5" opacity="0.35"/>`;
+  });
+  html += `<line x1="50" y1="${CY}" x2="${W-40}" y2="${CY}" stroke="#444466" stroke-width="0.5" opacity="0.25"/>`;
+
+  // Draw each body
+  BODIES.forEach(b => {
+    if(b.isStar){
+      const x=55, y=CY;
+      html += `<circle cx="${x}" cy="${y}" r="34" fill="${b.color}" opacity="0.1"/>`;
+      html += `<circle cx="${x}" cy="${y}" r="26" fill="${b.color}" opacity="0.15"/>`;
+      html += `<circle cx="${x}" cy="${y}" r="20" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(selectedBody===b.id) html += `<circle cx="${x}" cy="${y}" r="26" fill="none" stroke="${b.color}" stroke-width="1.5" opacity="0.8" pointer-events="none"/>`;
+      html += `<text x="${x}" y="${CY+42}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace">${b.name}</text>`;
+    } else if(b.id==="veil"){
+      const veilX=ORBIT_X[4]*W, veilY=CY+15; // already computed above
+      VEIL_DOTS.forEach(([dx,dy]) => html += `<circle cx="${dx}" cy="${dy}" r="1.5" fill="${b.color}" opacity="0.6" pointer-events="none"/>`);
+      html += `<circle cx="${veilX}" cy="${veilY}" r="22" fill="transparent" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(selectedBody===b.id) html += `<circle cx="${veilX}" cy="${veilY}" r="22" fill="${b.color}" opacity="0.15" pointer-events="none"/>`;
+      // Hook indicator
+      html += `<text x="${veilX+14}" y="${veilY-14}" fill="#E8A020" font-size="12" font-weight="700" pointer-events="none">!</text>`;
+      html += `<text x="${veilX}" y="${CY+75}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace">The Veil</text>`;
+    } else if(!b.isMoon){
+      const x = ORBIT_X[b.orbitPos]*W;
+      const yOff = b.id==="tanath"?-18:b.id==="ouros"?12:b.id==="aurelia"?-12:b.id==="scoria"?15:b.id==="greymantle"?8:0;
+      const y = CY + yOff;
+      const r = b.id==="tanath"?14:b.id==="ouros"?10:b.id==="aurelia"?9:6;
+      if(selectedBody===b.id) html += `<circle cx="${x}" cy="${y}" r="${r+5}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
+      html += `<circle cx="${x}" cy="${y}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(b.hook) html += `<text x="${x+r+1}" y="${y-r-1}" font-size="11" fill="#E8A020" font-weight="700" pointer-events="none">!</text>`;
+      html += `<text x="${x}" y="${CY+75}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace">${b.name}</text>`;
+    } else {
+      // Moon
+      const parent = BODIES.find(p=>p.id===b.parentId);
+      if(!parent) return;
+      const parentX = b.parentId==="aurelia"?ORBIT_X[2]*W:ORBIT_X[5]*W;
+      const parentY = b.parentId==="aurelia"?CY-12:CY-18;
+      const offsets = {pallor:[22,-18],esk:[-22,18],nara:[28,-5],darkmoon:[18,28]};
+      const [ox,oy] = offsets[b.id]||[18,-18];
+      const mx=parentX+ox, my=parentY+oy;
+      html += `<line x1="${parentX}" y1="${parentY}" x2="${mx}" y2="${my}" stroke="#444466" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
+      html += `<circle cx="${mx}" cy="${my}" r="3" fill="${b.color}" ${b.id==="darkmoon"?'opacity="0.4"':''} data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+      if(b.hook) html += `<text x="${mx+5}" y="${my-5}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
+      html += `<text x="${mx+6}" y="${my+4}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle">${b.name}</text>`;
+    }
+  });
+
+  svg.innerHTML = html;
+
+  // Click/touch handlers
+  svg.querySelectorAll(".body-node").forEach(el => {
+    el.addEventListener("click", () => selectBody(el.getAttribute("data-body")));
+    el.addEventListener("touchend", e => { e.preventDefault(); selectBody(el.getAttribute("data-body")); });
+  });
+}
+
+function selectBody(id){
+  selectedBody = id;
+  const body = BODIES.find(b=>b.id===id);
+  if(!body) return;
+  buildOrrery();
+
+  document.getElementById("sys-overview").classList.add("v-hidden");
+  const det = document.getElementById("sys-body-detail");
+  det.classList.remove("v-hidden");
+
+  const nm = document.getElementById("sys-dname");
+  nm.textContent = body.name.toUpperCase();
+  nm.style.color = body.color;
+  document.getElementById("sys-dtype").textContent = body.type.toUpperCase();
+
+  const stBtn = document.getElementById("btn-view-station");
+  if(body.id==="aurelia"){
+    stBtn.classList.remove("v-hidden");
+    stBtn.textContent = "⬡ VIEW AURELIA UP CLOSE";
+    stBtn.onclick = function(){ goAurelia(); };
+  } else {
+    stBtn.classList.add("v-hidden");
+  }
+
+  const pm = pmCheck.checked;
+  let html = "";
+
+  if(body.uwpString&&body.uwpString!=="—"){
+    html += `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+      <span style="font-family:monospace;font-size:18px;color:#D4A843;font-weight:700">${body.uwpString}</span>
+      <span style="font-size:9px;color:#8b91a8;font-family:monospace;letter-spacing:1px">${body.tag||""}</span>
+    </div>`;
+  }
+
+  const fields=[["Orbit",body.orbitAU],["Diameter",body.diameter],["Period",body.period]].filter(f=>f[1]&&f[1]!=="—");
+  if(fields.length) html += `<div class="sg">${fields.map(([l,v])=>`<div class="sg-l">${l}</div><div class="sg-v">${v}</div>`).join("")}</div>`;
+
+  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${body.desc.replace(/\n/g,"<br>")}</div></div>`;
+
+  if(!pm&&body.readAloud) html += `<div class="s-blk read"><div class="s-blk-lbl">Read Aloud</div>${body.readAloud}</div>`;
+  if(!pm&&body.refNote) html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${body.refNote.replace(/\n/g,"<br>")}</div>`;
+
+  if(!pm&&body.npcs&&body.npcs.length){
+    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
+    body.npcs.forEach((n,i)=>{
+      const nid=`sys-npc-${i}`;
+      html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
+        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
+        <span class="chev" id="${nid}-chev">▾</span></div>
+        <div class="npc-body" id="${nid}">
+          <div class="skill-row">${n.skills}</div>
+          ${n.rows.map(([l,v])=>`<div class="npc-row"><div class="nrl">${l}</div><div class="nrv">${v}</div></div>`).join("")}
+        </div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  if(!pm&&body.checks&&body.checks.length){
+    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
+    const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
+    body.checks.forEach(c=>{
+      html += `<div class="chk"><div class="chk-t">${c.skill}</div>`;
+      c.degrees.forEach(d=>{
+        const cls=d.cls||degCls[d.c]||"deg-p";
+        const lbl=d.label||d.l||"";
+        const txt=d.text||d.t||"";
+        html+=`<div class="deg-row"><div class="${cls}">${lbl}</div><div style="font-size:11px">${txt}</div></div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+
+  if(!pm&&body.events&&body.events.length){
+    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
+    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`);
+    html += `</div>`;
+  }
+
+  det.innerHTML = html;
+  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}], body.name);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIEW SWITCHING
+// ═══════════════════════════════════════════════════════════════════════════
+function enterStation(){
+  currentView = "station";
+  document.getElementById("view-system").classList.add("v-hidden");
+  document.getElementById("view-aurelia").classList.add("v-hidden");
+  document.getElementById("view-station").classList.remove("v-hidden");
+  document.getElementById("view-station").style.display="flex";
+  document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
+  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+}
+
+function goSystem(){
+  currentView = "system";
+  document.getElementById("view-station").classList.add("v-hidden");
+  document.getElementById("view-aurelia").classList.add("v-hidden");
+  document.getElementById("view-system").classList.remove("v-hidden");
+  document.getElementById("view-system").style.display="flex";
+  document.getElementById("hdr-title").textContent = "AURELIAN SYSTEM";
+  if(selectedBody){
+    const b=BODIES.find(x=>x.id===selectedBody);
+    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}],b?b.name:"");
+  } else {
+    document.getElementById("breadcrumb").innerHTML="";
+  }
+}
+
+function setBreadcrumb(crumbs,current){
+  const el=document.getElementById("breadcrumb");
+  el.innerHTML=crumbs.map(c=>`<span class="bc-link" onclick="${c.fn}()">${c.label}</span><span class="bc-sep"> › </span>`).join("")
+    +(current?`<span style="color:#8b91a8">${current}</span>`:"");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATION
+// ═══════════════════════════════════════════════════════════════════════════
+let cur=null, curSub=null, curTab="overview";
+const notes={};
+const nodeColours={elevator:"#BA7517",docking:"#185FA5",concourse:"#BA7517",security:"#534AB7",medical:"#0F6E56",maintenance:"#A32D2D"};
+
+function selArea(areaId){
+  cur=areaId; curSub=null; curTab="overview";
+  updateNodes(); renderHeader(); renderTabs(); renderDetail(); renderFooter();
+  showDetail();
+}
+
+function selSub(subId){
+  curSub=subId; curTab="overview";
+  renderHeader(); renderTabs(); renderDetail(); renderFooter();
+}
+
+function goBack(){
+  curSub=null;
+  curTab=pmCheck.checked?"notes":"overview";
+  renderHeader(); renderTabs(); renderDetail(); renderFooter();
+}
+
+function showDetail(){
+  if(window.innerWidth<=640){
+    document.getElementById("map-panel").style.display="none";
+    document.querySelector(".map-back-btn").style.display="flex";
+  }
+}
+function showMap(){
+  document.getElementById("map-panel").style.display="";
+  document.querySelector(".map-back-btn").style.display="none";
+}
+
+function updateNodes(){
+  ["elevator","docking","concourse","security","medical","maintenance"].forEach(id=>{
+    const el=document.getElementById("r-"+id);
+    if(!el) return;
+    const on=cur===id;
+    el.setAttribute("fill",on?nodeColours[id]+"33":"#0f1117");
+    el.setAttribute("stroke-width",on?"2.5":"1.5");
+  });
+}
+
+function getArea(){
+  const a=MAIN[cur];
+  if(curSub&&a.subs&&a.subs[curSub]) return a.subs[curSub];
+  return a;
+}
+
+function renderHeader(){
+  const h=document.getElementById("area-hdr");
+  if(!cur){h.style.display="none";return;}
+  const a=MAIN[cur], sub=curSub&&a.subs&&a.subs[curSub];
+  h.style.display="block";
+  h.innerHTML=`<span class="atag" style="background:${a.tagBg};color:${a.tagColor}">${a.tag}</span>`
+    +`<div class="aname">${sub?a.label+" → "+sub.label:a.label}</div>`
+    +`<div class="asub">${sub?sub.sub:a.sub}</div>`;
+}
+
+function renderTabs(){
+  const tb=document.getElementById("tab-bar");
+  if(!cur){tb.style.display="none";return;}
+  const pm=pmCheck.checked;
+  const refOnly=["npcs","checks","events","refnotes"]; // desc tab visible in PM but shows cleaned content
+  const allTabs=[["overview","Overview"],["desc","Description"],["npcs","NPCs"],["checks","Checks"],["events","Events"],["refnotes","Ref Notes"],["notes","My Notes"]];
+  const tabs=pm?allTabs.filter(([k])=>!refOnly.includes(k)):allTabs;
+  const hasSubs=!curSub&&MAIN[cur].subs&&Object.keys(MAIN[cur].subs).length>0;
+  if(!tabs.map(t=>t[0]).includes(curTab)) curTab="overview";
+  tb.style.display="flex";
+  let html=tabs.map(([k,l])=>`<button class="tab${curTab===k?" on":""}" onclick="setTab('${k}')">${l}</button>`).join("");
+  if(hasSubs) html+=`<button class="tab${curTab==="subareas"?" on":""}" onclick="setTab('subareas')">Sub-areas</button>`;
+  tb.innerHTML=html;
+}
+
+function setTab(t){curTab=t;renderTabs();renderDetail();}
+
+function renderDetail(){
+  const d=document.getElementById("detail");
+  if(!cur){
+    d.innerHTML='<div class="empty"><div class="empty-icon">🛰</div><div style="font-size:14px;font-weight:600;color:#e8eaf0">Select an area</div><div style="font-size:12px;max-width:180px;text-align:center">Tap any node on the map.</div></div>';
+    return;
+  }
+  const a=getArea(), mainA=MAIN[cur], pm=pmCheck.checked;
+  if(pm&&refOnly_tabs.includes(curTab)) curTab="overview";
+  const backBtn=curSub?`<button class="back-btn" onclick="goBack()">← Back to ${mainA.label}</button>`:"";
+
+  if(curTab==="overview"){
+    let html=backBtn;
+    if(a.read) html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${a.read}</div></div>`;
+    if(!pm&&a.rsr) html+=`<div class="rsr-tag">🔴 ${a.rsr}</div>`;
+    if(a.desc) html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${a.desc}</div></div>`;
+    if(a.ship){
+      html+=`<div class="blk" style="margin-top:8px"><div class="blk-lbl">THE MERIDIAN'S EDGE — STATBLOCK</div><div style="display:grid;grid-template-columns:1fr;gap:4px;margin-top:4px">
+        ${a.ship.lines.map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:6px;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--bg2)"><span style="color:var(--tx1);font-weight:700">${k}</span><span style="color:var(--tx0)">${v}</span></div>`).join("")}
+      </div></div>`;
+    }
+    d.innerHTML=html;
+  } else if(curTab==="npcs"){
+    let html=backBtn;
+    if(!a.npcs||a.npcs.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No named NPCs in this area.</div>`;return;}
+    html+=a.npcs.map((n,i)=>{
+      const nid="sta-npc-"+cur+(curSub||"")+i;
+      return `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
+        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
+        <span class="chev" id="${nid}-chev">▾</span></div>
+        <div class="npc-body" id="${nid}">
+          <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
+          <div class="skill-row">${n.skills}</div>
+          ${n.rows.map(r=>`<div class="sr"><b>${r[0]}:</b> ${r[1]}</div>`).join("")}
+        </div></div>`;
+    }).join("");
+    d.innerHTML=html;
+  } else if(curTab==="desc"){
+    let html=backBtn;
+    const pm=pmCheck.checked;
+    const rawRead = a.read||"";
+    if(!rawRead){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No description for this area.</div>`;return;}
+    // In player mode, strip lines containing PC names or referee cues
+    const pcNames=["Cass","Rhett","Riley","Riven","Bartholomew","Curculion","Calder","Eleos"];
+    const refCues=["Referee","referee","RSR","Underdeck","roll","Roll","symbol","Symbol","Note:","⚠"];
+    let displayText = rawRead;
+    if(pm){
+      displayText = rawRead.split("\n").filter(line => {
+        if(!line.trim()) return true;
+        const hasPC = pcNames.some(n => line.includes(n) && (line.includes(" her ") || line.includes(" his ") || line.includes(" she ") || line.includes(" he ") || line.includes("hits ") || line.includes("smells") || line.includes("feels ")));
+        const hasRef = refCues.some(c => line.startsWith(c) || line.includes("⚠"));
+        return !hasPC && !hasRef;
+      }).join("\n");
+    }
+    html += `<div class="read-blk"><div class="read-body" style="white-space:pre-wrap">${displayText.replace(/</g,"&lt;")}</div></div>`;
+    d.innerHTML=html;
+  } else if(curTab==="checks"){
+    let html=backBtn;
+    if(!a.checks||a.checks.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No skill checks in this area.</div>`;return;}
+    const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
+    html+=a.checks.map(c=>`<div class="chk"><div class="chk-t">🎲 ${c.skill}</div>${c.degrees.map(dg=>{
+      const cls=dg.cls||degCls[dg.c]||"deg-p";
+      const lbl=dg.label||dg.l||"";
+      const txt=dg.text||dg.t||"";
+      return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
+    }).join("")}</div>`).join("");
+    d.innerHTML=html;
+  } else if(curTab==="events"){
+    let html=backBtn;
+    if(!a.events||a.events.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No events scheduled.</div>`;return;}
+    html+=a.events.map(e=>`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`).join("");
+    d.innerHTML=html;
+  } else if(curTab==="refnotes"){
+    let html=backBtn;
+    html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${a.refnotes||"No referee notes for this area."}</div></div>`;
+    d.innerHTML=html;
+  } else if(curTab==="subareas"){
+    const subs=MAIN[cur].subs||{}, keys=Object.keys(subs);
+    if(!keys.length){d.innerHTML=`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No sub-areas defined.</div>`;return;}
+    d.innerHTML=`<div class="blk-lbl" style="margin-bottom:8px">Select a Sub-Area</div><div class="sub-grid">${keys.map(k=>`<button class="sub-btn" data-subid="${k}"><div class="sub-btn-name">${subs[k].label}</div><div class="sub-btn-desc">${subs[k].sub||""}</div></button>`).join("")}</div>`;
+    d.querySelectorAll('.sub-btn[data-subid]').forEach(btn => {
+      btn.addEventListener('click', () => selSub(btn.getAttribute('data-subid')));
+      btn.addEventListener('touchend', e => { e.preventDefault(); selSub(btn.getAttribute('data-subid')); });
+    });
+  } else if(curTab==="notes"){
+    const key=cur+(curSub?"_"+curSub:"");
+    const saved=notes[key]||"";
+    d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${saved}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
+  }
+}
+
+const refOnly_tabs=["npcs","checks","events","refnotes"];
+
+function toggleNPC(id,hdr){
+  const el=document.getElementById(id), ch=document.getElementById(id+"-chev");
+  const open=el.classList.contains("open");
+  el.classList.toggle("open",!open);
+  if(ch) ch.classList.toggle("open",!open);
+}
+
+function saveNote(){
+  const key=cur+(curSub?"_"+curSub:"");
+  const ta=document.getElementById("nta");
+  if(ta){ notes[key]=ta.value; const m=document.getElementById("smsg"); if(m){m.style.display="inline";setTimeout(()=>m.style.display="none",1500);} }
+}
+
+function renderFooter(){
+  const f=document.getElementById("foot"), cr=document.getElementById("conn-row");
+  if(!cur||curSub){f.style.display="none";return;}
+  const a=MAIN[cur];
+  if(!a.conn||a.conn.length===0){f.style.display="none";return;}
+  f.style.display="block";
+  cr.innerHTML=a.conn.map(id=>{
+    const c=nodeColours[id]||"#5b8ef0";
+    return `<button class="conn-btn" onclick="selArea('${id}')" style="background:${c}22;color:${c};border-color:${c}">${MAIN[id].label}</button>`;
+  }).join("");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATION CLOCK
+// ═══════════════════════════════════════════════════════════════════════════
+let clockMinutes = 0; // total minutes since 00:00
+
+function clockDisplay(mins) {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+function renderClock() {
+  document.getElementById('clock-display').textContent = clockDisplay(clockMinutes);
+  try { localStorage.setItem('aurelia_clock', clockMinutes); } catch(e){}
+}
+
+function advanceClock(mins) {
+  const prev = clockMinutes;
+  clockMinutes = (clockMinutes + mins) % 1440;
+  renderClock();
+  checkTimedEvents(prev, clockMinutes);
+}
+
+function resetClock() {
+  clockMinutes = 0;
+  renderClock();
+  resetTimedEvents();
+}
+
+function openClockEdit(e) {
+  const pop = document.getElementById('clock-edit');
+  const inp = document.getElementById('clock-input');
+  inp.value = clockDisplay(clockMinutes);
+  // Position below the display
+  const rect = e.target.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 6) + 'px';
+  pop.style.left = Math.max(4, rect.left - 60) + 'px';
+  pop.classList.toggle('open');
+  if(pop.classList.contains('open')) {
+    setTimeout(() => inp.focus(), 50);
+  }
+}
+
+function setClockFromInput() {
+  const val = document.getElementById('clock-input').value; // "HH:MM"
+  if(val) {
+    const [h, m] = val.split(':').map(Number);
+    clockMinutes = (h * 60 + m) % 1440;
+    renderClock();
+  }
+  document.getElementById('clock-edit').classList.remove('open');
+}
+
+// Close clock popover when clicking outside
+document.addEventListener('click', function(e) {
+  const pop = document.getElementById('clock-edit');
+  if(pop.classList.contains('open') &&
+     !pop.contains(e.target) &&
+     e.target.id !== 'clock-display') {
+    pop.classList.remove('open');
+  }
+});
+
+// Restore clock from localStorage
+try {
+  const saved = localStorage.getItem('aurelia_clock');
+  if(saved !== null) clockMinutes = parseInt(saved, 10) || 0;
+} catch(e){}
+renderClock();
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RSR FOUND STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const rsrFound = {1:false,2:false,3:false,4:false};
+try {
+  const saved = JSON.parse(localStorage.getItem('aurelia_rsr')||'{}');
+  Object.keys(saved).forEach(k => rsrFound[k] = saved[k]);
+} catch(e){}
+
+function toggleRsrFound(n){
+  rsrFound[n] = !rsrFound[n];
+  try { localStorage.setItem('aurelia_rsr', JSON.stringify(rsrFound)); } catch(e){}
+  renderRsrMarkers();
+  if(rsrFound[n]) logEvent(`Players found RSR Symbol ${['①','②','③','④'][n-1]} — marker darkened.`);
+}
+
+function renderRsrMarkers(){
+  [1,2,3,4].forEach(n => {
+    const c = document.getElementById('rsr-c-'+n);
+    const g = document.getElementById('rsr-g-'+n);
+    if(!c) return;
+    c.setAttribute('fill', rsrFound[n] ? '#6B1010' : '#A32D2D');
+    if(g) g.setAttribute('title', rsrFound[n] ? 'Found ✓' : 'Tap to mark found');
+  });
+}
+
+// Call after SVG loads
+setTimeout(renderRsrMarkers, 100);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EVENT LOG
+// ═══════════════════════════════════════════════════════════════════════════
+let eventLog = [];
+let eventLogCollapsed = false;
+try { eventLog = JSON.parse(localStorage.getItem('aurelia_evlog')||'[]'); } catch(e){}
+
+function logEvent(text, areaLabel){
+  const entry = { time: clockDisplay(clockMinutes), area: areaLabel||'', text };
+  eventLog.unshift(entry); // newest first
+  if(eventLog.length > 100) eventLog.pop();
+  try { localStorage.setItem('aurelia_evlog', JSON.stringify(eventLog)); } catch(e){}
+  renderEventLog();
+}
+
+function renderEventLog(){
+  const body = document.getElementById('event-log-body');
+  const count = document.getElementById('event-log-count');
+  if(!body) return;
+  count.textContent = eventLog.length;
+  if(eventLogCollapsed){ body.classList.add('collapsed'); return; }
+  body.classList.remove('collapsed');
+  if(!eventLog.length){
+    body.innerHTML = '<div style="color:var(--tx1);font-size:11px;font-style:italic;padding:4px">No events logged yet. Events trigger automatically as station time advances.</div>';
+    return;
+  }
+  body.innerHTML = eventLog.map(e =>
+    `<div class="evlog-entry">
+      <div class="evlog-time">${e.time}${e.area?' · '+e.area:''}</div>
+      <div class="evlog-text">${e.text}</div>
+    </div>`
+  ).join('');
+}
+
+function toggleEventLog(){
+  eventLogCollapsed = !eventLogCollapsed;
+  document.getElementById('event-log-toggle').textContent = eventLogCollapsed ? '▲' : '▼';
+  renderEventLog();
+}
+
+function clearEventLog(){
+  eventLog = [];
+  try { localStorage.removeItem('aurelia_evlog'); } catch(e){}
+  renderEventLog();
+}
+
+// Timed events — check which events should have fired at current clock time
+// Each event has a minuteThreshold — fires when clock passes it
+const TIMED_EVENTS = [
+  {mins:30,  area:"Docking Hub",    text:"Hegemony customs skiff does a slow pass of Bay 15, scanning the Meridian's Edge. Does not hail."},
+  {mins:40,  area:"Main Concourse", text:"The ceiling clouds complete a full cycle. Light shifts slightly warmer for ~10 minutes."},
+  {mins:60,  area:"Space Elevator", text:"Tannoy: The orbital elevator remains temporarily offline for scheduled maintenance."},
+  {mins:60,  area:"Docking Hub",    text:"Dockmaster Vey makes a slow circuit of the office, pausing longer at Bay 15."},
+  {mins:90,  area:"Main Concourse", text:"Tannoy: Aurelia Station welcomes delegates of the Hegemony Trade Commission."},
+  {mins:120, area:"Docking Hub",    text:"Berth fee notice appears on the ship's external terminal. Payment expected within 6 hours."},
+  {mins:120, area:"Main Concourse", text:"The Cleaner crosses the concourse — grey coveralls, badge inward. Gone in ten seconds."},
+  {mins:120, area:"Maintenance",    text:"Dos receives a message on his encrypted channel. He looks pleased, then looks at Sable. Neither speaks."},
+  {mins:120, area:"Life Support",   text:"A processor runs a self-diagnostic cycle — brief shift in harmonic tone."},
+  {mins:180, area:"Main Concourse", text:"Small group of Hegemony administrative aides moves through the concourse with purpose."},
+  {mins:180, area:"Docking Hub",    text:"Hegemony liaison officer visits Vey's office. Muffled conversation. Vey's expression does not change."},
+  {mins:180, area:"Manufacturing",  text:"Dos appears with a request — a component for encrypted comms hardware. Teva fills it without comment."},
+  {mins:240, area:"Main Concourse", text:"Tannoy: The Stellarview Lounge will be reserved for a private function from 1800 to 2200."},
+  {mins:240, area:"Maintenance",    text:"A Cleaner completes a circuit of all four levels, checking systems manually."},
+  {mins:360, area:"Docking Hub",    text:"Vey sends a polite automated reminder about the unpaid berth fee, if applicable."},
+  {mins:1020, area:"Stellarview",   text:"1800 — Staff begin redirecting non-delegation guests. Players inside have about four minutes."},
+  {mins:1080, area:"Stellarview",   text:"1800-2200 — Delegation function behind closed doors. One raised voice at 2100, quickly contained."},
+  {mins:1320, area:"Space Elevator",text:"Hour 22 — Low vibration through deck plates. Elevator cable coming back online. Gate lights: red to amber."},
+  {mins:1440, area:"Space Elevator",text:"Hour 24 — Gate unseals. Three Hegemony staff emerge looking tired. One is who the RSR cell was watching."},
+];
+
+let lastLoggedMinute = -1;
+let firedEvents = new Set();
+try {
+  const saved = JSON.parse(localStorage.getItem('aurelia_fired')||'[]');
+  firedEvents = new Set(saved);
+} catch(e){}
+
+function checkTimedEvents(prevMins, newMins){
+  // Handle wrap-around (midnight)
+  TIMED_EVENTS.forEach((ev, i) => {
+    const key = i + '_' + ev.mins;
+    if(firedEvents.has(key)) return;
+    // Fire if we've passed the threshold this advance
+    const crossed = prevMins < ev.mins && newMins >= ev.mins;
+    if(crossed){
+      logEvent(ev.text, ev.area);
+      firedEvents.add(key);
+      // Special: re-open elevator at hour 24
+      if(ev.mins === 1440) openElevator();
+    }
+  });
+  try { localStorage.setItem('aurelia_fired', JSON.stringify([...firedEvents])); } catch(e){}
+}
+
+function resetTimedEvents(){
+  firedEvents = new Set();
+  try { localStorage.removeItem('aurelia_fired'); } catch(e){}
+}
+
+function openElevator(){
+  // Update elevator node in station SVG
+  const el = document.getElementById('r-elevator');
+  if(el) el.setAttribute('stroke','#4CAF50');
+  const txt = document.querySelector('#n-elevator text');
+  if(txt) { txt.textContent='ELEVATOR ONLINE'; txt.setAttribute('fill','#4CAF50'); }
+  // Update MAIN data
+  if(MAIN.elevator){
+    MAIN.elevator.tag = 'ONLINE';
+    MAIN.elevator.tagBg = '#0f2e20';
+    MAIN.elevator.tagColor = '#4caf82';
+    MAIN.elevator.read = MAIN.elevator.read.replace('Right now you cannot.','The gate is now open.');
+  }
+  logEvent('Space Elevator is back online. Gate unsealed.', 'Space Elevator');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AURELIA LOCATIONS DATA
+// ═══════════════════════════════════════════════════════════════════════════
+const AURELIA_LOCS = [
+  {
+    id:"station", name:"Aurelia Orbital Station", angle:270, dist:0.72,
+    color:"#4A90D9", hook:true, isStation:true,
+    tag:"ACTIVE LOCATION", tagBg:"#0F3460", tagColor:"#4A90D9",
+    desc:"The station sits at the L2 Lagrange point, permanently in Aurelia's shadow. A mid-sized orbital platform serving commercial docking, transit, and Hegemony administrative functions.\n\nThe crew's current location.",
+    refNote:"Enter the station to access the full station map and all areas."
+  },
+  {
+    id:"capitol", name:"Aurelia Capitol", angle:340, dist:0.60,
+    color:"#D4A843", hook:false,
+    tag:"HEGEMONY", tagBg:"#3D2B1F", tagColor:"#D4A843",
+    desc:"The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford.",
+    refNote:"The Capitol is where Hegemony policy for the Aurelian system is made. The Governor-General's residence is here, as is the regional OmniSynth licensing office."
+  },
+  {
+    id:"cradle", name:"The Cradle", angle:200, dist:0.58,
+    color:"#2AABB8", hook:true,
+    tag:"DEEP WATER", tagBg:"#0a2530", tagColor:"#2AABB8",
+    desc:"Aurelia's most extraordinary city — built on the ocean floor in the equatorial deep trench, pressurised and lit from within. Visible from orbit as a faint blue-white glow through 600 metres of water.\n\nPopulation 12 million. The Cradle operates under a different legal framework from the surface — a legacy of the engineering charter that built it. The Hegemony's reach here is real but thinner.",
+    refNote:"The Cradle is the closest thing Aurelia has to a free city. Black markets, off-charter research, people who don't want to be found. The RSR has significant infrastructure here."
+  },
+  {
+    id:"hegemony-base", name:"Hegemony Garrison", angle:45, dist:0.55,
+    color:"#534AB7", hook:false,
+    tag:"MILITARY", tagBg:"#1e1e2e", tagColor:"#8b91a8",
+    desc:"A Hegemony Navy installation on the northern continent's high plateau. Mostly administrative — a handful of frigates on rotation, a rapid-response ground force, the regional communications hub.\n\nNot a combat posting. The Hegemony has not needed combat on Aurelia. The garrison commander finds this increasingly difficult to explain to new arrivals who expected action.",
+    refNote:"The garrison holds sealed orders for three scenarios. One of them involves the Cleaners. Nobody at the garrison knows this."
+  },
+  {
+    id:"spire-range", name:"Spire Range", angle:130, dist:0.50,
+    color:"#9999AA", hook:false,
+    tag:"LANDMARK", tagBg:"#1e2030", tagColor:"#9999AA",
+    desc:"The twin mountain peaks that appear in every Hegemony promotional image of Aurelia. Geologically ancient, atmospherically dramatic — the peaks catch the copper-tinted light of Auros at dawn and dusk and turn a shade of red that colonists have named the Auros Kiss.\n\nPopular tourist destination. Four licensed resort complexes at mid-altitude. Above 4,000 metres, only licensed research expeditions.",
+    refNote:"A pre-Collapse observatory sits at 5,200 metres on the eastern peak. It stopped broadcasting forty years ago. It still has power."
+  },
+  {
+    id:"omnisynth", name:"OmniSynth Arcology", angle:155, dist:0.62,
+    color:"#C87941", hook:true,
+    tag:"CORPORATE", tagBg:"#2e1f0a", tagColor:"#C87941",
+    desc:"OmniSynth's primary Aurelian facility — a self-contained arcology on the southern coast housing 80,000 employees and their dependents. Research, manufacturing, and administrative functions. The arcology has its own power grid, water supply, and internal security force.\n\nFrom outside, it looks like a very clean small city. From inside, it looks like a company town.",
+    refNote:"Project Chimera's above-ground operations are administered from the OmniSynth Arcology's sub-level C. Sub-level C is not on the official floor plan."
+  },
+  {
+    id:"underdeck", name:"Underdeck Entrance", angle:250, dist:0.45,
+    color:"#A32D2D", hook:true,
+    tag:"UNDERDECK", tagBg:"#2e1010", tagColor:"#d45050",
+    desc:"The surface access point for Aurelia's Cleaner settlements — a pressurised transition zone between the atmosphere above and the filtered tunnels below. Multiple entrances exist; this is the one that appears on Hegemony maps, marked as Infrastructure Access — Authorised Personnel Only.\n\nThe ones that don't appear on any map are more interesting.",
+    refNote:"The Cleaner settlements beneath Aurelia's surface house approximately 2 million people. They breathe filtered air, grow food under artificial light, and know the surface population's life expectancy. The RSR's deepest infrastructure is down here."
+  }
+];
+
+let selectedLoc = null;
+
+function buildAureliaMap(){
+  const svg = document.getElementById('aurelia-svg');
+  if(!svg) return;
+  const W=800, H=600, CX=W/2, CY=H/2;
+  const planetR = 90;
+  let svgHTML = '';
+
+  // Background stars
+  const STARS = [[40,30],[110,70],[190,25],[290,55],[390,15],[510,45],[620,75],[710,25],[760,55],[75,110],[175,140],[345,105],[445,135],[575,95],[685,125],[750,110],[25,195],[145,215],[245,175],[425,205],[545,185],[705,205],[780,175],[55,295],[165,315],[275,275],[405,305],[525,295],[655,285],[760,325],[95,375],[215,395],[385,355],[485,415],[625,375],[725,395]];
+  STARS.forEach(([x,y]) => svgHTML += `<circle cx="${x}" cy="${y}" r="1" fill="white" opacity="0.3"/>`);
+
+  // Subtle orbit ring
+  svgHTML += `<ellipse cx="${CX}" cy="${CY}" rx="${CX*0.75}" ry="${CY*0.65}" fill="none" stroke="#444466" stroke-width="0.5" stroke-dasharray="4,6" opacity="0.3"/>`;
+
+  // Connection lines from planet to nodes
+  AURELIA_LOCS.forEach(loc => {
+    const rad = loc.angle * Math.PI / 180;
+    const nx = CX + Math.cos(rad) * (CX * loc.dist);
+    const ny = CY + Math.sin(rad) * (CY * loc.dist);
+    // Line from planet edge to node
+    const ex = CX + Math.cos(rad) * (planetR + 8);
+    const ey = CY + Math.sin(rad) * (planetR + 8);
+    svgHTML += `<line x1="${ex}" y1="${ey}" x2="${nx}" y2="${ny}" stroke="${loc.color}" stroke-width="0.5" stroke-dasharray="3,5" opacity="0.4"/>`;
+  });
+
+  // Planet — layered glow
+  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+25}" fill="#4A90D9" opacity="0.04"/>`;
+  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+12}" fill="#4A90D9" opacity="0.08"/>`;
+  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR}" fill="#1a3a5a"/>`;
+  // Continent patches (stylised)
+  svgHTML += `<ellipse cx="${CX-20}" cy="${CY-25}" rx="35" ry="22" fill="#2a5a3a" opacity="0.7" transform="rotate(-20,${CX-20},${CY-25})"/>`;
+  svgHTML += `<ellipse cx="${CX+30}" cy="${CY+15}" rx="28" ry="18" fill="#2a5a3a" opacity="0.6" transform="rotate(15,${CX+30},${CY+15})"/>`;
+  svgHTML += `<ellipse cx="${CX-10}" cy="${CY+30}" rx="18" ry="12" fill="#2a5a3a" opacity="0.5" transform="rotate(-5,${CX-10},${CY+30})"/>`;
+  // Atmosphere rim
+  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR}" fill="none" stroke="#4A90D9" stroke-width="3" opacity="0.4"/>`;
+  svgHTML += `<circle cx="${CX}" cy="${CY}" r="${planetR+4}" fill="none" stroke="#4A90D9" stroke-width="1.5" opacity="0.15"/>`;
+  // Planet label
+  svgHTML += `<text x="${CX}" y="${CY+5}" text-anchor="middle" fill="#4A90D9" font-size="11" font-family="monospace" opacity="0.6">AURELIA</text>`;
+
+  // Location nodes
+  AURELIA_LOCS.forEach(loc => {
+    const rad = loc.angle * Math.PI / 180;
+    const nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist));
+    const ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist));
+    const isSelected = selectedLoc === loc.id;
+    const r = 10;
+
+    if(isSelected) svgHTML += `<circle cx="${nx}" cy="${ny}" r="${r+6}" fill="${loc.color}" opacity="0.2" pointer-events="none"/>`;
+
+    svgHTML += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'55' : '#16213E'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.2}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+
+    if(loc.hook) svgHTML += `<text x="${nx+r+2}" y="${ny-r+2}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+
+    // Label — position to avoid overlap
+    const labelX = nx + (Math.cos(rad) > 0 ? r+4 : -(r+4));
+    const anchor = Math.cos(rad) > 0 ? 'start' : 'end';
+    const labelY = ny + (Math.sin(rad) > 0.5 ? r+12 : Math.sin(rad) < -0.5 ? -(r+4) : 4);
+    svgHTML += `<text x="${labelX}" y="${labelY}" text-anchor="${anchor}" fill="${loc.hook?'#E8A020':loc.color}" font-size="9" font-family="monospace" pointer-events="none">${loc.name}</text>`;
+  });
+
+  svg.innerHTML = svgHTML;
+
+  svg.querySelectorAll('.loc-node').forEach(el => {
+    el.addEventListener('click', () => selectLoc(el.getAttribute('data-loc')));
+    el.addEventListener('touchend', e => { e.preventDefault(); selectLoc(el.getAttribute('data-loc')); });
+  });
+}
+
+function selectLoc(id){
+  selectedLoc = id;
+  const loc = AURELIA_LOCS.find(l => l.id === id);
+  if(!loc) return;
+  buildAureliaMap();
+
+  document.getElementById('aur-overview').classList.add('v-hidden');
+  const det = document.getElementById('aur-loc-detail');
+  det.classList.remove('v-hidden');
+
+  const nm = document.getElementById('aur-dname');
+  nm.textContent = loc.name.toUpperCase();
+  nm.style.color = loc.color;
+  document.getElementById('aur-dtype').textContent = loc.tag;
+
+  // Show/hide Enter Station button
+  const stBtn = document.getElementById('btn-enter-station');
+  loc.isStation ? stBtn.classList.remove('v-hidden') : stBtn.classList.add('v-hidden');
+
+  const pm = pmCheck.checked;
+  let detHTML = '';
+  detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${loc.desc.split('\n').join('<br>')}</div></div>`;
+  if(!pm && loc.refNote) detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${loc.refNote}</div>`;
+  det.innerHTML = detHTML;
+
+  setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UPDATED VIEW SWITCHING — add Aurelia as intermediary
+// ═══════════════════════════════════════════════════════════════════════════
+function goAurelia(){
+  currentView = 'aurelia';
+  document.getElementById('view-system').classList.add('v-hidden');
+  document.getElementById('view-station').classList.add('v-hidden');
+  document.getElementById('view-aurelia').classList.remove('v-hidden');
+  document.getElementById('view-aurelia').style.display = 'flex';
+  document.getElementById('hdr-title').textContent = 'AURELIA';
+  setBreadcrumb([{label:'Aurelian System',fn:'goSystem'}], 'Aurelia');
+  buildAureliaMap();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+buildOrrery();
+renderEventLog();
+renderRsrMarkers();
+</script>
+</body>
+</html>
