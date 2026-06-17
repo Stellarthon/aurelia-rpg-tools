@@ -602,6 +602,48 @@ textarea{font-family:var(--font)}
   border-radius:5px;padding:10px;font-size:12px;cursor:pointer;font-family:monospace
 }
 #pw-error{color:#d45050;font-size:10px;margin-top:8px;min-height:14px}
+
+/* ── Player refresh button (iOS home-screen apps suspend setInterval, so
+     players need a manual way to pull fresh reveal state) ── */
+#player-refresh-btn{
+  display:none;position:fixed;top:54px;left:10px;z-index:60;
+  background:#1a3a2a;color:#4CAF50;border:1px solid #4CAF50;
+  border-radius:20px;padding:8px 14px;font-size:11px;font-family:monospace;
+  font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.4);
+  display:none;align-items:center;gap:6px;letter-spacing:0.5px
+}
+#root.pm-active #player-refresh-btn{display:flex}
+#player-refresh-btn:active{transform:scale(0.96)}
+#player-refresh-btn.spinning .refresh-icon{animation:refresh-spin 0.6s linear}
+@keyframes refresh-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+#player-refresh-btn.just-updated{background:#2a4a1a;border-color:#8BC34A}
+
+/* ── View transition effect ── */
+#view-transition{
+  position:fixed;inset:0;z-index:150;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%, #5ab0e8 0%, #1a3a6a 40%, #050810 100%);
+  opacity:0;
+}
+#view-transition.active{
+  animation:view-warp 0.5s cubic-bezier(.4,0,.2,1)
+}
+@keyframes view-warp{
+  0%   { opacity:0;   transform:scale(0.3); clip-path:circle(0% at 50% 50%); }
+  35%  { opacity:0.85; transform:scale(1);   clip-path:circle(75% at 50% 50%); }
+  65%  { opacity:0.85; transform:scale(1);   clip-path:circle(75% at 50% 50%); }
+  100% { opacity:0;   transform:scale(1.4); clip-path:circle(0% at 50% 50%); }
+}
+#view-transition .vt-streak{
+  position:absolute;background:#cfe8ff;opacity:0;border-radius:2px
+}
+#view-transition.active .vt-streak{
+  animation:streak-fly 0.5s ease-out
+}
+@keyframes streak-fly{
+  0%   { opacity:0; }
+  20%  { opacity:0.9; }
+  100% { opacity:0; }
+}
 </style>
 </head>
 <body>
@@ -615,6 +657,19 @@ textarea{font-family:var(--font)}
   </div>
 </div>
 <div id="root">
+  <!-- ── View transition overlay ── -->
+  <div id="view-transition">
+    <div class="vt-streak" style="top:20%;left:10%;width:35%;height:2px;transform:rotate(8deg)"></div>
+    <div class="vt-streak" style="top:45%;left:55%;width:40%;height:2px;transform:rotate(-12deg)"></div>
+    <div class="vt-streak" style="top:70%;left:15%;width:30%;height:2px;transform:rotate(5deg)"></div>
+    <div class="vt-streak" style="top:30%;left:60%;width:25%;height:2px;transform:rotate(-6deg)"></div>
+    <div class="vt-streak" style="top:60%;left:30%;width:38%;height:2px;transform:rotate(15deg)"></div>
+  </div>
+  <!-- ── Player manual refresh (iOS home-screen apps don't run background timers reliably) ── -->
+  <button id="player-refresh-btn" onclick="manualRefresh()">
+    <span class="refresh-icon">⟲</span> Refresh
+  </button>
+
 
   <!-- ── Header ── -->
   <div id="hdr">
@@ -1609,30 +1664,47 @@ function selectBody(id){
 // ═══════════════════════════════════════════════════════════════════════════
 // VIEW SWITCHING
 // ═══════════════════════════════════════════════════════════════════════════
+// Plays a brief warp-style transition, then runs the actual view switch
+// at the midpoint (when the overlay is fully opaque) so the swap is hidden.
+function playViewTransition(switchFn){
+  const el = document.getElementById('view-transition');
+  if(!el){ switchFn(); return; }
+  el.classList.remove('active');
+  // Force reflow so re-adding the class restarts the animation
+  void el.offsetWidth;
+  el.classList.add('active');
+  setTimeout(switchFn, 175); // ~35% through the 500ms animation = full opacity
+  setTimeout(() => el.classList.remove('active'), 520);
+}
+
 function enterStation(){
-  currentView = "station";
-  document.getElementById("view-system").classList.add("v-hidden");
-  document.getElementById("view-aurelia").classList.add("v-hidden");
-  document.getElementById("view-station").classList.remove("v-hidden");
-  document.getElementById("view-station").style.display="flex";
-  document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
-  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
-  updateStationLocks();
+  playViewTransition(() => {
+    currentView = "station";
+    document.getElementById("view-system").classList.add("v-hidden");
+    document.getElementById("view-aurelia").classList.add("v-hidden");
+    document.getElementById("view-station").classList.remove("v-hidden");
+    document.getElementById("view-station").style.display="flex";
+    document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
+    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+    updateStationLocks();
+  });
 }
 
 function goSystem(){
-  currentView = "system";
-  document.getElementById("view-station").classList.add("v-hidden");
-  document.getElementById("view-aurelia").classList.add("v-hidden");
-  document.getElementById("view-system").classList.remove("v-hidden");
-  document.getElementById("view-system").style.display="flex";
-  document.getElementById("hdr-title").textContent = "AURELIAN SYSTEM";
-  if(selectedBody){
-    const b=BODIES.find(x=>x.id===selectedBody);
-    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}],b?b.name:"");
-  } else {
-    document.getElementById("breadcrumb").innerHTML="";
-  }
+  playViewTransition(() => {
+    currentView = "system";
+    document.getElementById("view-station").classList.add("v-hidden");
+    document.getElementById("view-aurelia").classList.add("v-hidden");
+    document.getElementById("view-system").classList.remove("v-hidden");
+    document.getElementById("view-system").style.display="flex";
+    document.getElementById("hdr-title").textContent = "AURELIAN SYSTEM";
+    if(selectedBody){
+      const b=BODIES.find(x=>x.id===selectedBody);
+      setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}],b?b.name:"");
+    } else {
+      document.getElementById("breadcrumb").innerHTML="";
+    }
+  });
 }
 
 function setBreadcrumb(crumbs,current){
@@ -2145,7 +2217,7 @@ const AURELIA_LOCS = [
     refNote:"Enter the station to access the full station map and all areas."
   },
   {
-    id:"capitol", name:"Aurelia Capitol", angle:340, dist:0.60,
+    id:"capitol", name:"Aurelia Capitol", angle:90, dist:0.60,
     color:"#D4A843", hook:false,
     tag:"HEGEMONY", tagBg:"#3D2B1F", tagColor:"#D4A843",
     desc:"The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford.",
@@ -2266,6 +2338,40 @@ function buildAureliaMap(){
   s += `<circle cx="${CX}" cy="${CY}" r="${PR+10}" fill="none" stroke="#4a90D9" stroke-width="6" opacity="0.05" pointer-events="none"/>`;
 
   s += `<text x="${CX}" y="${CY+6}" text-anchor="middle" fill="#6ab8e8" font-size="10" font-family="monospace" font-weight="700" opacity="0.35" letter-spacing="3" pointer-events="none">AURELIA</text>`;
+
+  // ── Space elevator — connects Orbital Station (above) to Capitol (below) ──
+  // Drawn as a solid shaft passing through the planet, with small rail-car
+  // tick marks along its length, distinct from the dashed spoke lines other
+  // locations get. Station sits at angle 270 (top), Capitol at angle 90
+  // (bottom) — same X axis through the centre, so this is a clean vertical line.
+  {
+    const stationLoc = AURELIA_LOCS.find(l => l.id === 'station');
+    const capitolLoc = AURELIA_LOCS.find(l => l.id === 'capitol');
+    if(stationLoc && capitolLoc){
+      const sRad = stationLoc.angle * Math.PI / 180;
+      const sx = CX + Math.cos(sRad) * (CX * stationLoc.dist * 0.92);
+      const sy = CY + Math.sin(sRad) * (CY * stationLoc.dist * 0.92);
+      const cRad = capitolLoc.angle * Math.PI / 180;
+      const cx2 = CX + Math.cos(cRad) * (CX * capitolLoc.dist * 0.92);
+      const cy2 = CY + Math.sin(cRad) * (CY * capitolLoc.dist * 0.92);
+
+      // Soft glow underneath the shaft
+      s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#4A90D9" stroke-width="5" opacity="0.10" pointer-events="none"/>`;
+      // Main shaft — solid, distinct from dashed spoke lines
+      s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#7AB8E8" stroke-width="1.5" opacity="0.55" pointer-events="none"/>`;
+      // Rail-car tick marks along the shaft
+      const steps = 9;
+      for(let i = 1; i < steps; i++){
+        const t = i / steps;
+        const tx = sx + (cx2 - sx) * t;
+        const ty = sy + (cy2 - sy) * t;
+        s += `<line x1="${tx-3}" y1="${ty}" x2="${tx+3}" y2="${ty}" stroke="#7AB8E8" stroke-width="1" opacity="0.4" pointer-events="none"/>`;
+      }
+      // Small label at the midpoint
+      const midX = (sx + cx2) / 2, midY = (sy + cy2) / 2;
+      s += `<text x="${midX+8}" y="${midY+3}" fill="#7AB8E8" font-size="7" font-family="monospace" opacity="0.6" pointer-events="none">elevator</text>`;
+    }
+  }
 
   // ── Pallor (moon) ────────────────────────────────────────
   s += `<circle cx="${pallX}" cy="${pallY}" r="18" fill="#5a5a62" opacity="0.12" pointer-events="none"/>`;
@@ -2457,14 +2563,16 @@ function selectLoc(id){
 // UPDATED VIEW SWITCHING — add Aurelia as intermediary
 // ═══════════════════════════════════════════════════════════════════════════
 function goAurelia(){
-  currentView = 'aurelia';
-  document.getElementById('view-system').classList.add('v-hidden');
-  document.getElementById('view-station').classList.add('v-hidden');
-  document.getElementById('view-aurelia').classList.remove('v-hidden');
-  document.getElementById('view-aurelia').style.display = 'flex';
-  document.getElementById('hdr-title').textContent = 'AURELIA';
-  setBreadcrumb([{label:'Aurelian System',fn:'goSystem'}], 'Aurelia');
-  buildAureliaMap();
+  playViewTransition(() => {
+    currentView = 'aurelia';
+    document.getElementById('view-system').classList.add('v-hidden');
+    document.getElementById('view-station').classList.add('v-hidden');
+    document.getElementById('view-aurelia').classList.remove('v-hidden');
+    document.getElementById('view-aurelia').style.display = 'flex';
+    document.getElementById('hdr-title').textContent = 'AURELIA';
+    setBreadcrumb([{label:'Aurelian System',fn:'goSystem'}], 'Aurelia');
+    buildAureliaMap();
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2829,8 +2937,46 @@ function startPolling(){
   pollIntervalId = setInterval(pollRevealState, POLL_MS);
 }
 
+// iOS suspends setInterval timers for backgrounded/home-screen apps, but
+// visibilitychange/focus events reliably fire when the app comes back —
+// so this catches the gap even without the player tapping Refresh.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && !isReferee()) pollRevealState();
+});
+window.addEventListener('focus', () => {
+  if(!isReferee()) pollRevealState();
+});
+
 function stopPolling(){
   if(pollIntervalId){ clearInterval(pollIntervalId); pollIntervalId = null; }
+}
+
+// ── Manual refresh — for iOS home-screen apps, which suspend setInterval
+// timers when backgrounded/idle, so polling alone isn't reliable there.
+// Gives players a guaranteed way to pull the latest reveal state on tap.
+async function manualRefresh(){
+  const btn = document.getElementById('player-refresh-btn');
+  if(!btn) return;
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  try {
+    const res = await supaStorage.get('reveal-status', true);
+    const fresh = res ? JSON.parse(res.value) : {};
+    revealedAreas = fresh;
+    if(currentView === 'station') { renderDetail(); updateStationLocks(); }
+    if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+    btn.classList.add('just-updated');
+    btn.innerHTML = '<span class="refresh-icon">✓</span> Updated';
+    setTimeout(() => {
+      btn.classList.remove('just-updated');
+      btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
+    }, 1500);
+  } catch(e){
+    btn.innerHTML = '<span class="refresh-icon">⚠</span> Retry';
+  } finally {
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  }
 }
 
 async function saveRevealState(){
@@ -2849,7 +2995,7 @@ function toggleReveal(areaId){
   // The save happens in the background; if it fails, the button still
   // reflects local intent and a retry happens on the next poll cycle.
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
-  if(currentView === 'aurelia') { buildAureliaMap(); }
+  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
   saveRevealState(); // fire-and-forget
 }
 
@@ -2858,7 +3004,7 @@ function hideAllAreas(){
   if(!confirm('Hide all areas and locations from players? This resets the reveal state for testing.')) return;
   revealedAreas = {};
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
-  if(currentView === 'aurelia') { buildAureliaMap(); }
+  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
   saveRevealState();
 }
 
