@@ -35,6 +35,7 @@ textarea{font-family:var(--font)}
   flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
 }
 #hdr-title{font-size:13px;font-weight:700;color:#D4A843;letter-spacing:1px;font-family:monospace;white-space:nowrap}
+#build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap}
 #breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
 #breadcrumb .bc-link{color:#D4A843;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #breadcrumb .bc-link:hover{color:#E8A020}
@@ -247,24 +248,20 @@ textarea{font-family:var(--font)}
 }
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 
-/* ── Event Log ── */
+/* ── Event Log — freely draggable & resizable ── */
 #event-log-wrap{
-  position:fixed;bottom:0;left:0;width:300px;z-index:50;
-  background:var(--bg1);border-top:.5px solid var(--bd0);border-right:.5px solid var(--bd0);
-  border-radius:0 8px 0 0;max-height:240px;display:flex;flex-direction:column;
-  box-shadow:0 -4px 20px rgba(0,0,0,.4)
-}
-/* In landscape on tablet, keep log on left so it never covers right panel */
-@media(orientation:landscape) and (max-height:600px){
-  #event-log-wrap{width:260px;max-height:180px}
-}
-@media(max-width:640px){
-  #event-log-wrap{width:100%;border-radius:0;left:0;right:0;border-right:none}
+  position:fixed;bottom:0;left:0;width:300px;height:240px;z-index:50;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.4);
+  min-width:220px;min-height:120px;max-width:90vw;max-height:80vh
 }
 #event-log-header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;cursor:pointer
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;
+  cursor:grab;touch-action:none;user-select:none
 }
+#event-log-header:active{cursor:grabbing}
 #event-log-title{font-size:11px;font-family:monospace;color:#D4A843;letter-spacing:1px}
 #event-log-count{font-size:10px;background:#3D2B1F;color:#D4A843;border-radius:10px;padding:1px 7px;font-family:monospace}
 #event-log-toggle{font-size:10px;color:var(--tx1);cursor:pointer}
@@ -428,21 +425,51 @@ textarea{font-family:var(--font)}
 
 /* ── Initiative Tracker (referee-only) ── */
 #init-wrap{
-  position:fixed;bottom:0;right:0;width:340px;z-index:55;
-  background:var(--bg1);border-top:.5px solid var(--bd0);border-left:.5px solid var(--bd0);
-  border-radius:8px 0 0 0;max-height:70vh;display:flex;flex-direction:column;
-  box-shadow:0 -4px 20px rgba(0,0,0,.45)
+  position:fixed;bottom:0;right:0;width:340px;height:480px;z-index:55;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:260px;min-height:200px;max-width:90vw;max-height:85vh
 }
 #root.pm-active #init-wrap{display:none!important}
 #init-header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;cursor:pointer
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;
+  cursor:grab;touch-action:none;user-select:none
 }
+#init-header:active{cursor:grabbing}
 #init-title{font-size:11px;font-family:monospace;color:#C0392B;letter-spacing:1px}
 #init-count{font-size:10px;background:#3B1A1A;color:#d45050;border-radius:10px;padding:1px 7px;font-family:monospace}
 #init-toggle{font-size:10px;color:var(--tx1)}
 #init-body{overflow-y:auto;flex:1;padding:8px 10px;-webkit-overflow-scrolling:touch}
 #init-body.collapsed{display:none}
+
+/* ── NPC Health Panel — standalone, separate from initiative tracker ── */
+#health-wrap{
+  position:fixed;bottom:0;right:360px;width:300px;height:400px;z-index:54;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:240px;min-height:160px;max-width:90vw;max-height:85vh
+}
+#root.pm-active #health-wrap{display:none!important}
+#health-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;
+  cursor:grab;touch-action:none;user-select:none
+}
+#health-header:active{cursor:grabbing}
+#health-title{font-size:11px;font-family:monospace;color:#4CAF50;letter-spacing:1px}
+#health-count{font-size:10px;background:#16301c;color:#4CAF50;border-radius:10px;padding:1px 7px;font-family:monospace}
+#health-toggle{font-size:10px;color:var(--tx1)}
+#health-body{overflow-y:auto;flex:1;padding:8px 10px;-webkit-overflow-scrolling:touch}
+#health-body.collapsed{display:none}
+.health-card{
+  background:var(--bg0);border-radius:5px;padding:8px 9px;margin-bottom:7px;
+  border-left:3px solid var(--bd0)
+}
+.health-card.down{opacity:0.5}
+.health-card-name{font-size:11px;font-weight:600;color:var(--tx0);margin-bottom:5px}
 #init-foot.collapsed{display:none}
 #init-foot{border-top:.5px solid var(--bd0);padding:8px 10px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
 
@@ -468,6 +495,34 @@ textarea{font-family:var(--font)}
 }
 .init-btn:hover{background:var(--bd0);color:var(--tx0)}
 .init-btn.danger:hover{color:#d45050;border-color:#d45050}
+
+/* ── NPC health tracking (simple HP bar or detailed STR/DEX/END bars) ── */
+.hp-block{
+  background:var(--bg0);border-radius:5px;padding:6px 8px;margin-top:4px;
+  position:relative;overflow:hidden
+}
+.hp-status-banner{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;font-size:22px;font-weight:900;font-family:monospace;
+  letter-spacing:2px;z-index:1
+}
+.hp-status-banner.downed{color:rgba(212,168,67,0.5)}
+.hp-status-banner.dead{color:rgba(212,57,57,0.5)}
+.hp-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.hp-row:last-of-type{margin-bottom:0}
+.hp-label{font-size:9px;font-family:monospace;color:var(--tx1);width:24px;flex-shrink:0}
+.hp-bar-track{
+  flex:1;height:7px;background:var(--bg1);border-radius:4px;overflow:hidden;
+  border:.5px solid var(--bd0)
+}
+.hp-bar-fill{height:100%;border-radius:4px;transition:width 0.25s ease}
+.hp-value{font-size:9px;font-family:monospace;color:var(--tx1);width:38px;text-align:right;flex-shrink:0}
+.hp-adjust-row{display:flex;align-items:center;gap:3px;margin-top:5px;flex-wrap:wrap}
+.hp-max-input{
+  width:36px;background:var(--bg1);border:.5px solid var(--bd0);border-radius:3px;
+  color:var(--tx1);font-size:9px;padding:2px 4px;margin-left:4px;outline:none;text-align:center
+}
+
 .init-notes{
   width:100%;background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;
   color:var(--tx1);font-size:10px;padding:4px 6px;margin-top:3px;resize:none;
@@ -561,6 +616,94 @@ textarea{font-family:var(--font)}
   border-radius:5px;padding:9px;font-size:12px;cursor:pointer;font-family:monospace
 }
 
+/* ── Character sheet trigger + small menu ── */
+#sheet-trigger-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
+}
+#sheet-trigger-btn:hover{background:var(--bd0);color:var(--tx0)}
+#sheet-menu{
+  position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
+  display:flex;align-items:flex-start;justify-content:flex-end
+}
+#sheet-menu.hidden{display:none}
+#sheet-menu-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  margin:50px 14px 0 0;padding:8px;min-width:200px;
+  box-shadow:0 4px 20px rgba(0,0,0,.5)
+}
+.sheet-menu-item{
+  display:block;width:100%;text-align:left;background:transparent;border:none;
+  color:var(--tx0);font-size:12px;font-family:monospace;padding:9px 10px;
+  border-radius:5px;cursor:pointer
+}
+.sheet-menu-item:hover{background:var(--bd0)}
+.sheet-menu-label{font-size:9px;color:var(--tx1);letter-spacing:1px;padding:6px 10px 2px;text-transform:uppercase}
+
+/* ── Character sheet modal ── */
+#sheet-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:195;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#sheet-modal.hidden{display:none}
+#sheet-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#sheet-card-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#sheet-card-title{font-size:14px;font-weight:700;color:#D4A843;font-family:monospace;letter-spacing:1px}
+#sheet-close-btn{
+  font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;
+  padding:4px 8px;line-height:1
+}
+#sheet-close-btn:hover{color:var(--tx0)}
+#sheet-card-body{overflow-y:auto;flex:1;padding:16px 18px;-webkit-overflow-scrolling:touch}
+#sheet-card-footer{
+  padding:12px 18px;border-top:.5px solid var(--bd0);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;gap:10px
+}
+#sheet-ref-picker{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:12px;padding:7px 10px;margin-bottom:14px;width:100%;outline:none
+}
+.sheet-section{margin-bottom:16px}
+.sheet-section-lbl{
+  font-size:10px;color:#D4A843;letter-spacing:1.5px;text-transform:uppercase;
+  font-family:monospace;margin-bottom:8px;border-bottom:.5px solid var(--bd0);padding-bottom:4px
+}
+.sheet-char-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sheet-char-box{background:var(--bg0);border-radius:6px;padding:8px;text-align:center}
+.sheet-char-label{font-size:9px;color:var(--tx1);letter-spacing:1px;margin-bottom:5px}
+.sheet-char-input{
+  width:50px;background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;
+  color:var(--tx0);font-size:16px;font-weight:700;text-align:center;padding:4px;outline:none
+}
+.sheet-char-dm{font-size:10px;color:#4CAF50;font-family:monospace;margin-top:4px}
+.sheet-name-row{display:flex;gap:10px;margin-bottom:14px}
+.sheet-name-input{
+  flex:1;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:13px;padding:8px 10px;outline:none
+}
+.sheet-textarea{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:12px;padding:9px 10px;outline:none;resize:vertical;
+  min-height:70px;line-height:1.5;font-family:inherit
+}
+.sheet-textarea:focus{border-color:var(--bd0)}
+#sheet-save-btn{
+  background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:5px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:monospace
+}
+#sheet-save-msg{font-size:10px;color:#4CAF50;font-family:monospace;display:none}
+#sheet-readonly-notice{
+  font-size:10px;color:var(--tx1);font-style:italic
+}
+
 /* Notes tab additions — private/party split */
 .notes-subtabs{display:flex;gap:0;margin-bottom:10px;border-bottom:.5px solid var(--bd0)}
 .notes-subtab{
@@ -633,17 +776,109 @@ textarea{font-family:var(--font)}
   65%  { opacity:0.85; transform:scale(1);   clip-path:circle(75% at 50% 50%); }
   100% { opacity:0;   transform:scale(1.4); clip-path:circle(0% at 50% 50%); }
 }
-#view-transition .vt-streak{
-  position:absolute;background:#cfe8ff;opacity:0;border-radius:2px
+
+/* ── Drag/resize handle (shared by event log + initiative panels) ── */
+.panel-resize-handle{
+  position:absolute;bottom:0;right:0;width:22px;height:22px;
+  cursor:nwse-resize;touch-action:none;z-index:2;
+  background:linear-gradient(135deg, transparent 50%, var(--bd0) 50%, var(--bd0) 58%, transparent 58%, transparent 68%, var(--bd0) 68%, var(--bd0) 76%, transparent 76%);
+  opacity:0.6
 }
-#view-transition.active .vt-streak{
-  animation:streak-fly 0.5s ease-out
+.panel-resize-handle:active{opacity:1}
+.floating-panel-draggable{position:fixed!important}
+
+#reset-campaign-btn{
+  font-size:10px;font-family:monospace;color:#d45050;background:transparent;
+  border:.5px solid #d45050;border-radius:5px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
 }
-@keyframes streak-fly{
-  0%   { opacity:0; }
-  20%  { opacity:0.9; }
-  100% { opacity:0; }
+#reset-campaign-btn:hover{background:#3B1A1A}
+
+/* ── Design Mode ── */
+#design-mode-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:5px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
 }
+#design-mode-btn:hover{background:var(--bd0);color:var(--tx0)}
+#design-mode-btn.on{background:#2A1A3B;color:#9B59B6;border-color:#9B59B6}
+#root.design-active .design-editable{position:relative}
+.design-edit-pencil{
+  display:none;position:absolute;top:-4px;right:-4px;z-index:5;
+  background:#2A1A3B;color:#9B59B6;border:.5px solid #9B59B6;border-radius:50%;
+  width:22px;height:22px;font-size:11px;cursor:pointer;align-items:center;justify-content:center
+}
+#root.design-active .design-editable .design-edit-pencil{display:flex}
+.design-editable.has-override{outline:1px dashed #9B59B6;outline-offset:3px;border-radius:4px}
+
+/* Stage-2 structured pencils (whole check / event / NPC row) sit inline
+   next to a title rather than floating in a corner, so they use a
+   visibility rule keyed off design-active directly rather than requiring
+   the .design-editable corner-icon wrapper used by stage-1 text fields. */
+.design-edit-pencil-inline{
+  display:none;flex-shrink:0;background:#2A1A3B;color:#9B59B6;border:.5px solid #9B59B6;
+  border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;
+  align-items:center;justify-content:center
+}
+#root.design-active .design-edit-pencil-inline{display:flex}
+#design-edit-panel{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:210;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#design-edit-panel.hidden{display:none}
+#design-edit-card{
+  background:var(--bg1);border:.5px solid #9B59B6;border-radius:10px;
+  max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#design-edit-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0)
+}
+#design-edit-title{font-size:12px;font-family:monospace;color:#9B59B6;letter-spacing:1px}
+#design-edit-close{font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;padding:4px 8px}
+#design-edit-body{padding:14px 16px;overflow-y:auto;flex:1}
+#design-edit-textarea{
+  width:100%;min-height:160px;background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:6px;color:var(--tx0);font-size:13px;padding:10px;outline:none;
+  resize:vertical;line-height:1.6;font-family:inherit
+}
+#design-edit-footer{
+  padding:12px 16px;border-top:.5px solid var(--bd0);
+  display:flex;align-items:center;justify-content:space-between;gap:8px
+}
+.design-edit-btn{
+  font-size:11px;font-family:monospace;padding:7px 14px;border-radius:5px;cursor:pointer
+}
+#design-save-btn{background:#2A1A3B;color:#9B59B6;border:.5px solid #9B59B6}
+#design-revert-btn{background:transparent;color:var(--tx1);border:.5px solid var(--bd0)}
+#design-history-btn{background:transparent;color:var(--tx1);border:.5px solid var(--bd0)}
+#design-save-msg{font-size:10px;color:#4CAF50;font-family:monospace;display:none}
+#design-history-list{margin-top:10px;border-top:.5px solid var(--bd0);padding-top:10px}
+.design-history-item{
+  background:var(--bg0);border-radius:5px;padding:8px;margin-bottom:6px;font-size:11px;
+  cursor:pointer;border:.5px solid var(--bd0)
+}
+.design-history-item:hover{border-color:#9B59B6}
+.design-history-snippet{color:var(--tx1);max-height:40px;overflow:hidden}
+.design-history-label{font-size:9px;color:#9B59B6;font-family:monospace;margin-bottom:3px}
+
+/* ── Design Mode stage 2 — structured editors for checks/events/NPC rows ── */
+.design-field-group{margin-bottom:14px}
+.design-field-label{font-size:9px;color:#9B59B6;letter-spacing:1px;text-transform:uppercase;font-family:monospace;margin-bottom:5px}
+.design-field-input{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:12px;padding:8px 10px;outline:none;font-family:inherit
+}
+.design-field-textarea{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:12px;padding:8px 10px;outline:none;resize:vertical;
+  min-height:55px;line-height:1.5;font-family:inherit
+}
+.design-degree-block{
+  border-left:2px solid #9B59B6;padding:8px 0 8px 12px;margin-bottom:10px
+}
+.design-degree-head{font-size:9px;color:var(--tx1);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -658,13 +893,7 @@ textarea{font-family:var(--font)}
 </div>
 <div id="root">
   <!-- ── View transition overlay ── -->
-  <div id="view-transition">
-    <div class="vt-streak" style="top:20%;left:10%;width:35%;height:2px;transform:rotate(8deg)"></div>
-    <div class="vt-streak" style="top:45%;left:55%;width:40%;height:2px;transform:rotate(-12deg)"></div>
-    <div class="vt-streak" style="top:70%;left:15%;width:30%;height:2px;transform:rotate(5deg)"></div>
-    <div class="vt-streak" style="top:30%;left:60%;width:25%;height:2px;transform:rotate(-6deg)"></div>
-    <div class="vt-streak" style="top:60%;left:30%;width:38%;height:2px;transform:rotate(15deg)"></div>
-  </div>
+  <div id="view-transition"></div>
   <!-- ── Player manual refresh (iOS home-screen apps don't run background timers reliably) ── -->
   <button id="player-refresh-btn" onclick="manualRefresh()">
     <span class="refresh-icon">⟲</span> Refresh
@@ -675,6 +904,7 @@ textarea{font-family:var(--font)}
   <div id="hdr">
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
+      <span id="build-version" title="Build version">v26</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -689,12 +919,15 @@ textarea{font-family:var(--font)}
       <div id="clock-sep"></div>
       <button id="clock-reset" onclick="resetClock()" title="Reset to 00:00">↺</button>
     </div>
+    <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
       <input type="time" id="clock-input" value="00:00">
       <button id="clock-edit-ok" onclick="setClockFromInput()">Set time</button>
     </div>
+    <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker">⟲ Reset Campaign</button>
+    <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly">✏ Design Mode</button>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
       <span class="pm-label">Player Mode</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
@@ -879,6 +1112,17 @@ textarea{font-family:var(--font)}
     </div>
     <div id="event-log-body"></div>
     <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
+    <div class="panel-resize-handle" data-panel="event-log-wrap"></div>
+  </div>
+  <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
+  <div id="health-wrap" class="ref-only">
+    <div id="health-header" onclick="toggleHealthPanel()">
+      <span id="health-title">♥ NPC HEALTH</span>
+      <span id="health-count">0</span>
+      <span id="health-toggle">▼</span>
+    </div>
+    <div id="health-body"></div>
+    <div class="panel-resize-handle" data-panel="health-wrap"></div>
   </div>
   <!-- ── Initiative Tracker (referee-only, floating panel) ── -->
   <div id="init-wrap" class="ref-only">
@@ -909,6 +1153,7 @@ textarea{font-family:var(--font)}
         <button class="init-action-btn primary" onclick="clearInitiative()">Clear All</button>
       </div>
     </div>
+    <div class="panel-resize-handle" data-panel="init-wrap"></div>
   </div>
 
   <!-- ── Identity modal (shown once per device to non-referees) ── -->
@@ -919,6 +1164,52 @@ textarea{font-family:var(--font)}
       <div id="identity-quick"></div>
       <input type="text" id="identity-input" placeholder="Type a name..." maxlength="24">
       <button id="identity-confirm" onclick="confirmIdentity()">Continue</button>
+    </div>
+  </div>
+
+  <!-- ── Sheet menu (small popover from the Sheets button) ── -->
+  <div id="sheet-menu" class="hidden" onclick="if(event.target===this) closeSheetMenu()">
+    <div id="sheet-menu-card"></div>
+  </div>
+
+  <!-- ── Character sheet modal ── -->
+  <div id="sheet-modal" class="hidden" onclick="if(event.target===this) closeSheet()">
+    <div id="sheet-card">
+      <div id="sheet-card-header">
+        <span id="sheet-card-title">CHARACTER SHEET</span>
+        <button id="sheet-close-btn" onclick="closeSheet()">✕</button>
+      </div>
+      <div id="sheet-card-body"></div>
+      <div id="sheet-card-footer">
+        <span id="sheet-readonly-notice"></span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span id="sheet-save-msg">✓ Saved</span>
+          <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Design Mode inline editor ── -->
+  <div id="design-edit-panel" class="hidden" onclick="if(event.target===this) closeDesignEdit()">
+    <div id="design-edit-card">
+      <div id="design-edit-header">
+        <span id="design-edit-title">EDIT TEXT</span>
+        <button id="design-edit-close" onclick="closeDesignEdit()">✕</button>
+      </div>
+      <div id="design-edit-body">
+        <div id="design-history-list"></div>
+      </div>
+      <div id="design-edit-footer">
+        <span style="display:flex;gap:8px">
+          <button id="design-revert-btn" class="design-edit-btn" onclick="revertDesignEdit()">Revert to Original</button>
+          <button id="design-history-btn" class="design-edit-btn" onclick="toggleDesignHistory()">History</button>
+        </span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span id="design-save-msg">✓ Saved</span>
+          <button id="design-save-btn" class="design-edit-btn" onclick="saveDesignEdit()">Save</button>
+        </span>
+      </div>
     </div>
   </div>
 </div><!-- #root -->
@@ -1615,21 +1906,41 @@ function selectBody(id){
   const fields=[["Orbit",body.orbitAU],["Diameter",body.diameter],["Period",body.period]].filter(f=>f[1]&&f[1]!=="—");
   if(fields.length) html += `<div class="sg">${fields.map(([l,v])=>`<div class="sg-l">${l}</div><div class="sg-v">${v}</div>`).join("")}</div>`;
 
-  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${body.desc.replace(/\n/g,"<br>")}</div></div>`;
+  const sbDescKey = 'body-'+id+'-desc';
+  designOriginalRegistry[sbDescKey] = body.desc;
+  const sbDescText = resolveContent(sbDescKey, body.desc);
+  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, sbDescText.replace(/\n/g,"<br>"))}</div></div>`;
 
-  if(!pm&&body.readAloud) html += `<div class="s-blk read"><div class="s-blk-lbl">Read Aloud</div>${body.readAloud}</div>`;
-  if(!pm&&body.refNote) html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${body.refNote.replace(/\n/g,"<br>")}</div>`;
+  if(!pm&&body.readAloud){
+    const sbReadKey = 'body-'+id+'-readAloud';
+    designOriginalRegistry[sbReadKey] = body.readAloud;
+    const sbReadText = resolveContent(sbReadKey, body.readAloud);
+    html += `<div class="s-blk read"><div class="s-blk-lbl">Read Aloud</div>${designWrap(sbReadKey, body.readAloud, sbReadText)}</div>`;
+  }
+  if(!pm&&body.refNote){
+    const sbRefKey = 'body-'+id+'-refNote';
+    designOriginalRegistry[sbRefKey] = body.refNote;
+    const sbRefText = resolveContent(sbRefKey, body.refNote);
+    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${designWrap(sbRefKey, body.refNote, sbRefText.replace(/\n/g,"<br>"))}</div>`;
+  }
 
   if(!pm&&body.npcs&&body.npcs.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
     body.npcs.forEach((n,i)=>{
       const nid=`sys-npc-${i}`;
+      const rowBaseKey = 'body-'+id+'-npc-'+i+'-row-';
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
         <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
           <div class="skill-row">${n.skills}</div>
-          ${n.rows.map(([l,v])=>`<div class="npc-row"><div class="nrl">${l}</div><div class="nrv">${v}</div></div>`).join("")}
+          ${n.rows.map((r,ri)=>{
+            const rkey = rowBaseKey+ri;
+            designOriginalRegistry[rkey] = r;
+            const rdata = resolveContent(rkey, r);
+            const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
+            return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div>${pencil}</div>`;
+          }).join("")}
         </div></div>`;
     });
     html += `</div>`;
@@ -1825,9 +2136,18 @@ function renderDetail(){
         </div>
       </div>`;
     }
-    if(a.read) html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${a.read}</div></div>`;
+    const stKey = cur+(curSub?"_"+curSub:"");
+    if(a.read){
+      designOriginalRegistry[stKey+'-read'] = a.read;
+      const readText = resolveContent(stKey+'-read', a.read);
+      html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${designWrap(stKey+'-read', a.read, readText)}</div></div>`;
+    }
     if(!pm&&a.rsr) html+=`<div class="rsr-tag">🔴 ${a.rsr}</div>`;
-    if(a.desc) html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${a.desc}</div></div>`;
+    if(a.desc){
+      designOriginalRegistry[stKey+'-desc'] = a.desc;
+      const descText = resolveContent(stKey+'-desc', a.desc);
+      html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${designWrap(stKey+'-desc', a.desc, descText)}</div></div>`;
+    }
     if(a.ship){
       html+=`<div class="blk" style="margin-top:8px"><div class="blk-lbl">THE MERIDIAN'S EDGE — STATBLOCK</div><div style="display:grid;grid-template-columns:1fr;gap:4px;margin-top:4px">
         ${a.ship.lines.map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:6px;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--bg2)"><span style="color:var(--tx1);font-weight:700">${k}</span><span style="color:var(--tx0)">${v}</span></div>`).join("")}
@@ -1839,13 +2159,20 @@ function renderDetail(){
     if(!a.npcs||a.npcs.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No named NPCs in this area.</div>`;return;}
     html+=a.npcs.map((n,i)=>{
       const nid="sta-npc-"+cur+(curSub||"")+i;
+      const rowBaseKey = nid+'-row-';
       return `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
         <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
           <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
           <div class="skill-row">${n.skills}</div>
-          ${n.rows.map(r=>`<div class="sr"><b>${r[0]}:</b> ${r[1]}</div>`).join("")}
+          ${n.rows.map((r,ri)=>{
+            const rkey = rowBaseKey+ri;
+            designOriginalRegistry[rkey] = r;
+            const rdata = resolveContent(rkey, r);
+            const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
+            return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span>${pencil}</div>`;
+          }).join("")}
         </div></div>`;
     }).join("");
     d.innerHTML=html;
@@ -1872,21 +2199,39 @@ function renderDetail(){
     let html=backBtn;
     if(!a.checks||a.checks.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No skill checks in this area.</div>`;return;}
     const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
-    html+=a.checks.map(c=>`<div class="chk"><div class="chk-t">🎲 ${c.skill}</div>${c.degrees.map(dg=>{
-      const cls=dg.cls||degCls[dg.c]||"deg-p";
-      const lbl=dg.label||dg.l||"";
-      const txt=dg.text||dg.t||"";
-      return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
-    }).join("")}</div>`).join("");
+    const chkBaseKey = cur+(curSub?"_"+curSub:"")+'-check-';
+    html+=a.checks.map((c,ci)=>{
+      const ckey = chkBaseKey+ci;
+      designOriginalRegistry[ckey] = c;
+      const cdata = resolveContent(ckey, c);
+      const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
+      return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between">🎲 ${cdata.skill}${pencil}</div>${cdata.degrees.map(dg=>{
+        const cls=dg.cls||degCls[dg.c]||"deg-p";
+        const lbl=dg.label||dg.l||"";
+        const txt=dg.text||dg.t||"";
+        return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
+      }).join("")}</div>`;
+    }).join("");
     d.innerHTML=html;
   } else if(curTab==="events"){
     let html=backBtn;
     if(!a.events||a.events.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No events scheduled.</div>`;return;}
-    html+=a.events.map(e=>`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`).join("");
+    const evtBaseKey = cur+(curSub?"_"+curSub:"")+'-event-';
+    html+=a.events.map((e,ei)=>{
+      const ekey = evtBaseKey+ei;
+      designOriginalRegistry[ekey] = e;
+      const edata = resolveContent(ekey, e);
+      const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
+      return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between">${edata.t}${pencil}</div>${edata.e}</div>`;
+    }).join("");
     d.innerHTML=html;
   } else if(curTab==="refnotes"){
     let html=backBtn;
-    html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${a.refnotes||"No referee notes for this area."}</div></div>`;
+    const rnKey = (cur+(curSub?"_"+curSub:""))+'-refnotes';
+    const origRefnotes = a.refnotes||"No referee notes for this area.";
+    designOriginalRegistry[rnKey] = origRefnotes;
+    const refnotesText = resolveContent(rnKey, origRefnotes);
+    html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${designWrap(rnKey, origRefnotes, refnotesText)}</div></div>`;
     d.innerHTML=html;
   } else if(curTab==="subareas"){
     const subs=MAIN[cur].subs||{}, keys=Object.keys(subs);
@@ -2125,6 +2470,7 @@ function renderEventLog(){
 }
 
 function toggleEventLog(){
+  if(document.getElementById('event-log-header').dataset.suppressClick === '1') return;
   eventLogCollapsed = !eventLogCollapsed;
   document.getElementById('event-log-toggle').textContent = eventLogCollapsed ? '▲' : '▼';
   renderEventLog();
@@ -2217,42 +2563,42 @@ const AURELIA_LOCS = [
     refNote:"Enter the station to access the full station map and all areas."
   },
   {
-    id:"capitol", name:"Aurelia Capitol", angle:90, dist:0.60,
+    id:"capitol", name:"Aurelia Capitol", surface:true, sx:-0.02, sy:-0.44,
     color:"#D4A843", hook:false,
     tag:"HEGEMONY", tagBg:"#3D2B1F", tagColor:"#D4A843",
     desc:"The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford.",
     refNote:"The Capitol is where Hegemony policy for the Aurelian system is made. The Governor-General's residence is here, as is the regional OmniSynth licensing office."
   },
   {
-    id:"cradle", name:"The Cradle", angle:200, dist:0.58,
+    id:"cradle", name:"The Cradle", surface:true, sx:0.30, sy:0.06,
     color:"#2AABB8", hook:true,
     tag:"DEEP WATER", tagBg:"#0a2530", tagColor:"#2AABB8",
     desc:"Aurelia's most extraordinary city — built on the ocean floor in the equatorial deep trench, pressurised and lit from within. Visible from orbit as a faint blue-white glow through 600 metres of water.\n\nPopulation 12 million. The Cradle operates under a different legal framework from the surface — a legacy of the engineering charter that built it. The Hegemony's reach here is real but thinner.",
     refNote:"The Cradle is the closest thing Aurelia has to a free city. Black markets, off-charter research, people who don't want to be found. The RSR has significant infrastructure here."
   },
   {
-    id:"hegemony-base", name:"Hegemony Garrison", angle:45, dist:0.55,
+    id:"hegemony-base", name:"Hegemony Garrison", surface:true, sx:0.32, sy:0.58,
     color:"#534AB7", hook:false,
     tag:"MILITARY", tagBg:"#1e1e2e", tagColor:"#8b91a8",
     desc:"A Hegemony Navy installation on the northern continent's high plateau. Mostly administrative — a handful of frigates on rotation, a rapid-response ground force, the regional communications hub.\n\nNot a combat posting. The Hegemony has not needed combat on Aurelia. The garrison commander finds this increasingly difficult to explain to new arrivals who expected action.",
     refNote:"The garrison holds sealed orders for three scenarios. One of them involves the Cleaners. Nobody at the garrison knows this."
   },
   {
-    id:"spire-range", name:"Spire Range", angle:130, dist:0.50,
+    id:"spire-range", name:"Spire Range", surface:true, sx:-0.44, sy:0.50,
     color:"#9999AA", hook:false,
     tag:"LANDMARK", tagBg:"#1e2030", tagColor:"#9999AA",
     desc:"The twin mountain peaks that appear in every Hegemony promotional image of Aurelia. Geologically ancient, atmospherically dramatic — the peaks catch the copper-tinted light of Auros at dawn and dusk and turn a shade of red that colonists have named the Auros Kiss.\n\nPopular tourist destination. Four licensed resort complexes at mid-altitude. Above 4,000 metres, only licensed research expeditions.",
     refNote:"A pre-Collapse observatory sits at 5,200 metres on the eastern peak. It stopped broadcasting forty years ago. It still has power."
   },
   {
-    id:"omnisynth", name:"OmniSynth Arcology", angle:155, dist:0.62,
+    id:"omnisynth", name:"OmniSynth Arcology", surface:true, sx:-0.66, sy:0.12,
     color:"#C87941", hook:true,
     tag:"CORPORATE", tagBg:"#2e1f0a", tagColor:"#C87941",
     desc:"OmniSynth's primary Aurelian facility — a self-contained arcology on the southern coast housing 80,000 employees and their dependents. Research, manufacturing, and administrative functions. The arcology has its own power grid, water supply, and internal security force.\n\nFrom outside, it looks like a very clean small city. From inside, it looks like a company town.",
     refNote:"Project Chimera's above-ground operations are administered from the OmniSynth Arcology's sub-level C. Sub-level C is not on the official floor plan."
   },
   {
-    id:"underdeck", name:"Underdeck Entrance", angle:250, dist:0.45,
+    id:"underdeck", name:"Underdeck Entrance", surface:true, sx:-0.20, sy:-0.30,
     color:"#A32D2D", hook:true,
     tag:"UNDERDECK", tagBg:"#2e1010", tagColor:"#d45050",
     desc:"The surface access point for Aurelia's Cleaner settlements — a pressurised transition zone between the atmosphere above and the filtered tunnels below. Multiple entrances exist; this is the one that appears on Hegemony maps, marked as Infrastructure Access — Authorised Personnel Only.\n\nThe ones that don't appear on any map are more interesting.",
@@ -2261,6 +2607,7 @@ const AURELIA_LOCS = [
 ];
 
 let selectedLoc = null;
+let pallorSelected = false; // tracks the Pallor special-case selection for re-render purposes
 
 function buildAureliaMap(){
   const svg = document.getElementById('aurelia-svg');
@@ -2311,8 +2658,9 @@ function buildAureliaMap(){
 
   s += `<ellipse cx="${CX}" cy="${CY}" rx="${PALLOR_A}" ry="${PALLOR_B}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.35"/>`;
 
-  // ── Connection lines (behind planet) ─────────────────────
+  // ── Connection lines (behind planet) — only for orbiting nodes ──
   AURELIA_LOCS.forEach(loc => {
+    if(loc.surface) return; // surface-anchored locations don't need a spoke line
     const rad = loc.angle * Math.PI / 180;
     const nx = CX + Math.cos(rad) * (CX * loc.dist * 0.92);
     const ny = CY + Math.sin(rad) * (CY * loc.dist * 0.92);
@@ -2339,11 +2687,11 @@ function buildAureliaMap(){
 
   s += `<text x="${CX}" y="${CY+6}" text-anchor="middle" fill="#6ab8e8" font-size="10" font-family="monospace" font-weight="700" opacity="0.35" letter-spacing="3" pointer-events="none">AURELIA</text>`;
 
-  // ── Space elevator — connects Orbital Station (above) to Capitol (below) ──
-  // Drawn as a solid shaft passing through the planet, with small rail-car
-  // tick marks along its length, distinct from the dashed spoke lines other
-  // locations get. Station sits at angle 270 (top), Capitol at angle 90
-  // (bottom) — same X axis through the centre, so this is a clean vertical line.
+  // ── Space elevator — connects Orbital Station (above, in orbit) to
+  // Capitol (now a surface location on the planet itself) ──
+  // Trimmed to actually end at Capitol's surface position rather than
+  // passing through to the opposite side of the planet. A few small
+  // orange "car" dots animate up and down the shaft via CSS.
   {
     const stationLoc = AURELIA_LOCS.find(l => l.id === 'station');
     const capitolLoc = AURELIA_LOCS.find(l => l.id === 'capitol');
@@ -2351,22 +2699,37 @@ function buildAureliaMap(){
       const sRad = stationLoc.angle * Math.PI / 180;
       const sx = CX + Math.cos(sRad) * (CX * stationLoc.dist * 0.92);
       const sy = CY + Math.sin(sRad) * (CY * stationLoc.dist * 0.92);
-      const cRad = capitolLoc.angle * Math.PI / 180;
-      const cx2 = CX + Math.cos(cRad) * (CX * capitolLoc.dist * 0.92);
-      const cy2 = CY + Math.sin(cRad) * (CY * capitolLoc.dist * 0.92);
+      const cx2 = CX + capitolLoc.sx * PR;
+      const cy2 = CY + capitolLoc.sy * PR;
 
       // Soft glow underneath the shaft
       s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#4A90D9" stroke-width="5" opacity="0.10" pointer-events="none"/>`;
       // Main shaft — solid, distinct from dashed spoke lines
       s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#7AB8E8" stroke-width="1.5" opacity="0.55" pointer-events="none"/>`;
-      // Rail-car tick marks along the shaft
-      const steps = 9;
+      // Rail-car tick marks along the shaft (static, structural)
+      const steps = 7;
       for(let i = 1; i < steps; i++){
         const t = i / steps;
         const tx = sx + (cx2 - sx) * t;
         const ty = sy + (cy2 - sy) * t;
         s += `<line x1="${tx-3}" y1="${ty}" x2="${tx+3}" y2="${ty}" stroke="#7AB8E8" stroke-width="1" opacity="0.4" pointer-events="none"/>`;
       }
+      // Animated elevator cars — small orange dots travelling the shaft.
+      // All start visually at the Station end. Two travel down toward
+      // Capitol, one travels back up toward the Station, staggered so
+      // they don't all move in lockstep. Slower than before.
+      s += `<path id="elevator-path" d="M ${sx} ${sy} L ${cx2} ${cy2}" fill="none" stroke="none"/>`;
+      const carDefs = [
+        { dur: 7.5, delay: 0,   reverse: false },
+        { dur: 8.2, delay: 3.0, reverse: false },
+        { dur: 7.0, delay: 1.5, reverse: true  },
+      ];
+      carDefs.forEach(({dur, delay, reverse}) => {
+        const keyPoints = reverse ? '1;0' : '0;1';
+        s += `<circle r="2.2" fill="#E8A020">
+          <animateMotion dur="${dur}s" repeatCount="indefinite" keyPoints="${keyPoints}" keyTimes="0;1" path="M ${sx} ${sy} L ${cx2} ${cy2}" begin="-${delay}s"/>
+        </circle>`;
+      });
       // Small label at the midpoint
       const midX = (sx + cx2) / 2, midY = (sy + cy2) / 2;
       s += `<text x="${midX+8}" y="${midY+3}" fill="#7AB8E8" font-size="7" font-family="monospace" opacity="0.6" pointer-events="none">elevator</text>`;
@@ -2385,9 +2748,18 @@ function buildAureliaMap(){
   // ── Location nodes ───────────────────────────────────────
   const showLocks = !isReferee();
   AURELIA_LOCS.forEach(loc => {
-    const rad = loc.angle * Math.PI / 180;
-    const nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist * 0.92));
-    const ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist * 0.92));
+    let nx, ny, rad;
+    if(loc.surface){
+      // Surface-anchored: position is an offset from planet centre, in
+      // units of planet radius (PR). sx/sy range roughly -1..1.
+      nx = Math.round(CX + loc.sx * PR);
+      ny = Math.round(CY + loc.sy * PR);
+      rad = Math.atan2(loc.sy, loc.sx); // used only for label-side heuristics below
+    } else {
+      rad = loc.angle * Math.PI / 180;
+      nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist * 0.92));
+      ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist * 0.92));
+    }
     const isSelected = selectedLoc === loc.id;
     const isLocked = showLocks && !isRevealed(loc.id);
 
@@ -2438,8 +2810,32 @@ function buildAureliaMap(){
       const nameColor = '#E8A020';
       s += `<text x="${nx+28}" y="${ny+4}" text-anchor="start" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
 
+    } else if(loc.surface){
+      // ── Surface-anchored location (sits directly on the planet) ──
+      const r = 7; // smaller than orbiting nodes — they're packed onto a small visible disc
+      if(isSelected){
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+8}" fill="${loc.color}" opacity="0.15" pointer-events="none"/>`;
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+4}" fill="${loc.color}" opacity="0.2" pointer-events="none"/>`;
+      }
+      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'55' : '#0d1828dd'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.3}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?3:1.6}" fill="${loc.color}" opacity="${isSelected?0.95:0.7}" pointer-events="none"/>`;
+
+      if(loc.hook) s += `<text x="${nx+r+1}" y="${ny-r}" fill="#E8A020" font-size="10" font-weight="700" pointer-events="none">!</text>`;
+
+      // Label placed to whichever side has more room, based on offset direction
+      const labelDist = r + 4;
+      let lx, ly, anchor;
+      if(loc.sx >= 0){ lx = nx + labelDist; anchor = 'start'; }
+      else { lx = nx - labelDist; anchor = 'end'; }
+      ly = ny + (loc.sy < -0.3 ? -2 : loc.sy > 0.3 ? 12 : 4);
+      const nameColor = loc.hook ? '#E8A020' : loc.color;
+      // Small text-shadow effect via duplicate dark text underneath, so labels
+      // stay readable against the busy planet texture
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="#05070a" font-size="9" font-family="monospace" font-weight="700" pointer-events="none" opacity="0.6" stroke="#05070a" stroke-width="3">${loc.name}</text>`;
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
+
     } else {
-      // Regular location node
+      // Regular orbiting location node
       const r = 9;
       if(isSelected){
         s += `<circle cx="${nx}" cy="${ny}" r="${r+10}" fill="${loc.color}" opacity="0.12" pointer-events="none"/>`;
@@ -2466,7 +2862,8 @@ function buildAureliaMap(){
 
     // Lock badge — overlaid on top of either node type, player-only, unrevealed only
     if(isLocked){
-      const bx = loc.isStation ? nx+13 : nx+9, by = loc.isStation ? ny-13 : ny-9;
+      const bx = loc.isStation ? nx+13 : loc.surface ? nx+6 : nx+9;
+      const by = loc.isStation ? ny-13 : loc.surface ? ny-6 : ny-9;
       s += `<circle cx="${bx}" cy="${by}" r="7" fill="#0a0c12" stroke="#555570" stroke-width="1" pointer-events="none"/>`;
       s += `<text x="${bx}" y="${by+3}" text-anchor="middle" font-size="8" pointer-events="none">🔒</text>`;
     }
@@ -2476,26 +2873,8 @@ function buildAureliaMap(){
 
   // Pallor click
   svg.querySelectorAll('.body-node[data-body="pallor"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const pallor = BODIES.find(b => b.id === 'pallor');
-      if(!pallor) return;
-      document.getElementById('aur-dname').textContent = 'PALLOR';
-      document.getElementById('aur-dname').style.color = '#B0B0B0';
-      document.getElementById('aur-dtype').textContent = 'MOON · TIDALLY LOCKED · Y200000-0';
-      document.getElementById('aur-overview').classList.add('v-hidden');
-      document.getElementById('btn-enter-station').classList.add('v-hidden');
-      const det = document.getElementById('aur-loc-detail');
-      det.classList.remove('v-hidden');
-      const pm = pmCheck.checked;
-      det.innerHTML = `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
-        <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
-        <div class="s-desc" style="font-size:12px;line-height:1.65">${pallor.desc}</div>
-      </div>
-      ${!pm && pallor.refNote ? '<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>' + pallor.refNote + '</div>' : ''}`;
-      selectedLoc = null;
-      buildAureliaMap();
-    });
-    el.addEventListener('touchend', e => { e.preventDefault(); e.target.dispatchEvent(new Event('click')); });
+    el.addEventListener('click', selectPallor);
+    el.addEventListener('touchend', e => { e.preventDefault(); selectPallor(); });
   });
 
   // Station icon click
@@ -2510,8 +2889,39 @@ function buildAureliaMap(){
   });
 }
 
+function selectPallor(){
+  const pallor = BODIES.find(b => b.id === 'pallor');
+  if(!pallor) return;
+  selectedLoc = null;
+  pallorSelected = true;
+  document.getElementById('aur-dname').textContent = 'PALLOR';
+  document.getElementById('aur-dname').style.color = '#B0B0B0';
+  document.getElementById('aur-dtype').textContent = 'MOON · TIDALLY LOCKED · Y200000-0';
+  document.getElementById('aur-overview').classList.add('v-hidden');
+  document.getElementById('btn-enter-station').classList.add('v-hidden');
+  const det = document.getElementById('aur-loc-detail');
+  det.classList.remove('v-hidden');
+  const pm = pmCheck.checked;
+  const pDescKey = 'loc-pallor-desc';
+  designOriginalRegistry[pDescKey] = pallor.desc;
+  const pDescText = resolveContent(pDescKey, pallor.desc);
+  let pHTML = `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
+    <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
+    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(pDescKey, pallor.desc, pDescText)}</div>
+  </div>`;
+  if(!pm && pallor.refNote){
+    const pRefKey = 'loc-pallor-refNote';
+    designOriginalRegistry[pRefKey] = pallor.refNote;
+    const pRefText = resolveContent(pRefKey, pallor.refNote);
+    pHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(pRefKey, pallor.refNote, pRefText)}</div>`;
+  }
+  det.innerHTML = pHTML;
+  buildAureliaMap();
+}
+
 function selectLoc(id){
   selectedLoc = id;
+  pallorSelected = false;
   const loc = AURELIA_LOCS.find(l => l.id === id);
   if(!loc) return;
   buildAureliaMap();
@@ -2552,8 +2962,18 @@ function selectLoc(id){
       </div>
     </div>`;
   }
-  detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${loc.desc.split('\n').join('<br>')}</div></div>`;
-  if(!pm && loc.refNote) detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${loc.refNote}</div>`;
+  detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${(() => {
+    const lk = 'loc-'+id+'-desc';
+    designOriginalRegistry[lk] = loc.desc;
+    const t = resolveContent(lk, loc.desc);
+    return designWrap(lk, loc.desc, t.split('\n').join('<br>'));
+  })()}</div></div>`;
+  if(!pm && loc.refNote){
+    const lrk = 'loc-'+id+'-refNote';
+    designOriginalRegistry[lrk] = loc.refNote;
+    const rt = resolveContent(lrk, loc.refNote);
+    detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(lrk, loc.refNote, rt)}</div>`;
+  }
   det.innerHTML = detHTML;
 
   setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
@@ -2626,7 +3046,10 @@ function addCombatant(){
   combatants.push({
     id: combatantIdSeed++,
     name, score, dex, int: intl,
-    ambush: null, down: false, notes: ''
+    ambush: null, down: false, notes: '',
+    healthMode: 'none', // 'none' | 'simple' | 'detailed'
+    hp: 10, maxHp: 10,
+    cStr: 8, maxCStr: 8, cDex: 8, maxCDex: 8, cEnd: 8, maxCEnd: 8
   });
 
   nameEl.value=''; scoreEl.value=''; dexEl.value=''; intEl.value='';
@@ -2641,7 +3064,10 @@ function quickAddNPC(name, dex, intl){
   combatants.push({
     id: combatantIdSeed++,
     name, score, dex: dex||0, int: intl||0,
-    ambush: null, down: false, notes: ''
+    ambush: null, down: false, notes: '',
+    healthMode: 'none',
+    hp: 10, maxHp: 10,
+    cStr: 8, maxCStr: 8, cDex: 8, maxCDex: 8, cEnd: 8, maxCEnd: 8
   });
   sortInitiative();
 }
@@ -2684,6 +3110,62 @@ function toggleDown(id){
   c.down = !c.down;
   renderInit();
   saveCombatants();
+}
+
+// ── NPC health tracking ──────────────────────────────────────────────────
+// Traveller doesn't use a single HP pool — damage is split across STR,
+// DEX, and END, and a character is taken out when two of the three hit
+// zero. "Simple" mode collapses this into one bar for minor NPCs where
+// the distinction doesn't matter at the table. "Detailed" mode tracks
+// all three separately for NPCs where it might come up.
+function cycleHealthMode(id){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  c.healthMode = c.healthMode === 'none' ? 'simple' : c.healthMode === 'simple' ? 'detailed' : 'none';
+  renderInit();
+  saveCombatants();
+}
+
+function adjustHealth(id, stat, delta){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  if(stat === 'hp'){
+    c.hp = Math.max(0, Math.min(c.maxHp, c.hp + delta));
+  } else {
+    const cur = 'c' + stat, max = 'maxC' + stat;
+    c[cur] = Math.max(0, Math.min(c[max], c[cur] + delta));
+  }
+  renderInit();
+  saveCombatants();
+}
+
+function setMaxHealth(id, stat, val){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  const n = Math.max(1, parseInt(val)||1);
+  if(stat === 'hp'){ c.maxHp = n; c.hp = Math.min(c.hp, n); }
+  else { const max='maxC'+stat, cur='c'+stat; c[max]=n; c[cur]=Math.min(c[cur], n); }
+  renderInit();
+  saveCombatants();
+}
+
+function healthBarHTML(label, cur, max, color){
+  const pct = max > 0 ? Math.round((cur/max)*100) : 0;
+  const barColor = pct <= 25 ? '#C0392B' : pct <= 50 ? '#D4913A' : color;
+  return `<div class="hp-row">
+    <span class="hp-label">${label}</span>
+    <div class="hp-bar-track"><div class="hp-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    <span class="hp-value">${cur}/${max}</span>
+  </div>`;
+}
+
+// Detailed-mode status banner: STR at 0 reads DEAD (red), DEX and END both
+// at 0 (with STR still above 0) reads DOWNED (yellow). Drawn as a large
+// translucent overlay behind the bars so the numbers stay legible.
+function healthStatusBannerHTML(c){
+  if(c.cStr === 0) return '<div class="hp-status-banner dead">DEAD</div>';
+  if(c.cDex === 0 && c.cEnd === 0) return '<div class="hp-status-banner downed">DOWNED</div>';
+  return '';
 }
 
 function updateNotes(id, val){
@@ -2734,6 +3216,7 @@ function clearInitiative(){
 }
 
 function toggleInitPanel(){
+  if(document.getElementById('init-header').dataset.suppressClick === '1') return;
   initCollapsed = !initCollapsed;
   document.getElementById('init-toggle').textContent = initCollapsed ? '▲' : '▼';
   document.getElementById('init-body').classList.toggle('collapsed', initCollapsed);
@@ -2755,21 +3238,121 @@ function renderInit(){
     const isCurrent = i === currentTurnIdx;
     const ambushTag = c.ambush==='atk' ? '<span class="init-ambush-tag atk">AMBUSH +6</span>'
                      : c.ambush==='def' ? '<span class="init-ambush-tag def">AMBUSHED −6</span>' : '';
+
+    let healthHTML = '';
+    if(c.healthMode === 'simple'){
+      healthHTML = `<div class="hp-block">
+        ${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+        <div class="hp-adjust-row">
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
+          <input type="number" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+        </div>
+      </div>`;
+    } else if(c.healthMode === 'detailed'){
+      healthHTML = `<div class="hp-block">
+        ${healthStatusBannerHTML(c)}
+        ${healthBarHTML('STR', c.cStr, c.maxCStr, '#C0392B')}
+        ${healthBarHTML('DEX', c.cDex, c.maxCDex, '#4A90D9')}
+        ${healthBarHTML('END', c.cEnd, c.maxCEnd, '#4CAF50')}
+        <div class="hp-adjust-row">
+          <span style="font-size:9px;color:var(--tx1)">STR</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Str',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Str',1)">+</button>
+          <span style="font-size:9px;color:var(--tx1);margin-left:6px">DEX</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Dex',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Dex',1)">+</button>
+          <span style="font-size:9px;color:var(--tx1);margin-left:6px">END</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'End',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'End',1)">+</button>
+        </div>
+      </div>`;
+    }
+
     return `<div class="init-row ${isCurrent?'current':''} ${c.down?'down':''}">
       <div class="init-row-top">
         <span class="init-score" title="Click to reroll" onclick="rerollScore(${c.id})" style="cursor:pointer">${c.score}</span>
         <span class="init-name">${c.name}</span>
         ${ambushTag}
       </div>
+      ${healthHTML}
       <div class="init-row-controls" style="margin-top:4px;flex-wrap:wrap">
         <button class="init-btn" onclick="moveCombatant(${c.id},-1)" title="Move up">▲</button>
         <button class="init-btn" onclick="moveCombatant(${c.id},1)" title="Move down">▼</button>
         <button class="init-btn ${c.ambush==='atk'?'danger':''}" onclick="toggleAmbush(${c.id},'atk')" title="Ambushing (+6)">AMB+</button>
         <button class="init-btn ${c.ambush==='def'?'danger':''}" onclick="toggleAmbush(${c.id},'def')" title="Ambushed (−6)">AMB−</button>
+        <button class="init-btn" onclick="cycleHealthMode(${c.id})" title="Cycle health tracking: off → simple → detailed">${c.healthMode==='none'?'+ HP':c.healthMode==='simple'?'HP: Simple':'HP: Detailed'}</button>
         <button class="init-btn" onclick="toggleDown(${c.id})" title="Toggle down/out">${c.down?'Revive':'Down'}</button>
         <button class="init-btn danger" onclick="removeCombatant(${c.id})" title="Remove">✕</button>
       </div>
       <textarea class="init-notes" placeholder="Notes (wounds, conditions...)" oninput="updateNotes(${c.id}, this.value)">${c.notes||''}</textarea>
+    </div>`;
+  }).join('');
+
+  renderHealthPanel();
+}
+
+// ── Standalone NPC Health Panel ──────────────────────────────────────────
+// Reuses the same `combatants` array and health functions as the
+// initiative tracker — this is just a filtered, more compact view focused
+// purely on health, so referees don't have to scroll through full
+// initiative rows (ambush flags, notes, move buttons) just to check HP.
+// Both panels stay in sync automatically since they share the same data.
+let healthPanelCollapsed = false;
+
+function toggleHealthPanel(){
+  if(document.getElementById('health-header').dataset.suppressClick === '1') return;
+  healthPanelCollapsed = !healthPanelCollapsed;
+  document.getElementById('health-toggle').textContent = healthPanelCollapsed ? '▲' : '▼';
+  document.getElementById('health-body').classList.toggle('collapsed', healthPanelCollapsed);
+}
+
+function renderHealthPanel(){
+  const body = document.getElementById('health-body');
+  const count = document.getElementById('health-count');
+  if(!body) return;
+
+  const tracked = combatants.filter(c => c.healthMode !== 'none');
+  count.textContent = tracked.length;
+
+  if(!tracked.length){
+    body.innerHTML = '<div class="init-empty">No NPCs being tracked yet. Use the "+ HP" button on a combatant in the Initiative panel to start tracking them here.</div>';
+    return;
+  }
+
+  body.innerHTML = tracked.map(c => {
+    let healthHTML = '';
+    if(c.healthMode === 'simple'){
+      healthHTML = `${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+        <div class="hp-adjust-row">
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
+          <input type="number" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+        </div>`;
+    } else {
+      healthHTML = `<div style="position:relative">
+        ${healthStatusBannerHTML(c)}
+        ${healthBarHTML('STR', c.cStr, c.maxCStr, '#C0392B')}
+        ${healthBarHTML('DEX', c.cDex, c.maxCDex, '#4A90D9')}
+        ${healthBarHTML('END', c.cEnd, c.maxCEnd, '#4CAF50')}
+        <div class="hp-adjust-row">
+          <span style="font-size:9px;color:var(--tx1)">STR</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Str',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Str',1)">+</button>
+          <span style="font-size:9px;color:var(--tx1);margin-left:6px">DEX</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Dex',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'Dex',1)">+</button>
+          <span style="font-size:9px;color:var(--tx1);margin-left:6px">END</span>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'End',-1)">−</button>
+          <button class="init-btn" onclick="adjustHealth(${c.id},'End',1)">+</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="health-card ${c.down?'down':''}">
+      <div class="health-card-name">${c.name}</div>
+      ${healthHTML}
     </div>`;
   }).join('');
 }
@@ -2929,6 +3512,20 @@ async function pollRevealState(){
       if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Also pick up any Design Mode content edits the referee has made
+  try {
+    const res2 = await supaStorage.get('content-overrides', true);
+    const freshOverrides = res2 ? JSON.parse(res2.value) : {};
+    const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
+    if(overridesChanged){
+      contentOverrides = freshOverrides;
+      if(currentView === 'station' && cur) renderDetail();
+      if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+      if(currentView === 'aurelia' && pallorSelected) selectPallor();
+      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+    }
+  } catch(e){ /* silent — next poll will retry */ }
 }
 
 function startPolling(){
@@ -3006,6 +3603,53 @@ function hideAllAreas(){
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
   if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
   saveRevealState();
+}
+
+// ── Full campaign reset (referee only) ──────────────────────────────────
+// Wipes: reveal status (shared, via Supabase), RSR markers, event log,
+// fired-timed-events tracking, station clock, and the initiative tracker.
+// Deliberately leaves alone: access code unlock, player identity, and
+// floating-panel positions — those are device/person preferences, not
+// campaign state, and re-asking for them every reset would be annoying.
+function resetCampaign(){
+  if(!isReferee()) return;
+  if(!confirm('Reset the whole campaign?\n\nThis wipes reveal status, RSR markers, the event log, the station clock, the initiative tracker, AND any Design Mode text edits — for EVERYONE. This cannot be undone.')) return;
+
+  // Local-only state
+  try {
+    localStorage.removeItem('aurelia_clock');
+    localStorage.removeItem('aurelia_rsr');
+    localStorage.removeItem('aurelia_evlog');
+    localStorage.removeItem('aurelia_fired');
+    localStorage.removeItem('aurelia_combatants');
+  } catch(e){}
+
+  // In-memory state
+  clockMinutes = 0;
+  Object.keys(rsrFound).forEach(k => rsrFound[k] = false);
+  eventLog = [];
+  firedEvents = new Set();
+  combatants = [];
+  currentTurnIdx = -1;
+  revealedAreas = {};
+  contentOverrides = {};
+  contentHistory = {};
+
+  // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
+  saveRevealState();
+  saveContentOverrides();
+  saveContentHistory();
+
+  // Re-render everything currently visible
+  renderClock();
+  renderRsrMarkers();
+  renderEventLog();
+  renderInit();
+  if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
+  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); if(pallorSelected) selectPallor(); }
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+
+  alert('Campaign reset.');
 }
 
 // Node positions on the static station SVG, for lock-badge placement
@@ -3127,8 +3771,670 @@ async function addPartyNote(key, text){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// INIT
+// CHARACTER SHEETS
 // ═══════════════════════════════════════════════════════════════════════════
+// One sheet per known character (Rhett Calder, Cassia Velen, etc.), stored
+// as a single JSON blob under key `sheet-${characterName}`. Stored shared
+// (like party notes) rather than under the private-note pattern, because
+// the referee needs read/write access to ANY character's sheet, not just
+// their own — shared:true plus client-side gating (only the matching
+// player's own identity, or the referee, can ever open a given sheet in
+// the UI) gives us that without a second storage scheme. Fields cover
+// stats, skills, equipment, weapons, and notes — finances, augments,
+// background terms, and portrait are deliberately omitted per the
+// referee's scoping (those matter at character creation, not at the table).
+
+let sheetCurrentCharacter = null; // which character's sheet is currently open in the modal
+let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
+
+function emptySheet(){
+  return {
+    name: '', age: '',
+    str: 7, dex: 7, end: 7, intl: 7, edu: 7, soc: 7,
+    skills: '', equipment: '', weapons: '', notes: ''
+  };
+}
+
+function charDM(score){
+  const n = parseInt(score) || 0;
+  if(n <= 0) return -3;
+  if(n <= 2) return -2;
+  if(n <= 5) return -1;
+  if(n <= 8) return 0;
+  if(n <= 11) return 1;
+  if(n <= 14) return 2;
+  return 3;
+}
+
+async function loadSheet(characterName){
+  try {
+    const res = await supaStorage.get(`sheet-${characterName}`, true);
+    if(!res) return emptySheet();
+    return Object.assign(emptySheet(), JSON.parse(res.value));
+  } catch(e){ return emptySheet(); }
+}
+
+async function saveSheet(characterName, data){
+  try { await supaStorage.set(`sheet-${characterName}`, JSON.stringify(data), true); }
+  catch(e){ console.error('Sheet save failed', e); }
+}
+
+// ── Sheet menu (small popover from the header button) ──────────────────
+function openSheetMenu(){
+  const menu = document.getElementById('sheet-menu');
+  const card = document.getElementById('sheet-menu-card');
+  let html = '';
+  if(isReferee()){
+    html += '<div class="sheet-menu-label">View / edit a sheet</div>';
+    html += KNOWN_CHARACTERS.map(n =>
+      `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${n.replace(/'/g,"\\\\'")}')">${n}</button>`
+    ).join('');
+  } else {
+    if(!myIdentity){
+      html += '<div class="sheet-menu-label">Pick a character first</div>';
+      html += '<button class="sheet-menu-item" onclick="closeSheetMenu();showIdentityModal()">Choose my character</button>';
+    } else {
+      html += `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${myIdentity.replace(/'/g,"\\\\'")}')">My Sheet (${myIdentity})</button>`;
+    }
+  }
+  card.innerHTML = html;
+  menu.classList.remove('hidden');
+}
+
+function closeSheetMenu(){
+  document.getElementById('sheet-menu').classList.add('hidden');
+}
+
+// ── Sheet modal ──────────────────────────────────────────────────────────
+async function openSheet(characterName){
+  sheetCurrentCharacter = characterName;
+  const modal = document.getElementById('sheet-modal');
+  const title = document.getElementById('sheet-card-title');
+  const notice = document.getElementById('sheet-readonly-notice');
+  title.textContent = characterName.toUpperCase();
+  notice.textContent = isReferee() ? 'Referee view — editable' : '';
+  document.getElementById('sheet-card-body').innerHTML = '<div class="init-empty">Loading…</div>';
+  modal.classList.remove('hidden');
+
+  const data = await loadSheet(characterName);
+  renderSheetForm(data);
+}
+
+function closeSheet(){
+  document.getElementById('sheet-modal').classList.add('hidden');
+  sheetCurrentCharacter = null;
+}
+
+function renderSheetForm(data){
+  const body = document.getElementById('sheet-card-body');
+  const chars = [
+    ['STR','str'], ['DEX','dex'], ['END','end'],
+    ['INT','intl'], ['EDU','edu'], ['SOC','soc']
+  ];
+  body.innerHTML = `
+    <div class="sheet-name-row">
+      <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
+      <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${(data.age||'').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Characteristics</div>
+      <div class="sheet-char-grid">
+        ${chars.map(([label,key]) => `
+          <div class="sheet-char-box">
+            <div class="sheet-char-label">${label}</div>
+            <input type="number" class="sheet-char-input" id="sheet-f-${key}" value="${data[key]}" oninput="updateSheetDM('${key}')">
+            <div class="sheet-char-dm" id="sheet-dm-${key}">DM ${charDM(data[key])>=0?'+':''}${charDM(data[key])}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Skills</div>
+      <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Weapons</div>
+      <textarea class="sheet-textarea" id="sheet-f-weapons" placeholder="e.g. Snub pistol, close range, 3d6-3 damage, 6 rounds...">${data.weapons||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Equipment</div>
+      <textarea class="sheet-textarea" id="sheet-f-equipment" placeholder="e.g. Vacc suit (form-fitting, 6kg), Comm unit, Medkit...">${data.equipment||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Notes</div>
+      <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
+    </div>
+  `;
+}
+
+function updateSheetDM(key){
+  const input = document.getElementById('sheet-f-' + key);
+  const dmEl = document.getElementById('sheet-dm-' + key);
+  if(!input || !dmEl) return;
+  const dm = charDM(input.value);
+  dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
+}
+
+async function saveCurrentSheet(){
+  if(!sheetCurrentCharacter) return;
+  const data = {
+    name: document.getElementById('sheet-f-name').value,
+    age: document.getElementById('sheet-f-age').value,
+    str: parseInt(document.getElementById('sheet-f-str').value)||0,
+    dex: parseInt(document.getElementById('sheet-f-dex').value)||0,
+    end: parseInt(document.getElementById('sheet-f-end').value)||0,
+    intl: parseInt(document.getElementById('sheet-f-intl').value)||0,
+    edu: parseInt(document.getElementById('sheet-f-edu').value)||0,
+    soc: parseInt(document.getElementById('sheet-f-soc').value)||0,
+    skills: document.getElementById('sheet-f-skills').value,
+    weapons: document.getElementById('sheet-f-weapons').value,
+    equipment: document.getElementById('sheet-f-equipment').value,
+    notes: document.getElementById('sheet-f-notes').value
+  };
+  await saveSheet(sheetCurrentCharacter, data);
+  const msg = document.getElementById('sheet-save-msg');
+  msg.style.display = 'inline';
+  setTimeout(() => { msg.style.display = 'none'; }, 1500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN MODE — STAGE 1: simple text field overrides
+// ═══════════════════════════════════════════════════════════════════════════
+// Scope: read-aloud text, referee description/context, and referee notes
+// fields on station areas/subs and Aurelia locations. Skill checks, timed
+// events, and NPC stat-block rows are NOT covered yet — those are
+// structurally different (nested arrays of objects, not plain strings) and
+// are a deliberate later stage rather than part of this first pass.
+//
+// Mechanism: original campaign content stays exactly where it already is,
+// hardcoded in MAIN / AURELIA_LOCS. This system adds a lookup layer in
+// front of it — contentOverrides holds any edited values, keyed by a
+// stable content key like "elevator-read" or "loc-capitol-desc". Anywhere
+// the app displays one of these fields, it checks contentOverrides first
+// and falls back to the original hardcoded value if no override exists.
+// Nothing about the original data is ever deleted or mutated — Design
+// Mode edits are purely additive, which is what makes "Revert to
+// Original" always possible regardless of how much editing happened.
+//
+// Safety net: every save pushes the PREVIOUS value (override or original,
+// whichever was showing) onto a history list for that key before
+// overwriting it, so "History" can step back through several edits, not
+// just one. History is capped at 10 entries per field to keep storage
+// reasonable.
+
+let contentOverrides = {};   // {key: currentText}
+let contentHistory = {};     // {key: [{text, t}, ...]} most recent first
+let designModeOn = false;
+let designEditCurrentKey = null;
+let designEditOriginalText = '';
+
+async function loadContentOverrides(){
+  try {
+    const res = await supaStorage.get('content-overrides', true);
+    contentOverrides = res ? JSON.parse(res.value) : {};
+  } catch(e){ contentOverrides = {}; }
+  try {
+    const res2 = await supaStorage.get('content-history', true);
+    contentHistory = res2 ? JSON.parse(res2.value) : {};
+  } catch(e){ contentHistory = {}; }
+}
+
+async function saveContentOverrides(){
+  try { await supaStorage.set('content-overrides', JSON.stringify(contentOverrides), true); }
+  catch(e){ console.error('Content override save failed', e); }
+}
+
+async function saveContentHistory(){
+  try { await supaStorage.set('content-history', JSON.stringify(contentHistory), true); }
+  catch(e){ console.error('Content history save failed', e); }
+}
+
+// Resolves the text actually shown for a given key — override if one
+// exists, otherwise the original hardcoded value passed in.
+function resolveContent(key, originalText){
+  return Object.prototype.hasOwnProperty.call(contentOverrides, key) ? contentOverrides[key] : originalText;
+}
+
+const DESIGN_MODE_CODE = 'ilovetwix2012!';
+
+function toggleDesignMode(){
+  if(!isReferee()) return;
+  if(!designModeOn){
+    // Turning ON — require the passcode. Turning off is always immediate.
+    const entered = prompt('Enter the Design Mode passcode:');
+    if(entered !== DESIGN_MODE_CODE){
+      if(entered !== null) alert('Incorrect passcode.');
+      return;
+    }
+  }
+  designModeOn = !designModeOn;
+  rootEl.classList.toggle('design-active', designModeOn);
+  document.getElementById('design-mode-btn').classList.toggle('on', designModeOn);
+  // Re-render whatever's currently visible so pencil icons appear/disappear
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+      if(currentView === 'aurelia' && pallorSelected) selectPallor();
+      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+}
+
+// Wraps a piece of displayed text with a pencil-edit affordance when
+// Design Mode is on. `key` must be stable and unique per field.
+// `originalText` is the hardcoded fallback value for that field.
+function designWrap(key, originalText, displayedHtml){
+  if(!designModeOn) return displayedHtml;
+  const hasOverride = Object.prototype.hasOwnProperty.call(contentOverrides, key);
+  return `<div class="design-editable ${hasOverride?'has-override':''}" data-design-key="${key}">
+    ${displayedHtml}
+    <button class="design-edit-pencil" onclick="openDesignEdit('${key.replace(/'/g,"\\\\'")}', this)" title="Edit this text">✏</button>
+  </div>`;
+}
+
+// designEditType: 'text' (stage 1, simple string) | 'check' | 'event' | 'nperow'
+// (stage 2, structured objects/tuples). Each structured type gets its own
+// small form rendered into #design-edit-body in place of the plain
+// textarea, but everything else — save, revert, history — is shared.
+let designEditType = 'text';
+
+function openDesignEdit(key, btnEl){
+  designEditCurrentKey = key;
+  designEditType = 'text';
+  const titleKey = key.replace(/^loc-/, '').replace(/-/g, ' › ');
+  document.getElementById('design-edit-title').textContent = 'EDIT: ' + titleKey.toUpperCase();
+  const current = resolveContent(key, designEditOriginalTextFor(key));
+  showDesignEditBody(`<textarea id="design-edit-textarea" class="design-field-textarea" style="min-height:160px">${(current||'').replace(/</g,'&lt;')}</textarea>`);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+// Opens the structured editor for a whole skill check (skill name + all
+// its degree tiers). `original` is the hardcoded check object, used as
+// the fallback if no override exists yet.
+function openDesignEditCheck(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'check';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT SKILL CHECK';
+  const data = resolveContent(key, original);
+  const degreesHTML = data.degrees.map((dg,i) => `
+    <div class="design-degree-block">
+      <div class="design-degree-head">Tier ${i+1}</div>
+      <div class="design-field-group">
+        <div class="design-field-label">Label (e.g. "Success", "Effect 2+")</div>
+        <input type="text" class="design-field-input design-deg-label" data-idx="${i}" value="${(dg.l||dg.label||'').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="design-field-group">
+        <div class="design-field-label">Outcome text</div>
+        <textarea class="design-field-textarea design-deg-text" data-idx="${i}">${(dg.t||dg.text||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+    </div>
+  `).join('');
+  showDesignEditBody(`
+    <div class="design-field-group">
+      <div class="design-field-label">Skill check</div>
+      <input type="text" id="design-check-skill" class="design-field-input" value="${(data.skill||'').replace(/"/g,'&quot;')}">
+    </div>
+    ${degreesHTML}
+  `);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+// Opens the structured editor for a single timed event (timing + text).
+function openDesignEditEvent(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'event';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT EVENT';
+  const data = resolveContent(key, original);
+  showDesignEditBody(`
+    <div class="design-field-group">
+      <div class="design-field-label">Timing (e.g. "Hour 22", "On arrival")</div>
+      <input type="text" id="design-event-timing" class="design-field-input" value="${(data.t||'').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="design-field-group">
+      <div class="design-field-label">Event text</div>
+      <textarea id="design-event-text" class="design-field-textarea" style="min-height:100px">${(data.e||'').replace(/</g,'&lt;')}</textarea>
+    </div>
+  `);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+// Opens the structured editor for a single NPC detail row (label + text).
+// `original` is the [label, text] tuple.
+function openDesignEditNpcRow(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'nperow';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT NPC DETAIL';
+  const data = resolveContent(key, original);
+  showDesignEditBody(`
+    <div class="design-field-group">
+      <div class="design-field-label">Label (e.g. "Manner", "On fuel")</div>
+      <input type="text" id="design-row-label" class="design-field-input" value="${(data[0]||'').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="design-field-group">
+      <div class="design-field-label">Detail text</div>
+      <textarea id="design-row-text" class="design-field-textarea" style="min-height:100px">${(data[1]||'').replace(/</g,'&lt;')}</textarea>
+    </div>
+  `);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+function showDesignEditBody(formHTML){
+  document.getElementById('design-edit-body').innerHTML = formHTML + '<div id="design-history-list"></div>';
+}
+
+// Looks up the original hardcoded value for a key, so Revert always has
+// something to fall back to even if contentOverrides has since changed it.
+// Registered by each render call via designOriginalRegistry.
+const designOriginalRegistry = {};
+function designEditOriginalTextFor(key){
+  return designOriginalRegistry[key] || '';
+}
+
+function closeDesignEdit(){
+  document.getElementById('design-edit-panel').classList.add('hidden');
+  designEditCurrentKey = null;
+}
+
+// Reads the current form values back into the appropriate JS value shape
+// for whichever designEditType is active.
+function readDesignEditFormValue(){
+  if(designEditType === 'text'){
+    return document.getElementById('design-edit-textarea').value;
+  }
+  if(designEditType === 'check'){
+    const skill = document.getElementById('design-check-skill').value;
+    const labels = document.querySelectorAll('.design-deg-label');
+    const texts = document.querySelectorAll('.design-deg-text');
+    const degrees = [];
+    labels.forEach((labelEl, i) => {
+      degrees.push({ l: labelEl.value, c: (designEditOriginalTextFor(designEditCurrentKey).degrees[i]||{}).c || 'dp', t: texts[i].value });
+    });
+    return { skill, degrees };
+  }
+  if(designEditType === 'event'){
+    return { t: document.getElementById('design-event-timing').value, e: document.getElementById('design-event-text').value };
+  }
+  if(designEditType === 'nperow'){
+    return [document.getElementById('design-row-label').value, document.getElementById('design-row-text').value];
+  }
+  return null;
+}
+
+// Renders the form fields back from a given value — used by Revert and by
+// restoring a history entry, so both end up reusing the same render logic
+// as the original openDesignEdit* functions rather than duplicating it.
+function renderDesignEditFormFromValue(value){
+  if(designEditType === 'text'){
+    document.getElementById('design-edit-textarea').value = value || '';
+    return;
+  }
+  if(designEditType === 'check'){
+    const degreesHTML = value.degrees.map((dg,i) => `
+      <div class="design-degree-block">
+        <div class="design-degree-head">Tier ${i+1}</div>
+        <div class="design-field-group">
+          <div class="design-field-label">Label (e.g. "Success", "Effect 2+")</div>
+          <input type="text" class="design-field-input design-deg-label" data-idx="${i}" value="${(dg.l||'').replace(/"/g,'&quot;')}">
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Outcome text</div>
+          <textarea class="design-field-textarea design-deg-text" data-idx="${i}">${(dg.t||'').replace(/</g,'&lt;')}</textarea>
+        </div>
+      </div>
+    `).join('');
+    showDesignEditBody(`
+      <div class="design-field-group">
+        <div class="design-field-label">Skill check</div>
+        <input type="text" id="design-check-skill" class="design-field-input" value="${(value.skill||'').replace(/"/g,'&quot;')}">
+      </div>
+      ${degreesHTML}
+    `);
+    return;
+  }
+  if(designEditType === 'event'){
+    showDesignEditBody(`
+      <div class="design-field-group">
+        <div class="design-field-label">Timing (e.g. "Hour 22", "On arrival")</div>
+        <input type="text" id="design-event-timing" class="design-field-input" value="${(value.t||'').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="design-field-group">
+        <div class="design-field-label">Event text</div>
+        <textarea id="design-event-text" class="design-field-textarea" style="min-height:100px">${(value.e||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+    `);
+    return;
+  }
+  if(designEditType === 'nperow'){
+    showDesignEditBody(`
+      <div class="design-field-group">
+        <div class="design-field-label">Label (e.g. "Manner", "On fuel")</div>
+        <input type="text" id="design-row-label" class="design-field-input" value="${(value[0]||'').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="design-field-group">
+        <div class="design-field-label">Detail text</div>
+        <textarea id="design-row-text" class="design-field-textarea" style="min-height:100px">${(value[1]||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+    `);
+    return;
+  }
+}
+
+async function saveDesignEdit(){
+  if(!designEditCurrentKey) return;
+  const key = designEditCurrentKey;
+  const newValue = readDesignEditFormValue();
+  const previousValue = resolveContent(key, designEditOriginalTextFor(key));
+
+  // Push previous value onto history before overwriting
+  if(!contentHistory[key]) contentHistory[key] = [];
+  contentHistory[key].unshift({value: previousValue, type: designEditType, t: Date.now()});
+  contentHistory[key] = contentHistory[key].slice(0, 10);
+
+  contentOverrides[key] = newValue;
+  await saveContentOverrides();
+  await saveContentHistory();
+
+  const msg = document.getElementById('design-save-msg');
+  msg.style.display = 'inline';
+  setTimeout(() => { msg.style.display = 'none'; }, 1500);
+
+  // Re-render the underlying view so the change is visible immediately
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+}
+
+async function revertDesignEdit(){
+  if(!designEditCurrentKey) return;
+  const key = designEditCurrentKey;
+  if(!confirm('Revert this field to its original campaign text? This removes your override entirely.')) return;
+  delete contentOverrides[key];
+  await saveContentOverrides();
+  renderDesignEditFormFromValue(designEditOriginalTextFor(key));
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+}
+
+function toggleDesignHistory(){
+  const list = document.getElementById('design-history-list');
+  const key = designEditCurrentKey;
+  const hidden = list.classList.contains('hidden');
+  if(!hidden){ list.classList.add('hidden'); list.innerHTML=''; return; }
+  const hist = contentHistory[key] || [];
+  if(!hist.length){
+    list.innerHTML = '<div class="init-empty">No earlier versions saved yet.</div>';
+  } else {
+    list.innerHTML = hist.map((h,i) => {
+      const snippet = typeof h.value === 'string' ? h.value
+        : Array.isArray(h.value) ? (h.value[0]+': '+h.value[1])
+        : h.value.skill ? h.value.skill
+        : h.value.t ? (h.value.t+' — '+h.value.e)
+        : JSON.stringify(h.value);
+      return `<div class="design-history-item" onclick="restoreHistoryEntry(${i})">
+        <div class="design-history-label">${new Date(h.t).toLocaleString()}</div>
+        <div class="design-history-snippet">${(snippet||'').slice(0,120)}${(snippet||'').length>120?'…':''}</div>
+      </div>`;
+    }).join('');
+  }
+  list.classList.remove('hidden');
+}
+
+function restoreHistoryEntry(idx){
+  const key = designEditCurrentKey;
+  const hist = contentHistory[key] || [];
+  const entry = hist[idx];
+  if(!entry) return;
+  renderDesignEditFormFromValue(entry.value);
+  document.getElementById('design-history-list').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DRAGGABLE & RESIZABLE FLOATING PANELS (Event Log + Initiative Tracker)
+// ═══════════════════════════════════════════════════════════════════════════
+// Uses the Pointer Events API rather than separate mouse/touch handlers —
+// Pointer Events unify mouse, touch, and pen input into one consistent
+// model and are well supported on iPadOS Safari, which is the main target
+// here. Position/size are persisted per-panel to localStorage so layout
+// survives a page reload.
+
+function makePanelDraggable(panelId, headerId){
+  const panel = document.getElementById(panelId);
+  const header = document.getElementById(headerId);
+  if(!panel || !header) return;
+
+  // Restore saved position/size if present
+  try {
+    const saved = JSON.parse(localStorage.getItem('panelpos_' + panelId) || 'null');
+    if(saved){
+      panel.style.left = saved.left;
+      panel.style.top = saved.top;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      if(saved.width) panel.style.width = saved.width;
+      if(saved.height) panel.style.height = saved.height;
+    }
+  } catch(e){}
+
+  let dragging = false;
+  let startX, startY, startLeft, startTop;
+
+  header.addEventListener('pointerdown', (e) => {
+    // Don't start a drag if the click was on the collapse arrow/count —
+    // header still has onclick=toggleEventLog()/toggleInitPanel(), so we
+    // distinguish a drag from a tap by movement threshold below.
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = panel.getBoundingClientRect();
+    startLeft = rect.left; startTop = rect.top;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    header.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  let moved = false;
+  header.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    if(!moved) return;
+    let newLeft = startLeft + dx, newTop = startTop + dy;
+    // Keep panel on-screen
+    const maxLeft = window.innerWidth - 60;
+    const maxTop = window.innerHeight - 40;
+    newLeft = Math.max(-panel.offsetWidth + 80, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
+    panel.style.left = newLeft + 'px';
+    panel.style.top = newTop + 'px';
+  });
+
+  function endDrag(e){
+    if(!dragging) return;
+    dragging = false;
+    try { header.releasePointerCapture(e.pointerId); } catch(err){}
+    if(moved){
+      savePanelPos(panelId, panel);
+      // Suppress the click-to-toggle that would otherwise fire right after a drag
+      header.dataset.suppressClick = '1';
+      setTimeout(() => { header.dataset.suppressClick = ''; }, 50);
+    }
+    moved = false;
+  }
+  header.addEventListener('pointerup', endDrag);
+  header.addEventListener('pointercancel', endDrag);
+}
+
+function makePanelResizable(panelId){
+  const panel = document.getElementById(panelId);
+  const handle = panel ? panel.querySelector('.panel-resize-handle') : null;
+  if(!panel || !handle) return;
+
+  let resizing = false;
+  let startX, startY, startW, startH;
+
+  handle.addEventListener('pointerdown', (e) => {
+    resizing = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = panel.getBoundingClientRect();
+    startW = rect.width; startH = rect.height;
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if(!resizing) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    const newW = startW + dx, newH = startH + dy;
+    panel.style.width = newW + 'px';
+    panel.style.height = newH + 'px';
+  });
+
+  function endResize(e){
+    if(!resizing) return;
+    resizing = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch(err){}
+    savePanelPos(panelId, panel);
+  }
+  handle.addEventListener('pointerup', endResize);
+  handle.addEventListener('pointercancel', endResize);
+}
+
+function savePanelPos(panelId, panel){
+  try {
+    localStorage.setItem('panelpos_' + panelId, JSON.stringify({
+      left: panel.style.left, top: panel.style.top,
+      width: panel.style.width, height: panel.style.height
+    }));
+  } catch(e){}
+}
+
+function resetPanelPositions(){
+  try {
+    localStorage.removeItem('panelpos_event-log-wrap');
+    localStorage.removeItem('panelpos_init-wrap');
+  } catch(e){}
+  location.reload();
+}
+
+makePanelDraggable('event-log-wrap', 'event-log-header');
+makePanelResizable('event-log-wrap');
+makePanelDraggable('init-wrap', 'init-header');
+makePanelResizable('init-wrap');
+makePanelDraggable('health-wrap', 'health-header');
+makePanelResizable('health-wrap');
+
 buildOrrery();
 renderInit();
 buildQuickAddList();
@@ -3136,6 +4442,12 @@ checkIdentity();
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
   if(currentView === 'aurelia'){ buildAureliaMap(); }
+});
+loadContentOverrides().then(() => {
+  if(currentView === 'station' && cur){ renderDetail(); }
+  if(currentView === 'aurelia' && selectedLoc){ selectLoc(selectedLoc); }
+  if(currentView === 'aurelia' && pallorSelected){ selectPallor(); }
+  if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
 });
 renderEventLog();
 renderRsrMarkers();
