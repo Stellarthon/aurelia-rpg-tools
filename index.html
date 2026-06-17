@@ -425,6 +425,158 @@ textarea{font-family:var(--font)}
 /* SVG on top, absolute fill */
 #aurelia-panel { position: relative; }
 #aurelia-svg   { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; }
+
+/* ── Initiative Tracker (referee-only) ── */
+#init-wrap{
+  position:fixed;bottom:0;right:0;width:340px;z-index:55;
+  background:var(--bg1);border-top:.5px solid var(--bd0);border-left:.5px solid var(--bd0);
+  border-radius:8px 0 0 0;max-height:70vh;display:flex;flex-direction:column;
+  box-shadow:0 -4px 20px rgba(0,0,0,.45)
+}
+#root.pm-active #init-wrap{display:none!important}
+#init-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;cursor:pointer
+}
+#init-title{font-size:11px;font-family:monospace;color:#C0392B;letter-spacing:1px}
+#init-count{font-size:10px;background:#3B1A1A;color:#d45050;border-radius:10px;padding:1px 7px;font-family:monospace}
+#init-toggle{font-size:10px;color:var(--tx1)}
+#init-body{overflow-y:auto;flex:1;padding:8px 10px;-webkit-overflow-scrolling:touch}
+#init-body.collapsed{display:none}
+#init-foot.collapsed{display:none}
+#init-foot{border-top:.5px solid var(--bd0);padding:8px 10px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+
+.init-row{
+  background:var(--bg0);border-radius:5px;padding:7px 8px;margin-bottom:6px;
+  border-left:3px solid var(--bd0);position:relative
+}
+.init-row.current{border-left-color:#C0392B;background:#2a1414}
+.init-row.down{opacity:0.5}
+.init-row-top{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.init-score{
+  font-family:monospace;font-size:14px;font-weight:700;color:#D4A843;
+  min-width:28px;text-align:center;background:var(--bg1);border-radius:4px;padding:1px 4px
+}
+.init-name{font-size:12px;font-weight:600;color:var(--tx0);flex:1;min-width:0}
+.init-ambush-tag{font-size:8px;font-family:monospace;padding:1px 4px;border-radius:3px;font-weight:700}
+.init-ambush-tag.atk{background:#3D2B1F;color:#E8A020}
+.init-ambush-tag.def{background:#3B1A1A;color:#d45050}
+.init-row-controls{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.init-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);padding:2px 5px;
+  border-radius:3px;border:.5px solid var(--bd0);background:transparent;cursor:pointer;line-height:1.2
+}
+.init-btn:hover{background:var(--bd0);color:var(--tx0)}
+.init-btn.danger:hover{color:#d45050;border-color:#d45050}
+.init-notes{
+  width:100%;background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;
+  color:var(--tx1);font-size:10px;padding:4px 6px;margin-top:3px;resize:none;
+  min-height:24px;line-height:1.3;outline:none
+}
+.init-notes:focus{color:var(--tx0);border-color:var(--bd0)}
+.init-empty{color:var(--tx1);font-size:11px;font-style:italic;padding:8px 4px;text-align:center}
+
+#init-addrow{display:flex;gap:5px;flex-wrap:wrap}
+#init-name-input, #init-score-input{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  color:var(--tx0);font-size:11px;padding:5px 7px;outline:none
+}
+#init-name-input{flex:1;min-width:90px}
+#init-score-input{width:50px;text-align:center}
+#init-dex-input, #init-int-input{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  color:var(--tx0);font-size:10px;padding:5px 4px;width:38px;text-align:center;outline:none
+}
+.init-add-btn{
+  background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:4px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:monospace
+}
+.init-roll-btn{
+  background:#3D2B1F;color:#D4A843;border:.5px solid #D4A843;
+  border-radius:4px;padding:5px 8px;font-size:10px;cursor:pointer;font-family:monospace
+}
+#init-mode-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--tx1)}
+#init-quickadd{display:flex;flex-wrap:wrap;gap:4px;max-height:70px;overflow-y:auto}
+.init-quick-btn{
+  font-size:9px;font-family:monospace;color:#9B59B6;background:#2A1A3B;
+  border:.5px solid #9B59B666;border-radius:3px;padding:3px 6px;cursor:pointer
+}
+.init-quick-btn:hover{background:#3A2550}
+#init-actions{display:flex;gap:6px}
+.init-action-btn{
+  flex:1;font-size:10px;font-family:monospace;padding:6px;border-radius:4px;
+  border:.5px solid var(--bd0);background:var(--bg0);color:var(--tx1);cursor:pointer;text-align:center
+}
+.init-action-btn.primary{border-color:#C0392B;color:#d45050}
+.init-action-btn:hover{background:var(--bd0);color:var(--tx0)}
+
+/* ── Reveal system & player notes ── */
+.locked-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:8px;background:rgba(10,12,18,0.92);z-index:10;
+  border-radius:inherit;color:var(--tx1);text-align:center;padding:20px
+}
+.locked-icon{font-size:26px;opacity:0.6}
+.locked-text{font-size:12px;font-family:monospace;letter-spacing:1px}
+.locked-sub{font-size:10px;color:var(--tx1);opacity:0.7;max-width:200px}
+
+/* Reveal toggle button shown to referee per area */
+.reveal-toggle-row{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--bg1);border-radius:6px;padding:8px 10px;margin-bottom:10px;
+  border:.5px solid var(--bd0)
+}
+.reveal-toggle-lbl{font-size:11px;color:var(--tx1);display:flex;align-items:center;gap:6px}
+.reveal-btn{
+  font-size:10px;font-family:monospace;font-weight:700;padding:5px 12px;
+  border-radius:4px;border:.5px solid;cursor:pointer
+}
+.reveal-btn.is-hidden{background:#3B1A1A;color:#d45050;border-color:#d45050}
+.reveal-btn.is-revealed{background:#1A3B1A;color:#4CAF50;border-color:#4CAF50}
+
+/* Player identity picker (shown once per device) */
+#identity-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:200;
+  display:flex;align-items:center;justify-content:center
+}
+#identity-modal.hidden{display:none}
+#identity-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  padding:24px;max-width:320px;width:90%;text-align:center
+}
+#identity-card h3{color:#D4A843;font-size:15px;margin-bottom:6px;font-family:monospace;letter-spacing:1px}
+#identity-card p{color:var(--tx1);font-size:11px;margin-bottom:16px;line-height:1.5}
+#identity-input{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:13px;padding:9px 10px;outline:none;text-align:center;margin-bottom:10px
+}
+#identity-quick{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:14px}
+.identity-quick-btn{
+  font-size:11px;padding:5px 12px;border-radius:5px;border:.5px solid var(--bd0);
+  background:var(--bg0);color:var(--tx0);cursor:pointer
+}
+.identity-quick-btn:hover{background:var(--bd0)}
+#identity-confirm{
+  width:100%;background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:5px;padding:9px;font-size:12px;cursor:pointer;font-family:monospace
+}
+
+/* Notes tab additions — private/party split */
+.notes-subtabs{display:flex;gap:0;margin-bottom:10px;border-bottom:.5px solid var(--bd0)}
+.notes-subtab{
+  flex:1;text-align:center;padding:7px;font-size:10px;font-family:monospace;
+  color:var(--tx1);cursor:pointer;border-bottom:2px solid transparent
+}
+.notes-subtab.on{color:#D4A843;border-bottom-color:#D4A843;font-weight:700}
+#whoami-strip{
+  font-size:10px;color:var(--tx1);text-align:right;margin-bottom:6px;cursor:pointer
+}
+#whoami-strip span{color:#D4A843;text-decoration:underline;text-underline-offset:2px}
+.party-note-entry{
+  background:var(--bg1);border-radius:5px;padding:7px 9px;margin-bottom:6px;font-size:11px
+}
+.party-note-author{color:#9B59B6;font-weight:700;font-size:9px;font-family:monospace;margin-bottom:2px}
+.party-note-text{color:var(--tx0);white-space:pre-wrap;line-height:1.5}
 </style>
 </head>
 <body>
@@ -638,6 +790,47 @@ textarea{font-family:var(--font)}
     </div>
     <div id="event-log-body"></div>
     <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
+  </div>
+  <!-- ── Initiative Tracker (referee-only, floating panel) ── -->
+  <div id="init-wrap" class="ref-only">
+    <div id="init-header" onclick="toggleInitPanel()">
+      <span id="init-title">⚔ INITIATIVE</span>
+      <span id="init-count">0</span>
+      <span id="init-toggle">▼</span>
+    </div>
+    <div id="init-body"></div>
+    <div id="init-foot">
+      <div id="init-mode-row">
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="init-roll-mode" style="accent-color:#D4A843">
+          Roll 2D6 + mod automatically
+        </label>
+      </div>
+      <div id="init-addrow">
+        <input type="text" id="init-name-input" placeholder="Name" maxlength="30">
+        <input type="number" id="init-score-input" placeholder="Score">
+        <input type="number" id="init-dex-input" placeholder="DEX" title="DEX modifier">
+        <input type="number" id="init-int-input" placeholder="INT" title="INT modifier">
+        <button class="init-add-btn" onclick="addCombatant()">+ Add</button>
+      </div>
+      <div id="init-quickadd"></div>
+      <div id="init-actions">
+        <button class="init-action-btn" onclick="sortInitiative()">Sort</button>
+        <button class="init-action-btn" onclick="nextTurn()">Next Turn ▸</button>
+        <button class="init-action-btn primary" onclick="clearInitiative()">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Identity modal (shown once per device to non-referees) ── -->
+  <div id="identity-modal" class="hidden">
+    <div id="identity-card">
+      <h3>WHO'S PLAYING?</h3>
+      <p>Pick your character name so the referee knows whose notes they're reading. This is remembered on this device.</p>
+      <div id="identity-quick"></div>
+      <input type="text" id="identity-input" placeholder="Type a name..." maxlength="24">
+      <button id="identity-confirm" onclick="confirmIdentity()">Continue</button>
+    </div>
   </div>
 </div><!-- #root -->
 <script>
@@ -1002,7 +1195,9 @@ function togglePM(){
     if(pmCheck.checked) localStorage.setItem("aurelia_pm","1");
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
-  if(currentView === "station" && cur) renderTabs(), renderDetail();
+  if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
+  if(currentView === "aurelia") buildAureliaMap();
+  checkIdentity();
 }
 pmCheck.addEventListener("change", function(){
   rootEl.classList.toggle("pm-active", this.checked);
@@ -1010,7 +1205,9 @@ pmCheck.addEventListener("change", function(){
     if(this.checked) localStorage.setItem("aurelia_pm","1");
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
-  if(currentView === "station" && cur) renderTabs(), renderDetail();
+  if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
+  if(currentView === "aurelia") buildAureliaMap();
+  checkIdentity();
 });
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); } } catch(e){}
 
@@ -1099,9 +1296,9 @@ function buildOrrery(){
   // spans roughly x: SX-440*cos28 to SX+440*cos28 = SX ± 388
   // We want the visual centre of the fan to sit at ~W*0.42, H*0.38
   // So star goes at approx (W*0.42 + 388*0.82, H*0.38 - 440*sin28*0.5) ≈ (660, 120)
-  // After tuning: SX=652, SY=105 centres the system nicely in 800×500
+  // Star at SX=594, SY=180 — centres the visual mass of the fan in the viewBox
 
-  const SX = 652, SY = 105;
+  const SX = 594, SY = 180;
   const TILT = -28 * Math.PI / 180;
   const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
 
@@ -1384,6 +1581,7 @@ function enterStation(){
   document.getElementById("view-station").style.display="flex";
   document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
   setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+  updateStationLocks();
 }
 
 function goSystem(){
@@ -1495,8 +1693,27 @@ function renderDetail(){
   if(pm&&refOnly_tabs.includes(curTab)) curTab="overview";
   const backBtn=curSub?`<button class="back-btn" onclick="goBack()">← Back to ${mainA.label}</button>`:"";
 
+  // ── Reveal gate: only top-level areas are gated, not sub-areas ──
+  const isTopLevelArea = !curSub && REVEALABLE_STATION_AREAS.includes(cur);
+  const locked = isTopLevelArea && pm && !isRevealed(cur);
+
+  if(locked){
+    d.innerHTML = `<div class="empty"><div class="empty-icon">🔒</div>
+      <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
+      <div style="font-size:12px;max-width:200px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this area yet.</div></div>`;
+    return;
+  }
+
   if(curTab==="overview"){
     let html=backBtn;
+    // Referee-only reveal toggle (only shown when NOT in player mode, on top-level areas)
+    if(!pm && isTopLevelArea){
+      const rev = isRevealed(cur);
+      html += `<div class="reveal-toggle-row">
+        <span class="reveal-toggle-lbl">👁 Player visibility</span>
+        <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${cur}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+      </div>`;
+    }
     if(a.read) html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${a.read}</div></div>`;
     if(!pm&&a.rsr) html+=`<div class="rsr-tag">🔴 ${a.rsr}</div>`;
     if(a.desc) html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${a.desc}</div></div>`;
@@ -1570,10 +1787,70 @@ function renderDetail(){
     });
   } else if(curTab==="notes"){
     const key=cur+(curSub?"_"+curSub:"");
-    const saved=notes[key]||"";
-    d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${saved}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
+    if(pmCheck.checked){
+      renderPlayerNotesTab(d, key);
+    } else {
+      const saved=notes[key]||"";
+      d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${saved}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
+    }
   }
 }
+
+// ── Player-facing notes tab: private notes + party notebook ──────────────
+let notesSubTab = 'private';
+
+async function renderPlayerNotesTab(container, key){
+  if(!myIdentity){
+    container.innerHTML = '<div class="init-empty">Pick a character name first.</div>';
+    showIdentityModal();
+    return;
+  }
+  container.innerHTML = `<div id="whoami-strip">Playing as <span onclick="changeIdentity()">${myIdentity}</span></div>
+    <div class="notes-subtabs">
+      <div class="notes-subtab ${notesSubTab==='private'?'on':''}" onclick="setNotesSubTab('${key}','private')">MY NOTES</div>
+      <div class="notes-subtab ${notesSubTab==='party'?'on':''}" onclick="setNotesSubTab('${key}','party')">PARTY NOTEBOOK</div>
+    </div>
+    <div id="player-notes-body">Loading…</div>`;
+
+  if(notesSubTab === 'private'){
+    const text = await loadPrivateNote(key);
+    const body = document.getElementById('player-notes-body');
+    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${text}</textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="savePrivNotesTab('${key}')">Save</button><span class="saved-msg" id="priv-smsg">✓ Saved</span></div>`;
+  } else {
+    const list = await loadPartyNotes(key);
+    const body = document.getElementById('player-notes-body');
+    if(body){
+      body.innerHTML = (list.length ? list.map(n =>
+        `<div class="party-note-entry"><div class="party-note-author">${n.author}</div><div class="party-note-text">${n.text}</div></div>`
+      ).join('') : '<div class="init-empty">No party notes yet for this area.</div>')
+      + `<textarea class="note-ta" id="party-nta" placeholder="Add a note the whole party can see..." style="margin-top:8px;min-height:60px"></textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="addPartyNoteTab('${key}')">Post</button></div>`;
+    }
+  }
+}
+
+function setNotesSubTab(key, tab){
+  notesSubTab = tab;
+  renderPlayerNotesTab(document.getElementById('detail'), key);
+}
+
+async function savePrivNotesTab(key){
+  const ta = document.getElementById('priv-nta');
+  if(!ta) return;
+  await savePrivateNote(key, ta.value);
+  const m = document.getElementById('priv-smsg');
+  if(m){ m.style.display='inline'; setTimeout(()=>m.style.display='none',1500); }
+}
+
+async function addPartyNoteTab(key){
+  const ta = document.getElementById('party-nta');
+  if(!ta || !ta.value.trim()) return;
+  await addPartyNote(key, ta.value);
+  ta.value = '';
+  renderPlayerNotesTab(document.getElementById('detail'), key);
+}
+
 
 const refOnly_tabs=["npcs","checks","events","refnotes"];
 
@@ -1961,11 +2238,13 @@ function buildAureliaMap(){
   s += `<text x="${pallX}" y="${pallY+38}" text-anchor="middle" fill="#555570" font-size="7" font-family="monospace" pointer-events="none">moon · 18.3d</text>`;
 
   // ── Location nodes ───────────────────────────────────────
+  const showLocks = !isReferee();
   AURELIA_LOCS.forEach(loc => {
     const rad = loc.angle * Math.PI / 180;
     const nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist * 0.92));
     const ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist * 0.92));
     const isSelected = selectedLoc === loc.id;
+    const isLocked = showLocks && !isRevealed(loc.id);
 
     if(loc.isStation){
       // ── Orbital station icon ─────────────────────────────
@@ -2039,6 +2318,13 @@ function buildAureliaMap(){
       const nameColor = loc.hook ? '#E8A020' : loc.color;
       s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
     }
+
+    // Lock badge — overlaid on top of either node type, player-only, unrevealed only
+    if(isLocked){
+      const bx = loc.isStation ? nx+13 : nx+9, by = loc.isStation ? ny-13 : ny-9;
+      s += `<circle cx="${bx}" cy="${by}" r="7" fill="#0a0c12" stroke="#555570" stroke-width="1" pointer-events="none"/>`;
+      s += `<text x="${bx}" y="${by+3}" text-anchor="middle" font-size="8" pointer-events="none">🔒</text>`;
+    }
   });
 
   svg.innerHTML = s;
@@ -2094,12 +2380,30 @@ function selectLoc(id){
   nm.style.color = loc.color;
   document.getElementById('aur-dtype').textContent = loc.tag;
 
+  const pm = pmCheck.checked;
+
+  // ── Reveal gate ──────────────────────────────────────────
+  if(pm && !isRevealed(id)){
+    document.getElementById('btn-enter-station').classList.add('v-hidden');
+    det.innerHTML = `<div class="empty" style="height:200px"><div class="empty-icon">🔒</div>
+      <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
+      <div style="font-size:12px;max-width:200px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
+    setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
+    return;
+  }
+
   // Show/hide Enter Station button
   const stBtn = document.getElementById('btn-enter-station');
   loc.isStation ? stBtn.classList.remove('v-hidden') : stBtn.classList.add('v-hidden');
 
-  const pm = pmCheck.checked;
   let detHTML = '';
+  if(!pm){
+    const rev = isRevealed(id);
+    detHTML += `<div class="reveal-toggle-row">
+      <span class="reveal-toggle-lbl">👁 Player visibility</span>
+      <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${id}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+    </div>`;
+  }
   detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${loc.desc.split('\n').join('<br>')}</div></div>`;
   if(!pm && loc.refNote) detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${loc.refNote}</div>`;
   det.innerHTML = detHTML;
@@ -2122,9 +2426,457 @@ function goAurelia(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// INITIATIVE TRACKER (referee-only)
+// ═══════════════════════════════════════════════════════════════════════════
+let combatants = []; // {id, name, score, dex, int, ambush:null|'atk'|'def', down:false, notes:''}
+let currentTurnIdx = -1; // -1 = no active turn pointer
+let initCollapsed = false;
+let combatantIdSeed = 1;
+
+try {
+  const saved = JSON.parse(localStorage.getItem('aurelia_combatants')||'null');
+  if(saved && Array.isArray(saved.list)){
+    combatants = saved.list;
+    currentTurnIdx = saved.turnIdx ?? -1;
+    combatantIdSeed = saved.seed || (combatants.length+1);
+  }
+} catch(e){}
+
+function saveCombatants(){
+  try {
+    localStorage.setItem('aurelia_combatants', JSON.stringify({
+      list: combatants, turnIdx: currentTurnIdx, seed: combatantIdSeed
+    }));
+  } catch(e){}
+}
+
+function roll2d6(){ return (1+Math.floor(Math.random()*6)) + (1+Math.floor(Math.random()*6)); }
+
+function addCombatant(){
+  const nameEl = document.getElementById('init-name-input');
+  const scoreEl = document.getElementById('init-score-input');
+  const dexEl = document.getElementById('init-dex-input');
+  const intEl = document.getElementById('init-int-input');
+  const rollMode = document.getElementById('init-roll-mode').checked;
+
+  const name = nameEl.value.trim();
+  if(!name) { nameEl.focus(); return; }
+
+  const dex = parseInt(dexEl.value)||0;
+  const intl = parseInt(intEl.value)||0;
+  const mod = Math.max(dex, intl); // DEX or INT roll, whichever the referee tracks — use higher modifier field filled in
+
+  let score;
+  if(rollMode){
+    score = roll2d6() + mod;
+  } else {
+    score = scoreEl.value !== '' ? (parseInt(scoreEl.value)||0) : (roll2d6()+mod);
+  }
+
+  combatants.push({
+    id: combatantIdSeed++,
+    name, score, dex, int: intl,
+    ambush: null, down: false, notes: ''
+  });
+
+  nameEl.value=''; scoreEl.value=''; dexEl.value=''; intEl.value='';
+  sortInitiative();
+  nameEl.focus();
+}
+
+function quickAddNPC(name, dex, intl){
+  const rollMode = document.getElementById('init-roll-mode').checked;
+  const mod = Math.max(dex||0, intl||0);
+  const score = roll2d6() + mod;
+  combatants.push({
+    id: combatantIdSeed++,
+    name, score, dex: dex||0, int: intl||0,
+    ambush: null, down: false, notes: ''
+  });
+  sortInitiative();
+}
+
+function removeCombatant(id){
+  const idx = combatants.findIndex(c=>c.id===id);
+  if(idx===-1) return;
+  if(currentTurnIdx > idx) currentTurnIdx--;
+  else if(currentTurnIdx === idx) currentTurnIdx = -1;
+  combatants.splice(idx,1);
+  renderInit();
+  saveCombatants();
+}
+
+function moveCombatant(id, dir){
+  const idx = combatants.findIndex(c=>c.id===id);
+  if(idx===-1) return;
+  const newIdx = idx + dir;
+  if(newIdx<0 || newIdx>=combatants.length) return;
+  const wasCurrentId = currentTurnIdx>=0 ? combatants[currentTurnIdx].id : null;
+  const tmp = combatants[idx];
+  combatants[idx] = combatants[newIdx];
+  combatants[newIdx] = tmp;
+  if(wasCurrentId !== null) currentTurnIdx = combatants.findIndex(c=>c.id===wasCurrentId);
+  renderInit();
+  saveCombatants();
+}
+
+function toggleAmbush(id, type){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  c.ambush = (c.ambush === type) ? null : type;
+  renderInit();
+  saveCombatants();
+}
+
+function toggleDown(id){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  c.down = !c.down;
+  renderInit();
+  saveCombatants();
+}
+
+function updateNotes(id, val){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  c.notes = val;
+  saveCombatants();
+}
+
+function rerollScore(id){
+  const c = combatants.find(c=>c.id===id);
+  if(!c) return;
+  const mod = Math.max(c.dex||0, c.int||0);
+  c.score = roll2d6() + mod;
+  sortInitiative();
+}
+
+function sortInitiative(){
+  const wasCurrentId = currentTurnIdx>=0 && combatants[currentTurnIdx] ? combatants[currentTurnIdx].id : null;
+  // Sort descending by score; on tie, highest DEX wins (per cheat sheet)
+  combatants.sort((a,b) => {
+    if(b.score !== a.score) return b.score - a.score;
+    return (b.dex||0) - (a.dex||0);
+  });
+  if(wasCurrentId !== null) currentTurnIdx = combatants.findIndex(c=>c.id===wasCurrentId);
+  renderInit();
+  saveCombatants();
+}
+
+function nextTurn(){
+  if(combatants.length === 0) return;
+  // Skip down combatants
+  let tries = 0;
+  do {
+    currentTurnIdx = (currentTurnIdx + 1) % combatants.length;
+    tries++;
+  } while(combatants[currentTurnIdx].down && tries <= combatants.length);
+  renderInit();
+  saveCombatants();
+}
+
+function clearInitiative(){
+  if(combatants.length && !confirm('Clear all combatants from the initiative tracker?')) return;
+  combatants = [];
+  currentTurnIdx = -1;
+  renderInit();
+  saveCombatants();
+}
+
+function toggleInitPanel(){
+  initCollapsed = !initCollapsed;
+  document.getElementById('init-toggle').textContent = initCollapsed ? '▲' : '▼';
+  document.getElementById('init-body').classList.toggle('collapsed', initCollapsed);
+  document.getElementById('init-foot').classList.toggle('collapsed', initCollapsed);
+}
+
+function renderInit(){
+  const body = document.getElementById('init-body');
+  const count = document.getElementById('init-count');
+  if(!body) return;
+  count.textContent = combatants.length;
+
+  if(!combatants.length){
+    body.innerHTML = '<div class="init-empty">No combatants yet. Add by name or use a quick-add button below.</div>';
+    return;
+  }
+
+  body.innerHTML = combatants.map((c,i) => {
+    const isCurrent = i === currentTurnIdx;
+    const ambushTag = c.ambush==='atk' ? '<span class="init-ambush-tag atk">AMBUSH +6</span>'
+                     : c.ambush==='def' ? '<span class="init-ambush-tag def">AMBUSHED −6</span>' : '';
+    return `<div class="init-row ${isCurrent?'current':''} ${c.down?'down':''}">
+      <div class="init-row-top">
+        <span class="init-score" title="Click to reroll" onclick="rerollScore(${c.id})" style="cursor:pointer">${c.score}</span>
+        <span class="init-name">${c.name}</span>
+        ${ambushTag}
+      </div>
+      <div class="init-row-controls" style="margin-top:4px;flex-wrap:wrap">
+        <button class="init-btn" onclick="moveCombatant(${c.id},-1)" title="Move up">▲</button>
+        <button class="init-btn" onclick="moveCombatant(${c.id},1)" title="Move down">▼</button>
+        <button class="init-btn ${c.ambush==='atk'?'danger':''}" onclick="toggleAmbush(${c.id},'atk')" title="Ambushing (+6)">AMB+</button>
+        <button class="init-btn ${c.ambush==='def'?'danger':''}" onclick="toggleAmbush(${c.id},'def')" title="Ambushed (−6)">AMB−</button>
+        <button class="init-btn" onclick="toggleDown(${c.id})" title="Toggle down/out">${c.down?'Revive':'Down'}</button>
+        <button class="init-btn danger" onclick="removeCombatant(${c.id})" title="Remove">✕</button>
+      </div>
+      <textarea class="init-notes" placeholder="Notes (wounds, conditions...)" oninput="updateNotes(${c.id}, this.value)">${c.notes||''}</textarea>
+    </div>`;
+  }).join('');
+}
+
+function buildQuickAddList(){
+  // Gather unique NPCs from MAIN (station) and BODIES (system) data
+  const seen = new Set();
+  const list = [];
+  function consider(npc){
+    if(!npc || !npc.name || seen.has(npc.name)) return;
+    seen.add(npc.name);
+    const dex = npc.stats ? (npc.stats.DEX||0) : 0;
+    const intl = npc.stats ? (npc.stats.INT||0) : 0;
+    list.push({name:npc.name, dex, int:intl});
+  }
+  Object.values(MAIN).forEach(area => {
+    (area.npcs||[]).forEach(consider);
+    if(area.subs) Object.values(area.subs).forEach(sub => (sub.npcs||[]).forEach(consider));
+  });
+  BODIES.forEach(b => (b.npcs||[]).forEach(consider));
+
+  const wrap = document.getElementById('init-quickadd');
+  if(!wrap) return;
+  wrap.innerHTML = list.map(n =>
+    `<button class="init-quick-btn" onclick="quickAddNPC('${n.name.replace(/'/g,"\\\\'")}',${n.dex},${n.int})">+ ${n.name}</button>`
+  ).join('');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUPABASE ADAPTER — drop-in replacement for window.storage
+// ═══════════════════════════════════════════════════════════════════════════
+// Mimics supaStorage.get(key, shared) / .set(key, value, shared) shape
+// so the rest of the app's storage calls don't need to change.
+// Table: aurelia_state(key text primary key, value text, updated_at timestamptz)
+// Private (per-device) keys already bake the device identity into the key
+// string itself (e.g. note-private-Cass-elevator), so "shared" doesn't need
+// its own column — every row in this table is technically readable by anyone
+// with the anon key, exactly like window.storage's shared=true behaviour.
+// This is acceptable here since the table only ever holds reveal flags and
+// notes text — never referee-only content (see note above).
+
+const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
+const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
+
+const supaStorage = {
+  async get(key, shared){
+    try {
+      const res = await fetch(`${SUPABASE_REST}?key=eq.${encodeURIComponent(key)}&select=value`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY
+        }
+      });
+      if(!res.ok) return null;
+      const rows = await res.json();
+      if(!rows.length) return null;
+      return { key, value: rows[0].value, shared };
+    } catch(e){
+      console.error('Supabase get failed', e);
+      return null;
+    }
+  },
+  async set(key, value, shared){
+    try {
+      const res = await fetch(SUPABASE_REST, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ key, value: String(value) })
+      });
+      if(!res.ok) { console.error('Supabase set failed', await res.text()); return null; }
+      return { key, value, shared };
+    } catch(e){
+      console.error('Supabase set failed', e);
+      return null;
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED STATE (via Supabase) — reveal status, player notes, party notes
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORTANT: only reveal-status flags and notes ever go into shared storage.
+// Referee-only content (NPCs, checks, ref notes, the data itself) stays in
+// the hardcoded JS exactly as before — never written to storage — so a
+// player inspecting storage directly can only see which area IDs are
+// "revealed", never the hidden content.
+
+const REVEALABLE_STATION_AREAS = ['elevator','docking','concourse','security','medical','maintenance'];
+const REVEALABLE_AURELIA_LOCS  = ['station','capitol','cradle','hegemony-base','spire-range','omnisynth','underdeck'];
+
+let revealedAreas = {}; // {areaId: true/false} — shared
+let myIdentity = null;  // local to this device — "Cass", "Rhett", etc.
+let notesViewMode = 'private'; // 'private' | 'party'
+
+function isReferee(){ return !pmCheck.checked; }
+
+async function loadRevealState(){
+  try {
+    const res = await supaStorage.get('reveal-status', true);
+    revealedAreas = res ? JSON.parse(res.value) : {};
+  } catch(e){ revealedAreas = {}; }
+}
+
+async function saveRevealState(){
+  try { await supaStorage.set('reveal-status', JSON.stringify(revealedAreas), true); }
+  catch(e){ console.error('Reveal save failed', e); }
+}
+
+function isRevealed(areaId){
+  return !!revealedAreas[areaId];
+}
+
+async function toggleReveal(areaId){
+  if(!isReferee()) return; // safety — only referee can toggle
+  revealedAreas[areaId] = !revealedAreas[areaId];
+  await saveRevealState();
+  // Re-render whatever's currently showing
+  if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
+  if(currentView === 'aurelia') { buildAureliaMap(); }
+}
+
+// Node positions on the static station SVG, for lock-badge placement
+const STATION_NODE_RECTS = {
+  elevator:    {x:155, y:20,  w:90},
+  docking:     {x:8,   y:188, w:122},
+  concourse:   {x:148, y:88,  w:104},
+  security:    {x:270, y:188, w:122},
+  medical:     {x:274, y:298, w:118},
+  maintenance: {x:14,  y:298, w:118}
+};
+
+function updateStationLocks(){
+  // Remove any existing lock badges first
+  document.querySelectorAll('.station-lock-badge').forEach(el => el.remove());
+  if(isReferee()) return; // referee always sees everything, no badges needed
+  const svg = document.getElementById('mapsvg');
+  if(!svg) return;
+  REVEALABLE_STATION_AREAS.forEach(areaId => {
+    if(isRevealed(areaId)) return;
+    const r = STATION_NODE_RECTS[areaId];
+    if(!r) return;
+    const ns = 'http://www.w3.org/2000/svg';
+    const g = document.createElementNS(ns,'g');
+    g.setAttribute('class','station-lock-badge');
+    g.setAttribute('pointer-events','none');
+    const circle = document.createElementNS(ns,'circle');
+    circle.setAttribute('cx', r.x + r.w - 10);
+    circle.setAttribute('cy', r.y + 10);
+    circle.setAttribute('r', 8);
+    circle.setAttribute('fill', '#0a0c12');
+    circle.setAttribute('stroke', '#555570');
+    circle.setAttribute('stroke-width', '1');
+    const text = document.createElementNS(ns,'text');
+    text.setAttribute('x', r.x + r.w - 10);
+    text.setAttribute('y', r.y + 13);
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('font-size','9');
+    text.textContent = '🔒';
+    g.appendChild(circle); g.appendChild(text);
+    svg.appendChild(g);
+  });
+}
+
+// ── Player identity ────────────────────────────────────────────────────
+const KNOWN_CHARACTERS = ['Cass','Rhett','Riley','Riven','Bartholomew','Calder','Eleos'];
+
+function checkIdentity(){
+  if(isReferee()) return; // referee never needs an identity
+  try {
+    myIdentity = localStorage.getItem('aurelia_identity');
+  } catch(e){}
+  if(!myIdentity){
+    showIdentityModal();
+  } else {
+    renderWhoAmI();
+  }
+}
+
+function showIdentityModal(){
+  const modal = document.getElementById('identity-modal');
+  const quick = document.getElementById('identity-quick');
+  quick.innerHTML = KNOWN_CHARACTERS.map(n =>
+    `<button class="identity-quick-btn" onclick="document.getElementById('identity-input').value='${n}'">${n}</button>`
+  ).join('');
+  modal.classList.remove('hidden');
+}
+
+function confirmIdentity(){
+  const val = document.getElementById('identity-input').value.trim();
+  if(!val) return;
+  myIdentity = val;
+  try { localStorage.setItem('aurelia_identity', val); } catch(e){}
+  document.getElementById('identity-modal').classList.add('hidden');
+  renderWhoAmI();
+}
+
+function renderWhoAmI(){
+  const strip = document.getElementById('whoami-strip');
+  if(strip) strip.innerHTML = `Playing as <span onclick="changeIdentity()">${myIdentity}</span>`;
+}
+
+function changeIdentity(){
+  try { localStorage.removeItem('aurelia_identity'); } catch(e){}
+  myIdentity = null;
+  showIdentityModal();
+}
+
+// ── Private + party notes (shared storage) ───────────────────────────────
+async function loadPrivateNote(key){
+  if(!myIdentity) return '';
+  try {
+    const res = await supaStorage.get(`note-private-${myIdentity}-${key}`, false);
+    return res ? res.value : '';
+  } catch(e){ return ''; }
+}
+
+async function savePrivateNote(key, text){
+  if(!myIdentity) return;
+  try { await supaStorage.set(`note-private-${myIdentity}-${key}`, text, false); }
+  catch(e){ console.error('Private note save failed', e); }
+}
+
+async function loadPartyNotes(key){
+  try {
+    const res = await supaStorage.get(`note-party-${key}`, true);
+    return res ? JSON.parse(res.value) : [];
+  } catch(e){ return []; }
+}
+
+async function addPartyNote(key, text){
+  if(!text.trim()) return;
+  const author = isReferee() ? 'Referee' : (myIdentity || 'Unknown');
+  const list = await loadPartyNotes(key);
+  list.push({author, text: text.trim(), t: Date.now()});
+  try { await supaStorage.set(`note-party-${key}`, JSON.stringify(list), true); }
+  catch(e){ console.error('Party note save failed', e); }
+  return list;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════
 buildOrrery();
+renderInit();
+buildQuickAddList();
+checkIdentity();
+loadRevealState().then(() => {
+  if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
+  if(currentView === 'aurelia'){ buildAureliaMap(); }
+});
 renderEventLog();
 renderRsrMarkers();
 </script>
