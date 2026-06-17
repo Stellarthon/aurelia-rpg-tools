@@ -577,9 +577,43 @@ textarea{font-family:var(--font)}
 }
 .party-note-author{color:#9B59B6;font-weight:700;font-size:9px;font-family:monospace;margin-bottom:2px}
 .party-note-text{color:var(--tx0);white-space:pre-wrap;line-height:1.5}
+
+/* ── Password gate ── */
+#pw-gate{
+  position:fixed;inset:0;background:var(--bg0);z-index:300;
+  display:flex;align-items:center;justify-content:center
+}
+#pw-gate.hidden{display:none}
+#pw-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  padding:28px;max-width:300px;width:90%;text-align:center
+}
+#pw-card h3{color:#D4A843;font-size:14px;margin-bottom:8px;font-family:monospace;letter-spacing:1px}
+#pw-card p{color:var(--tx1);font-size:11px;margin-bottom:16px;line-height:1.5}
+#pw-input{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:14px;padding:10px;outline:none;text-align:center;margin-bottom:10px;
+  letter-spacing:1px
+}
+#pw-input.wrong{border-color:#C0392B;animation:pw-shake .3s}
+@keyframes pw-shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+#pw-submit{
+  width:100%;background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:5px;padding:10px;font-size:12px;cursor:pointer;font-family:monospace
+}
+#pw-error{color:#d45050;font-size:10px;margin-top:8px;min-height:14px}
 </style>
 </head>
 <body>
+<div id="pw-gate">
+  <div id="pw-card">
+    <h3>AURELIA REFEREE TOOL</h3>
+    <p>This tool is for an active campaign. Enter the access code your referee gave you.</p>
+    <input type="password" id="pw-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
+    <button id="pw-submit" onclick="checkPassword()">Enter</button>
+    <div id="pw-error"></div>
+  </div>
+</div>
 <div id="root">
 
   <!-- ── Header ── -->
@@ -1198,6 +1232,7 @@ function togglePM(){
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
   if(currentView === "aurelia") buildAureliaMap();
   checkIdentity();
+  if(pmCheck.checked) startPolling(); else stopPolling();
 }
 pmCheck.addEventListener("change", function(){
   rootEl.classList.toggle("pm-active", this.checked);
@@ -1208,8 +1243,9 @@ pmCheck.addEventListener("change", function(){
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
   if(currentView === "aurelia") buildAureliaMap();
   checkIdentity();
+  if(this.checked) startPolling(); else stopPolling();
 });
-try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); } } catch(e){}
+try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); startPolling(); } } catch(e){}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM MAP
@@ -1711,7 +1747,10 @@ function renderDetail(){
       const rev = isRevealed(cur);
       html += `<div class="reveal-toggle-row">
         <span class="reveal-toggle-lbl">👁 Player visibility</span>
-        <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${cur}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+        <div style="display:flex;gap:6px">
+          <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${cur}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+          <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
+        </div>
       </div>`;
     }
     if(a.read) html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${a.read}</div></div>`;
@@ -1744,7 +1783,7 @@ function renderDetail(){
     const rawRead = a.read||"";
     if(!rawRead){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No description for this area.</div>`;return;}
     // In player mode, strip lines containing PC names or referee cues
-    const pcNames=["Cass","Rhett","Riley","Riven","Bartholomew","Curculion","Calder","Eleos"];
+    const pcNames=["Rhett","Calder","Cassia","Velen","Curculion","Riley","Riven","Dahl"];
     const refCues=["Referee","referee","RSR","Underdeck","roll","Roll","symbol","Symbol","Note:","⚠"];
     let displayText = rawRead;
     if(pm){
@@ -2401,7 +2440,10 @@ function selectLoc(id){
     const rev = isRevealed(id);
     detHTML += `<div class="reveal-toggle-row">
       <span class="reveal-toggle-lbl">👁 Player visibility</span>
-      <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${id}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+      <div style="display:flex;gap:6px">
+        <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${id}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
+        <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
+      </div>
     </div>`;
   }
   detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${loc.desc.split('\n').join('<br>')}</div></div>`;
@@ -2706,6 +2748,36 @@ const supaStorage = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ACCESS GATE
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTE: this is a casual deterrent, not real security. Anyone who views the
+// page source can find the code below. It exists to stop a stray link click
+// or idle curiosity from landing someone in the middle of an active
+// campaign — not to protect genuinely sensitive information.
+const ACCESS_CODE = 'Traveller2E!';
+
+function checkPassword(){
+  const input = document.getElementById('pw-input');
+  const err = document.getElementById('pw-error');
+  if(input.value === ACCESS_CODE){
+    try { localStorage.setItem('aurelia_access', '1'); } catch(e){}
+    document.getElementById('pw-gate').classList.add('hidden');
+  } else {
+    input.classList.add('wrong');
+    err.textContent = 'Incorrect code — try again.';
+    setTimeout(() => input.classList.remove('wrong'), 300);
+  }
+}
+
+(function initAccessGate(){
+  try {
+    if(localStorage.getItem('aurelia_access') === '1'){
+      document.getElementById('pw-gate').classList.add('hidden');
+    }
+  } catch(e){}
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SHARED STATE (via Supabase) — reveal status, player notes, party notes
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPORTANT: only reveal-status flags and notes ever go into shared storage.
@@ -2718,7 +2790,7 @@ const REVEALABLE_STATION_AREAS = ['elevator','docking','concourse','security','m
 const REVEALABLE_AURELIA_LOCS  = ['station','capitol','cradle','hegemony-base','spire-range','omnisynth','underdeck'];
 
 let revealedAreas = {}; // {areaId: true/false} — shared
-let myIdentity = null;  // local to this device — "Cass", "Rhett", etc.
+let myIdentity = null;  // local to this device — "Rhett Calder", "Cassia Velen", etc.
 let notesViewMode = 'private'; // 'private' | 'party'
 
 function isReferee(){ return !pmCheck.checked; }
@@ -2730,6 +2802,37 @@ async function loadRevealState(){
   } catch(e){ revealedAreas = {}; }
 }
 
+// ── Live polling for players ──────────────────────────────────────────
+// Referees don't need this (they're the source of truth and update
+// optimistically). Players poll every few seconds so reveals/hides show
+// up without a manual refresh.
+let pollIntervalId = null;
+const POLL_MS = 4000;
+
+async function pollRevealState(){
+  if(isReferee()) return; // referee never polls — would be pointless and noisy
+  try {
+    const res = await supaStorage.get('reveal-status', true);
+    const fresh = res ? JSON.parse(res.value) : {};
+    const changed = JSON.stringify(fresh) !== JSON.stringify(revealedAreas);
+    if(changed){
+      revealedAreas = fresh;
+      if(currentView === 'station') { renderDetail(); updateStationLocks(); }
+      if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+}
+
+function startPolling(){
+  stopPolling();
+  if(isReferee()) return;
+  pollIntervalId = setInterval(pollRevealState, POLL_MS);
+}
+
+function stopPolling(){
+  if(pollIntervalId){ clearInterval(pollIntervalId); pollIntervalId = null; }
+}
+
 async function saveRevealState(){
   try { await supaStorage.set('reveal-status', JSON.stringify(revealedAreas), true); }
   catch(e){ console.error('Reveal save failed', e); }
@@ -2739,13 +2842,24 @@ function isRevealed(areaId){
   return !!revealedAreas[areaId];
 }
 
-async function toggleReveal(areaId){
+function toggleReveal(areaId){
   if(!isReferee()) return; // safety — only referee can toggle
   revealedAreas[areaId] = !revealedAreas[areaId];
-  await saveRevealState();
-  // Re-render whatever's currently showing
+  // Render IMMEDIATELY using the in-memory state — don't wait on the network.
+  // The save happens in the background; if it fails, the button still
+  // reflects local intent and a retry happens on the next poll cycle.
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
   if(currentView === 'aurelia') { buildAureliaMap(); }
+  saveRevealState(); // fire-and-forget
+}
+
+function hideAllAreas(){
+  if(!isReferee()) return;
+  if(!confirm('Hide all areas and locations from players? This resets the reveal state for testing.')) return;
+  revealedAreas = {};
+  if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
+  if(currentView === 'aurelia') { buildAureliaMap(); }
+  saveRevealState();
 }
 
 // Node positions on the static station SVG, for lock-badge placement
@@ -2791,7 +2905,7 @@ function updateStationLocks(){
 }
 
 // ── Player identity ────────────────────────────────────────────────────
-const KNOWN_CHARACTERS = ['Cass','Rhett','Riley','Riven','Bartholomew','Calder','Eleos'];
+const KNOWN_CHARACTERS = ['Rhett Calder','Cassia Velen','Dr Curculion','Riley','Riven Dahl'];
 
 function checkIdentity(){
   if(isReferee()) return; // referee never needs an identity
