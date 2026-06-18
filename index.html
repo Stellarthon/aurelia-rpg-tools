@@ -16,12 +16,50 @@
   --txS:#4caf82;--bgS:#0f2e20;
   --txW:#d4913a;--bgW:#2e1f0a;
   --txD:#d45050;--bgD:#2e1010;
+  --accentGold:#D4A843;--accentGoldBg:#3D2B1F;
   --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --rad:6px;
 }
+/* ── Light mode — overrides the same variable set, scoped to the UI
+   chrome only. The solar system orrery, station map, and Aurelia surface
+   view intentionally keep their dark, atmospheric backgrounds regardless
+   of this toggle — those are styled separately with their own dark
+   backgrounds baked in, not through these variables, so they're
+   unaffected here by design rather than by omission. ── */
+#root.light-mode{
+  --bg0:#ffffff;--bg1:#f4f5f7;--bg2:#eaecf0;
+  --bd0:#d8dbe2;--bd1:#e2e5ea;--bd2:#eaecf0;
+  --tx0:#1a1d29;--tx1:#5c6178;
+  --txI:#2255cc;--bgI:#e3ecfc;
+  --txS:#1f7a4f;--bgS:#e3f5e9;
+  --txW:#9a6420;--bgW:#fbeedc;
+  --txD:#c0392b;--bgD:#fce6e4;
+  --accentGold:#8a6512;--accentGoldBg:#fbf0d9;
+}
+/* The orrery, station map, and Aurelia surface views use var(--bg0) for
+   their own background just like the rest of the chrome — but they're
+   meant to stay dark and atmospheric in both themes, so they're pinned
+   back explicitly here rather than participating in the light-mode
+   variable swap above. Their DETAIL panels (#sys-detail, #right-panel,
+   #aurelia-detail) are NOT included here and correctly flip with
+   everything else, since that's where the readable text content lives. */
+#root.light-mode #orrery-panel,
+#root.light-mode #map-panel,
+#root.light-mode #aurelia-panel{
+  background:#0f1117;
+}
 /* ── Reset ── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;width:100%;overflow:hidden;font-family:var(--font);background:#070a10;color:var(--tx0)}
+html,body{height:100%;width:100%;overflow:hidden;font-family:var(--font);background:#070a10;color:#e8eaf0}
+/* body sits OUTSIDE/above #root in the DOM, so #root.light-mode's variable
+   overrides (which only apply within #root's subtree) never reach body's
+   own `color` property — body inherits color from the true :root (html),
+   not from the #root div. Anything that relies on inheriting its text
+   color from body rather than setting its own color explicitly was
+   silently stuck on the dark-mode value regardless of theme. This rule
+   fixes that at the source rather than patching every individual element
+   that happened to rely on inheritance. */
+body.light-mode-body{background:#ffffff;color:#1a1d29}
 button{font-family:var(--font);cursor:pointer;border:none;background:none}
 textarea{font-family:var(--font)}
 
@@ -34,10 +72,10 @@ textarea{font-family:var(--font)}
   padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
   flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
 }
-#hdr-title{font-size:13px;font-weight:700;color:#D4A843;letter-spacing:1px;font-family:monospace;white-space:nowrap}
+#hdr-title{font-size:13px;font-weight:700;color:var(--accentGold);letter-spacing:1px;font-family:monospace;white-space:nowrap}
 #build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap}
 #breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
-#breadcrumb .bc-link{color:#D4A843;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#breadcrumb .bc-link{color:var(--accentGold);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #breadcrumb .bc-link:hover{color:#E8A020}
 #breadcrumb .bc-sep{color:var(--bd0)}
 
@@ -49,10 +87,12 @@ textarea{font-family:var(--font)}
 }
 #clock-display{
   font-family:monospace;font-size:15px;font-weight:700;
-  color:#D4A843;letter-spacing:2px;min-width:42px;text-align:center;
+  color:var(--accentGold);letter-spacing:2px;min-width:42px;text-align:center;
   cursor:pointer;user-select:none
 }
 #clock-display:hover{color:#E8A020}
+#root.pm-active #clock-display{cursor:default}
+#root.pm-active #clock-display:hover{color:var(--accentGold)}
 #clock-sep{width:.5px;height:18px;background:var(--bd0);flex-shrink:0}
 .clk-btn{
   font-size:10px;font-family:monospace;font-weight:700;
@@ -81,7 +121,7 @@ textarea{font-family:var(--font)}
   color:var(--tx0);font-family:monospace;font-size:14px;padding:5px 8px;
   width:100%;outline:none
 }
-#clock-edit input:focus{border-color:#D4A843}
+#clock-edit input:focus{border-color:var(--accentGold)}
 #clock-edit-ok{
   background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
   border-radius:4px;padding:5px;font-size:11px;font-family:monospace;cursor:pointer
@@ -119,7 +159,7 @@ textarea{font-family:var(--font)}
   display:flex;flex-direction:column;overflow:hidden
 }
 #sys-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
-#sys-dname{font-size:15px;font-weight:700;color:#D4A843}
+#sys-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
 #sys-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
 #sys-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
 
@@ -136,15 +176,16 @@ textarea{font-family:var(--font)}
 .s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
 .s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
 .s-blk{border-radius:5px;padding:9px 11px;margin-top:9px;font-size:12px;line-height:1.55}
-.s-blk.ref{background:#3D2B1F;border-left:3px solid #D4A843}
-.s-blk.read{background:#1A2A3B;border-left:3px solid #4A90D9}
+.s-blk.ref{background:var(--accentGoldBg);border-left:3px solid var(--accentGold)}
+.s-blk.read{background:#1A2A3B;border-left:3px solid #4A90D9;color:#e8eaf0}
+.s-blk.read .s-blk-lbl{color:#7AB8E8}
 .s-blk-lbl{font-size:9px;font-family:monospace;letter-spacing:2px;opacity:.65;margin-bottom:4px;text-transform:uppercase}
 
 /* NPC cards (shared) */
 .npc-card{background:#2A1A3B;border:1px solid #9B59B699;border-radius:6px;margin-bottom:9px;overflow:hidden}
 .npc-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer}
 .npc-name{font-size:13px;font-weight:700;color:#9B59B6}
-.npc-role{font-size:10px;color:var(--tx1);margin-top:1px}
+.npc-role{font-size:10px;color:#c9b8e0;margin-top:1px}
 .chev{color:#9B59B6;font-size:11px;transition:transform .15s}
 .chev.open{transform:rotate(180deg)}
 .npc-body{padding:0 10px 10px;display:none}
@@ -156,7 +197,7 @@ textarea{font-family:var(--font)}
 .skill-row{font-size:11px;color:#4CAF50;margin-bottom:6px;padding:4px 6px;background:#1A3B1A;border-radius:3px}
 .npc-row{display:grid;grid-template-columns:85px 1fr;gap:4px;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg0)}
 .npc-row:last-child{border-bottom:none}
-.nrl{color:var(--tx1);font-weight:700}.nrv{color:var(--tx0)}
+.nrl{color:#b89bd9;font-weight:700}.nrv{color:#e8eaf0}
 
 /* station-only "view station" button */
 #btn-view-station{
@@ -170,7 +211,7 @@ textarea{font-family:var(--font)}
 /* Checks */
 .chk{background:#1A3B1A;border:1px solid #4CAF5066;border-radius:5px;margin-bottom:8px;overflow:hidden}
 .chk-t{font-size:11px;font-weight:700;color:#4CAF50;padding:7px 10px;border-bottom:.5px solid #4CAF5033}
-.deg-row{display:grid;grid-template-columns:88px 1fr;gap:6px;padding:5px 10px;font-size:11px;border-bottom:.5px solid var(--bg0)}
+.deg-row{display:grid;grid-template-columns:88px 1fr;gap:6px;padding:5px 10px;font-size:11px;border-bottom:.5px solid rgba(255,255,255,0.08);color:#e8eaf0}
 .deg-row:last-child{border-bottom:none}
 .deg-s{color:#4CAF50;font-weight:700}.deg-p{color:#E8A020;font-weight:700}.deg-f{color:#C0392B;font-weight:700}
 
@@ -212,16 +253,16 @@ textarea{font-family:var(--font)}
 .blk-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
 .blk-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap}
 .read-blk{background:#1A2A3B;border-left:3px solid #4A90D9;border-radius:0 5px 5px 0;padding:10px;margin-bottom:9px}
-.read-lbl{font-size:9px;color:#4A90D9;font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
-.read-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap}
-.rsr-tag{background:#2e1010;border-left:3px solid #d45050;border-radius:0 5px 5px 0;padding:8px 10px;font-size:11px;color:var(--tx0);margin-bottom:9px}
+.read-lbl{font-size:9px;color:#7AB8E8;font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.read-blk .read-body{font-size:12px;line-height:1.65;color:#e8eaf0;white-space:pre-wrap}
+.rsr-tag{background:#2e1010;border-left:3px solid #d45050;border-radius:0 5px 5px 0;padding:8px 10px;font-size:11px;color:#f0c8c8;margin-bottom:9px}
 .back-btn{display:inline-flex;align-items:center;gap:5px;margin-bottom:9px;padding:4px 10px;border:.5px solid var(--bd0);border-radius:var(--rad);background:var(--bg1);color:var(--tx1);font-size:11px;cursor:pointer}
 .sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sub-btn{border:.5px solid var(--bd0);border-radius:var(--rad);background:var(--bg1);padding:10px 12px;cursor:pointer;text-align:left}
 .sub-btn:hover{background:var(--bg2)}
 .sub-btn-name{font-size:12px;font-weight:600;color:var(--tx0)}
 .sub-btn-desc{font-size:10px;color:var(--tx1);margin-top:2px}
-.sr{font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg0);color:var(--tx0)}
+.sr{font-size:11px;padding:3px 0;border-bottom:.5px solid rgba(255,255,255,0.1);color:#e8eaf0}
 .sr:last-child{border-bottom:none}
 #foot{border-top:.5px solid var(--bd2);padding:8px 12px;flex-shrink:0;background:var(--bg1);display:none;position:sticky;bottom:0;z-index:2}
 .conn-lbl{font-size:9px;color:var(--tx1);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
@@ -256,19 +297,21 @@ textarea{font-family:var(--font)}
   box-shadow:0 4px 20px rgba(0,0,0,.4);
   min-width:220px;min-height:120px;max-width:90vw;max-height:80vh
 }
+#event-log-wrap.panel-collapsed{height:auto!important;min-height:0}
+.panel-collapsed #event-log-clear{display:none}
 #event-log-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;
   cursor:grab;touch-action:none;user-select:none
 }
 #event-log-header:active{cursor:grabbing}
-#event-log-title{font-size:11px;font-family:monospace;color:#D4A843;letter-spacing:1px}
-#event-log-count{font-size:10px;background:#3D2B1F;color:#D4A843;border-radius:10px;padding:1px 7px;font-family:monospace}
+#event-log-title{font-size:11px;font-family:monospace;color:var(--accentGold);letter-spacing:1px}
+#event-log-count{font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace}
 #event-log-toggle{font-size:10px;color:var(--tx1);cursor:pointer}
 #event-log-body{overflow-y:auto;flex:1;padding:6px 10px;-webkit-overflow-scrolling:touch}
 #event-log-body.collapsed{display:none}
-.evlog-entry{border-left:2px solid #D4A843;padding:4px 8px;margin-bottom:5px;font-size:11px;line-height:1.45}
-.evlog-time{font-family:monospace;font-size:9px;color:#D4A843;margin-bottom:2px;letter-spacing:1px}
+.evlog-entry{border-left:2px solid var(--accentGold);padding:4px 8px;margin-bottom:5px;font-size:11px;line-height:1.45}
+.evlog-time{font-family:monospace;font-size:9px;color:var(--accentGold);margin-bottom:2px;letter-spacing:1px}
 .evlog-area{font-size:9px;color:var(--tx1);margin-bottom:2px}
 .evlog-text{color:var(--tx0)}
 #event-log-clear{font-size:9px;color:var(--tx1);padding:5px 12px;border-top:.5px solid var(--bd0);cursor:pointer;text-align:right;flex-shrink:0}
@@ -431,6 +474,7 @@ textarea{font-family:var(--font)}
   box-shadow:0 4px 20px rgba(0,0,0,.45);
   min-width:260px;min-height:200px;max-width:90vw;max-height:85vh
 }
+#init-wrap.panel-collapsed{height:auto!important;min-height:0}
 #root.pm-active #init-wrap{display:none!important}
 #init-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -452,6 +496,7 @@ textarea{font-family:var(--font)}
   box-shadow:0 4px 20px rgba(0,0,0,.45);
   min-width:240px;min-height:160px;max-width:90vw;max-height:85vh
 }
+#health-wrap.panel-collapsed{height:auto!important;min-height:0}
 #root.pm-active #health-wrap{display:none!important}
 #health-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -477,16 +522,17 @@ textarea{font-family:var(--font)}
   background:var(--bg0);border-radius:5px;padding:7px 8px;margin-bottom:6px;
   border-left:3px solid var(--bd0);position:relative
 }
-.init-row.current{border-left-color:#C0392B;background:#2a1414}
+.init-row.current{border-left-color:#C0392B;background:#2a1414;color:#f0d8d8}
+.init-row.current .init-name{color:#f0d8d8}
 .init-row.down{opacity:0.5}
 .init-row-top{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .init-score{
-  font-family:monospace;font-size:14px;font-weight:700;color:#D4A843;
+  font-family:monospace;font-size:14px;font-weight:700;color:var(--accentGold);
   min-width:28px;text-align:center;background:var(--bg1);border-radius:4px;padding:1px 4px
 }
 .init-name{font-size:12px;font-weight:600;color:var(--tx0);flex:1;min-width:0}
 .init-ambush-tag{font-size:8px;font-family:monospace;padding:1px 4px;border-radius:3px;font-weight:700}
-.init-ambush-tag.atk{background:#3D2B1F;color:#E8A020}
+.init-ambush-tag.atk{background:var(--accentGoldBg);color:#E8A020}
 .init-ambush-tag.def{background:#3B1A1A;color:#d45050}
 .init-row-controls{display:flex;align-items:center;gap:3px;flex-shrink:0}
 .init-btn{
@@ -547,7 +593,7 @@ textarea{font-family:var(--font)}
   border-radius:4px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:monospace
 }
 .init-roll-btn{
-  background:#3D2B1F;color:#D4A843;border:.5px solid #D4A843;
+  background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold);
   border-radius:4px;padding:5px 8px;font-size:10px;cursor:pointer;font-family:monospace
 }
 #init-mode-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--tx1)}
@@ -599,7 +645,7 @@ textarea{font-family:var(--font)}
   background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
   padding:24px;max-width:320px;width:90%;text-align:center
 }
-#identity-card h3{color:#D4A843;font-size:15px;margin-bottom:6px;font-family:monospace;letter-spacing:1px}
+#identity-card h3{color:var(--accentGold);font-size:15px;margin-bottom:6px;font-family:monospace;letter-spacing:1px}
 #identity-card p{color:var(--tx1);font-size:11px;margin-bottom:16px;line-height:1.5}
 #identity-input{
   width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
@@ -623,6 +669,14 @@ textarea{font-family:var(--font)}
   flex-shrink:0;white-space:nowrap
 }
 #sheet-trigger-btn:hover{background:var(--bd0);color:var(--tx0)}
+#header-whoami-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
+}
+#header-whoami-btn.hidden{display:none}
+#header-whoami-btn:hover{background:var(--bd0);color:var(--tx0)}
+#header-whoami-name{color:var(--accentGold);font-weight:600}
 #sheet-menu{
   position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
   display:flex;align-items:flex-start;justify-content:flex-end
@@ -641,6 +695,39 @@ textarea{font-family:var(--font)}
 .sheet-menu-item:hover{background:var(--bd0)}
 .sheet-menu-label{font-size:9px;color:var(--tx1);letter-spacing:1px;padding:6px 10px 2px;text-transform:uppercase}
 
+/* ── Settings (gear icon + menu) ── */
+#settings-btn{
+  font-size:13px;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;line-height:1
+}
+#settings-btn:hover{background:var(--bd0);color:var(--tx0)}
+#settings-menu{
+  position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
+  display:flex;align-items:flex-start;justify-content:flex-end
+}
+#settings-menu.hidden{display:none}
+#settings-menu-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  margin:50px 14px 0 0;padding:12px;min-width:220px;
+  box-shadow:0 4px 20px rgba(0,0,0,.5)
+}
+.settings-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 4px;gap:12px
+}
+.settings-row-label{font-size:12px;color:var(--tx0);font-family:monospace}
+.theme-toggle{
+  position:relative;width:54px;height:26px;background:var(--bg0);
+  border:.5px solid var(--bd0);border-radius:13px;cursor:pointer;flex-shrink:0
+}
+.theme-toggle-knob{
+  position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+  background:var(--tx1);transition:transform 0.2s ease,background 0.2s ease;
+  display:flex;align-items:center;justify-content:center;font-size:11px
+}
+#root.light-mode .theme-toggle-knob{transform:translateX(28px);background:#E8A020}
+
 /* ── Character sheet modal ── */
 #sheet-modal{
   position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:195;
@@ -656,7 +743,7 @@ textarea{font-family:var(--font)}
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 18px;border-bottom:.5px solid var(--bd0);flex-shrink:0
 }
-#sheet-card-title{font-size:14px;font-weight:700;color:#D4A843;font-family:monospace;letter-spacing:1px}
+#sheet-card-title{font-size:14px;font-weight:700;color:var(--accentGold);font-family:monospace;letter-spacing:1px}
 #sheet-close-btn{
   font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;
   padding:4px 8px;line-height:1
@@ -673,7 +760,7 @@ textarea{font-family:var(--font)}
 }
 .sheet-section{margin-bottom:16px}
 .sheet-section-lbl{
-  font-size:10px;color:#D4A843;letter-spacing:1.5px;text-transform:uppercase;
+  font-size:10px;color:var(--accentGold);letter-spacing:1.5px;text-transform:uppercase;
   font-family:monospace;margin-bottom:8px;border-bottom:.5px solid var(--bd0);padding-bottom:4px
 }
 .sheet-char-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -710,11 +797,11 @@ textarea{font-family:var(--font)}
   flex:1;text-align:center;padding:7px;font-size:10px;font-family:monospace;
   color:var(--tx1);cursor:pointer;border-bottom:2px solid transparent
 }
-.notes-subtab.on{color:#D4A843;border-bottom-color:#D4A843;font-weight:700}
+.notes-subtab.on{color:var(--accentGold);border-bottom-color:var(--accentGold);font-weight:700}
 #whoami-strip{
   font-size:10px;color:var(--tx1);text-align:right;margin-bottom:6px;cursor:pointer
 }
-#whoami-strip span{color:#D4A843;text-decoration:underline;text-underline-offset:2px}
+#whoami-strip span{color:var(--accentGold);text-decoration:underline;text-underline-offset:2px}
 .party-note-entry{
   background:var(--bg1);border-radius:5px;padding:7px 9px;margin-bottom:6px;font-size:11px
 }
@@ -731,7 +818,7 @@ textarea{font-family:var(--font)}
   background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
   padding:28px;max-width:300px;width:90%;text-align:center
 }
-#pw-card h3{color:#D4A843;font-size:14px;margin-bottom:8px;font-family:monospace;letter-spacing:1px}
+#pw-card h3{color:var(--accentGold);font-size:14px;margin-bottom:8px;font-family:monospace;letter-spacing:1px}
 #pw-card p{color:var(--tx1);font-size:11px;margin-bottom:16px;line-height:1.5}
 #pw-input{
   width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
@@ -785,6 +872,7 @@ textarea{font-family:var(--font)}
   opacity:0.6
 }
 .panel-resize-handle:active{opacity:1}
+.panel-collapsed .panel-resize-handle{display:none}
 .floating-panel-draggable{position:fixed!important}
 
 #reset-campaign-btn{
@@ -802,6 +890,13 @@ textarea{font-family:var(--font)}
 }
 #design-mode-btn:hover{background:var(--bd0);color:var(--tx0)}
 #design-mode-btn.on{background:#2A1A3B;color:#9B59B6;border-color:#9B59B6}
+#design-removed-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:5px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
+}
+#design-removed-btn.hidden{display:none}
+#design-removed-btn:hover{background:var(--bd0);color:var(--tx0)}
 #root.design-active .design-editable{position:relative}
 .design-edit-pencil{
   display:none;position:absolute;top:-4px;right:-4px;z-index:5;
@@ -821,6 +916,21 @@ textarea{font-family:var(--font)}
   align-items:center;justify-content:center
 }
 #root.design-active .design-edit-pencil-inline{display:flex}
+.design-edit-pencil-inline.danger{background:#3B1A1A;color:#d45050;border-color:#d45050}
+
+/* "+ Add" buttons for stage 3 (new check / event / NPC row) sit at the
+   bottom of their respective lists, full-width so they're easy to tap
+   on a tablet. */
+.design-add-btn{
+  display:block;width:100%;margin-top:10px;background:transparent;
+  color:#9B59B6;border:1px dashed #9B59B6;border-radius:6px;padding:9px;
+  font-size:11px;font-family:monospace;cursor:pointer
+}
+.design-add-btn:hover{background:#2A1A3B}
+.design-tier-remove{
+  font-size:9px;color:#d45050;background:transparent;border:.5px solid #d45050;
+  border-radius:4px;padding:3px 8px;cursor:pointer;margin-left:8px
+}
 #design-edit-panel{
   position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:210;
   display:flex;align-items:center;justify-content:center;padding:20px
@@ -879,6 +989,45 @@ textarea{font-family:var(--font)}
   border-left:2px solid #9B59B6;padding:8px 0 8px 12px;margin-bottom:10px
 }
 .design-degree-head{font-size:9px;color:var(--tx1);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase}
+
+/* ── Phone-width panel sizing — placed at the END of the stylesheet ──
+   This MUST come after the base #init-wrap/#health-wrap/#event-log-wrap
+   rules above, since identical-specificity ID selectors resolve by
+   source order, not by which one sits inside a media query. Putting this
+   block earlier (as a previous version did) meant it was silently always
+   losing to the base rule below it, regardless of screen width — the
+   phone-specific sizing never actually applied. ── */
+@media(max-width:640px){
+  #init-wrap{width:260px;height:280px}
+  #health-wrap{width:240px;height:220px;right:270px}
+  #event-log-wrap{width:220px;height:160px}
+}
+
+/* ── Larger touch targets for the initiative tracker and NPC health
+   panel on touch devices. (pointer:coarse) targets touch input
+   specifically rather than just screen width, so this also covers
+   tablets that have plenty of screen space but still need finger-sized
+   buttons — width alone wouldn't catch that case. ── */
+@media(pointer:coarse){
+  .init-btn{
+    font-size:12px;padding:7px 11px;min-height:34px;min-width:34px
+  }
+  .init-action-btn{
+    font-size:12px;padding:11px 8px;min-height:38px
+  }
+  .init-add-btn{
+    font-size:12px;padding:9px 14px;min-height:36px
+  }
+  .init-quick-btn{
+    font-size:11px;padding:8px 12px;min-height:36px
+  }
+  #init-name-input,#init-score-input,#init-dex-input,#init-int-input{
+    font-size:13px;padding:8px;min-height:34px
+  }
+  .hp-max-input{
+    font-size:12px;padding:6px;width:46px;min-height:30px
+  }
+}
 </style>
 </head>
 <body>
@@ -904,22 +1053,24 @@ textarea{font-family:var(--font)}
   <div id="hdr">
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v26</span>
+      <span id="build-version" title="Build version">v28.3</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
     <div id="clock-wrap">
       <div id="clock-display" onclick="openClockEdit(event)" title="Tap to set time">00:00</div>
-      <div id="clock-sep"></div>
-      <button class="clk-btn" onclick="advanceClock(1)">+1</button>
-      <button class="clk-btn" onclick="advanceClock(5)">+5</button>
-      <button class="clk-btn" onclick="advanceClock(10)">+10</button>
-      <button class="clk-btn" onclick="advanceClock(15)">+15</button>
-      <button class="clk-btn" onclick="advanceClock(30)">+30</button>
-      <div id="clock-sep"></div>
-      <button id="clock-reset" onclick="resetClock()" title="Reset to 00:00">↺</button>
+      <div id="clock-sep" class="ref-only"></div>
+      <button class="clk-btn ref-only" onclick="advanceClock(1)">+1</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(5)">+5</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(10)">+10</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(15)">+15</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(30)">+30</button>
+      <div id="clock-sep" class="ref-only"></div>
+      <button id="clock-reset" class="ref-only" onclick="resetClock()" title="Reset to 00:00">↺</button>
     </div>
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
+    <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
+    <button id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
@@ -928,6 +1079,7 @@ textarea{font-family:var(--font)}
     </div>
     <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker">⟲ Reset Campaign</button>
     <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly">✏ Design Mode</button>
+    <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows">🗑 Removed Items</button>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
       <span class="pm-label">Player Mode</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
@@ -983,7 +1135,7 @@ textarea{font-family:var(--font)}
         <div id="aur-db">
           <div id="aur-overview">
             <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:12px">
-              Jewel world of the Hegemony. Population 800 million. UWP: <span style="color:#D4A843;font-family:monospace">B867976-C</span><br><br>
+              Jewel world of the Hegemony. Population 800 million. UWP: <span style="color:var(--accentGold);font-family:monospace">B867976-C</span><br><br>
               Select a location node to inspect it. The Orbital Station can be entered from here.
             </div>
           </div>
@@ -1135,7 +1287,7 @@ textarea{font-family:var(--font)}
     <div id="init-foot">
       <div id="init-mode-row">
         <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-          <input type="checkbox" id="init-roll-mode" style="accent-color:#D4A843">
+          <input type="checkbox" id="init-roll-mode" style="accent-color:var(--accentGold)">
           Roll 2D6 + mod automatically
         </label>
       </div>
@@ -1170,6 +1322,11 @@ textarea{font-family:var(--font)}
   <!-- ── Sheet menu (small popover from the Sheets button) ── -->
   <div id="sheet-menu" class="hidden" onclick="if(event.target===this) closeSheetMenu()">
     <div id="sheet-menu-card"></div>
+  </div>
+
+  <!-- ── Settings menu (small popover from the gear icon) ── -->
+  <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
+    <div id="settings-menu-card"></div>
   </div>
 
   <!-- ── Character sheet modal ── -->
@@ -1571,24 +1728,30 @@ const rootEl = document.getElementById("root");
 function togglePM(){
   pmCheck.checked = !pmCheck.checked;
   rootEl.classList.toggle("pm-active", pmCheck.checked);
+  if(pmCheck.checked) forceDesignModeOff();
   try {
     if(pmCheck.checked) localStorage.setItem("aurelia_pm","1");
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
   if(currentView === "aurelia") buildAureliaMap();
+  if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
+  renderWhoAmI();
   if(pmCheck.checked) startPolling(); else stopPolling();
 }
 pmCheck.addEventListener("change", function(){
   rootEl.classList.toggle("pm-active", this.checked);
+  if(this.checked) forceDesignModeOff();
   try {
     if(this.checked) localStorage.setItem("aurelia_pm","1");
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
   if(currentView === "aurelia") buildAureliaMap();
+  if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
+  renderWhoAmI();
   if(this.checked) startPolling(); else stopPolling();
 });
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); startPolling(); } } catch(e){}
@@ -1618,9 +1781,9 @@ function buildOrrery(){
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
-          <span style="color:${b.hook?'#E8A020':'#e8eaf0'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
-      <td style="color:#8b91a8;font-size:10px">${b.type.split('·')[0].trim()}</td>
-      <td style="color:#D4A843;font-family:monospace;font-size:10px">${b.uwpString}</td>
+          <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
+      <td style="color:var(--tx1);font-size:10px">${b.type.split('·')[0].trim()}</td>
+      <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${b.uwpString}</td>
       <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
     tr.style.cursor="pointer";
     tr.onclick = () => selectBody(b.id);
@@ -1898,7 +2061,7 @@ function selectBody(id){
 
   if(body.uwpString&&body.uwpString!=="—"){
     html += `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
-      <span style="font-family:monospace;font-size:18px;color:#D4A843;font-weight:700">${body.uwpString}</span>
+      <span style="font-family:monospace;font-size:18px;color:var(--accentGold);font-weight:700">${body.uwpString}</span>
       <span style="font-size:9px;color:#8b91a8;font-family:monospace;letter-spacing:1px">${body.tag||""}</span>
     </div>`;
   }
@@ -1928,19 +2091,24 @@ function selectBody(id){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
     body.npcs.forEach((n,i)=>{
       const nid=`sys-npc-${i}`;
+      const rowListKey = 'body-'+id+'-npc-'+i+'-rows';
       const rowBaseKey = 'body-'+id+'-npc-'+i+'-row-';
+      const mergedRows = mergeListWithAdditions(n.rows, rowListKey, rowBaseKey);
+      const rowsHTML = mergedRows.map(({item:r, key:rkey}) => {
+        designOriginalRegistry[rkey] = r;
+        const rdata = resolveContent(rkey, r);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
+        return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
+      }).join("");
+      const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
         <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
           <div class="skill-row">${n.skills}</div>
-          ${n.rows.map((r,ri)=>{
-            const rkey = rowBaseKey+ri;
-            designOriginalRegistry[rkey] = r;
-            const rdata = resolveContent(rkey, r);
-            const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
-            return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div>${pencil}</div>`;
-          }).join("")}
+          ${rowsHTML}
+          ${addRowBtn}
         </div></div>`;
     });
     html += `</div>`;
@@ -2159,20 +2327,25 @@ function renderDetail(){
     if(!a.npcs||a.npcs.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No named NPCs in this area.</div>`;return;}
     html+=a.npcs.map((n,i)=>{
       const nid="sta-npc-"+cur+(curSub||"")+i;
+      const rowListKey = nid+'-rows';
       const rowBaseKey = nid+'-row-';
+      const mergedRows = mergeListWithAdditions(n.rows, rowListKey, rowBaseKey);
+      const rowsHTML = mergedRows.map(({item:r, key:rkey}) => {
+        designOriginalRegistry[rkey] = r;
+        const rdata = resolveContent(rkey, r);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
+        return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
+      }).join("");
+      const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       return `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
         <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
           <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
           <div class="skill-row">${n.skills}</div>
-          ${n.rows.map((r,ri)=>{
-            const rkey = rowBaseKey+ri;
-            designOriginalRegistry[rkey] = r;
-            const rdata = resolveContent(rkey, r);
-            const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
-            return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span>${pencil}</div>`;
-          }).join("")}
+          ${rowsHTML}
+          ${addRowBtn}
         </div></div>`;
     }).join("");
     d.innerHTML=html;
@@ -2197,33 +2370,49 @@ function renderDetail(){
     d.innerHTML=html;
   } else if(curTab==="checks"){
     let html=backBtn;
-    if(!a.checks||a.checks.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No skill checks in this area.</div>`;return;}
     const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
+    const chkListKey = cur+(curSub?"_"+curSub:"")+'-checks';
     const chkBaseKey = cur+(curSub?"_"+curSub:"")+'-check-';
-    html+=a.checks.map((c,ci)=>{
-      const ckey = chkBaseKey+ci;
-      designOriginalRegistry[ckey] = c;
-      const cdata = resolveContent(ckey, c);
-      const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
-      return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between">🎲 ${cdata.skill}${pencil}</div>${cdata.degrees.map(dg=>{
-        const cls=dg.cls||degCls[dg.c]||"deg-p";
-        const lbl=dg.label||dg.l||"";
-        const txt=dg.text||dg.t||"";
-        return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
-      }).join("")}</div>`;
-    }).join("");
+    const mergedChecks = mergeListWithAdditions(a.checks, chkListKey, chkBaseKey);
+    if(!mergedChecks.length){
+      html += `<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No skill checks in this area.</div>`;
+    } else {
+      html += mergedChecks.map(({item:c, key:ckey}) => {
+        designOriginalRegistry[ckey] = c;
+        const cdata = resolveContent(ckey, c);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
+        return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>🎲 ${cdata.skill}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(dg=>{
+          const cls=dg.cls||degCls[dg.c]||"deg-p";
+          const lbl=dg.label||dg.l||"";
+          const txt=dg.text||dg.t||"";
+          return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
+        }).join("")}</div>`;
+      }).join("");
+    }
+    if(designModeOn){
+      html += `<button class="design-add-btn" onclick="addNewCheck('${chkListKey}')">+ Add Skill Check</button>`;
+    }
     d.innerHTML=html;
   } else if(curTab==="events"){
     let html=backBtn;
-    if(!a.events||a.events.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No events scheduled.</div>`;return;}
+    const evtListKey = cur+(curSub?"_"+curSub:"")+'-events';
     const evtBaseKey = cur+(curSub?"_"+curSub:"")+'-event-';
-    html+=a.events.map((e,ei)=>{
-      const ekey = evtBaseKey+ei;
-      designOriginalRegistry[ekey] = e;
-      const edata = resolveContent(ekey, e);
-      const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
-      return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between">${edata.t}${pencil}</div>${edata.e}</div>`;
-    }).join("");
+    const mergedEvents = mergeListWithAdditions(a.events, evtListKey, evtBaseKey);
+    if(!mergedEvents.length){
+      html += `<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No events scheduled.</div>`;
+    } else {
+      html += mergedEvents.map(({item:e, key:ekey}) => {
+        designOriginalRegistry[ekey] = e;
+        const edata = resolveContent(ekey, e);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ekey}', ${JSON.stringify(edata).replace(/"/g,'&quot;')})" title="Remove this event">🗑</button>` : '';
+        return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${edata.t}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${edata.e}</div>`;
+      }).join("");
+    }
+    if(designModeOn){
+      html += `<button class="design-add-btn" onclick="addNewEvent('${evtListKey}')">+ Add Event</button>`;
+    }
     d.innerHTML=html;
   } else if(curTab==="refnotes"){
     let html=backBtn;
@@ -2352,19 +2541,24 @@ function renderClock() {
 }
 
 function advanceClock(mins) {
+  if(!isReferee()) return;
   const prev = clockMinutes;
   clockMinutes = (clockMinutes + mins) % 1440;
   renderClock();
   checkTimedEvents(prev, clockMinutes);
+  saveClockState();
 }
 
 function resetClock() {
+  if(!isReferee()) return;
   clockMinutes = 0;
   renderClock();
   resetTimedEvents();
+  saveClockState();
 }
 
 function openClockEdit(e) {
+  if(!isReferee()) return;
   const pop = document.getElementById('clock-edit');
   const inp = document.getElementById('clock-input');
   inp.value = clockDisplay(clockMinutes);
@@ -2379,11 +2573,13 @@ function openClockEdit(e) {
 }
 
 function setClockFromInput() {
+  if(!isReferee()) return;
   const val = document.getElementById('clock-input').value; // "HH:MM"
   if(val) {
     const [h, m] = val.split(':').map(Number);
     clockMinutes = (h * 60 + m) % 1440;
     renderClock();
+    saveClockState();
   }
   document.getElementById('clock-edit').classList.remove('open');
 }
@@ -2453,8 +2649,10 @@ function logEvent(text, areaLabel){
 function renderEventLog(){
   const body = document.getElementById('event-log-body');
   const count = document.getElementById('event-log-count');
+  const wrap = document.getElementById('event-log-wrap');
   if(!body) return;
   count.textContent = eventLog.length;
+  if(wrap) wrap.classList.toggle('panel-collapsed', eventLogCollapsed);
   if(eventLogCollapsed){ body.classList.add('collapsed'); return; }
   body.classList.remove('collapsed');
   if(!eventLog.length){
@@ -3221,6 +3419,7 @@ function toggleInitPanel(){
   document.getElementById('init-toggle').textContent = initCollapsed ? '▲' : '▼';
   document.getElementById('init-body').classList.toggle('collapsed', initCollapsed);
   document.getElementById('init-foot').classList.toggle('collapsed', initCollapsed);
+  document.getElementById('init-wrap').classList.toggle('panel-collapsed', initCollapsed);
 }
 
 function renderInit(){
@@ -3306,6 +3505,7 @@ function toggleHealthPanel(){
   healthPanelCollapsed = !healthPanelCollapsed;
   document.getElementById('health-toggle').textContent = healthPanelCollapsed ? '▲' : '▼';
   document.getElementById('health-body').classList.toggle('collapsed', healthPanelCollapsed);
+  document.getElementById('health-wrap').classList.toggle('panel-collapsed', healthPanelCollapsed);
 }
 
 function renderHealthPanel(){
@@ -3493,6 +3693,23 @@ async function loadRevealState(){
   } catch(e){ revealedAreas = {}; }
 }
 
+// ── Shared station clock ─────────────────────────────────────────────
+// The clock is now shared campaign state, not a per-device value — only
+// the referee can change it (advance, reset, or set directly), and that
+// change pushes to Supabase immediately so every player's screen picks
+// it up on their next poll, the same way reveal-status already works.
+async function loadClockState(){
+  try {
+    const res = await supaStorage.get('station-clock', true);
+    if(res){ clockMinutes = JSON.parse(res.value).minutes || 0; }
+  } catch(e){ /* keep whatever's already in memory */ }
+}
+
+async function saveClockState(){
+  try { await supaStorage.set('station-clock', JSON.stringify({minutes: clockMinutes}), true); }
+  catch(e){ console.error('Clock save failed', e); }
+}
+
 // ── Live polling for players ──────────────────────────────────────────
 // Referees don't need this (they're the source of truth and update
 // optimistically). Players poll every few seconds so reveals/hides show
@@ -3513,6 +3730,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Pick up the referee's station clock changes
+  try {
+    const resClock = await supaStorage.get('station-clock', true);
+    if(resClock){
+      const freshMinutes = JSON.parse(resClock.value).minutes || 0;
+      if(freshMinutes !== clockMinutes){
+        clockMinutes = freshMinutes;
+        renderClock();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Also pick up any Design Mode content edits the referee has made
   try {
     const res2 = await supaStorage.get('content-overrides', true);
@@ -3520,6 +3749,24 @@ async function pollRevealState(){
     const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
     if(overridesChanged){
       contentOverrides = freshOverrides;
+      if(currentView === 'station' && cur) renderDetail();
+      if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+      if(currentView === 'aurelia' && pallorSelected) selectPallor();
+      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // And any added/removed checks, events, or NPC rows
+  try {
+    const res3 = await supaStorage.get('content-additions', true);
+    const freshAdditions = res3 ? JSON.parse(res3.value) : {};
+    const res4 = await supaStorage.get('content-deletions', true);
+    const freshDeletions = res4 ? JSON.parse(res4.value) : {};
+    const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
+      || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
+    if(addDelChanged){
+      contentAdditions = freshAdditions;
+      contentDeletions = freshDeletions;
       if(currentView === 'station' && cur) renderDetail();
       if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
       if(currentView === 'aurelia' && pallorSelected) selectPallor();
@@ -3613,7 +3860,7 @@ function hideAllAreas(){
 // campaign state, and re-asking for them every reset would be annoying.
 function resetCampaign(){
   if(!isReferee()) return;
-  if(!confirm('Reset the whole campaign?\n\nThis wipes reveal status, RSR markers, the event log, the station clock, the initiative tracker, AND any Design Mode text edits — for EVERYONE. This cannot be undone.')) return;
+  if(!confirm('Reset the whole campaign?\n\nThis wipes reveal status, RSR markers, the event log, the station clock, the initiative tracker, AND any Design Mode text edits or added/removed checks, events, and NPC rows — for EVERYONE. This cannot be undone.')) return;
 
   // Local-only state
   try {
@@ -3634,11 +3881,16 @@ function resetCampaign(){
   revealedAreas = {};
   contentOverrides = {};
   contentHistory = {};
+  contentAdditions = {};
+  contentDeletions = {};
 
   // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
   saveRevealState();
+  saveClockState();
   saveContentOverrides();
   saveContentHistory();
+  saveContentAdditions();
+  saveContentDeletions();
 
   // Re-render everything currently visible
   renderClock();
@@ -3730,11 +3982,22 @@ function confirmIdentity(){
 function renderWhoAmI(){
   const strip = document.getElementById('whoami-strip');
   if(strip) strip.innerHTML = `Playing as <span onclick="changeIdentity()">${myIdentity}</span>`;
+  const headerBtn = document.getElementById('header-whoami-btn');
+  const headerName = document.getElementById('header-whoami-name');
+  if(headerBtn){
+    if(myIdentity && !isReferee()){
+      headerName.textContent = myIdentity;
+      headerBtn.classList.remove('hidden');
+    } else {
+      headerBtn.classList.add('hidden');
+    }
+  }
 }
 
 function changeIdentity(){
   try { localStorage.removeItem('aurelia_identity'); } catch(e){}
   myIdentity = null;
+  renderWhoAmI();
   showIdentityModal();
 }
 
@@ -3835,6 +4098,7 @@ function openSheetMenu(){
       html += '<button class="sheet-menu-item" onclick="closeSheetMenu();showIdentityModal()">Choose my character</button>';
     } else {
       html += `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${myIdentity.replace(/'/g,"\\\\'")}')">My Sheet (${myIdentity})</button>`;
+      html += `<button class="sheet-menu-item" style="color:var(--tx1);font-size:10px" onclick="closeSheetMenu();changeIdentity()">Not ${myIdentity}? Switch character</button>`;
     }
   }
   card.innerHTML = html;
@@ -3844,6 +4108,53 @@ function openSheetMenu(){
 function closeSheetMenu(){
   document.getElementById('sheet-menu').classList.add('hidden');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════
+// A small, extensible menu off the gear icon in the header. Currently
+// holds just the light/dark theme toggle, but built as a container so
+// more device-level preferences can be added here later without needing
+// a new menu. Theme choice is a personal device preference (like panel
+// positions or the access code), not campaign state, so it's stored in
+// localStorage only — never written to Supabase, and never shared
+// between devices or between referee and players.
+let lightModeOn = false;
+
+function openSettingsMenu(){
+  const menu = document.getElementById('settings-menu');
+  const card = document.getElementById('settings-menu-card');
+  card.innerHTML = `
+    <div class="settings-row">
+      <span class="settings-row-label">${lightModeOn ? '☀ Light Mode' : '🌙 Dark Mode'}</span>
+      <div class="theme-toggle" onclick="toggleLightMode()"><div class="theme-toggle-knob">${lightModeOn ? '☀' : '🌙'}</div></div>
+    </div>
+  `;
+  menu.classList.remove('hidden');
+}
+
+function closeSettingsMenu(){
+  document.getElementById('settings-menu').classList.add('hidden');
+}
+
+function toggleLightMode(){
+  lightModeOn = !lightModeOn;
+  rootEl.classList.toggle('light-mode', lightModeOn);
+  document.body.classList.toggle('light-mode-body', lightModeOn);
+  try {
+    if(lightModeOn) localStorage.setItem('aurelia_theme', 'light');
+    else localStorage.removeItem('aurelia_theme');
+  } catch(e){}
+  openSettingsMenu(); // re-render so the toggle's label/icon updates immediately
+}
+
+try {
+  if(localStorage.getItem('aurelia_theme') === 'light'){
+    lightModeOn = true;
+    rootEl.classList.add('light-mode');
+    document.body.classList.add('light-mode-body');
+  }
+} catch(e){}
 
 // ── Sheet modal ──────────────────────────────────────────────────────────
 async function openSheet(characterName){
@@ -3968,6 +4279,24 @@ let designModeOn = false;
 let designEditCurrentKey = null;
 let designEditOriginalText = '';
 
+// ── Stage 3: add / remove whole checks, events, degree tiers, NPC rows ──
+// Two more stores layered on top of the override system above:
+//
+// contentAdditions: {listKey: [item, item, ...]} — brand-new items the
+// referee has added, appended after the hardcoded ones at render time.
+// Keyed by a list-level key (e.g. "elevator-checks"), NOT a per-item key,
+// since these items don't exist in the original data and have no index
+// to anchor to.
+//
+// contentDeletions: {itemKey: true} — a tombstone marking a specific
+// item (hardcoded OR added) as removed. Render loops check this and skip
+// the item entirely. Using tombstones rather than actually splicing the
+// hardcoded arrays keeps every existing per-item key (used throughout
+// stage 2) stable regardless of what's been deleted elsewhere — deleting
+// check #1 never shifts what key check #2 answers to.
+let contentAdditions = {};
+let contentDeletions = {};
+
 async function loadContentOverrides(){
   try {
     const res = await supaStorage.get('content-overrides', true);
@@ -3977,6 +4306,14 @@ async function loadContentOverrides(){
     const res2 = await supaStorage.get('content-history', true);
     contentHistory = res2 ? JSON.parse(res2.value) : {};
   } catch(e){ contentHistory = {}; }
+  try {
+    const res3 = await supaStorage.get('content-additions', true);
+    contentAdditions = res3 ? JSON.parse(res3.value) : {};
+  } catch(e){ contentAdditions = {}; }
+  try {
+    const res4 = await supaStorage.get('content-deletions', true);
+    contentDeletions = res4 ? JSON.parse(res4.value) : {};
+  } catch(e){ contentDeletions = {}; }
 }
 
 async function saveContentOverrides(){
@@ -3989,6 +4326,130 @@ async function saveContentHistory(){
   catch(e){ console.error('Content history save failed', e); }
 }
 
+async function saveContentAdditions(){
+  try { await supaStorage.set('content-additions', JSON.stringify(contentAdditions), true); }
+  catch(e){ console.error('Content additions save failed', e); }
+}
+
+async function saveContentDeletions(){
+  try { await supaStorage.set('content-deletions', JSON.stringify(contentDeletions), true); }
+  catch(e){ console.error('Content deletions save failed', e); }
+}
+
+// Combines hardcoded items + additions, with deleted ones filtered out,
+// and a per-item key attached to each so the caller can wire up edit/
+// delete pencils consistently regardless of whether the item is original
+// or referee-added. `listKey` identifies the list (e.g. "elevator-checks"),
+// `keyPrefix` is the per-item key prefix already used by stage 2
+// (e.g. "elevator-check-").
+function mergeListWithAdditions(original, listKey, keyPrefix){
+  const merged = [];
+  (original||[]).forEach((item, i) => {
+    const key = keyPrefix + i;
+    if(contentDeletions[key]) return;
+    merged.push({ item, key, isAddition: false });
+  });
+  const additions = contentAdditions[listKey] || [];
+  additions.forEach((item, i) => {
+    const key = keyPrefix + 'add' + i;
+    if(contentDeletions[key]) return;
+    merged.push({ item, key, isAddition: true, additionIndex: i });
+  });
+  return merged;
+}
+
+async function deleteContentItem(key, item){
+  if(!confirm('Remove this? You can restore it later from "Show Removed Items" if you change your mind.')) return;
+  contentDeletions[key] = { item, t: Date.now() };
+  await saveContentDeletions();
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+}
+
+// Adds a brand-new blank item to the given list, saves it, re-renders so
+// it appears in the list, then immediately opens its editor so the
+// referee fills it in right away rather than leaving an empty entry
+// sitting there. Each push gets its own "...addN" key via
+// mergeListWithAdditions, computed fresh after the render.
+async function addNewCheck(listKey){
+  if(!contentAdditions[listKey]) contentAdditions[listKey] = [];
+  const blank = { skill: '', degrees: [{l:'Success', c:'dp', t:''}] };
+  contentAdditions[listKey].push(blank);
+  await saveContentAdditions();
+  if(currentView === 'station' && cur) renderDetail();
+  const newIdx = contentAdditions[listKey].length - 1;
+  const newKey = listKey.replace(/-checks$/, '-check-') + 'add' + newIdx;
+  openDesignEditCheck(newKey, blank);
+}
+
+async function addNewEvent(listKey){
+  if(!contentAdditions[listKey]) contentAdditions[listKey] = [];
+  const blank = { t: '', e: '' };
+  contentAdditions[listKey].push(blank);
+  await saveContentAdditions();
+  if(currentView === 'station' && cur) renderDetail();
+  const newIdx = contentAdditions[listKey].length - 1;
+  const newKey = listKey.replace(/-events$/, '-event-') + 'add' + newIdx;
+  openDesignEditEvent(newKey, blank);
+}
+
+async function addNewNpcRow(listKey){
+  if(!contentAdditions[listKey]) contentAdditions[listKey] = [];
+  const blank = ['', ''];
+  contentAdditions[listKey].push(blank);
+  await saveContentAdditions();
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  const newIdx = contentAdditions[listKey].length - 1;
+  const newKey = listKey.replace(/-rows$/, '-row-') + 'add' + newIdx;
+  openDesignEditNpcRow(newKey, blank);
+}
+
+async function restoreDeletedItem(key){
+  delete contentDeletions[key];
+  await saveContentDeletions();
+  closeRemovedItemsPanel();
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+}
+
+function openRemovedItemsPanel(){
+  const keys = Object.keys(contentDeletions);
+  let html = '';
+  if(!keys.length){
+    html = '<div class="init-empty">Nothing has been removed yet.</div>';
+  } else {
+    html = keys.map(key => {
+      const entry = contentDeletions[key];
+      const item = entry.item;
+      let snippet;
+      if(typeof item === 'string') snippet = item;
+      else if(Array.isArray(item)) snippet = item[0] + ': ' + item[1];
+      else if(item && item.skill) snippet = '🎲 ' + item.skill;
+      else if(item && item.t !== undefined && item.e !== undefined) snippet = item.t + ' — ' + item.e;
+      else snippet = JSON.stringify(item);
+      return `<div class="design-history-item" onclick="restoreDeletedItem('${key.replace(/'/g,"\\\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore</div>
+        <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
+  document.getElementById('design-edit-body').innerHTML = html;
+  document.getElementById('design-edit-footer').classList.add('hidden');
+  designEditCurrentKey = null;
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+function closeRemovedItemsPanel(){
+  closeDesignEdit();
+}
+
+
 // Resolves the text actually shown for a given key — override if one
 // exists, otherwise the original hardcoded value passed in.
 function resolveContent(key, originalText){
@@ -3996,6 +4457,24 @@ function resolveContent(key, originalText){
 }
 
 const DESIGN_MODE_CODE = 'ilovetwix2012!';
+
+// Player Mode and Design Mode are mutually exclusive — a referee should
+// never be able to switch into Player Mode (to preview what players see)
+// while editing controls are still live. toggleDesignMode() already
+// blocks turning Design Mode ON while Player Mode is active via the
+// isReferee() check, but that alone doesn't cover the reverse order:
+// Design Mode ON first, then Player Mode switched on afterward. This
+// forces it off the moment Player Mode activates, no passcode needed
+// since we're removing access, not granting it.
+function forceDesignModeOff(){
+  if(!designModeOn) return;
+  designModeOn = false;
+  rootEl.classList.remove('design-active');
+  const btn = document.getElementById('design-mode-btn');
+  if(btn) btn.classList.remove('on');
+  const removedBtn = document.getElementById('design-removed-btn');
+  if(removedBtn) removedBtn.classList.add('hidden');
+}
 
 function toggleDesignMode(){
   if(!isReferee()) return;
@@ -4010,6 +4489,7 @@ function toggleDesignMode(){
   designModeOn = !designModeOn;
   rootEl.classList.toggle('design-active', designModeOn);
   document.getElementById('design-mode-btn').classList.toggle('on', designModeOn);
+  document.getElementById('design-removed-btn').classList.toggle('hidden', !designModeOn);
   // Re-render whatever's currently visible so pencil icons appear/disappear
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
@@ -4050,15 +4530,16 @@ function openDesignEdit(key, btnEl){
 // Opens the structured editor for a whole skill check (skill name + all
 // its degree tiers). `original` is the hardcoded check object, used as
 // the fallback if no override exists yet.
-function openDesignEditCheck(key, original){
-  designEditCurrentKey = key;
-  designEditType = 'check';
-  designOriginalRegistry[key] = original;
-  document.getElementById('design-edit-title').textContent = 'EDIT SKILL CHECK';
-  const data = resolveContent(key, original);
+// Shared form-builder for the check editor — used by both the initial
+// open and re-renders after adding/removing a tier, so the markup and
+// the add/remove wiring only exist in one place.
+function renderCheckEditForm(data){
   const degreesHTML = data.degrees.map((dg,i) => `
     <div class="design-degree-block">
-      <div class="design-degree-head">Tier ${i+1}</div>
+      <div class="design-degree-head" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Tier ${i+1}</span>
+        ${data.degrees.length > 1 ? `<button type="button" class="design-tier-remove" onclick="removeDesignDegreeTier(${i})">✕ Remove tier</button>` : ''}
+      </div>
       <div class="design-field-group">
         <div class="design-field-label">Label (e.g. "Success", "Effect 2+")</div>
         <input type="text" class="design-field-input design-deg-label" data-idx="${i}" value="${(dg.l||dg.label||'').replace(/"/g,'&quot;')}">
@@ -4075,7 +4556,33 @@ function openDesignEditCheck(key, original){
       <input type="text" id="design-check-skill" class="design-field-input" value="${(data.skill||'').replace(/"/g,'&quot;')}">
     </div>
     ${degreesHTML}
+    <button type="button" class="design-add-btn" onclick="addDesignDegreeTier()">+ Add Tier</button>
   `);
+}
+
+// Adds a blank degree tier to the check currently being edited, preserving
+// whatever's already been typed into the other tiers by reading the form
+// back into a value first rather than re-rendering from the original data.
+function addDesignDegreeTier(){
+  const current = readDesignEditFormValue();
+  current.degrees.push({ l: '', c: 'dp', t: '' });
+  renderCheckEditForm(current);
+}
+
+function removeDesignDegreeTier(idx){
+  const current = readDesignEditFormValue();
+  if(current.degrees.length <= 1) return; // always keep at least one tier
+  current.degrees.splice(idx, 1);
+  renderCheckEditForm(current);
+}
+
+function openDesignEditCheck(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'check';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT SKILL CHECK';
+  const data = resolveContent(key, original);
+  renderCheckEditForm(data);
   document.getElementById('design-history-list').innerHTML = '';
   document.getElementById('design-history-list').classList.add('hidden');
   document.getElementById('design-edit-panel').classList.remove('hidden');
@@ -4140,6 +4647,7 @@ function designEditOriginalTextFor(key){
 
 function closeDesignEdit(){
   document.getElementById('design-edit-panel').classList.add('hidden');
+  document.getElementById('design-edit-footer').classList.remove('hidden');
   designEditCurrentKey = null;
 }
 
@@ -4177,26 +4685,7 @@ function renderDesignEditFormFromValue(value){
     return;
   }
   if(designEditType === 'check'){
-    const degreesHTML = value.degrees.map((dg,i) => `
-      <div class="design-degree-block">
-        <div class="design-degree-head">Tier ${i+1}</div>
-        <div class="design-field-group">
-          <div class="design-field-label">Label (e.g. "Success", "Effect 2+")</div>
-          <input type="text" class="design-field-input design-deg-label" data-idx="${i}" value="${(dg.l||'').replace(/"/g,'&quot;')}">
-        </div>
-        <div class="design-field-group">
-          <div class="design-field-label">Outcome text</div>
-          <textarea class="design-field-textarea design-deg-text" data-idx="${i}">${(dg.t||'').replace(/</g,'&lt;')}</textarea>
-        </div>
-      </div>
-    `).join('');
-    showDesignEditBody(`
-      <div class="design-field-group">
-        <div class="design-field-label">Skill check</div>
-        <input type="text" id="design-check-skill" class="design-field-input" value="${(value.skill||'').replace(/"/g,'&quot;')}">
-      </div>
-      ${degreesHTML}
-    `);
+    renderCheckEditForm(value);
     return;
   }
   if(designEditType === 'event'){
@@ -4439,10 +4928,12 @@ buildOrrery();
 renderInit();
 buildQuickAddList();
 checkIdentity();
+renderWhoAmI();
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
   if(currentView === 'aurelia'){ buildAureliaMap(); }
 });
+loadClockState().then(() => { renderClock(); });
 loadContentOverrides().then(() => {
   if(currentView === 'station' && cur){ renderDetail(); }
   if(currentView === 'aurelia' && selectedLoc){ selectLoc(selectedLoc); }
