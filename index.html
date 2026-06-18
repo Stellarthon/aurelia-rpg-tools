@@ -497,6 +497,120 @@ textarea{font-family:var(--font)}
   min-width:240px;min-height:160px;max-width:90vw;max-height:85vh
 }
 #health-wrap.panel-collapsed{height:auto!important;min-height:0}
+
+/* ── Quest Log panel ── */
+#quest-wrap{
+  position:fixed;top:54px;left:0;width:340px;height:480px;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:260px;min-height:120px;max-width:90vw;max-height:85vh
+}
+#quest-wrap.hidden{display:none}
+#quest-wrap.panel-collapsed{height:auto!important;min-height:0}
+#quest-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
+  border-bottom:.5px solid var(--bd0)
+}
+#quest-toggle{font-size:10px;color:var(--tx1)}
+#quest-body{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
+#quest-body.collapsed{display:none}
+#quest-foot{padding:8px 10px;border-top:.5px solid var(--bd0);flex-shrink:0}
+#quest-foot.collapsed{display:none}
+#quest-add-btn{
+  width:100%;background:transparent;color:var(--accentGold);
+  border:1px dashed var(--accentGold);border-radius:5px;
+  padding:8px;font-size:11px;font-family:monospace;cursor:pointer
+}
+#quest-add-btn:hover{background:var(--accentGoldBg)}
+.quest-card{
+  background:var(--bg0);border-radius:6px;overflow:hidden;
+  border-left:3px solid var(--bd0)
+}
+.quest-card.status-active{border-left-color:var(--accentGold)}
+.quest-card.status-complete{border-left-color:var(--txS);opacity:0.75}
+.quest-card.status-hidden{border-left-color:#9B59B6}
+.quest-card-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;gap:8px
+}
+.quest-title{font-size:12px;font-weight:700;color:var(--tx0);font-family:monospace;flex:1;min-width:0}
+.quest-status-badge{
+  font-size:8px;font-family:monospace;letter-spacing:1px;padding:2px 6px;
+  border-radius:3px;flex-shrink:0;text-transform:uppercase;font-weight:700
+}
+.status-active .quest-status-badge{background:var(--accentGoldBg);color:var(--accentGold)}
+.status-complete .quest-status-badge{background:var(--bgS);color:var(--txS)}
+.status-hidden .quest-status-badge{background:#2A1A3B;color:#9B59B6}
+.quest-card-body{padding:0 10px 10px;display:none}
+.quest-card-body.open{display:block}
+.quest-player-desc{font-size:11px;line-height:1.6;color:var(--tx0);white-space:pre-wrap;margin-bottom:8px}
+.quest-ref-note{
+  font-size:10px;line-height:1.55;color:#e8eaf0;white-space:pre-wrap;
+  background:var(--accentGoldBg);border-left:2px solid var(--accentGold);
+  padding:6px 8px;border-radius:0 4px 4px 0;margin-bottom:8px
+}
+.quest-ref-note-lbl{font-size:8px;color:var(--accentGold);font-family:monospace;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.quest-objectives{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.quest-obj-row{display:flex;align-items:flex-start;gap:7px;font-size:11px;color:var(--tx0)}
+.quest-obj-row.done .quest-obj-text{text-decoration:line-through;opacity:0.5}
+.quest-obj-check{
+  width:14px;height:14px;border:.5px solid var(--bd0);border-radius:3px;
+  flex-shrink:0;cursor:pointer;margin-top:1px;display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:var(--txS);background:var(--bg1)
+}
+.quest-obj-check.checked{background:var(--bgS);border-color:var(--txS)}
+.quest-obj-ref{font-size:9px;color:var(--tx1);font-style:italic;margin-left:21px;margin-top:1px}
+.quest-edit-btn{
+  font-size:9px;font-family:monospace;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:4px;padding:3px 8px;cursor:pointer;margin-top:8px
+}
+.quest-edit-btn:hover{background:var(--bd0);color:var(--tx0)}
+.quest-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:20px 0}
+#quest-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
+}
+#quest-btn:hover{background:var(--bd0);color:var(--tx0)}
+#quest-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){
+  #quest-wrap{width:280px;height:320px;top:54px;left:0}
+}
+
+/* ── Quest editor modal ── */
+#quest-edit-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:220;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#quest-edit-modal.hidden{display:none}
+#quest-edit-card{
+  background:var(--bg1);border:.5px solid var(--accentGold);border-radius:10px;
+  width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden
+}
+#quest-edit-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#quest-edit-title{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#quest-edit-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+#quest-edit-footer{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:10px 16px;border-top:.5px solid var(--bd0);flex-shrink:0
+}
+#quest-edit-footer button{
+  font-size:11px;font-family:monospace;padding:7px 14px;border-radius:5px;cursor:pointer;border:none
+}
+#qe-save-btn{background:var(--accentGold);color:#0f1117;font-weight:700}
+#qe-delete-btn{background:#3B1A1A;color:#d45050;border:.5px solid #d45050 !important;margin-right:auto}
+#quest-edit-footer button:not(#qe-save-btn):not(#qe-delete-btn){background:var(--bg0);color:var(--tx1)}
+.qe-obj-row{display:flex;align-items:flex-start;gap:6px;margin-bottom:8px}
+.qe-obj-inputs{flex:1;display:flex;flex-direction:column;gap:4px}
+.qe-obj-text{width:100%;font-size:11px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:5px 8px;resize:none;height:36px}
+.qe-obj-refnote{width:100%;font-size:10px;font-family:monospace;background:var(--bg0);color:var(--tx1);border:.5px solid var(--bd0);border-radius:4px;padding:4px 8px;resize:none;height:28px;font-style:italic}
+.qe-obj-done{width:16px;height:16px;flex-shrink:0;margin-top:8px;accent-color:var(--txS);cursor:pointer}
+.qe-obj-remove{font-size:11px;background:#3B1A1A;color:#d45050;border:.5px solid #d45050;border-radius:50%;width:20px;height:20px;flex-shrink:0;margin-top:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #root.pm-active #health-wrap{display:none!important}
 #health-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -702,6 +816,35 @@ textarea{font-family:var(--font)}
   flex-shrink:0;line-height:1
 }
 #settings-btn:hover{background:var(--bd0);color:var(--tx0)}
+
+/* ── Persistent search ── */
+#search-wrap{position:relative;flex-shrink:0}
+#search-input{
+  width:160px;font-size:11px;font-family:monospace;color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:6px 10px;outline:none
+}
+#search-input:focus{border-color:var(--accentGold);width:200px}
+#search-results{
+  position:absolute;top:calc(100% + 4px);right:0;width:280px;max-height:60vh;
+  overflow-y:auto;background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.5);z-index:185;display:none
+}
+#search-results.open{display:block}
+.search-empty{padding:14px 12px;font-size:11px;color:var(--tx1);font-style:italic;text-align:center}
+.search-group-lbl{font-size:9px;color:var(--tx1);letter-spacing:1px;padding:8px 12px 3px;text-transform:uppercase}
+.search-result-item{
+  display:block;width:100%;text-align:left;background:transparent;border:none;
+  color:var(--tx0);font-size:12px;font-family:monospace;padding:8px 12px;
+  cursor:pointer;border-radius:0
+}
+.search-result-item:hover{background:var(--bd0)}
+.search-result-sub{display:block;font-size:9px;color:var(--tx1);margin-top:1px}
+@media(max-width:640px){
+  #search-input{width:120px}
+  #search-input:focus{width:150px}
+  #search-results{width:240px}
+}
 #settings-menu{
   position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
   display:flex;align-items:flex-start;justify-content:flex-end
@@ -1053,7 +1196,7 @@ textarea{font-family:var(--font)}
   <div id="hdr">
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v28.3</span>
+      <span id="build-version" title="Build version">v30</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -1071,6 +1214,11 @@ textarea{font-family:var(--font)}
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
+    <div id="search-wrap">
+      <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
+      <div id="search-results"></div>
+    </div>
+    <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
@@ -1327,6 +1475,64 @@ textarea{font-family:var(--font)}
   <!-- ── Settings menu (small popover from the gear icon) ── -->
   <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
     <div id="settings-menu-card"></div>
+  </div>
+
+  <!-- ── Quest Log panel ── -->
+  <div id="quest-wrap" class="hidden">
+    <div id="quest-header" onclick="toggleQuestCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 QUEST LOG</span>
+        <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="quest-toggle">▼</span>
+    </div>
+    <div id="quest-body"></div>
+    <div id="quest-foot" class="ref-only">
+      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Quest</button>
+    </div>
+    <div class="panel-resize-handle" id="quest-resize"></div>
+  </div>
+
+  <!-- ── Quest editor modal ── -->
+  <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
+    <div id="quest-edit-card">
+      <div id="quest-edit-header">
+        <span id="quest-edit-title">NEW QUEST</span>
+        <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div id="quest-edit-body">
+        <div class="design-field-group">
+          <div class="design-field-label">Quest Title</div>
+          <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Status</div>
+          <select id="qe-status" class="design-field-input">
+            <option value="active">Active</option>
+            <option value="complete">Complete</option>
+            <option value="hidden">Hidden (referee only)</option>
+          </select>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Player Description (visible to players)</div>
+          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this quest..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Referee Notes (private)</div>
+          <textarea id="qe-ref-note" class="design-field-textarea" placeholder="Your private notes, planned outcomes, hooks..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Objectives</div>
+          <div id="qe-objectives"></div>
+          <button onclick="addQuestObjective()" style="margin-top:6px;font-size:11px;font-family:monospace;background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px 12px;cursor:pointer;width:100%">+ Add Objective</button>
+        </div>
+      </div>
+      <div id="quest-edit-footer">
+        <button id="qe-delete-btn" onclick="deleteQuest()" class="hidden">🗑 Delete</button>
+        <button onclick="closeQuestEditor()">Cancel</button>
+        <button id="qe-save-btn" onclick="saveQuestEdit()">Save</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Character sheet modal ── -->
@@ -3773,6 +3979,17 @@ async function pollRevealState(){
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Quest log — players see live updates as referee changes quest status,
+  // adds objectives, or marks things done during a session
+  try {
+    const resQ = await supaStorage.get('quest-log', true);
+    const freshQuests = resQ ? JSON.parse(resQ.value) || [] : [];
+    if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
+      questLog = freshQuests;
+      if(questPanelOpen) renderQuestPanel();
+    }
+  } catch(e){ /* silent — next poll will retry */ }
 }
 
 function startPolling(){
@@ -3883,6 +4100,7 @@ function resetCampaign(){
   contentHistory = {};
   contentAdditions = {};
   contentDeletions = {};
+  questLog = [];
 
   // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
   saveRevealState();
@@ -3891,12 +4109,14 @@ function resetCampaign(){
   saveContentHistory();
   saveContentAdditions();
   saveContentDeletions();
+  saveQuestLog();
 
   // Re-render everything currently visible
   renderClock();
   renderRsrMarkers();
   renderEventLog();
   renderInit();
+  if(questPanelOpen) renderQuestPanel();
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
   if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); if(pallorSelected) selectPallor(); }
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
@@ -4120,6 +4340,164 @@ function closeSheetMenu(){
 // localStorage only — never written to Supabase, and never shared
 // between devices or between referee and players.
 let lightModeOn = false;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════════════════════════
+// Names-only search across station areas/subs, Aurelia locations, system
+// bodies, and their NPCs/skill checks — not full description/event text,
+// by design, to keep results short and fast to scan. Respects Design Mode
+// overrides so a referee-renamed or newly-added NPC/check is searchable,
+// and respects referee-vs-player visibility: players only ever see areas
+// that are actually revealed to them, never referee-only NPCs/checks.
+//
+// Each result also has its own resolveContent() lookup for its name, since
+// names themselves can be edited via Design Mode stage 1 just like any
+// other text field — a renamed NPC should be findable by its NEW name.
+
+function searchResolvedName(key, fallback){
+  const ov = contentOverrides[key];
+  if(ov === undefined) return fallback;
+  // Some override types (checks) store an object with a .skill field
+  // rather than a plain string — handle both shapes.
+  if(typeof ov === 'string') return ov;
+  if(ov && typeof ov === 'object' && ov.skill) return ov.skill;
+  if(ov && typeof ov === 'object' && ov.name) return ov.name;
+  return fallback;
+}
+
+function buildSearchIndex(){
+  const idx = [];
+  const ref = isReferee();
+
+  // ── Station areas + subs ──
+  Object.keys(MAIN).forEach(areaId => {
+    const a = MAIN[areaId];
+    if(!ref && !revealedAreas[areaId]) return; // players only see revealed areas
+    idx.push({type:'Station Area', name:a.label, sub:a.sub||'', nav:{view:'station', areaId, subId:null}});
+    if(a.npcs && ref){ // NPCs are referee-only content
+      a.npcs.forEach((n,i) => {
+        const nkey = 'sta-npc-'+areaId+i; // matches the nid pattern used at render time (no sub)
+        idx.push({type:'NPC', name:n.name, sub:a.label, nav:{view:'station', areaId, subId:null}});
+      });
+    }
+    if(a.checks && ref){
+      const chkBaseKey = areaId+'-check-';
+      a.checks.forEach((c,i) => {
+        const name = searchResolvedName(chkBaseKey+i, c.skill);
+        idx.push({type:'Skill Check', name, sub:a.label, nav:{view:'station', areaId, subId:null}});
+      });
+    }
+    if(a.subs){
+      Object.keys(a.subs).forEach(subId => {
+        const s = a.subs[subId];
+        idx.push({type:'Station Area', name:s.label, sub:a.label+' →', nav:{view:'station', areaId, subId}});
+        if(s.npcs && ref){
+          s.npcs.forEach(n => idx.push({type:'NPC', name:n.name, sub:s.label, nav:{view:'station', areaId, subId}}));
+        }
+        if(s.checks && ref){
+          const chkBaseKey = areaId+'_'+subId+'-check-';
+          s.checks.forEach((c,i) => {
+            const name = searchResolvedName(chkBaseKey+i, c.skill);
+            idx.push({type:'Skill Check', name, sub:s.label, nav:{view:'station', areaId, subId}});
+          });
+        }
+      });
+    }
+  });
+
+  // ── Aurelia locations (Pallor lives in BODIES, handled separately below) ──
+  AURELIA_LOCS.forEach(loc => {
+    idx.push({type:'Location', name:loc.name, sub:'Aurelia', nav:{view:'aurelia', locId:loc.id}});
+  });
+
+  // ── System bodies (includes Pallor) ──
+  BODIES.forEach(b => {
+    idx.push({type:'System Body', name:b.name, sub:b.type||'', nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+    if(b.npcs && ref){
+      b.npcs.forEach((n,i) => {
+        idx.push({type:'NPC', name:n.name, sub:b.name, nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+      });
+    }
+    if(b.checks && ref){
+      const chkBaseKey = b.id+'-check-'; // matches the body-detail check key pattern... approximate, name itself is what's searched
+      b.checks.forEach((c,i) => {
+        idx.push({type:'Skill Check', name:c.skill, sub:b.name, nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+      });
+    }
+  });
+
+  return idx;
+}
+
+function navigateToSearchResult(nav){
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').classList.remove('open');
+  // playViewTransition() (used by enterStation/goAurelia/goSystem) updates
+  // currentView asynchronously, 175ms into its fade animation — not
+  // synchronously on call. So we capture whether a view switch is needed
+  // BEFORE triggering it, rather than re-checking currentView right after
+  // calling the switch function, which would still read the OLD value at
+  // that point and silently always take the "switching" branch's timing.
+  const needsSwitch = currentView !== nav.view;
+  if(nav.view === 'station'){
+    if(needsSwitch) enterStation();
+    setTimeout(() => {
+      selArea(nav.areaId);
+      if(nav.subId) setTimeout(() => selSub(nav.subId), 60);
+    }, needsSwitch ? 220 : 0);
+  } else if(nav.view === 'aurelia'){
+    if(needsSwitch) goAurelia();
+    setTimeout(() => selectLoc(nav.locId), needsSwitch ? 220 : 0);
+  } else if(nav.view === 'system'){
+    if(needsSwitch) goSystem();
+    setTimeout(() => { nav.isPallor ? selectPallor() : selectBody(nav.bodyId); }, needsSwitch ? 220 : 0);
+  }
+}
+
+function renderSearchResults(){
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const box = document.getElementById('search-results');
+  if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  const idx = buildSearchIndex();
+  const matches = idx.filter(item => item.name.toLowerCase().includes(q)).slice(0, 30);
+
+  if(!matches.length){
+    box.innerHTML = '<div class="search-empty">No matches.</div>';
+    box.classList.add('open');
+    return;
+  }
+
+  // Store the actual nav objects in an array rather than inlining them into
+  // the onclick attribute string — sidesteps any quote-escaping risk if a
+  // future area/sub id ever contains an apostrophe, and is simpler than
+  // hand-escaping JSON for HTML attribute context.
+  window._searchResultNavs = matches.map(m => m.nav);
+
+  const groups = {};
+  matches.forEach((m, i) => { (groups[m.type] = groups[m.type] || []).push({...m, idx:i}); });
+
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let html = '';
+  Object.keys(groups).forEach(type => {
+    html += `<div class="search-group-lbl">${esc(type)}</div>`;
+    html += groups[type].map(m =>
+      `<button class="search-result-item" onclick="navigateToSearchResult(window._searchResultNavs[${m.idx}])">${esc(m.name)}<span class="search-result-sub">${esc(m.sub)}</span></button>`
+    ).join('');
+  });
+  box.innerHTML = html;
+  box.classList.add('open');
+}
+
+// Close search results when clicking outside the search box
+document.addEventListener('click', function(e){
+  const wrap = document.getElementById('search-wrap');
+  if(wrap && !wrap.contains(e.target)){
+    document.getElementById('search-results').classList.remove('open');
+  }
+});
 
 function openSettingsMenu(){
   const menu = document.getElementById('settings-menu');
@@ -4822,10 +5200,21 @@ function makePanelDraggable(panelId, headerId){
     // Don't start a drag if the click was on the collapse arrow/count —
     // header still has onclick=toggleEventLog()/toggleInitPanel(), so we
     // distinguish a drag from a tap by movement threshold below.
+    //
+    // IMPORTANT: clearing right/bottom here used to cause a visible jump
+    // to the top-left corner on a plain tap (not just a drag), because
+    // panels default to being positioned via right/bottom, and clearing
+    // those without first pinning left/top to the panel's actual current
+    // position falls back toward 0,0. We capture the real rendered
+    // position via getBoundingClientRect() and pin left/top to THAT
+    // before clearing right/bottom, so a tap that never moves the mouse
+    // produces zero visible change.
     dragging = true;
     startX = e.clientX; startY = e.clientY;
     const rect = panel.getBoundingClientRect();
     startLeft = rect.left; startTop = rect.top;
+    panel.style.left = startLeft + 'px';
+    panel.style.top = startTop + 'px';
     panel.style.right = 'auto';
     panel.style.bottom = 'auto';
     header.setPointerCapture(e.pointerId);
@@ -4917,12 +5306,251 @@ function resetPanelPositions(){
   location.reload();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// QUEST LOG
+// ═══════════════════════════════════════════════════════════════════════════
+// Data shape per quest:
+//   { id:string, title:string, status:'active'|'complete'|'hidden',
+//     playerDesc:string, refNote:string,
+//     objectives:[{id:string, text:string, done:bool, refNote:string}] }
+//
+// Stored as a single Supabase key 'quest-log' (shared:true), same pattern
+// as reveal state, clock, and Design Mode overrides. Players poll for
+// changes every 10s and re-render automatically.
+//
+// Visibility rules:
+//   - hidden quests: referee only
+//   - active/complete: players see title, playerDesc, objectives (text+done)
+//   - refNote on quests and objectives: referee only, always
+
+let questLog = [];        // array of quest objects
+let questPanelOpen = false;
+let questCollapsed = false;
+let questEditingId = null; // id of quest being edited, or null for new
+
+// ── Persistence ──────────────────────────────────────────────────────────
+
+async function loadQuestLog(){
+  try {
+    const res = await supaStorage.get('quest-log', true);
+    if(res) questLog = JSON.parse(res.value) || [];
+  } catch(e){ questLog = []; }
+}
+
+async function saveQuestLog(){
+  try { await supaStorage.set('quest-log', JSON.stringify(questLog), true); }
+  catch(e){ console.error('Quest save failed:', e); }
+}
+
+// ── Panel toggle ─────────────────────────────────────────────────────────
+
+function toggleQuestPanel(){
+  questPanelOpen = !questPanelOpen;
+  const wrap = document.getElementById('quest-wrap');
+  const btn = document.getElementById('quest-btn');
+  wrap.classList.toggle('hidden', !questPanelOpen);
+  btn.classList.toggle('panel-open', questPanelOpen);
+  if(questPanelOpen) renderQuestPanel();
+}
+
+function toggleQuestCollapse(){
+  if(document.getElementById('quest-header').dataset.suppressClick === '1') return;
+  questCollapsed = !questCollapsed;
+  document.getElementById('quest-toggle').textContent = questCollapsed ? '▲' : '▼';
+  document.getElementById('quest-body').classList.toggle('collapsed', questCollapsed);
+  const foot = document.getElementById('quest-foot');
+  if(foot) foot.classList.toggle('collapsed', questCollapsed);
+  document.getElementById('quest-wrap').classList.toggle('panel-collapsed', questCollapsed);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+
+function renderQuestPanel(){
+  const ref = isReferee();
+  const body = document.getElementById('quest-body');
+  if(!body) return;
+
+  // Filter to what's visible for the current user
+  const visible = questLog.filter(q => ref || q.status !== 'hidden');
+
+  // Update count badge — shows active quests only (not hidden/complete noise)
+  const activeCount = questLog.filter(q => q.status === 'active').length;
+  const countEl = document.getElementById('quest-count');
+  if(countEl) countEl.textContent = activeCount;
+
+  if(!visible.length){
+    body.innerHTML = `<div class="quest-empty">${ref ? 'No quests yet. Add one below.' : 'No active quests.'}</div>`;
+    return;
+  }
+
+  body.innerHTML = visible.map(q => renderQuestCard(q, ref)).join('');
+}
+
+function renderQuestCard(q, ref){
+  const statusLabel = {active:'Active', complete:'Complete', hidden:'Hidden'}[q.status] || q.status;
+
+  const objHTML = (q.objectives||[]).length ? `
+    <div class="quest-objectives">
+      ${q.objectives.map((obj,i) => `
+        <div class="quest-obj-row${obj.done?' done':''}">
+          ${ref
+            ? `<div class="quest-obj-check${obj.done?' checked':''}" onclick="toggleObjective('${q.id}',${i})" title="Toggle done">${obj.done?'✓':''}</div>`
+            : `<div class="quest-obj-check${obj.done?' checked':''}" style="cursor:default">${obj.done?'✓':''}</div>`
+          }
+          <span class="quest-obj-text">${escQH(obj.text)}</span>
+        </div>
+        ${ref && obj.refNote ? `<div class="quest-obj-ref">↳ ${escQH(obj.refNote)}</div>` : ''}
+      `).join('')}
+    </div>` : '';
+
+  const refNoteHTML = ref && q.refNote ? `
+    <div class="quest-ref-note">
+      <div class="quest-ref-note-lbl">Referee Note</div>
+      ${escQH(q.refNote).replace(/\n/g,'<br>')}
+    </div>` : '';
+
+  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Quest</button>` : '';
+
+  return `
+    <div class="quest-card status-${q.status}" id="qcard-${q.id}">
+      <div class="quest-card-header" onclick="toggleQuestCard('${q.id}')">
+        <span class="quest-title">${escQH(q.title)}</span>
+        <span class="quest-status-badge">${statusLabel}</span>
+      </div>
+      <div class="quest-card-body" id="qbody-${q.id}">
+        ${q.playerDesc ? `<div class="quest-player-desc">${escQH(q.playerDesc).replace(/\n/g,'<br>')}</div>` : ''}
+        ${objHTML}
+        ${refNoteHTML}
+        ${editBtn}
+      </div>
+    </div>`;
+}
+
+function escQH(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleQuestCard(id){
+  const body = document.getElementById('qbody-'+id);
+  if(body) body.classList.toggle('open');
+}
+
+async function toggleObjective(questId, objIdx){
+  const q = questLog.find(x => x.id === questId);
+  if(!q || !q.objectives[objIdx]) return;
+  q.objectives[objIdx].done = !q.objectives[objIdx].done;
+  await saveQuestLog();
+  renderQuestPanel();
+}
+
+// ── Editor ────────────────────────────────────────────────────────────────
+
+function openQuestEditor(id){
+  questEditingId = id;
+  const isNew = !id;
+  const q = isNew ? null : questLog.find(x => x.id === id);
+
+  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW QUEST' : 'EDIT QUEST';
+  document.getElementById('qe-title').value = q ? q.title : '';
+  document.getElementById('qe-status').value = q ? q.status : 'active';
+  document.getElementById('qe-player-desc').value = q ? q.playerDesc||'' : '';
+  document.getElementById('qe-ref-note').value = q ? q.refNote||'' : '';
+  document.getElementById('qe-delete-btn').classList.toggle('hidden', isNew);
+
+  renderObjectiveEditorRows(q ? q.objectives||[] : []);
+  document.getElementById('quest-edit-modal').classList.remove('hidden');
+}
+
+function closeQuestEditor(){
+  document.getElementById('quest-edit-modal').classList.add('hidden');
+  questEditingId = null;
+}
+
+function renderObjectiveEditorRows(objectives){
+  const container = document.getElementById('qe-objectives');
+  container.innerHTML = objectives.map((obj, i) => `
+    <div class="qe-obj-row" id="qe-obj-${i}">
+      <input type="checkbox" class="qe-obj-done" ${obj.done?'checked':''} title="Mark done">
+      <div class="qe-obj-inputs">
+        <textarea class="qe-obj-text" placeholder="Objective text...">${escQH(obj.text)}</textarea>
+        <textarea class="qe-obj-refnote" placeholder="Ref note (private)...">${escQH(obj.refNote||'')}</textarea>
+      </div>
+      <button class="qe-obj-remove" onclick="removeObjectiveRow(${i})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function addQuestObjective(){
+  const rows = readObjectiveRows();
+  rows.push({text:'', done:false, refNote:''});
+  renderObjectiveEditorRows(rows);
+}
+
+function removeObjectiveRow(idx){
+  const rows = readObjectiveRows();
+  rows.splice(idx, 1);
+  renderObjectiveEditorRows(rows);
+}
+
+function readObjectiveRows(){
+  const container = document.getElementById('qe-objectives');
+  const rows = [];
+  container.querySelectorAll('.qe-obj-row').forEach(row => {
+    rows.push({
+      text: row.querySelector('.qe-obj-text').value,
+      done: row.querySelector('.qe-obj-done').checked,
+      refNote: row.querySelector('.qe-obj-refnote').value,
+    });
+  });
+  return rows;
+}
+
+async function saveQuestEdit(){
+  const title = document.getElementById('qe-title').value.trim();
+  if(!title){ alert('A quest title is required.'); return; }
+
+  const questData = {
+    id: questEditingId || ('q-' + Date.now()),
+    title,
+    status: document.getElementById('qe-status').value,
+    playerDesc: document.getElementById('qe-player-desc').value,
+    refNote: document.getElementById('qe-ref-note').value,
+    objectives: readObjectiveRows(),
+  };
+
+  if(questEditingId){
+    const idx = questLog.findIndex(x => x.id === questEditingId);
+    if(idx !== -1) questLog[idx] = questData;
+    else questLog.push(questData);
+  } else {
+    questLog.push(questData);
+  }
+
+  await saveQuestLog();
+  closeQuestEditor();
+  if(questPanelOpen) renderQuestPanel();
+}
+
+async function deleteQuest(){
+  if(!questEditingId) return;
+  if(!confirm('Delete this quest? This cannot be undone.')) return;
+  questLog = questLog.filter(x => x.id !== questEditingId);
+  await saveQuestLog();
+  closeQuestEditor();
+  if(questPanelOpen) renderQuestPanel();
+}
+
+// ── Player polling extension ──────────────────────────────────────────────
+// Wired into the existing pollRevealState() call chain — see that function
+
 makePanelDraggable('event-log-wrap', 'event-log-header');
 makePanelResizable('event-log-wrap');
 makePanelDraggable('init-wrap', 'init-header');
 makePanelResizable('init-wrap');
 makePanelDraggable('health-wrap', 'health-header');
 makePanelResizable('health-wrap');
+makePanelDraggable('quest-wrap', 'quest-header');
+makePanelResizable('quest-wrap');
 
 buildOrrery();
 renderInit();
@@ -4940,6 +5568,7 @@ loadContentOverrides().then(() => {
   if(currentView === 'aurelia' && pallorSelected){ selectPallor(); }
   if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
 });
+loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 renderEventLog();
 renderRsrMarkers();
 </script>
