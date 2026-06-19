@@ -852,7 +852,8 @@ textarea{font-family:var(--font)}
 #settings-menu.hidden{display:none}
 #settings-menu-card{
   background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
-  margin:50px 14px 0 0;padding:12px;min-width:220px;
+  margin:50px 14px 0 0;padding:12px;min-width:320px;max-width:90vw;
+  max-height:85vh;overflow-y:auto;
   box-shadow:0 4px 20px rgba(0,0,0,.5)
 }
 .settings-row{
@@ -870,6 +871,313 @@ textarea{font-family:var(--font)}
   display:flex;align-items:center;justify-content:center;font-size:11px
 }
 #root.light-mode .theme-toggle-knob{transform:translateX(28px);background:#E8A020}
+
+
+/* ── NPC Location Tracker ── */
+.npc-location-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:9px;font-family:monospace;font-weight:700;letter-spacing:.5px;
+  background:#0d2235;color:#4A90D9;border:.5px solid #4A90D955;
+  border-radius:3px;padding:2px 6px;margin-top:3px;cursor:default
+}
+.npc-location-badge.has-location{cursor:pointer}
+.npc-location-badge.has-location:hover{background:#1a3550;border-color:#4A90D9}
+
+.npc-loc-editor{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:10px;margin:6px 0;display:none;flex-direction:column;gap:7px
+}
+.npc-loc-editor.open{display:flex}
+.npc-loc-row{display:flex;flex-direction:column;gap:3px}
+.npc-loc-lbl{font-size:9px;font-family:monospace;letter-spacing:1px;color:var(--tx1);text-transform:uppercase}
+.npc-loc-select{
+  font-size:11px;font-family:monospace;color:var(--tx0);
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;
+  padding:4px 7px;outline:none;width:100%
+}
+.npc-loc-select:focus{border-color:var(--accentGold)}
+.npc-loc-note{
+  font-size:11px;font-family:monospace;color:var(--tx0);
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:4px;
+  padding:4px 7px;outline:none;width:100%;resize:none
+}
+.npc-loc-note:focus{border-color:var(--accentGold)}
+.npc-loc-btn-row{display:flex;gap:5px;margin-top:2px}
+.npc-loc-save{
+  flex:1;font-size:10px;font-family:monospace;font-weight:700;
+  background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:4px;padding:5px;cursor:pointer
+}
+.npc-loc-save:hover{opacity:.85}
+.npc-loc-clear{
+  font-size:10px;font-family:monospace;color:var(--tx1);
+  background:transparent;border:.5px solid var(--bd0);
+  border-radius:4px;padding:5px 9px;cursor:pointer
+}
+.npc-loc-clear:hover{color:#d45050;border-color:#d45050}
+
+/* Schedule */
+.npc-sched-section{margin-top:6px}
+.npc-sched-lbl{
+  font-size:9px;font-family:monospace;letter-spacing:1px;color:var(--tx1);
+  text-transform:uppercase;margin-bottom:5px;display:flex;
+  align-items:center;justify-content:space-between
+}
+.npc-sched-entry{
+  display:grid;grid-template-columns:38px 1fr auto;gap:5px;align-items:center;
+  padding:4px 0;border-bottom:.5px solid var(--bg2);font-size:11px
+}
+.npc-sched-entry:last-child{border-bottom:none}
+.npc-sched-time{font-family:monospace;font-weight:700;color:var(--accentGold)}
+.npc-sched-dest{color:var(--tx0);font-size:10px}
+.npc-sched-del{
+  background:transparent;border:none;color:var(--tx1);cursor:pointer;
+  font-size:11px;padding:2px 4px;border-radius:3px
+}
+.npc-sched-del:hover{color:#d45050}
+.npc-sched-add{
+  font-size:9px;font-family:monospace;color:var(--txI);
+  background:var(--bgI);border:.5px solid var(--txI);
+  border-radius:3px;padding:2px 7px;cursor:pointer;margin-top:5px
+}
+.npc-sched-add:hover{opacity:.85}
+.npc-sched-add-form{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:5px;
+  padding:8px;margin-top:5px;display:none;flex-direction:column;gap:6px
+}
+.npc-sched-add-form.open{display:flex}
+.npc-sched-form-row{display:flex;gap:5px;align-items:flex-end}
+.npc-sched-time-input{
+  font-size:12px;font-family:monospace;color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  padding:4px 6px;outline:none;width:80px
+}
+.npc-sched-time-input:focus{border-color:var(--accentGold)}
+.npc-sched-commit{
+  font-size:10px;font-family:monospace;font-weight:700;
+  background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);
+  border-radius:4px;padding:4px 9px;cursor:pointer;white-space:nowrap
+}
+.npc-sched-commit:hover{opacity:.85}
+.npc-sched-cancel{
+  font-size:10px;font-family:monospace;color:var(--tx1);
+  background:transparent;border:.5px solid var(--bd0);
+  border-radius:4px;padding:4px 9px;cursor:pointer
+}
+.npc-sched-cancel:hover{background:var(--bd0)}
+
+/* Fired schedule pulse */
+.npc-location-badge.just-moved{
+  animation:loc-pulse .8s ease-out;
+}
+@keyframes loc-pulse{
+  0%{background:#1a4a8a;border-color:#4A90D9;color:#fff}
+  100%{background:#0d2235;border-color:#4A90D955;color:#4A90D9}
+}
+
+/* ── Keyboard Shortcuts (settings section) ── */
+.kbd-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 4px;gap:8px;border-bottom:.5px solid var(--bg2)
+}
+.kbd-row:last-child{border-bottom:none}
+.kbd-action{font-size:11px;color:var(--tx0);flex:1;min-width:0}
+.kbd-binding{
+  display:flex;align-items:center;gap:5px;flex-shrink:0
+}
+.kbd-key{
+  display:inline-block;font-size:10px;font-family:monospace;font-weight:700;
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  padding:2px 7px;color:var(--accentGold);white-space:nowrap;
+  box-shadow:0 1px 0 var(--bd0)
+}
+.kbd-rebind-btn{
+  font-size:9px;font-family:monospace;color:var(--tx1);
+  background:transparent;border:.5px solid var(--bd0);border-radius:3px;
+  padding:2px 6px;cursor:pointer;white-space:nowrap
+}
+.kbd-rebind-btn:hover{background:var(--bd0);color:var(--tx0)}
+.kbd-rebind-btn.listening{
+  background:var(--bgI);color:var(--txI);border-color:var(--txI);
+  animation:kbd-pulse 1s ease-in-out infinite
+}
+@keyframes kbd-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.kbd-reset-all{
+  font-size:9px;font-family:monospace;color:var(--tx1);
+  background:transparent;border:.5px solid var(--bd0);border-radius:3px;
+  padding:3px 8px;cursor:pointer;margin-top:6px;width:100%
+}
+.kbd-reset-all:hover{color:#d45050;border-color:#d45050}
+
+/* ── Quick Reference Sidebar ── */
+#qref-btn{
+  font-size:13px;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;line-height:1;transition:background .12s,color .12s
+}
+#qref-btn:hover{background:var(--bd0);color:var(--tx0)}
+#qref-btn.panel-open{background:var(--bgI);color:var(--txI);border-color:var(--txI)}
+
+#qref-overlay{
+  position:fixed;inset:0;z-index:170;pointer-events:none;
+}
+#qref-overlay.open{pointer-events:auto}
+
+#qref-panel{
+  position:fixed;top:0;right:0;width:340px;max-width:92vw;height:100vh;
+  background:var(--bg1);border-left:.5px solid var(--bd0);
+  display:flex;flex-direction:column;z-index:171;
+  box-shadow:-4px 0 24px rgba(0,0,0,.5);
+  transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);
+  overflow:hidden
+}
+#qref-panel.open{transform:translateX(0)}
+
+#qref-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#qref-title{font-size:11px;font-weight:700;font-family:monospace;letter-spacing:1.5px;color:var(--accentGold);text-transform:uppercase}
+#qref-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px;line-height:1}
+#qref-close:hover{color:var(--tx0)}
+
+#qref-search-wrap{padding:8px 14px;border-bottom:.5px solid var(--bd0);flex-shrink:0}
+#qref-search{
+  width:100%;font-size:11px;font-family:monospace;color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  padding:5px 9px;outline:none
+}
+#qref-search:focus{border-color:var(--accentGold)}
+
+#qref-body{flex:1;overflow-y:auto;padding:10px 14px 20px;-webkit-overflow-scrolling:touch}
+
+.qref-section{margin-bottom:18px}
+.qref-section-title{
+  font-size:9px;font-family:monospace;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;color:var(--tx1);
+  padding-bottom:5px;margin-bottom:7px;border-bottom:.5px solid var(--bd0)
+}
+.qref-table{width:100%;border-collapse:collapse;font-size:11px}
+.qref-table th{
+  font-size:8px;font-family:monospace;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--tx1);text-align:left;padding:3px 5px 3px 0;border-bottom:.5px solid var(--bd0)
+}
+.qref-table td{padding:4px 5px 4px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0);vertical-align:top}
+.qref-table tr:last-child td{border-bottom:none}
+.qref-table td:first-child{color:var(--accentGold);font-family:monospace;white-space:nowrap;font-weight:700}
+.qref-highlight{background:var(--accentGoldBg);border-radius:3px}
+.qref-highlight td:first-child,.qref-highlight td{color:var(--accentGold)!important}
+.qref-note{font-size:10px;color:var(--tx1);line-height:1.5;margin-top:5px;font-style:italic}
+.qref-formula{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  padding:8px 10px;font-family:monospace;font-size:12px;color:var(--accentGold);
+  margin-bottom:8px;line-height:1.6
+}
+.qref-pill{
+  display:inline-block;font-size:9px;font-family:monospace;font-weight:700;
+  border-radius:3px;padding:1px 5px;margin-right:3px
+}
+.qref-pos{background:#0f2e20;color:#4caf82}
+.qref-neg{background:#2e1010;color:#d45050}
+.qref-neu{background:var(--bg0);color:var(--tx1)}
+
+/* ── Archon Morality Tracker ── */
+.settings-section-lbl{
+  font-size:9px;color:var(--tx1);letter-spacing:1.5px;text-transform:uppercase;
+  font-family:monospace;padding:10px 4px 4px;border-top:.5px solid var(--bd0);margin-top:6px
+}
+.settings-section-lbl:first-child{border-top:none;margin-top:0;padding-top:4px}
+
+/* ── UI Scale slider ── */
+.ui-scale-row{display:flex;flex-direction:column;gap:6px;padding:8px 4px}
+.ui-scale-labels{display:flex;justify-content:space-between;align-items:center}
+.ui-scale-label{font-size:12px;color:var(--tx0);font-family:monospace}
+.ui-scale-value{font-size:11px;font-family:monospace;color:var(--accentGold);font-weight:700;min-width:36px;text-align:right}
+.ui-scale-track{position:relative;height:6px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:3px;margin:2px 0}
+.ui-scale-fill{position:absolute;left:0;top:0;height:100%;background:var(--accentGold);border-radius:3px;pointer-events:none;transition:width .1s}
+input#ui-scale-range{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer;margin:0;padding:0
+}
+.ui-scale-steps{display:flex;justify-content:space-between;padding:0 1px;margin-top:3px}
+.ui-scale-step{font-size:8px;font-family:monospace;color:var(--tx1)}
+.archon-total-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 4px;gap:8px
+}
+.archon-total-score{
+  font-size:22px;font-weight:700;font-family:monospace;color:var(--accentGold);
+  min-width:48px;text-align:center
+}
+.archon-classification{
+  font-size:10px;font-family:monospace;font-weight:700;letter-spacing:.5px;
+  padding:4px 10px;border-radius:4px;text-align:right;flex:1;line-height:1.4
+}
+.archon-class-worthy{background:#0f2e20;color:#4caf82}
+.archon-class-mercy{background:#1a2a0a;color:#7ec850}
+.archon-class-promising{background:#1e2a0a;color:#a0c840}
+.archon-class-inconclusive{background:var(--bg0);color:var(--tx1)}
+.archon-class-concerning{background:#2e1f0a;color:#d4913a}
+.archon-class-alarming{background:#2e1010;color:#d45050}
+.archon-class-unworthy{background:#3B1A1A;color:#ff4444}
+.archon-axes{display:flex;flex-direction:column;gap:6px;padding:4px 0 8px}
+.archon-axis-row{display:flex;align-items:center;gap:8px}
+.archon-axis-name{font-size:9px;font-family:monospace;color:var(--tx1);width:90px;flex-shrink:0;text-transform:uppercase;letter-spacing:.5px}
+.archon-axis-bar-wrap{
+  flex:1;height:6px;background:var(--bg0);border-radius:3px;
+  border:.5px solid var(--bd0);position:relative;overflow:visible
+}
+.archon-axis-bar-fill{
+  position:absolute;top:0;height:100%;border-radius:3px;transition:width .3s,left .3s
+}
+.archon-axis-score{font-size:10px;font-family:monospace;width:28px;text-align:right;flex-shrink:0}
+.archon-axis-score.pos{color:#4caf82}
+.archon-axis-score.neg{color:#d45050}
+.archon-axis-score.zero{color:var(--tx1)}
+.archon-divider{height:.5px;background:var(--bd0);margin:4px 0}
+.archon-log-section{margin-top:4px}
+.archon-log-entry{
+  padding:7px 4px;border-bottom:.5px solid var(--bd0);
+  display:flex;flex-direction:column;gap:3px
+}
+.archon-log-entry:last-child{border-bottom:none}
+.archon-log-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.archon-log-action{font-size:11px;color:var(--tx0);flex:1;line-height:1.4}
+.archon-log-score{font-size:11px;font-family:monospace;font-weight:700;flex-shrink:0}
+.archon-log-score.pos{color:#4caf82}
+.archon-log-score.neg{color:#d45050}
+.archon-log-axes{font-size:9px;color:var(--tx1);font-family:monospace;line-height:1.5}
+.archon-log-delete{
+  font-size:9px;background:transparent;border:none;color:var(--tx1);
+  cursor:pointer;padding:0 2px;opacity:0.5
+}
+.archon-log-delete:hover{color:#d45050;opacity:1}
+.archon-add-form{padding:8px 4px 4px;display:flex;flex-direction:column;gap:6px}
+.archon-add-action-input{
+  width:100%;font-size:11px;font-family:monospace;background:var(--bg0);
+  color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;
+  padding:6px 8px;resize:none;height:52px
+}
+.archon-axis-inputs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.archon-axis-input-row{display:flex;flex-direction:column;gap:2px}
+.archon-axis-input-lbl{font-size:8px;font-family:monospace;color:var(--tx1);letter-spacing:.5px;text-transform:uppercase}
+.archon-axis-stepper{display:flex;align-items:center;gap:4px}
+.archon-axis-stepper button{
+  width:22px;height:22px;border-radius:4px;border:.5px solid var(--bd0);
+  background:var(--bg0);color:var(--tx0);font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0
+}
+.archon-axis-stepper button:hover{background:var(--bd0)}
+.archon-axis-stepper span{
+  font-size:12px;font-family:monospace;min-width:24px;text-align:center;color:var(--tx0)
+}
+.archon-submit-btn{
+  width:100%;background:var(--accentGold);color:#0f1117;font-weight:700;
+  font-size:11px;font-family:monospace;border:none;border-radius:5px;
+  padding:8px;cursor:pointer
+}
+.archon-submit-btn:hover{opacity:0.9}
+.archon-empty{font-size:10px;color:var(--tx1);font-style:italic;padding:6px 4px}
 
 /* ── Character sheet modal ── */
 #sheet-modal{
@@ -1165,10 +1473,10 @@ textarea{font-family:var(--font)}
     font-size:11px;padding:8px 12px;min-height:36px
   }
   #init-name-input,#init-score-input,#init-dex-input,#init-int-input{
-    font-size:13px;padding:8px;min-height:34px
+    font-size:16px;padding:8px;min-height:34px
   }
   .hp-max-input{
-    font-size:12px;padding:6px;width:46px;min-height:30px
+    font-size:16px;padding:6px;width:52px;min-height:30px
   }
 }
 </style>
@@ -1196,7 +1504,7 @@ textarea{font-family:var(--font)}
   <div id="hdr">
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v30</span>
+      <span id="build-version" title="Build version">v30.3</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -1213,7 +1521,8 @@ textarea{font-family:var(--font)}
     </div>
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
-    <button id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
+    <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
+        <button id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
     <div id="search-wrap">
       <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
@@ -1225,9 +1534,9 @@ textarea{font-family:var(--font)}
       <input type="time" id="clock-input" value="00:00">
       <button id="clock-edit-ok" onclick="setClockFromInput()">Set time</button>
     </div>
-    <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker">⟲ Reset Campaign</button>
-    <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly">✏ Design Mode</button>
-    <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows">🗑 Removed Items</button>
+    <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker" style="display:none"></button>
+    <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly" style="display:none"></button>
+    <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows" style="display:none"></button>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
       <span class="pm-label">Player Mode</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
@@ -1441,9 +1750,9 @@ textarea{font-family:var(--font)}
       </div>
       <div id="init-addrow">
         <input type="text" id="init-name-input" placeholder="Name" maxlength="30">
-        <input type="number" id="init-score-input" placeholder="Score">
-        <input type="number" id="init-dex-input" placeholder="DEX" title="DEX modifier">
-        <input type="number" id="init-int-input" placeholder="INT" title="INT modifier">
+        <input type="number" inputmode="numeric" id="init-score-input" placeholder="Score">
+        <input type="number" inputmode="numeric" id="init-dex-input" placeholder="DEX" title="DEX modifier">
+        <input type="number" inputmode="numeric" id="init-int-input" placeholder="INT" title="INT modifier">
         <button class="init-add-btn" onclick="addCombatant()">+ Add</button>
       </div>
       <div id="init-quickadd"></div>
@@ -1478,6 +1787,20 @@ textarea{font-family:var(--font)}
   </div>
 
   <!-- ── Quest Log panel ── -->
+
+  <!-- ── Quick Reference sidebar ── -->
+  <div id="qref-overlay" onclick="if(event.target===this)closeQref()"></div>
+  <div id="qref-panel">
+    <div id="qref-hdr">
+      <span id="qref-title">📖 Quick Reference</span>
+      <button id="qref-close" onclick="closeQref()">✕</button>
+    </div>
+    <div id="qref-search-wrap">
+      <input id="qref-search" type="text" placeholder="Filter rules..." oninput="renderQref()">
+    </div>
+    <div id="qref-body"></div>
+  </div>
+
   <div id="quest-wrap" class="hidden">
     <div id="quest-header" onclick="toggleQuestCollapse()">
       <div style="display:flex;align-items:center;gap:8px">
@@ -2545,9 +2868,10 @@ function renderDetail(){
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       return `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
+        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div>${!pmCheck.checked ? npcLocationBadgeHTML(n.name) : ''}</div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
+          ${!pmCheck.checked ? npcLocEditorHTML(n.name) : ''}
           <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
           <div class="skill-row">${n.skills}</div>
           ${rowsHTML}
@@ -2752,6 +3076,7 @@ function advanceClock(mins) {
   clockMinutes = (clockMinutes + mins) % 1440;
   renderClock();
   checkTimedEvents(prev, clockMinutes);
+  checkNpcSchedules(prev, clockMinutes);
   saveClockState();
 }
 
@@ -3652,7 +3977,7 @@ function renderInit(){
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
         </div>
       </div>`;
     } else if(c.healthMode === 'detailed'){
@@ -3735,7 +4060,7 @@ function renderHealthPanel(){
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
         </div>`;
     } else {
       healthHTML = `<div style="position:relative">
@@ -4341,6 +4666,62 @@ function closeSheetMenu(){
 // between devices or between referee and players.
 let lightModeOn = false;
 
+// ── UI Scale ──────────────────────────────────────────────────────────────
+// Scales the entire #root element via CSS font-size on <html>, which
+// cascades through all rem-based sizing. Stored in localStorage so it
+// persists across sessions on the same device.
+const UI_SCALE_STEPS = [75, 85, 100, 115, 130, 150];
+const UI_SCALE_DEFAULT = 100;
+
+function getUIScale(){
+  try {
+    const v = parseInt(localStorage.getItem('aurelia_ui_scale'), 10);
+    if(UI_SCALE_STEPS.includes(v)) return v;
+  } catch(e){}
+  return UI_SCALE_DEFAULT;
+}
+
+function applyUIScale(pct){
+  const scale = pct / 100;
+  const root = document.getElementById('root');
+  if(!root) return;
+  if(scale === 1){
+    root.style.transform = '';
+    root.style.width = '';
+    root.style.height = '';
+    root.style.transformOrigin = '';
+  } else {
+    // Scale from top-left, then inverse-scale the declared dimensions so the
+    // element still fills the full viewport without scroll bars or clipping.
+    root.style.transformOrigin = 'top left';
+    root.style.transform = 'scale(' + scale + ')';
+    root.style.width  = (100 / scale) + 'vw';
+    root.style.height = (100 / scale) + 'vh';
+  }
+}
+
+function onUIScaleInput(idx){
+  // Live preview as thumb drags — update fill bar and value label without full re-render
+  const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  applyUIScale(pct);
+  const fill = document.getElementById('ui-scale-fill');
+  if(fill) fill.style.width = (parseInt(idx,10) / (UI_SCALE_STEPS.length-1) * 100) + '%';
+  const valEl = document.querySelector('.ui-scale-value');
+  if(valEl) valEl.textContent = pct + '%';
+}
+
+function onUIScaleCommit(idx){
+  const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  applyUIScale(pct);
+  try { localStorage.setItem('aurelia_ui_scale', pct); } catch(e){}
+  // Re-render the menu so step labels update their highlight
+  const showArchon = isReferee();
+  renderSettingsMenu(showArchon);
+}
+
+// Apply saved scale on load
+applyUIScale(getUIScale());
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SEARCH
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4499,16 +4880,279 @@ document.addEventListener('click', function(e){
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS MENU (expanded — Display + Archon Morality Tracker)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Archon Morality Tracker data ─────────────────────────────────────────
+// Stored as 'archon-morality' in localStorage only — this is purely a
+// referee tool, never synced to Supabase or shown to players.
+// Each action entry: { id, action, axes:{coop,comp,wisd,inno}, total, ts }
+
+const ARCHON_AXES = [
+  { key:'coop', label:'Cooperation' },
+  { key:'comp', label:'Compassion'  },
+  { key:'wisd', label:'Wisdom'      },
+  { key:'inno', label:'Innovation'  },
+];
+
+const ARCHON_BANDS = [
+  { min:15,  max:Infinity, cls:'worthy',      label:'Worthy of Active Support',  desc:'May offer direct assistance, share data, or provide protection.' },
+  { min:10,  max:14,       cls:'mercy',       label:'Worthy of Mercy',           desc:'Will not intervene against the party. Deemed salvageable.' },
+  { min:5,   max:9,        cls:'promising',   label:'Promising',                  desc:'Observation continues with slight favor. Right trajectory.' },
+  { min:0,   max:4,        cls:'inconclusive',label:'Inconclusive',              desc:'The Collective waits. No judgment rendered. The experiment continues.' },
+  { min:-5,  max:-1,       cls:'concerning',  label:'Concerning',                 desc:'Patterns of failure detected. May subtly obstruct.' },
+  { min:-10, max:-6,       cls:'alarming',    label:'Alarming',                   desc:'Active deterrence: disabling weapons, draining fuel, blocking jump routes.' },
+  { min:-Infinity, max:-11,cls:'unworthy',    label:'Unworthy',                   desc:'Experiment declared a failure. The Collective intervenes directly.' },
+];
+
+let archonLog = [];        // array of scored action entries
+let archonDraft = { coop:0, comp:0, wisd:0, inno:0 }; // current stepper state
+
+function loadArchonLog(){
+  try {
+    const raw = localStorage.getItem('aurelia_archon');
+    if(raw) archonLog = JSON.parse(raw);
+  } catch(e){ archonLog = []; }
+}
+
+function saveArchonLog(){
+  try { localStorage.setItem('aurelia_archon', JSON.stringify(archonLog)); }
+  catch(e){}
+}
+
+function archonAxisTotals(){
+  const totals = { coop:0, comp:0, wisd:0, inno:0 };
+  archonLog.forEach(e => {
+    ARCHON_AXES.forEach(a => { totals[a.key] += (e.axes[a.key]||0); });
+  });
+  return totals;
+}
+
+function archonGrandTotal(totals){
+  return Object.values(totals).reduce((s,v) => s+v, 0);
+}
+
+function archonClassification(total){
+  return ARCHON_BANDS.find(b => total >= b.min && total <= b.max)
+    || ARCHON_BANDS[ARCHON_BANDS.length-1];
+}
+
+function archonScoreLabel(n){
+  if(n > 0) return `+${n}`;
+  return `${n}`;
+}
+
+function archonAxisBarHTML(key, val, maxAbsTotal){
+  // Bar centred at 50% — left half is negative, right half is positive
+  const clamp = maxAbsTotal || 1;
+  const pct = Math.min(Math.abs(val) / clamp * 50, 50);
+  const isPos = val >= 0;
+  const colour = val > 0 ? '#4caf82' : val < 0 ? '#d45050' : 'transparent';
+  const left = isPos ? '50%' : `${50 - pct}%`;
+  const width = `${pct}%`;
+  return `
+    <div class="archon-axis-bar-wrap">
+      <div style="position:absolute;top:0;left:50%;width:.5px;height:100%;background:var(--bd0)"></div>
+      <div class="archon-axis-bar-fill" style="left:${left};width:${width};background:${colour}"></div>
+    </div>`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+
 function openSettingsMenu(){
-  const menu = document.getElementById('settings-menu');
+  if(!isReferee()) {
+    // Players only see the display section
+    renderSettingsMenu(false);
+  } else {
+    renderSettingsMenu(true);
+  }
+  document.getElementById('settings-menu').classList.remove('hidden');
+}
+
+function renderSettingsMenu(showArchon){
   const card = document.getElementById('settings-menu-card');
-  card.innerHTML = `
+
+  // ── Display section ──
+  const scaleSteps = [75, 85, 100, 115, 130, 150];
+  const curScale = getUIScale();
+  const scaleIdx = scaleSteps.indexOf(curScale);
+  const fillPct = scaleIdx < 0 ? 40 : (scaleIdx / (scaleSteps.length - 1)) * 100;
+  let html = `
+    <div class="settings-section-lbl">Display</div>
     <div class="settings-row">
       <span class="settings-row-label">${lightModeOn ? '☀ Light Mode' : '🌙 Dark Mode'}</span>
       <div class="theme-toggle" onclick="toggleLightMode()"><div class="theme-toggle-knob">${lightModeOn ? '☀' : '🌙'}</div></div>
     </div>
-  `;
-  menu.classList.remove('hidden');
+    <div class="ui-scale-row">
+      <div class="ui-scale-labels">
+        <span class="ui-scale-label">🔡 Text Size</span>
+        <span class="ui-scale-value">${curScale}%</span>
+      </div>
+      <div class="ui-scale-track">
+        <div class="ui-scale-fill" id="ui-scale-fill" style="width:${fillPct}%"></div>
+        <input id="ui-scale-range" type="range" min="0" max="${scaleSteps.length - 1}"
+          value="${scaleIdx < 0 ? 2 : scaleIdx}"
+          oninput="onUIScaleInput(this.value)"
+          onchange="onUIScaleCommit(this.value)">
+      </div>
+      <div class="ui-scale-steps">
+        ${scaleSteps.map(s => `<span class="ui-scale-step"${s===curScale?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
+      </div>
+    </div>`;
+
+  if(!showArchon){ html += kbdSettingsHTML(); card.innerHTML = html; return; }
+
+  // ── Referee Tools section ─────────────────────────────────────────────
+  const dmOn = designModeOn;
+  html += `
+    <div class="settings-section-lbl">Referee Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
+      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">
+        ✏ Design Mode${dmOn ? ' — ON' : ''}
+      </span>
+      <div class="theme-toggle" style="background:${dmOn ? '#2A1A3B' : 'var(--bg0)'};border-color:${dmOn ? '#9B59B6' : 'var(--bd0)'}">
+        <div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div>
+      </div>
+    </div>
+    ${dmOn ? `
+    <div class="settings-row" style="cursor:pointer;padding-top:4px" onclick="closeSettingsMenu();openRemovedItemsPanel()">
+      <span class="settings-row-label" style="color:var(--tx1);font-size:10px">🗑 Show Removed Items</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>` : ''}
+    <div class="settings-row" style="cursor:pointer;margin-top:4px" onclick="closeSettingsMenu();resetCampaign()">
+      <span class="settings-row-label" style="color:#d45050;font-size:10px">⟲ Reset Campaign</span>
+      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
+    </div>`;
+
+  // ── Archon Morality Tracker section ──
+  const totals = archonAxisTotals();
+  const grand  = archonGrandTotal(totals);
+  const band   = archonClassification(grand);
+  const maxAbs = Math.max(...Object.values(totals).map(Math.abs), 1);
+
+  const axesHTML = ARCHON_AXES.map(a => {
+    const v = totals[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return `
+      <div class="archon-axis-row">
+        <span class="archon-axis-name">${a.label}</span>
+        ${archonAxisBarHTML(a.key, v, maxAbs)}
+        <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
+      </div>`;
+  }).join('');
+
+  const logHTML = archonLog.length
+    ? [...archonLog].reverse().map(e => {
+        const axisDesc = ARCHON_AXES
+          .filter(a => e.axes[a.key] !== 0)
+          .map(a => `${a.label} (${archonScoreLabel(e.axes[a.key])})`)
+          .join(', ');
+        const scoreCls = e.total >= 0 ? 'pos' : 'neg';
+        return `
+          <div class="archon-log-entry">
+            <div class="archon-log-top">
+              <span class="archon-log-action">${escArchon(e.action)}</span>
+              <span class="archon-log-score ${scoreCls}">${archonScoreLabel(e.total)}</span>
+              <button class="archon-log-delete" onclick="deleteArchonEntry('${e.id}')" title="Remove">✕</button>
+            </div>
+            ${axisDesc ? `<div class="archon-log-axes">${escArchon(axisDesc)}</div>` : ''}
+          </div>`;
+      }).join('')
+    : `<div class="archon-empty">No actions logged yet.</div>`;
+
+  // Draft stepper state
+  const steppers = ARCHON_AXES.map(a => {
+    const v = archonDraft[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return `
+      <div class="archon-axis-input-row">
+        <span class="archon-axis-input-lbl">${a.label}</span>
+        <div class="archon-axis-stepper">
+          <button onclick="archonStep('${a.key}',-1)">−</button>
+          <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
+          <button onclick="archonStep('${a.key}',+1)">+</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
+
+  html += `
+    <div class="settings-section-lbl">Archon Collective — Morality</div>
+
+    <div class="archon-total-row">
+      <span class="archon-total-score">${archonScoreLabel(grand)}</span>
+      <span class="archon-classification archon-class-${band.cls}">
+        ${band.label}<br>
+        <span style="font-weight:400;font-size:8px;opacity:.8">${band.desc}</span>
+      </span>
+    </div>
+
+    <div class="archon-axes">${axesHTML}</div>
+    <div class="archon-divider"></div>
+
+    <div class="archon-add-form">
+      <textarea class="archon-add-action-input" id="archon-action-input"
+        placeholder="Describe the action (e.g. Spared the scavenger ships)..."></textarea>
+      <div class="archon-axis-inputs">${steppers}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0">
+        <span style="font-size:10px;font-family:monospace;color:var(--tx1)">
+          Entry total: <span class="archon-axis-score ${draftCls}">${archonScoreLabel(draftTotal)}</span>
+        </span>
+        <button onclick="archonResetDraft()" style="font-size:9px;font-family:monospace;background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:3px 8px;color:var(--tx1);cursor:pointer">Reset</button>
+      </div>
+      <button class="archon-submit-btn" onclick="submitArchonEntry()">Log Action</button>
+    </div>
+
+    <div class="archon-divider"></div>
+    <div class="archon-log-section">${logHTML}</div>`;
+
+  // ── Keyboard shortcuts section ──
+  html += kbdSettingsHTML();
+
+  card.innerHTML = html;
+}
+
+function escArchon(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Stepper ───────────────────────────────────────────────────────────────
+
+function archonStep(key, delta){
+  archonDraft[key] = Math.max(-2, Math.min(2, (archonDraft[key]||0) + delta));
+  renderSettingsMenu(true);
+  // Restore the textarea content after re-render
+}
+
+function archonResetDraft(){
+  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  renderSettingsMenu(true);
+}
+
+// ── Submit / delete ───────────────────────────────────────────────────────
+
+function submitArchonEntry(){
+  const actionEl = document.getElementById('archon-action-input');
+  const action = actionEl ? actionEl.value.trim() : '';
+  if(!action){
+    actionEl && (actionEl.style.borderColor = '#d45050');
+    return;
+  }
+  const axes = { ...archonDraft };
+  const total = Object.values(axes).reduce((s,v)=>s+v,0);
+  archonLog.push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
+  saveArchonLog();
+  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  renderSettingsMenu(true);
+}
+
+function deleteArchonEntry(id){
+  archonLog = archonLog.filter(e => e.id !== id);
+  saveArchonLog();
+  renderSettingsMenu(true);
 }
 
 function closeSettingsMenu(){
@@ -4848,10 +5492,10 @@ function forceDesignModeOff(){
   if(!designModeOn) return;
   designModeOn = false;
   rootEl.classList.remove('design-active');
-  const btn = document.getElementById('design-mode-btn');
-  if(btn) btn.classList.remove('on');
-  const removedBtn = document.getElementById('design-removed-btn');
-  if(removedBtn) removedBtn.classList.add('hidden');
+  // Re-render settings menu if open so the Design Mode row reflects the new state
+  if(!document.getElementById('settings-menu').classList.contains('hidden')){
+    renderSettingsMenu(true);
+  }
 }
 
 function toggleDesignMode(){
@@ -4866,8 +5510,10 @@ function toggleDesignMode(){
   }
   designModeOn = !designModeOn;
   rootEl.classList.toggle('design-active', designModeOn);
-  document.getElementById('design-mode-btn').classList.toggle('on', designModeOn);
-  document.getElementById('design-removed-btn').classList.toggle('hidden', !designModeOn);
+  // Re-render settings menu if open so Design Mode row and Removed Items row update
+  if(!document.getElementById('settings-menu').classList.contains('hidden')){
+    renderSettingsMenu(true);
+  }
   // Re-render whatever's currently visible so pencil icons appear/disappear
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
@@ -5569,6 +6215,612 @@ loadContentOverrides().then(() => {
   if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUICK REFERENCE SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════
+
+const QREF_DATA = [
+  {
+    id: 'task',
+    title: '2D6 Task Checks',
+    content: () => `
+      <div class="qref-formula">
+        2D6 + Characteristic DM + Skill<br>
+        vs Target Number (usually 8+)
+      </div>
+      <table class="qref-table">
+        <thead><tr><th>Effect</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr class="qref-highlight"><td>6+</td><td>Exceptional success</td></tr>
+          <tr><td>2–5</td><td>Success</td></tr>
+          <tr><td>0–1</td><td>Marginal success</td></tr>
+          <tr><td>−1 to −5</td><td>Failure</td></tr>
+          <tr class="qref-neg-row"><td>−6 or less</td><td>Exceptional failure</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">Effect = Roll − Target Number. Boon: roll 3D6 drop lowest. Bane: roll 3D6 drop highest.</p>`
+  },
+  {
+    id: 'characteristics',
+    title: 'Characteristic Modifiers',
+    content: () => `
+      <table class="qref-table">
+        <thead><tr><th>Score</th><th>DM</th><th>Score</th><th>DM</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>−3</td><td>9–11</td><td>+1</td></tr>
+          <tr><td>1–2</td><td>−2</td><td>12–14</td><td>+2</td></tr>
+          <tr><td>3–5</td><td>−1</td><td>15–17</td><td>+3</td></tr>
+          <tr class="qref-highlight"><td>6–8</td><td>0</td><td>18–20</td><td>+4</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">STR · DEX · END · INT · EDU · SOC. Characteristic letter codes appear on UWPs and NPC stat blocks.</p>`
+  },
+  {
+    id: 'skills',
+    title: 'Common Skill DMs',
+    content: () => `
+      <table class="qref-table">
+        <thead><tr><th>Situation</th><th>DM</th></tr></thead>
+        <tbody>
+          <tr><td>Untrained (most skills)</td><td>−3</td></tr>
+          <tr><td>Untrained (Jack of All Trades)</td><td>−1 per level</td></tr>
+          <tr><td>Skilled assistance</td><td>+1</td></tr>
+          <tr><td>Good tools / conditions</td><td>+1 to +2</td></tr>
+          <tr><td>Poor tools / conditions</td><td>−1 to −2</td></tr>
+          <tr><td>Extra time (×10 time)</td><td>+1</td></tr>
+          <tr><td>Rushing (÷10 time)</td><td>−2</td></tr>
+          <tr><td>Aided by relevant Tech Level</td><td>+1 per 3 TL</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">Multiple assistants: only one assistance DM applies (the highest). Max +3 from assistance.</p>`
+  },
+  {
+    id: 'reaction',
+    title: 'Reaction Table',
+    content: () => `
+      <table class="qref-table">
+        <thead><tr><th>2D6</th><th>Reaction</th></tr></thead>
+        <tbody>
+          <tr style="color:#d45050"><td>2</td><td>Hostile — immediate attack</td></tr>
+          <tr><td>3–5</td><td>Hostile — threatens, demands</td></tr>
+          <tr><td>6–7</td><td>Uncooperative</td></tr>
+          <tr class="qref-highlight"><td>8–9</td><td>Neutral</td></tr>
+          <tr><td>10–11</td><td>Friendly — willing to help</td></tr>
+          <tr style="color:#4caf82"><td>12</td><td>Enthusiastic — actively assists</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">Apply SOC DM of the most socially prominent party member. Each subsequent check in same encounter: −1 cumulative.</p>`
+  },
+  {
+    id: 'range',
+    title: 'Encounter Distances',
+    content: () => `
+      <table class="qref-table">
+        <thead><tr><th>Range Band</th><th>Distance</th></tr></thead>
+        <tbody>
+          <tr><td>Close</td><td>0–1.5 m</td></tr>
+          <tr><td>Short</td><td>1.5–3 m</td></tr>
+          <tr><td>Medium</td><td>3–50 m</td></tr>
+          <tr><td>Long</td><td>50–250 m</td></tr>
+          <tr><td>Very Long</td><td>250–500 m</td></tr>
+          <tr><td>Distant</td><td>500 m+</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">Weapons have an effective range and a maximum range. Attacks beyond effective range suffer −2 DM. Beyond maximum: impossible.</p>`
+  },
+  {
+    id: 'combat',
+    title: 'Combat Sequence',
+    content: () => `
+      <table class="qref-table">
+        <thead><tr><th>#</th><th>Step</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><b>Surprise check</b> — Recon vs 8+ if ambushing</td></tr>
+          <tr><td>2</td><td><b>Initiative</b> — 2D6 + DEX DM, highest goes first</td></tr>
+          <tr><td>3</td><td><b>Minor action</b> — move, draw, aim, communicate</td></tr>
+          <tr><td>4</td><td><b>Significant action</b> — attack, full move, skill check</td></tr>
+          <tr><td>5</td><td><b>Reaction</b> — dodge (DEX 8+, −2 to attacker) or parry</td></tr>
+          <tr><td>6</td><td><b>Damage</b> — subtract from STR/DEX/END in order</td></tr>
+          <tr><td>7</td><td><b>Unconscious</b> when any stat hits 0; <b>dead</b> when all 3 = 0</td></tr>
+        </tbody>
+      </table>
+      <table class="qref-table" style="margin-top:10px">
+        <thead><tr><th>Attack roll</th><th>Formula</th></tr></thead>
+        <tbody>
+          <tr><td>Melee</td><td>2D6 + STR or DEX DM + Melee</td></tr>
+          <tr><td>Ranged</td><td>2D6 + DEX DM + Gun Combat</td></tr>
+          <tr class="qref-highlight"><td>Target</td><td>8+ (modified by range, cover, aim)</td></tr>
+        </tbody>
+      </table>
+      <p class="qref-note">Aim (minor action): +1 DM to next attack. Max +6 from aiming. Cover: −1 to −4 DM to attacker.</p>`
+  },
+];
+
+let qrefOpen = false;
+
+function toggleQref(){
+  qrefOpen ? closeQref() : openQref();
+}
+
+function openQref(){
+  qrefOpen = true;
+  document.getElementById('qref-panel').classList.add('open');
+  document.getElementById('qref-overlay').classList.add('open');
+  document.getElementById('qref-btn').classList.add('panel-open');
+  renderQref();
+  // focus search
+  setTimeout(() => {
+    const s = document.getElementById('qref-search');
+    if(s) s.focus();
+  }, 230);
+}
+
+function closeQref(){
+  qrefOpen = false;
+  document.getElementById('qref-panel').classList.remove('open');
+  document.getElementById('qref-overlay').classList.remove('open');
+  document.getElementById('qref-btn').classList.remove('panel-open');
+}
+
+function renderQref(){
+  const body = document.getElementById('qref-body');
+  if(!body) return;
+  const query = (document.getElementById('qref-search')?.value || '').toLowerCase().trim();
+
+  let html = '';
+  QREF_DATA.forEach(section => {
+    const sectionHTML = section.content();
+    // Simple filter: check title and rendered text content
+    if(query){
+      const plain = section.title.toLowerCase() + ' ' + sectionHTML.replace(/<[^>]+>/g,' ').toLowerCase();
+      if(!plain.includes(query)) return;
+    }
+    html += `
+      <div class="qref-section">
+        <div class="qref-section-title">${section.title}</div>
+        ${sectionHTML}
+      </div>`;
+  });
+
+  if(!html) html = '<p class="qref-note" style="text-align:center;padding:20px 0">No matches found.</p>';
+  body.innerHTML = html;
+}
+
+// Escape closes qref — now handled by kbdDispatch
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NPC LOCATION TRACKER
+// ═══════════════════════════════════════════════════════════════════════════
+// npcLocations: { [npcKey]: { area, sub, note, schedule: [{id,mins,area,sub,note}] } }
+// npcKey = sanitised NPC name (lowercase, spaces→underscore)
+// Stored in localStorage only — referee-side state.
+
+let npcLocations = {};
+let npcLocEditorOpen = null;   // npcKey currently editing, or null
+let npcSchedFormOpen = null;   // npcKey whose add-schedule form is open
+
+const NPC_LOC_KEY = 'aurelia_npc_locations';
+
+function npcKey(name){ return name.toLowerCase().replace(/[^a-z0-9]/g,'_'); }
+
+function npcLocLoad(){
+  try {
+    const raw = localStorage.getItem(NPC_LOC_KEY);
+    if(raw) npcLocations = JSON.parse(raw);
+  } catch(e){ npcLocations = {}; }
+}
+
+function npcLocSave(){
+  try { localStorage.setItem(NPC_LOC_KEY, JSON.stringify(npcLocations)); }
+  catch(e){}
+}
+
+// ── Area label helpers ────────────────────────────────────────────────────
+
+const NPC_AREA_OPTIONS = [
+  { value:'',             label:'— Unknown / off-station —' },
+  { value:'elevator',     label:'Space Elevator' },
+  { value:'docking',      label:'Docking Hub' },
+  { value:'docking|landing-pad',       label:'  ↳ Landing Pad — Bay 15' },
+  { value:'docking|dockmaster-office', label:'  ↳ Dockmaster\'s Office' },
+  { value:'concourse',    label:'Main Concourse' },
+  { value:'concourse|promenade',   label:'  ↳ Promenade' },
+  { value:'concourse|stellarview', label:'  ↳ Stellarview Bar & Lounge' },
+  { value:'concourse|exchange',    label:'  ↳ The Exchange' },
+  { value:'concourse|dome',        label:'  ↳ Observation Dome' },
+  { value:'security',     label:'Security & Administration' },
+  { value:'security|guardhouse',  label:'  ↳ Guardhouse' },
+  { value:'security|armoury',     label:'  ↳ Armoury' },
+  { value:'security|admin-a',     label:'  ↳ Administration Block A' },
+  { value:'security|admin-b',     label:'  ↳ Administration Block B' },
+  { value:'medical',      label:'Medical Suite' },
+  { value:'maintenance',  label:'Maintenance Level' },
+  { value:'maintenance|life-support',   label:'  ↳ Life Support' },
+  { value:'maintenance|reactor',        label:'  ↳ Reactor Level' },
+  { value:'maintenance|manufacturing',  label:'  ↳ Manufacturing Level' },
+];
+
+function npcAreaLabel(area, sub){
+  if(!area) return 'Location unknown';
+  const key = sub ? area + '|' + sub : area;
+  const opt = NPC_AREA_OPTIONS.find(o => o.value === key);
+  return opt ? opt.label.trim() : area;
+}
+
+function npcAreaSelectHTML(selectedArea, selectedSub, idPrefix){
+  const val = selectedSub ? selectedArea + '|' + selectedSub : selectedArea;
+  return NPC_AREA_OPTIONS.map(o =>
+    `<option value="${o.value}"${o.value===val?' selected':''}>${o.label}</option>`
+  ).join('');
+}
+
+function npcParseAreaValue(val){
+  if(!val) return { area:'', sub:'' };
+  const [area, sub=''] = val.split('|');
+  return { area, sub };
+}
+
+// ── Render location badge (injected into NPC card header) ─────────────────
+
+function npcLocationBadgeHTML(name){
+  const k = npcKey(name);
+  const loc = npcLocations[k];
+  if(!loc || !loc.area){
+    return `<div class="npc-location-badge has-location" onclick="event.stopPropagation();toggleNpcLocEditor('${k}')">📍 Set location</div>`;
+  }
+  const label = npcAreaLabel(loc.area, loc.sub);
+  const note = loc.note ? ` · ${loc.note}` : '';
+  return `<div class="npc-location-badge has-location" id="npc-loc-badge-${k}" onclick="event.stopPropagation();toggleNpcLocEditor('${k}')" title="Click to update location">📍 ${label}${note}</div>`;
+}
+
+// ── Editor (rendered inline inside the npc-body) ──────────────────────────
+
+function toggleNpcLocEditor(k){
+  if(npcLocEditorOpen === k){
+    npcLocEditorOpen = null;
+  } else {
+    npcLocEditorOpen = k;
+    npcSchedFormOpen = null;
+  }
+  if(currentView === 'station') renderDetail();
+}
+
+function npcLocEditorHTML(name){
+  const k = npcKey(name);
+  if(npcLocEditorOpen !== k) return '';
+  const loc = npcLocations[k] || { area:'', sub:'', note:'', schedule:[] };
+  const areaVal = loc.sub ? loc.area + '|' + loc.sub : (loc.area || '');
+
+  // Schedule entries
+  const sched = (loc.schedule || []).sort((a,b) => a.mins - b.mins);
+  const schedHTML = sched.length ? sched.map(e => {
+    const h = Math.floor(e.mins/60).toString().padStart(2,'0');
+    const m = (e.mins%60).toString().padStart(2,'0');
+    const dest = npcAreaLabel(e.area, e.sub);
+    const noteStr = e.note ? ` <span style="color:var(--tx1);font-style:italic">(${e.note})</span>` : '';
+    return `<div class="npc-sched-entry">
+      <span class="npc-sched-time">${h}:${m}</span>
+      <span class="npc-sched-dest">${dest}${noteStr}</span>
+      <button class="npc-sched-del" onclick="npcSchedDelete('${k}','${e.id}')" title="Remove">✕</button>
+    </div>`;
+  }).join('') : '<div style="font-size:10px;color:var(--tx1);font-style:italic;padding:2px 0">No scheduled moves yet.</div>';
+
+  // Add-entry form
+  const addFormOpen = npcSchedFormOpen === k;
+  const addForm = `
+    <div class="npc-sched-add-form${addFormOpen ? ' open' : ''}" id="npc-sched-form-${k}">
+      <div class="npc-loc-row">
+        <div class="npc-loc-lbl">Time (HH:MM)</div>
+        <input type="time" class="npc-sched-time-input" id="npc-sched-time-${k}" value="${(() => { const h=Math.floor(clockMinutes/60).toString().padStart(2,'0'); const m=(clockMinutes%60).toString().padStart(2,'0'); return h+':'+m; })()}">
+      </div>
+      <div class="npc-loc-row">
+        <div class="npc-loc-lbl">Move to</div>
+        <select class="npc-loc-select" id="npc-sched-area-${k}">
+          ${npcAreaSelectHTML('', '', 'sched-'+k)}
+        </select>
+      </div>
+      <div class="npc-loc-row">
+        <div class="npc-loc-lbl">Note (optional)</div>
+        <input type="text" class="npc-loc-note" id="npc-sched-note-${k}" placeholder="e.g. Heads to briefing" style="height:auto;padding:4px 7px">
+      </div>
+      <div class="npc-sched-form-row">
+        <button class="npc-sched-commit" onclick="npcSchedAdd('${k}')">Add</button>
+        <button class="npc-sched-cancel" onclick="npcSchedFormClose()">Cancel</button>
+      </div>
+    </div>`;
+
+  return `
+    <div class="npc-loc-editor open" id="npc-loc-editor-${k}">
+      <div class="npc-loc-row">
+        <div class="npc-loc-lbl">Current Location</div>
+        <select class="npc-loc-select" id="npc-loc-area-${k}">
+          ${npcAreaSelectHTML(loc.area, loc.sub, k)}
+        </select>
+      </div>
+      <div class="npc-loc-row">
+        <div class="npc-loc-lbl">Note (optional)</div>
+        <textarea class="npc-loc-note" id="npc-loc-note-${k}" rows="1" placeholder="e.g. Waiting by the bar">${loc.note||''}</textarea>
+      </div>
+      <div class="npc-loc-btn-row">
+        <button class="npc-loc-save" onclick="npcLocSaveEditor('${k}','${name.replace(/'/g,"\\\\'")}')">✓ Save location</button>
+        <button class="npc-loc-clear" onclick="npcLocClear('${k}')">Clear</button>
+      </div>
+
+      <div class="npc-sched-section">
+        <div class="npc-sched-lbl">
+          <span>⏱ Schedule</span>
+          <button class="npc-sched-add" onclick="npcSchedFormToggle('${k}')">+ Add move</button>
+        </div>
+        ${schedHTML}
+        ${addForm}
+      </div>
+    </div>`;
+}
+
+// ── Save / clear current location ─────────────────────────────────────────
+
+function npcLocSaveEditor(k, name){
+  const selEl = document.getElementById('npc-loc-area-' + k);
+  const noteEl = document.getElementById('npc-loc-note-' + k);
+  if(!selEl) return;
+  const { area, sub } = npcParseAreaValue(selEl.value);
+  const note = noteEl ? noteEl.value.trim() : '';
+  if(!npcLocations[k]) npcLocations[k] = { schedule:[] };
+  npcLocations[k].area = area;
+  npcLocations[k].sub  = sub;
+  npcLocations[k].note = note;
+  npcLocSave();
+  npcLocEditorOpen = null;
+  if(currentView === 'station') renderDetail();
+}
+
+function npcLocClear(k){
+  if(npcLocations[k]){
+    npcLocations[k].area = '';
+    npcLocations[k].sub  = '';
+    npcLocations[k].note = '';
+  }
+  npcLocSave();
+  npcLocEditorOpen = null;
+  if(currentView === 'station') renderDetail();
+}
+
+// ── Schedule CRUD ──────────────────────────────────────────────────────────
+
+function npcSchedFormToggle(k){
+  npcSchedFormOpen = npcSchedFormOpen === k ? null : k;
+  if(currentView === 'station') renderDetail();
+}
+
+function npcSchedFormClose(){
+  npcSchedFormOpen = null;
+  if(currentView === 'station') renderDetail();
+}
+
+function npcSchedAdd(k){
+  const timeEl = document.getElementById('npc-sched-time-' + k);
+  const areaEl = document.getElementById('npc-sched-area-' + k);
+  const noteEl = document.getElementById('npc-sched-note-' + k);
+  if(!timeEl || !areaEl) return;
+  const [hh, mm] = timeEl.value.split(':').map(Number);
+  const mins = hh * 60 + mm;
+  const { area, sub } = npcParseAreaValue(areaEl.value);
+  const note = noteEl ? noteEl.value.trim() : '';
+  if(!npcLocations[k]) npcLocations[k] = { area:'', sub:'', note:'', schedule:[] };
+  if(!npcLocations[k].schedule) npcLocations[k].schedule = [];
+  npcLocations[k].schedule.push({ id: 's'+Date.now(), mins, area, sub, note });
+  npcLocSave();
+  npcSchedFormOpen = null;
+  if(currentView === 'station') renderDetail();
+}
+
+function npcSchedDelete(k, id){
+  if(!npcLocations[k]) return;
+  npcLocations[k].schedule = (npcLocations[k].schedule||[]).filter(e => e.id !== id);
+  npcLocSave();
+  if(currentView === 'station') renderDetail();
+}
+
+// ── Clock hook — called from checkTimedEvents ─────────────────────────────
+
+function checkNpcSchedules(prevMins, newMins){
+  let anyMoved = false;
+  Object.entries(npcLocations).forEach(([k, loc]) => {
+    if(!loc.schedule || !loc.schedule.length) return;
+    loc.schedule.forEach(entry => {
+      // Fire if clock crosses this entry's time
+      const crossed = (prevMins < entry.mins && newMins >= entry.mins)
+        || (newMins < prevMins && (entry.mins >= newMins || entry.mins <= prevMins)); // midnight wrap — simple: just check once per day
+      if(crossed && (prevMins < entry.mins && newMins >= entry.mins)){
+        loc.area = entry.area;
+        loc.sub  = entry.sub;
+        loc.note = entry.note || '';
+        anyMoved = true;
+        // Log it
+        const dest = npcAreaLabel(entry.area, entry.sub);
+        const nameGuess = k.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+        logEvent(`${nameGuess} → ${dest}${entry.note ? ' ('+entry.note+')' : ''}`, dest || 'Station');
+      }
+    });
+  });
+  if(anyMoved){
+    npcLocSave();
+    if(currentView === 'station') renderDetail();
+  }
+}
+
+npcLocLoad();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════════════════
+// Stored as JSON in localStorage under 'aurelia_shortcuts'.
+// Each binding: { id, label, defaultKey, key }
+// 'key' is a string like "q", "Escape", "F2", "shift+r" etc.
+// Modifier prefix order: ctrl+ > shift+ > alt+
+
+const KBD_DEFAULTS = [
+  { id:'qref',      label:'Open / close Quick Reference', defaultKey:'r' },
+  { id:'quests',    label:'Open / close Quest Log',       defaultKey:'q' },
+  { id:'settings',  label:'Open Settings',                defaultKey:',' },
+  { id:'search',    label:'Focus search bar',             defaultKey:'/' },
+  { id:'player',    label:'Toggle Player Mode',           defaultKey:'p' },
+  { id:'clock1',    label:'Advance clock +1 min',         defaultKey:'1' },
+  { id:'clock5',    label:'Advance clock +5 min',         defaultKey:'2' },
+  { id:'clock15',   label:'Advance clock +15 min',        defaultKey:'3' },
+  { id:'clockreset',label:'Reset clock',                  defaultKey:'0' },
+  { id:'system',    label:'Go to System view',            defaultKey:'s' },
+  { id:'station',   label:'Go to Station view',           defaultKey:'a' },
+  { id:'lightmode', label:'Toggle light/dark mode',       defaultKey:'m' },
+];
+
+let kbdBindings = [];
+let kbdListeningId = null;   // which binding is waiting for a key press
+
+function kbdLoad(){
+  try {
+    const raw = localStorage.getItem('aurelia_shortcuts');
+    if(raw){
+      const saved = JSON.parse(raw);
+      kbdBindings = KBD_DEFAULTS.map(d => {
+        const found = saved.find(s => s.id === d.id);
+        return { ...d, key: found ? found.key : d.defaultKey };
+      });
+    } else {
+      kbdBindings = KBD_DEFAULTS.map(d => ({ ...d, key: d.defaultKey }));
+    }
+  } catch(e){
+    kbdBindings = KBD_DEFAULTS.map(d => ({ ...d, key: d.defaultKey }));
+  }
+}
+
+function kbdSave(){
+  try {
+    localStorage.setItem('aurelia_shortcuts', JSON.stringify(
+      kbdBindings.map(b => ({ id: b.id, key: b.key }))
+    ));
+  } catch(e){}
+}
+
+function kbdReset(){
+  kbdBindings = KBD_DEFAULTS.map(d => ({ ...d, key: d.defaultKey }));
+  kbdSave();
+  renderSettingsMenu(isReferee());
+}
+
+function kbdKeyLabel(key){
+  if(!key) return '—';
+  // Make modifiers look nice
+  return key.replace('ctrl+','Ctrl+').replace('shift+','⇧').replace('alt+','Alt+');
+}
+
+function kbdStartListen(id){
+  kbdListeningId = id;
+  renderSettingsMenu(isReferee());
+}
+
+function kbdOnKeyForRebind(e){
+  if(!kbdListeningId) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  // Ignore bare modifiers
+  if(['Control','Shift','Alt','Meta'].includes(e.key)) return;
+  if(e.key === 'Escape'){
+    kbdListeningId = null;
+    renderSettingsMenu(isReferee());
+    return;
+  }
+
+  let combo = '';
+  if(e.ctrlKey)  combo += 'ctrl+';
+  if(e.shiftKey) combo += 'shift+';
+  if(e.altKey)   combo += 'alt+';
+  combo += e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+  const b = kbdBindings.find(x => x.id === kbdListeningId);
+  if(b) b.key = combo;
+  kbdListeningId = null;
+  kbdSave();
+  renderSettingsMenu(isReferee());
+}
+
+function kbdDispatch(e){
+  // Don't fire shortcuts when typing in an input/textarea
+  const tag = document.activeElement?.tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA') return;
+  // Don't fire if a modal overlay is open (settings, clock edit, etc.)
+  // — except the settings shortcut itself should still close the menu
+  const settingsOpen = !document.getElementById('settings-menu').classList.contains('hidden');
+
+  let combo = '';
+  if(e.ctrlKey)  combo += 'ctrl+';
+  if(e.shiftKey) combo += 'shift+';
+  if(e.altKey)   combo += 'alt+';
+  combo += e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+  const match = kbdBindings.find(b => b.key === combo);
+  if(!match) return;
+
+  // If rebind listener is active, let kbdOnKeyForRebind handle it instead
+  if(kbdListeningId) return;
+
+  e.preventDefault();
+
+  switch(match.id){
+    case 'qref':       toggleQref(); break;
+    case 'quests':     toggleQuestPanel(); break;
+    case 'settings':
+      if(settingsOpen) closeSettingsMenu(); else openSettingsMenu(); break;
+    case 'search':
+      document.getElementById('search-input')?.focus(); break;
+    case 'player':     togglePM(); break;
+    case 'clock1':     advanceClock(1); break;
+    case 'clock5':     advanceClock(5); break;
+    case 'clock15':    advanceClock(15); break;
+    case 'clockreset': resetClock(); break;
+    case 'system':     if(currentView !== 'system') goSystem(); break;
+    case 'station':    if(currentView !== 'station') enterStation(); break;
+    case 'lightmode':  toggleLightMode(); break;
+  }
+}
+
+// Render the shortcuts table for the settings menu (called from renderSettingsMenu)
+function kbdSettingsHTML(){
+  const rows = kbdBindings.map(b => {
+    const listening = kbdListeningId === b.id;
+    return `
+      <div class="kbd-row">
+        <span class="kbd-action">${b.label}</span>
+        <div class="kbd-binding">
+          <span class="kbd-key">${kbdKeyLabel(b.key)}</span>
+          <button class="kbd-rebind-btn${listening ? ' listening' : ''}"
+            onclick="kbdStartListen('${b.id}')">
+            ${listening ? 'press key…' : 'rebind'}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="settings-section-lbl">Keyboard Shortcuts</div>
+    ${rows}
+    <button class="kbd-reset-all" onclick="kbdReset()">↺ Reset all to defaults</button>`;
+}
+
+// Wire up the global keydown listener
+document.addEventListener('keydown', e => {
+  if(kbdListeningId){
+    kbdOnKeyForRebind(e);
+  } else {
+    kbdDispatch(e);
+  }
+});
+
+kbdLoad();
+
+loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on-demand in Settings
 renderEventLog();
 renderRsrMarkers();
 </script>
