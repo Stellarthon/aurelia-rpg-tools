@@ -408,13 +408,7 @@ textarea{font-family:var(--font)}
 .nrl{color:#b89bd9;font-weight:700}.nrv{color:#e8eaf0}
 
 /* station-only "view station" button */
-#btn-view-station{
-  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
-  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
-  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
-  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
-}
-#btn-view-station:hover{background:#16447A}
+/* #btn-view-station now uses the shared .view-close-btn style (see above). */
 
 /* Checks */
 .chk{background:#1A3B1A;border:1px solid #4CAF5066;border-radius:5px;margin-bottom:8px;overflow:hidden}
@@ -537,13 +531,7 @@ textarea{font-family:var(--font)}
 #aur-dname{font-size:15px;font-weight:700;color:#4A90D9}
 #aur-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
 #aur-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
-#btn-enter-station{
-  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
-  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
-  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
-  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
-}
-#btn-enter-station:hover{background:#16447A}
+/* #btn-enter-station now uses the shared .view-close-btn style (see above). */
 
 /* ── Generic body close-up view ── */
 #view-body{display:flex;flex:1;overflow:hidden;min-height:0}
@@ -1095,7 +1083,82 @@ textarea{font-family:var(--font)}
   display:flex;align-items:center;justify-content:center;font-size:11px
 }
 #root.light-mode .theme-toggle-knob{transform:translateX(28px);background:#E8A020}
+/* Generic on/off state for .theme-toggle reused outside light-mode
+   (referee toggles, reveal switch). Light-mode keeps its own rule above. */
+.theme-toggle.on{background:#1A3B1A;border-color:#4CAF50}
+.theme-toggle.on .theme-toggle-knob{transform:translateX(28px);background:#4CAF50}
+.theme-toggle:focus-visible{outline:2px solid var(--accentGold);outline-offset:2px}
 
+/* ── Standardized "view up close" button (system / Aurelia / station entry) ── */
+.view-close-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:11px;font-family:monospace;font-weight:700;letter-spacing:1px;
+  color:var(--accentGold);background:var(--accentGoldBg);
+  border:.5px solid var(--accentGold);border-radius:6px;padding:9px 12px;
+  cursor:pointer;text-transform:uppercase;transition:background .12s,color .12s;
+  margin:12px 0 4px 0;flex-shrink:0
+}
+.view-close-btn:hover{background:var(--accentGold);color:var(--bg0)}
+.view-close-btn:active{transform:translateY(1px)}
+.view-close-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Referee toggles: disable ambient animations / hide orbital rings ── */
+/* Pure-CSS + class on #root, so it applies to existing AND future elements. */
+#root.anim-off #star-glow-outer,
+#root.anim-off #star-glow-mid,
+#root.anim-off .twinkle-a,
+#root.anim-off .twinkle-b,
+#root.anim-off .twinkle-c,
+#root.anim-off .ast,
+#root.anim-off #station-icon-group{animation:none!important}
+#root.rings-off .orbit-ring{display:none!important}
+
+/* ── Referee + Design header menus (cloned from #settings-menu) ── */
+#referee-menu,#design-menu{
+  position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
+  display:flex;align-items:flex-start;justify-content:flex-end
+}
+#referee-menu.hidden,#design-menu.hidden{display:none}
+#referee-menu-card,#design-menu-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  margin:50px 14px 0 0;padding:12px;width:340px;max-width:90vw;
+  max-height:85vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,.5);
+  min-width:300px;flex-shrink:0
+}
+#referee-menu-btn,#design-menu-btn{
+  font-size:13px;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;line-height:1
+}
+#referee-menu-btn:hover,#design-menu-btn:hover{background:var(--bd0);color:var(--tx0)}
+#design-menu-btn{display:none}
+#root.design-active #design-menu-btn{display:inline-flex;align-items:center}
+#design-menu-btn{color:#9B59B6;border-color:#9B59B6}
+
+/* ── Header back arrow ── */
+#back-btn{
+  font-size:15px;line-height:1;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:5px 11px;cursor:pointer;
+  flex-shrink:0;font-weight:700
+}
+#back-btn:hover{background:var(--bd0);color:var(--tx0)}
+#back-btn.hidden{display:none}
+
+/* ── Session button — elevated for contrast on the dark header (WCAG AA) ── */
+#session-btn{
+  font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);
+  background:var(--accentGoldBg);border:.5px solid var(--accentGold);
+  border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap
+}
+#session-btn:hover{background:var(--accentGold);color:var(--bg0)}
+#root.light-mode #session-btn{color:#8a5a00;border-color:#caa14a;background:#fbf2dc}
+
+/* ── Dynamic referee-box manager (Design menu) ── */
+.boxmgr-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:.5px solid var(--bg2)}
+.boxmgr-row input.boxmgr-name{flex:1;min-width:0;font-size:11px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 7px}
+.boxmgr-vis{font-size:9px;font-family:monospace;color:var(--tx1);white-space:nowrap}
+.boxmgr-del{background:transparent;border:.5px solid var(--bd0);color:#d45050;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 7px;flex-shrink:0}
+.boxmgr-del:hover{border-color:#d45050}
 
 /* ── NPC Location Tracker ── */
 /* ── NPC disposition marker ── */
@@ -1262,7 +1325,7 @@ textarea{font-family:var(--font)}
 #qref-overlay.open{pointer-events:auto}
 
 #qref-panel{
-  position:fixed;top:0;right:0;width:340px;max-width:92vw;height:100vh;
+  position:fixed;top:0;right:0;width:680px;max-width:92vw;height:100vh;
   background:var(--bg1);border-left:.5px solid var(--bd0);
   display:flex;flex-direction:column;z-index:171;
   box-shadow:-4px 0 24px rgba(0,0,0,.5);
@@ -1317,6 +1380,12 @@ textarea{font-family:var(--font)}
 }
 .qref-pos{background:#0f2e20;color:#4caf82}
 .qref-neg{background:#2e1010;color:#d45050}
+/* On tablet/desktop the doubled-width panel flows sections into two columns;
+   collapses to a single column on phones. break-inside keeps tables intact. */
+@media(min-width:760px){
+  #qref-body{column-count:2;column-gap:24px}
+  .qref-section{break-inside:avoid}
+}
 .qref-neu{background:var(--bg0);color:var(--tx1)}
 
 /* ── Archon Morality Tracker ── */
@@ -1740,6 +1809,7 @@ input#ui-scale-range{
 
   <!-- ── Header ── -->
   <div id="hdr">
+    <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
       <span id="build-version" title="Build version">v30.3</span>
@@ -1760,6 +1830,8 @@ input#ui-scale-range{
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
+    <button id="referee-menu-btn" class="ref-only" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
+    <button id="design-menu-btn" class="ref-only" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
         <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
       <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
@@ -1806,7 +1878,7 @@ input#ui-scale-range{
             <table class="btbl" id="body-list-table"></table>
           </div>
           <div id="sys-body-detail" class="v-hidden"></div>
-          <button id="btn-view-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ VIEW AURELIA UP CLOSE</button>
+          <button id="btn-view-station" class="view-close-btn v-hidden" onclick="enterStation()">⬡ View Aurelia up close</button>
         </div>
       </div>
     </div>
@@ -1836,7 +1908,7 @@ input#ui-scale-range{
             </div>
           </div>
           <div id="aur-loc-detail" class="v-hidden"></div>
-          <button id="btn-enter-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ ENTER AURELIA ORBITAL STATION</button>
+          <button id="btn-enter-station" class="view-close-btn v-hidden" onclick="enterStation()">⬡ Enter Aurelia Orbital Station</button>
         </div>
       </div>
     </div>
@@ -2157,6 +2229,14 @@ input#ui-scale-range{
 
   <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
     <div id="settings-menu-card"></div>
+  </div>
+
+  <div id="referee-menu" class="hidden" onclick="if(event.target===this) closeRefereeMenu()">
+    <div id="referee-menu-card"></div>
+  </div>
+
+  <div id="design-menu" class="hidden" onclick="if(event.target===this) closeDesignMenu()">
+    <div id="design-menu-card"></div>
   </div>
 
   <!-- ── Quick Reference sidebar ── -->
@@ -2667,7 +2747,14 @@ function orbitPoint(a, b, t){
   const ex = a * Math.cos(t), ey = b * Math.sin(t);
   return [ ORR_SX + ex*ORR_COS - ey*ORR_SIN, ORR_SY + ex*ORR_SIN + ey*ORR_COS ];
 }
-function isBeltBody(b){ return /asteroid belt/i.test(b.type || ''); }
+function isBeltBody(b){
+  // An explicit discStyle (set when a referee picks a class in the body editor)
+  // is authoritative both ways, so a body can never read as a belt in one view
+  // and a planet in another. Falls back to the type string for un-edited base
+  // data (e.g. The Veil's "Asteroid Belt").
+  if(b.discStyle) return b.discStyle === 'belt';
+  return /asteroid belt/i.test(b.type || '');
+}
 // Deterministic 32-bit LCG seeded from a string (body id) — same belt every render.
 function seedFromString(str){
   let h = 2166136261 >>> 0;
@@ -2773,7 +2860,7 @@ function buildOrrery(){
   for(let p = maxP; p >= 1; p--){
     const [a,b] = orbitAxes(p, maxP);
     const isBelt = !!beltSlots[p];
-    html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
+    html += `<ellipse class="orbit-ring" cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
       stroke="${isBelt ? '#8B735566' : '#1a3a6a'}"
       stroke-width="${isBelt ? '3' : '1'}"
       stroke-dasharray="${isBelt ? '2,3' : '5,6'}"
@@ -2929,18 +3016,14 @@ function renderBodyContentSections(body, pm){
   const sbDescText = resolveContent(sbDescKey, body.desc);
   html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, (sbDescText||'').replace(/\n/g,"<br>"))}</div></div>`;
 
-  if(!pm&&body.readAloud){
-    const sbReadKey = 'body-'+id+'-readAloud';
-    designOriginalRegistry[sbReadKey] = body.readAloud;
-    const sbReadText = resolveContent(sbReadKey, body.readAloud);
-    html += `<div class="s-blk read"><div class="s-blk-lbl">Read Aloud</div>${designWrap(sbReadKey, body.readAloud, sbReadText)}</div>`;
-  }
-  if(!pm&&body.refNote){
-    const sbRefKey = 'body-'+id+'-refNote';
-    designOriginalRegistry[sbRefKey] = body.refNote;
-    const sbRefText = resolveContent(sbRefKey, body.refNote);
-    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${designWrap(sbRefKey, body.refNote, (sbRefText||'').replace(/\n/g,"<br>"))}</div>`;
-  }
+  // Referee boxes (Read Aloud, Referee Note, + any custom box types) are
+  // registry-driven so adding / removing / renaming a box propagates to every
+  // body. Built-ins keep their original content keys for back-compat.
+  html += renderBoxTypesHTML(
+    bt => bt.builtin ? ('body-'+id+'-'+bt.key) : ('body-'+id+'-box-'+bt.key),
+    bk => body[bk],
+    pm, false
+  );
 
   if(!pm&&body.npcs&&body.npcs.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
@@ -3011,7 +3094,7 @@ function selectBody(id){
   const stBtn = document.getElementById("btn-view-station");
   if(body.id==="aurelia"){
     stBtn.classList.remove("v-hidden");
-    stBtn.textContent = "⬡ VIEW AURELIA UP CLOSE";
+    stBtn.textContent = "⬡ View Aurelia up close";
     stBtn.onclick = function(){ goAurelia(); };
   } else {
     stBtn.classList.add("v-hidden");
@@ -3023,7 +3106,7 @@ function selectBody(id){
   // Generic close-up entry — every body except Aurelia (which keeps its
   // bespoke view until Phase 3 migrates it onto this engine).
   if(body.id!=="aurelia"){
-    html += `<button class="design-add-btn" style="width:100%;margin-bottom:10px;border-color:var(--accentGold);color:var(--accentGold)" onclick="goBodyView('${body.id}')">⊙ View ${escHtml(body.name)} up close</button>`;
+    html += `<button class="view-close-btn" onclick="goBodyView('${body.id}')">⊙ View ${escHtml(body.name)} up close</button>`;
   }
 
   html += renderBodyContentSections(body, pm);
@@ -3057,6 +3140,7 @@ function goSystemOverview(){
   const stBtn = document.getElementById("btn-view-station");
   if(stBtn) stBtn.classList.add("v-hidden");
   document.getElementById("breadcrumb").innerHTML = "";
+  updateBackBtn();
   buildOrrery();
 }
 
@@ -3082,7 +3166,7 @@ function bodyDiscStyle(body){
   if(body.discStyle) return body.discStyle;
   const t = (body.type || '').toLowerCase();
   if(body.isStar) return 'star';
-  if(/asteroid belt|belt/.test(t)) return 'belt';
+  if(/asteroid belt/.test(t)) return 'belt';  // matches isBeltBody exactly
   if(/gas giant|ice giant/.test(t)) return 'gasgiant';
   if(body.isMoon) return 'moon';
   if(/jewel|ocean|garden/.test(t)) return 'ocean';
@@ -3170,6 +3254,10 @@ function discPlanet(body, CX, CY, col, style){
   // Clipped style-specific surface detail
   s += `<g clip-path="url(#bv-clip)">`;
 
+  // Gas-giant band detail is captured in a variable so it can be re-emitted
+  // over the lower hemisphere after the ring-occlusion redraw — otherwise the
+  // flat front-half repaint erases the banding on the bottom of ringed giants.
+  let ggDetail = '';
   if(style === 'gasgiant'){
     // Horizontal banding — alternating light/dark translucent strips
     const bands = 7;
@@ -3177,12 +3265,13 @@ function discPlanet(body, CX, CY, col, style){
       const yy = CY - PR + (i + 0.5) * (2*PR/bands);
       const h  = (2*PR/bands) * (0.62 + rnd()*0.5);
       const light = i % 2 === 0;
-      s += `<ellipse cx="${CX}" cy="${yy.toFixed(1)}" rx="${PR}" ry="${(h/2).toFixed(1)}" fill="${light?'#ffffff':'#000610'}" opacity="${(light?0.07:0.14).toFixed(2)}"/>`;
+      ggDetail += `<ellipse cx="${CX}" cy="${yy.toFixed(1)}" rx="${PR}" ry="${(h/2).toFixed(1)}" fill="${light?'#ffffff':'#000610'}" opacity="${(light?0.07:0.14).toFixed(2)}"/>`;
     }
     // A storm oval (great spot)
     const spotY = CY + (rnd()-0.5)*PR*0.7;
-    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.22).toFixed(1)}" ry="${(PR*0.12).toFixed(1)}" fill="#ffffff" opacity="0.10"/>`;
-    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.12).toFixed(1)}" ry="${(PR*0.06).toFixed(1)}" fill="#000610" opacity="0.12"/>`;
+    ggDetail += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.22).toFixed(1)}" ry="${(PR*0.12).toFixed(1)}" fill="#ffffff" opacity="0.10"/>`;
+    ggDetail += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.12).toFixed(1)}" ry="${(PR*0.06).toFixed(1)}" fill="#000610" opacity="0.12"/>`;
+    s += ggDetail;
   } else if(style === 'ocean'){
     // Cloud swirls + landmass blots
     for(let i=0;i<5;i++){
@@ -3232,9 +3321,16 @@ function discPlanet(body, CX, CY, col, style){
     const sw = body.ringStyle==='major' ? 9 : 5;
     s += `<ellipse cx="${CX}" cy="${CY}" rx="${rr}" ry="${(rr*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${sw}" opacity="0.28" pointer-events="none"/>`;
     s += `<ellipse cx="${CX}" cy="${CY}" rx="${(rr-sw-3).toFixed(1)}" ry="${((rr-sw-3)*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${(sw*0.5).toFixed(1)}" opacity="0.18" pointer-events="none"/>`;
-    // Redraw front half of planet over the back of the ring
-    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="${col}" pointer-events="none"/>`;
-    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="url(#bv-base)" pointer-events="none"/>`;
+    // Redraw the front (lower) half of the planet over the back of the ring.
+    // For gas giants, re-emit the band detail clipped to that lower hemisphere
+    // so the bottom half keeps its banding rather than rendering flat.
+    const frontHalf = `M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z`;
+    s += `<path d="${frontHalf}" fill="${col}" pointer-events="none"/>`;
+    if(ggDetail){
+      s += `<clipPath id="bv-front"><path d="${frontHalf}"/></clipPath>`;
+      s += `<g clip-path="url(#bv-clip)"><g clip-path="url(#bv-front)">${ggDetail}</g></g>`;
+    }
+    s += `<path d="${frontHalf}" fill="url(#bv-base)" pointer-events="none"/>`;
   }
 
   // Name label
@@ -3395,6 +3491,7 @@ function goSystem(){
     } else {
       document.getElementById("breadcrumb").innerHTML="";
     }
+    updateBackBtn();
   });
 }
 
@@ -3402,6 +3499,23 @@ function setBreadcrumb(crumbs,current){
   const el=document.getElementById("breadcrumb");
   el.innerHTML=crumbs.map(c=>`<span class="bc-link" onclick="${c.fn}()">${c.label}</span><span class="bc-sep"> › </span>`).join("")
     +(current?`<span style="color:#8b91a8">${current}</span>`:"");
+  updateBackBtn();
+}
+
+// Hierarchical back-arrow (kept alongside the breadcrumb). Steps one level up
+// from the current view; hidden at the root (system view, no body selected).
+function navBack(){
+  if(currentView === 'station'){ goAurelia(); return; }
+  if(currentView === 'aurelia'){ goSystem(); return; }
+  if(currentView === 'body'){ goSystem(); return; }
+  if(currentView === 'system' && selectedBody){ goSystemOverview(); return; }
+  // system root — nothing above it
+}
+function updateBackBtn(){
+  const btn = document.getElementById('back-btn');
+  if(!btn) return;
+  const atRoot = (currentView === 'system' && !selectedBody);
+  btn.classList.toggle('hidden', atRoot);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3508,14 +3622,7 @@ function renderDetail(){
     let html=backBtn;
     // Referee-only reveal toggle (only shown when NOT in player mode, on top-level areas)
     if(!pm && isTopLevelArea){
-      const rev = isRevealed(cur);
-      html += `<div class="reveal-toggle-row">
-        <span class="reveal-toggle-lbl">👁 Player visibility</span>
-        <div style="display:flex;gap:6px">
-          <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${cur}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
-          <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
-        </div>
-      </div>`;
+      html += revealToggleRowHTML(cur);
     }
     const stKey = cur+(curSub?"_"+curSub:"");
     if(a.read){
@@ -3534,6 +3641,9 @@ function renderDetail(){
         ${a.ship.lines.map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:6px;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--bg2)"><span style="color:var(--tx1);font-weight:700">${k}</span><span style="color:var(--tx0)">${v}</span></div>`).join("")}
       </div></div>`;
     }
+    // Custom referee boxes (the area already shows its own Read Aloud + Referee
+    // Context above, so only the registry's custom box types are appended here).
+    html += renderBoxTypesHTML(bt => 'sta-'+stKey+'-box-'+bt.key, null, pm, true);
     d.innerHTML=html;
   } else if(curTab==="npcs"){
     let html=backBtn;
@@ -4083,7 +4193,7 @@ function buildAureliaMap(){
   const pallX = Math.round(CX + Math.cos(palRad) * PALLOR_A);
   const pallY = Math.round(CY + Math.sin(palRad) * PALLOR_B);
 
-  s += `<ellipse cx="${CX}" cy="${CY}" rx="${PALLOR_A}" ry="${PALLOR_B}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.35"/>`;
+  s += `<ellipse class="orbit-ring" cx="${CX}" cy="${CY}" rx="${PALLOR_A}" ry="${PALLOR_B}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.35"/>`;
 
   // ── Connection lines (behind planet) — only for orbiting nodes ──
   AURELIA_LOCS.forEach(loc => {
@@ -4380,14 +4490,7 @@ function selectLoc(id){
 
   let detHTML = '';
   if(!pm){
-    const rev = isRevealed(id);
-    detHTML += `<div class="reveal-toggle-row">
-      <span class="reveal-toggle-lbl">👁 Player visibility</span>
-      <div style="display:flex;gap:6px">
-        <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${id}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
-        <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
-      </div>
-    </div>`;
+    detHTML += revealToggleRowHTML(id);
   }
   detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${(() => {
     const lk = 'loc-'+id+'-desc';
@@ -4401,6 +4504,8 @@ function selectLoc(id){
     const rt = resolveContent(lrk, loc.refNote);
     detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(lrk, loc.refNote, rt)}</div>`;
   }
+  // Custom referee boxes (Overview + Referee Note are rendered above already).
+  detHTML += renderBoxTypesHTML(bt => 'loc-'+id+'-box-'+bt.key, null, pm, true);
   det.innerHTML = detHTML;
 
   setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
@@ -5075,6 +5180,23 @@ function isRevealed(areaId){
   return !!revealedAreas[areaId];
 }
 
+// Shared referee "player visibility" control — a keyboard-accessible switch
+// (reusing .theme-toggle) wired to toggleReveal. Used by both the station and
+// Aurelia detail panels so the affordance is identical in both places.
+function revealToggleRowHTML(id){
+  const rev = isRevealed(id);
+  return `<div class="reveal-toggle-row">
+      <span class="reveal-toggle-lbl">👁 Player visibility — ${rev ? '<b style="color:#4CAF50">revealed</b>' : '<b style="color:#d45050">hidden</b>'}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="theme-toggle ${rev?'on':''}" role="switch" tabindex="0" aria-checked="${rev}"
+             title="${rev ? 'Revealed to players — tap to hide' : 'Hidden from players — tap to reveal'}"
+             onclick="toggleReveal('${id}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReveal('${id}');}"><div class="theme-toggle-knob"></div></div>
+        <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
+      </div>
+    </div>`;
+}
+
 function toggleReveal(areaId){
   if(!isReferee()) return; // safety — only referee can toggle
   revealedAreas[areaId] = !revealedAreas[areaId];
@@ -5728,30 +5850,17 @@ function renderSettingsMenu(showArchon){
       </div>
     </div>`;
 
-  if(!showArchon){ html += kbdSettingsHTML(); card.innerHTML = html; return; }
+  // Settings is configuration-only now: Display + keyboard shortcuts for
+  // everyone. Referee tools (design mode), morality, and the animation /
+  // orbital-ring toggles live in the Referee menu; campaign-editing tools
+  // live in the Design menu. The showArchon arg is kept for back-compat.
+  html += kbdSettingsHTML();
+  card.innerHTML = html;
+}
 
-  // ── Referee Tools section ─────────────────────────────────────────────
-  const dmOn = designModeOn;
-  html += `
-    <div class="settings-section-lbl">Referee Tools</div>
-    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
-      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">
-        ✏ Design Mode${dmOn ? ' — ON' : ''}
-      </span>
-      <div class="theme-toggle" style="background:${dmOn ? '#2A1A3B' : 'var(--bg0)'};border-color:${dmOn ? '#9B59B6' : 'var(--bd0)'}">
-        <div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div>
-      </div>
-    </div>
-    ${dmOn ? `
-    <div class="settings-row" style="cursor:pointer;padding-top:4px" onclick="closeSettingsMenu();openRemovedItemsPanel()">
-      <span class="settings-row-label" style="color:var(--tx1);font-size:10px">🗑 Show Removed Items</span>
-      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
-    </div>` : ''}
-    <div class="settings-row" style="cursor:pointer;margin-top:4px" onclick="closeSettingsMenu();resetCampaign()">
-      <span class="settings-row-label" style="color:#d45050;font-size:10px">⟲ Reset Campaign</span>
-      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
-    </div>`;
-
+// Builds the Archon morality block (totals, axes, log, draft form). Extracted
+// so the Referee menu renders the same widget that used to live in Settings.
+function renderArchonSectionHTML(){
   // ── Archon Morality Tracker section ──
   const totals = archonAxisTotals();
   const grand  = archonGrandTotal(totals);
@@ -5806,7 +5915,7 @@ function renderSettingsMenu(showArchon){
   const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
   const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
 
-  html += `
+  return `
     <div class="settings-section-lbl">Archon Collective — Morality</div>
 
     <div class="archon-total-row">
@@ -5835,11 +5944,6 @@ function renderSettingsMenu(showArchon){
 
     <div class="archon-divider"></div>
     <div class="archon-log-section">${logHTML}</div>`;
-
-  // ── Keyboard shortcuts section ──
-  html += kbdSettingsHTML();
-
-  card.innerHTML = html;
 }
 
 function escArchon(s){
@@ -5880,7 +5984,7 @@ function archonStep(key, delta){
 
 function archonResetDraft(){
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
-  renderSettingsMenu(true);
+  renderRefereeMenu();
   // textarea is intentionally cleared on reset
 }
 
@@ -5898,18 +6002,249 @@ function submitArchonEntry(){
   archonLog.push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
   saveArchonLog();
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
-  renderSettingsMenu(true);
+  renderRefereeMenu();
   showToast('Morality action logged');
 }
 
 function deleteArchonEntry(id){
   archonLog = archonLog.filter(e => e.id !== id);
   saveArchonLog();
-  renderSettingsMenu(true);
+  renderRefereeMenu();
 }
 
 function closeSettingsMenu(){
   document.getElementById('settings-menu').classList.add('hidden');
+}
+
+// ── Referee menu (always available to referee) ────────────────────────────
+// Houses the Design-Mode toggle, ambient-animation + orbital-ring toggles,
+// and the Archon morality tracker — all moved out of Settings so Settings
+// stays configuration-only.
+function openRefereeMenu(){
+  if(!isReferee()) return;
+  renderRefereeMenu();
+  document.getElementById('referee-menu').classList.remove('hidden');
+}
+function closeRefereeMenu(){
+  document.getElementById('referee-menu').classList.add('hidden');
+}
+function renderRefereeMenu(){
+  const card = document.getElementById('referee-menu-card');
+  if(!card) return;
+  const dmOn = designModeOn;
+  const animOn = animationsOn();
+  const ringsShown = ringsOn();
+  card.innerHTML = `
+    <div class="settings-section-lbl">Referee Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
+      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
+      <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
+    </div>
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${animOn}" style="cursor:pointer" onclick="toggleAnim()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnim();}">
+      <span class="settings-row-label">✨ Animations${animOn ? '' : ' — off'}</span>
+      <div class="theme-toggle ${animOn?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${ringsShown}" style="cursor:pointer" onclick="toggleRings()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRings();}">
+      <span class="settings-row-label">🪐 Orbital Rings${ringsShown ? '' : ' — hidden'}</span>
+      <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="archon-divider"></div>
+    ${renderArchonSectionHTML()}`;
+}
+
+// ── Design menu (shown only while Design Mode is ON) ───────────────────────
+// Campaign-editing tools: removed items, full reset, and the dynamic
+// referee-box manager.
+function openDesignMenu(){
+  if(!isReferee() || !designModeOn) return;
+  renderDesignMenu();
+  document.getElementById('design-menu').classList.remove('hidden');
+}
+function closeDesignMenu(){
+  document.getElementById('design-menu').classList.add('hidden');
+}
+function renderDesignMenu(){
+  const card = document.getElementById('design-menu-card');
+  if(!card) return;
+  card.innerHTML = `
+    <div class="settings-section-lbl">Design Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
+      <span class="settings-row-label">🗑 Show Removed Items</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();resetCampaign()">
+      <span class="settings-row-label" style="color:#d45050">⟲ Reset Campaign</span>
+      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
+    </div>
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Referee Boxes</div>
+    ${renderBoxManagerHTML()}`;
+}
+
+// Re-render whichever menus are open (after a state change that affects them).
+function refreshOpenMenus(){
+  if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
+  if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Ambient-animation + orbital-ring toggles ──────────────────────────────
+// Implemented as classes on #root so they apply to every existing AND future
+// element via CSS selectors (no per-node bookkeeping). Persisted per device.
+function animationsOn(){ return !rootEl.classList.contains('anim-off'); }
+function ringsOn(){ return !rootEl.classList.contains('rings-off'); }
+function toggleAnim(){
+  const turnOff = animationsOn();
+  rootEl.classList.toggle('anim-off', turnOff);
+  try{ localStorage.setItem('aurelia_anim_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function toggleRings(){
+  const turnOff = ringsOn();
+  rootEl.classList.toggle('rings-off', turnOff);
+  try{ localStorage.setItem('aurelia_rings_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function applyRefereePrefs(){
+  try{
+    if(localStorage.getItem('aurelia_anim_off') === '1') rootEl.classList.add('anim-off');
+    if(localStorage.getItem('aurelia_rings_off') === '1') rootEl.classList.add('rings-off');
+  }catch(e){}
+}
+applyRefereePrefs();
+
+// ── Dynamic referee-box registry (Task 4) ─────────────────────────────────
+// A box "type" (Read Aloud, Referee Note, or any custom box) renders across
+// every celestial body and station area. Built-ins keep their original
+// content keys (body-<id>-readAloud / -refNote) for back-compat; custom boxes
+// store per-object content under body-<id>-box-<key> via the same
+// resolveContent/contentOverrides layer. Removed types are kept (restorable)
+// and their content is preserved.
+const BOX_TYPES_LS = 'aurelia_box_types';
+const DEFAULT_BOX_TYPES = [
+  { key:'readAloud', label:'Read Aloud',   cls:'read', refOnly:false, builtin:true },
+  { key:'refNote',   label:'Referee Note', cls:'ref',  refOnly:true,  builtin:true }
+];
+let boxTypesStore = null;
+function loadBoxTypes(){
+  if(boxTypesStore) return boxTypesStore;
+  let stored = null;
+  try{ stored = JSON.parse(localStorage.getItem(BOX_TYPES_LS) || 'null'); }catch(e){}
+  if(stored && Array.isArray(stored.active) && Array.isArray(stored.removed)){
+    boxTypesStore = stored;
+  } else {
+    boxTypesStore = { active: DEFAULT_BOX_TYPES.map(b => ({...b})), removed: [] };
+  }
+  return boxTypesStore;
+}
+function saveBoxTypes(){
+  try{ localStorage.setItem(BOX_TYPES_LS, JSON.stringify(boxTypesStore)); }catch(e){}
+}
+function getBoxTypes(){ return loadBoxTypes().active; }
+function getRemovedBoxTypes(){ return loadBoxTypes().removed; }
+function slugifyBox(label){
+  const base = (label||'box').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'box';
+  const st = loadBoxTypes();
+  const taken = k => st.active.some(b=>b.key===k) || st.removed.some(b=>b.key===k) || k==='readAloud' || k==='refNote';
+  let s = base, n = 2;
+  while(taken(s)){ s = base + '-' + n; n++; }
+  return s;
+}
+function addBoxType(){
+  const label = (prompt('New box name (e.g. "Tactics", "Lore", "Hooks"):', 'Custom Box') || '').trim();
+  if(!label) return;
+  const refOnly = !confirm('Should players see this box?\n\nOK = visible to players.\nCancel = referee-only.');
+  const st = loadBoxTypes();
+  st.active.push({ key: slugifyBox(label), label, cls: refOnly ? 'ref' : 'read', refOnly, builtin:false });
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function renameBoxType(key, val){
+  const b = getBoxTypes().find(x => x.key === key);
+  if(!b) return;
+  b.label = (val||'').trim() || b.label;
+  saveBoxTypes();
+  rerenderCurrentDetail();
+}
+function deleteBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.active.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  if(!confirm('Remove this box from every location? You can restore it later from Removed Items — saved content is kept.')) return;
+  const [removed] = st.active.splice(idx, 1);
+  removed._removedAt = Date.now();
+  st.removed.push(removed);
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function restoreBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.removed.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  const [b] = st.removed.splice(idx, 1);
+  delete b._removedAt;
+  st.active.push(b);
+  saveBoxTypes();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+  // If the user restored from the Removed Items panel, refresh it in place.
+  const dep = document.getElementById('design-edit-panel');
+  if(dep && !dep.classList.contains('hidden') && document.getElementById('design-edit-title').textContent === 'REMOVED ITEMS'){
+    openRemovedItemsPanel();
+  }
+  rerenderCurrentDetail();
+}
+function rerenderCurrentDetail(){
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && typeof selectedLoc !== 'undefined' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && typeof pallorSelected !== 'undefined' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+}
+function renderBoxManagerHTML(){
+  const st = loadBoxTypes();
+  const rows = st.active.map(b => `
+    <div class="boxmgr-row">
+      <input class="boxmgr-name" value="${(b.label||'').replace(/"/g,'&quot;')}" onchange="renameBoxType('${b.key}',this.value)">
+      <span class="boxmgr-vis">${b.refOnly ? 'ref-only' : 'players'}</span>
+      <button class="boxmgr-del" onclick="deleteBoxType('${b.key}')" title="Remove box type">🗑</button>
+    </div>`).join('');
+  const removed = st.removed.length ? `
+    <div style="font-size:9px;color:var(--tx1);margin:10px 0 2px;font-family:monospace;letter-spacing:1px">REMOVED — TAP TO RESTORE</div>
+    ${st.removed.map(b => `<div class="boxmgr-row"><span style="flex:1;font-size:11px;color:var(--tx1)">${b.label||''}</span><button class="boxmgr-del" style="color:#4CAF50;border-color:#4CAF50" onclick="restoreBoxType('${b.key}')" title="Restore">↺</button></div>`).join('')}` : '';
+  return `
+    <div style="font-size:10px;color:var(--tx1);margin-bottom:6px;line-height:1.5">Boxes appear on every planet, moon, and station area. Rename inline; remove to hide everywhere (saved text is preserved).</div>
+    ${rows}
+    <button class="design-add-btn" style="width:100%;margin-top:8px" onclick="addBoxType()">+ Add Box Type</button>
+    ${removed}`;
+}
+
+// Renders the registry's box types for one object. `keyFor(box)` maps a box to
+// its content-override key; `builtinValue(boxKey)` returns the object's
+// hardcoded value for built-in boxes. When onlyCustom is true the built-in
+// Read Aloud / Referee Note are skipped (station + Aurelia panels render those
+// in their own bespoke layout and only want the custom boxes appended). In
+// design mode empty boxes still render (with a placeholder) so the referee can
+// fill them in; in play mode empty boxes are hidden.
+function renderBoxTypesHTML(keyFor, builtinValue, pm, onlyCustom){
+  let html = '';
+  getBoxTypes().forEach(bt => {
+    if(onlyCustom && bt.builtin) return;
+    if(bt.refOnly && pm) return; // ref-only boxes are hidden from players
+    const key = keyFor(bt);
+    const original = bt.builtin ? ((builtinValue ? builtinValue(bt.key) : '') || '') : '';
+    designOriginalRegistry[key] = original;
+    const text = resolveContent(key, original);
+    const hasContent = (text || '').trim() !== '';
+    if(!hasContent && !designModeOn) return;
+    const cls = bt.cls === 'ref' ? 's-blk ref ref-only' : 's-blk read';
+    const disp = hasContent
+      ? (text || '').replace(/\n/g, '<br>')
+      : '<span style="opacity:.45;font-style:italic">(empty — tap ✎ to add)</span>';
+    html += `<div class="${cls}"><div class="s-blk-lbl">${escHtml(bt.label)}</div>${designWrap(key, original, disp)}</div>`;
+  });
+  return html;
 }
 
 function toggleLightMode(){
@@ -6265,11 +6600,18 @@ function openRemovedItemsPanel(){
       bodyEntries.push({ sysId, bid, entry: bodyDeletions[sysId][bid] });
     });
   });
+  const removedBoxes = getRemovedBoxTypes();
   let html = '';
-  if(!keys.length && !bodyEntries.length){
+  if(!keys.length && !bodyEntries.length && !removedBoxes.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
-    // Removed bodies first (more significant), then content items
+    // Removed box types first, then bodies, then content items
+    const boxHtml = removedBoxes.map(b => `
+      <div class="design-history-item" onclick="restoreBoxType('${b.key}')">
+        <div class="design-history-label">${b._removedAt ? new Date(b._removedAt).toLocaleString()+' — ' : ''}tap to restore box type</div>
+        <div class="design-history-snippet">🗂 ${b.label||b.key}${b.refOnly?' (referee-only)':''}</div>
+      </div>`).join('');
+    // Removed bodies (more significant), then content items
     const bodyHtml = bodyEntries.map(({sysId, bid, entry}) => {
       const b = entry.body || {};
       const snippet = `🪐 ${b.name || bid}${b.uwpString && b.uwpString!=='—' ? ' · '+b.uwpString : ''}`;
@@ -6292,7 +6634,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
-    html = bodyHtml + itemHtml;
+    html = boxHtml + bodyHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
@@ -6326,10 +6668,9 @@ function forceDesignModeOff(){
   if(!designModeOn) return;
   designModeOn = false;
   rootEl.classList.remove('design-active');
-  // Re-render settings menu if open so the Design Mode row reflects the new state
-  if(!document.getElementById('settings-menu').classList.contains('hidden')){
-    renderSettingsMenu(true);
-  }
+  // Design tools are no longer reachable — close that menu if it's open.
+  closeDesignMenu();
+  refreshOpenMenus();
 }
 
 function toggleDesignMode(){
@@ -6344,10 +6685,10 @@ function toggleDesignMode(){
   }
   designModeOn = !designModeOn;
   rootEl.classList.toggle('design-active', designModeOn);
-  // Re-render settings menu if open so Design Mode row and Removed Items row update
-  if(!document.getElementById('settings-menu').classList.contains('hidden')){
-    renderSettingsMenu(true);
-  }
+  // The Design header icon shows/hides via #root.design-active (CSS). If design
+  // mode was just turned off, close its menu so it can't linger open.
+  if(!designModeOn) closeDesignMenu();
+  refreshOpenMenus();
   // Re-render whatever's currently visible so pencil icons appear/disappear
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
@@ -8052,6 +8393,9 @@ function collectBodyForm(){
   const name = (g('body-f-name')||'').trim();
   let type = (g('body-f-type')||'').trim();
   if(cls === 'belt' && !/asteroid belt/i.test(type)) type = type ? (type + ' · Asteroid Belt') : 'Asteroid Belt';
+  // Switching a body AWAY from belt: strip the auto-added belt suffix so the
+  // type string can't keep classifying it as a belt (the Scoria flip).
+  if(cls !== 'belt') type = type.replace(/\s*·\s*Asteroid Belt\s*$/i, '').trim();
   if(cls === 'gasgiant' && !type) type = 'Gas Giant';
   if(cls === 'moon' && !type) type = 'Moon';
   if(cls === 'star' && !type) type = 'Star';
@@ -8083,6 +8427,11 @@ function collectBodyForm(){
   }
   // Sensible display radius defaults by class
   obj.displayRadius = cls==='star'?18 : cls==='gasgiant'?16 : cls==='moon'?4 : 8;
+  // Persist an explicit disc style for the unambiguous classes so the renderer
+  // never has to re-guess from the free-text type (and so a body keeps its
+  // class consistently across the orrery and close-up views). "planet" stays
+  // null so ocean / ice / rock can still be derived from the type label.
+  obj.discStyle = ({ belt:'belt', gasgiant:'gasgiant', star:'star', moon:'moon' })[cls] || null;
   return obj;
 }
 
@@ -8207,7 +8556,11 @@ function openBodyEditor(id){
   if(!b){ showToast('Body not found', 'error'); return; }
   bodyEditTargetId = id;
   bodyCreatorMode = 'manual';
-  const cls = b.isStar?'star' : b.isMoon?'moon' : /asteroid belt/i.test(b.type||'')?'belt' : /gas giant/i.test(b.type||'')?'gasgiant' : 'planet';
+  // Honour an explicit discStyle first (set by prior edits) so the editor opens
+  // on the class the body actually renders as, then fall back to the type text.
+  const cls = b.isStar?'star' : b.isMoon?'moon'
+    : (b.discStyle==='belt' || /asteroid belt/i.test(b.type||''))?'belt'
+    : (b.discStyle==='gasgiant' || /gas giant/i.test(b.type||''))?'gasgiant' : 'planet';
   bodyCreatorDraft = {
     name:b.name, type:b.type, tag:b.tag||'', color:b.color, orbitAU:b.orbitAU,
     uwpString:b.uwpString, diameter:b.diameter, period:b.period, hook:!!b.hook,
@@ -8237,7 +8590,7 @@ async function commitBodyEdit(id, obj){
     // Base body — store only the changed metadata fields as overrides so the
     // body's checks/events/npcs and identity stay anchored to the base data.
     const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
-    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar'];
+    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle'];
     const ov = {};
     fields.forEach(f => {
       const nv = obj[f];
