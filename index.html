@@ -6028,18 +6028,35 @@ function openRefereeMenu(){
 function closeRefereeMenu(){
   document.getElementById('referee-menu').classList.add('hidden');
 }
+// Inline Design-Mode passcode state. We can't use prompt()/alert() — they're
+// silently suppressed inside sandboxed preview iframes — so the passcode is
+// entered through a field rendered inline in the Referee menu instead.
+let designPasscodePrompt = false, designPasscodeError = false;
+
 function renderRefereeMenu(){
   const card = document.getElementById('referee-menu-card');
   if(!card) return;
   const dmOn = designModeOn;
   const animOn = animationsOn();
   const ringsShown = ringsOn();
+  const passField = (designPasscodePrompt && !dmOn) ? `
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;padding-top:0">
+      <input id="design-pass-input" type="password" placeholder="Design Mode passcode" autocomplete="off"
+        style="width:100%;font-size:12px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid ${designPasscodeError?'#d45050':'var(--bd0)'};border-radius:5px;padding:6px 9px;outline:none"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitDesignPasscode();}else if(event.key==='Escape'){cancelDesignPasscode();}">
+      ${designPasscodeError ? '<span style="font-size:10px;color:#d45050;font-family:monospace">Incorrect passcode.</span>' : ''}
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button onclick="cancelDesignPasscode()" style="font-size:10px;font-family:monospace;background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:4px 10px;color:var(--tx1);cursor:pointer">Cancel</button>
+        <button onclick="submitDesignPasscode()" style="font-size:10px;font-family:monospace;background:#9B59B6;border:none;border-radius:4px;padding:4px 10px;color:#fff;cursor:pointer">Unlock</button>
+      </div>
+    </div>` : '';
   card.innerHTML = `
     <div class="settings-section-lbl">Referee Tools</div>
     <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
       <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
       <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
     </div>
+    ${passField}
     <div class="settings-row" role="switch" tabindex="0" aria-checked="${animOn}" style="cursor:pointer" onclick="toggleAnim()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnim();}">
       <span class="settings-row-label">✨ Animations${animOn ? '' : ' — off'}</span>
       <div class="theme-toggle ${animOn?'on':''}"><div class="theme-toggle-knob"></div></div>
@@ -6667,34 +6684,68 @@ const DESIGN_MODE_CODE = 'ilovetwix2012!';
 function forceDesignModeOff(){
   if(!designModeOn) return;
   designModeOn = false;
+  designPasscodePrompt = false; designPasscodeError = false;
   rootEl.classList.remove('design-active');
   // Design tools are no longer reachable — close that menu if it's open.
   closeDesignMenu();
   refreshOpenMenus();
 }
 
+// Re-render the views that show design-mode affordances (pencils, add/remove
+// controls). Called whenever Design Mode flips on or off.
+function refreshDesignAffordances(){
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
+  if(currentView === 'aurelia' && pallorSelected) selectPallor();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+}
+
 function toggleDesignMode(){
   if(!isReferee()) return;
   if(!designModeOn){
-    // Turning ON — require the passcode. Turning off is always immediate.
-    const entered = prompt('Enter the Design Mode passcode:');
-    if(entered !== DESIGN_MODE_CODE){
-      if(entered !== null) alert('Incorrect passcode.');
-      return;
+    // Turning ON requires the passcode. prompt() is silently suppressed inside
+    // sandboxed preview iframes, so show an inline passcode field in the
+    // Referee menu instead and finish in submitDesignPasscode().
+    designPasscodePrompt = !designPasscodePrompt; // click again to dismiss
+    designPasscodeError = false;
+    renderRefereeMenu();
+    if(designPasscodePrompt){
+      setTimeout(() => { const i = document.getElementById('design-pass-input'); if(i) i.focus(); }, 0);
     }
+    return;
   }
-  designModeOn = !designModeOn;
-  rootEl.classList.toggle('design-active', designModeOn);
-  // The Design header icon shows/hides via #root.design-active (CSS). If design
-  // mode was just turned off, close its menu so it can't linger open.
-  if(!designModeOn) closeDesignMenu();
+  // Turning OFF is always immediate.
+  designModeOn = false;
+  designPasscodePrompt = false; designPasscodeError = false;
+  rootEl.classList.remove('design-active');
+  closeDesignMenu();
   refreshOpenMenus();
-  // Re-render whatever's currently visible so pencil icons appear/disappear
-  if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-      if(currentView === 'aurelia' && pallorSelected) selectPallor();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  refreshDesignAffordances();
+}
+
+// Validates the inline Design-Mode passcode and enables design mode on success.
+function submitDesignPasscode(){
+  const input = document.getElementById('design-pass-input');
+  const val = input ? input.value : '';
+  if(val !== DESIGN_MODE_CODE){
+    designPasscodeError = true;
+    renderRefereeMenu();
+    setTimeout(() => { const i = document.getElementById('design-pass-input'); if(i) i.focus(); }, 0);
+    return;
+  }
+  designModeOn = true;
+  designPasscodePrompt = false;
+  designPasscodeError = false;
+  rootEl.classList.add('design-active'); // reveals the ✎ Design header icon
+  refreshOpenMenus();
+  refreshDesignAffordances();
+}
+
+function cancelDesignPasscode(){
+  designPasscodePrompt = false;
+  designPasscodeError = false;
+  renderRefereeMenu();
 }
 
 // Wraps a piece of displayed text with a pencil-edit affordance when
