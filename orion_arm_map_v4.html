@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>The Orion Arm</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+/* ── CSS variables matching the main tool's dark theme exactly ── */
+:root{
+  --bg0:#0f1117;--bg1:#181c27;--bg2:#1e2333;
+  --bd0:#2e3347;--bd1:#252a3a;--bd2:#1e2333;
+  --tx0:#e8eaf0;--tx1:#8b91a8;
+  --accentGold:#D4A843;--accentGoldBg:#3D2B1F;
+  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+html,body{background:#0f1117;color:#e8eaf0}
+button{font-family:var(--font);cursor:pointer;border:none;background:none}
+
+/* ── Root layout — left canvas + right detail, exactly like sys-wrap ── */
+#galaxy-wrap{
+  display:flex;width:100%;height:100%;overflow:hidden;min-height:0
+}
+
+/* ── Left panel: the galaxy map canvas (stays dark like orrery-panel) ── */
+#galaxy-canvas{
+  flex:1;min-width:0;background:#04060e;overflow:hidden;
+  position:relative;cursor:grab;user-select:none;-webkit-user-select:none
+}
+#galaxy-canvas.panning{cursor:grabbing}
+#map-svg{position:absolute;top:0;left:0;width:1800px;height:1060px;transform-origin:0 0}
+
+/* ── Right panel: detail panel matching sys-detail exactly ── */
+#galaxy-detail{
+  width:360px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
+  display:flex;flex-direction:column;overflow:hidden
+}
+#galaxy-dh{
+  padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0
+}
+#galaxy-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
+#galaxy-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
+#galaxy-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+
+/* Responsive — same breakpoints as the main tool */
+@media(max-width:640px){
+  #galaxy-wrap{flex-direction:column}
+  #galaxy-canvas{flex:none;height:40vh}
+  #galaxy-detail{width:100%;border-left:none;border-top:.5px solid var(--bd2);flex:1;min-height:0}
+}
+@media(orientation:landscape) and (max-height:500px){
+  #galaxy-wrap{flex-direction:row}
+  #galaxy-canvas{flex:1;height:auto}
+  #galaxy-detail{width:50%;flex:none}
+}
+
+/* ── Exact copies of the sys-detail content classes from the main tool ── */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
+.sg-l{color:var(--tx1)}.sg-v{color:var(--tx0)}
+.s-sec{margin-top:14px}
+.s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
+.s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
+.s-blk{border-radius:5px;padding:9px 11px;margin-top:9px;font-size:12px;line-height:1.55}
+.s-blk.ref{background:var(--accentGoldBg);border-left:3px solid var(--accentGold);color:#1a1d29}
+.s-blk.read{background:#1A2A3B;border-left:3px solid #4A90D9;color:#e8eaf0}
+.s-blk-lbl{font-size:9px;font-family:monospace;letter-spacing:2px;opacity:.65;margin-bottom:4px;text-transform:uppercase}
+.npc-card{background:#2A1A3B;border:1px solid #9B59B699;border-radius:6px;margin-bottom:9px;overflow:hidden}
+.npc-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer}
+.npc-name{font-size:13px;font-weight:700;color:#9B59B6}
+.npc-role{font-size:10px;color:#c9b8e0;margin-top:1px}
+.chev{color:#9B59B6;font-size:11px;transition:transform .15s}
+.npc-body{padding:0 10px 10px;display:none}
+.nrl{color:#b89bd9;font-weight:700;font-size:10px}
+.nrv{color:#e8eaf0;font-size:11px}
+.skill-row{font-size:11px;color:#4CAF50;margin-bottom:6px;padding:4px 6px;background:#1A3B1A;border-radius:3px}
+
+/* ── Status flags ── */
+.flag-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:8px;
+  font-family:monospace;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  padding:2px 7px;border-radius:3px;margin:2px 2px 2px 0
+}
+
+/* ── Current location badge ── */
+.loc-badge{
+  display:inline-block;font-size:9px;background:var(--accentGold);color:#0f1117;
+  font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;
+  font-family:monospace;margin-bottom:8px
+}
+
+/* ── Context menu ── */
+#ctx-menu{
+  display:none;position:fixed;z-index:200;
+  background:rgba(14,18,30,0.98);border:.5px solid var(--bd0);
+  border-radius:8px;padding:8px;min-width:210px;
+  box-shadow:0 4px 24px rgba(0,0,0,.9)
+}
+#ctx-system-name{
+  font-size:10px;font-weight:700;color:var(--accentGold);letter-spacing:1.5px;
+  text-transform:uppercase;padding:4px 8px 8px;border-bottom:.5px solid var(--bd0);
+  margin-bottom:6px;font-family:monospace
+}
+.ctx-item{
+  display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:5px;
+  cursor:pointer;font-size:10px;font-family:monospace;letter-spacing:.5px;color:var(--tx1)
+}
+.ctx-item:hover{background:var(--bg1);color:var(--tx0)}
+.ctx-item.active{color:var(--tx0)}
+.ctx-check{
+  width:12px;height:12px;border:.5px solid var(--bd0);border-radius:2px;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;opacity:0
+}
+.ctx-item.active .ctx-check{opacity:1;background:#00e5ff22;border-color:#00e5ff}
+.ctx-divider{height:.5px;background:var(--bd0);margin:5px 4px}
+.ctx-set-loc{color:#00e5ff}
+.ctx-set-loc:hover{background:#001830}
+.ctx-section-lbl{
+  font-size:7px;color:var(--tx1);letter-spacing:1px;padding:3px 8px 5px;
+  text-transform:uppercase;opacity:.7
+}
+
+/* ── Location marker pulse ── */
+@keyframes loc-pulse{
+  0%,100%{opacity:.85;r:13}
+  50%{opacity:.25;r:19}
+}
+.loc-pulse-ring{animation:loc-pulse 2s ease-in-out infinite}
+
+/* ── Zoom controls ── */
+#zoom-controls{
+  position:absolute;bottom:14px;right:14px;
+  display:flex;flex-direction:column;gap:5px;z-index:10
+}
+.zoom-btn{
+  width:34px;height:34px;background:rgba(14,18,30,.92);
+  border:.5px solid var(--bd0);border-radius:6px;
+  color:var(--tx1);font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center
+}
+.zoom-btn:hover{color:var(--accentGold);border-color:var(--accentGold)}
+
+/* ── Map title (bottom left of canvas) ── */
+#map-title{
+  position:absolute;bottom:14px;left:14px;
+  font-size:17px;font-weight:700;letter-spacing:5px;
+  color:var(--tx0);text-transform:uppercase;pointer-events:none;
+  opacity:0.6;font-family:monospace
+}
+
+/* ── Ref mode toggle ── */
+#ref-mode-btn{
+  position:absolute;bottom:14px;left:210px;
+  font-size:9px;font-family:monospace;letter-spacing:1px;
+  background:rgba(14,18,30,.92);border:.5px solid #cc88ff;border-radius:6px;
+  padding:7px 12px;cursor:pointer;color:#cc88ff;text-transform:uppercase;z-index:10
+}
+
+/* ── Legend ── */
+#map-legend{
+  position:absolute;top:10px;left:10px;
+  background:rgba(14,18,30,.92);border:.5px solid var(--bd0);
+  border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none
+}
+.leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
+.leg-row:last-child{margin-bottom:0}
+.leg-swatch{width:20px;height:9px;border-radius:2px;flex-shrink:0;opacity:0.7}
+
+/* ── Design Mode — purple editing layer, ported from Aurelia ── */
+#design-mode-btn{
+  position:absolute;bottom:14px;left:340px;
+  font-size:9px;font-family:monospace;letter-spacing:1px;
+  background:rgba(14,18,30,.92);border:.5px solid var(--bd0);border-radius:6px;
+  padding:7px 12px;cursor:pointer;color:var(--tx1);text-transform:uppercase;z-index:10;white-space:nowrap
+}
+#design-mode-btn:hover{background:var(--bd0);color:var(--tx0)}
+#design-mode-btn.on{background:#2A1A3B;color:#9B59B6;border-color:#9B59B6}
+
+/* Design-mode banner shown across the top of the canvas while active */
+#design-banner{
+  display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  z-index:11;background:#2A1A3B;border:.5px solid #9B59B6;border-radius:8px;
+  padding:8px 14px;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.6)
+}
+#galaxy-wrap.design-active #design-banner{display:flex}
+.design-banner-lbl{font-size:10px;font-family:monospace;color:#9B59B6;letter-spacing:1px;text-transform:uppercase}
+.design-banner-btn{
+  font-size:10px;font-family:monospace;color:#9B59B6;background:transparent;
+  border:1px dashed #9B59B6;border-radius:6px;padding:6px 11px;cursor:pointer;white-space:nowrap
+}
+.design-banner-btn:hover{background:#3a2550}
+.design-banner-btn.linking{background:#9B59B6;color:#0f1117;border-style:solid}
+.design-banner-hint{font-size:9px;color:#c9b8e0;font-family:monospace;max-width:220px;line-height:1.4}
+
+/* Inline pencil/trash affordances inside the detail panel */
+.design-edit-pencil-inline{
+  display:inline-flex;flex-shrink:0;background:#2A1A3B;color:#9B59B6;border:.5px solid #9B59B6;
+  border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;
+  align-items:center;justify-content:center;vertical-align:middle
+}
+.design-edit-pencil-inline.danger{background:#3B1A1A;color:#d45050;border-color:#d45050}
+.design-add-btn{
+  display:block;width:100%;margin-top:10px;background:transparent;
+  color:#9B59B6;border:1px dashed #9B59B6;border-radius:6px;padding:9px;
+  font-size:11px;font-family:monospace;cursor:pointer
+}
+.design-add-btn:hover{background:#2A1A3B}
+.design-editable{outline:1px dashed transparent;outline-offset:3px;border-radius:4px;transition:outline-color .12s}
+.design-editable.has-override{outline-color:#9B59B6}
+
+/* Jump-lane styling + design-mode interactivity */
+#jump-lanes line.lane{stroke:#00cc88;stroke-width:1.1;fill:none;stroke-dasharray:6,4;opacity:0.6}
+#jump-lanes line.lane-hit{stroke:transparent;stroke-width:14;cursor:default}
+#galaxy-wrap.design-active #jump-lanes line.lane-hit{cursor:pointer}
+#galaxy-wrap.design-active #jump-lanes line.lane{opacity:0.5}
+#galaxy-wrap.design-active #jump-lanes g.lane-grp:hover line.lane{stroke:#d45050;opacity:1;stroke-dasharray:none}
+/* Node link-target highlight while adding a lane */
+#galaxy-wrap.linking-active .sys-node{cursor:crosshair}
+
+/* ── Design-mode modal editor — ported from Aurelia ── */
+#design-edit-panel{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:300;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#design-edit-panel.hidden{display:none}
+#design-edit-card{
+  background:var(--bg1);border:.5px solid #9B59B6;border-radius:10px;
+  max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#design-edit-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:.5px solid var(--bd0)}
+#design-edit-title{font-size:12px;font-family:monospace;color:#9B59B6;letter-spacing:1px}
+#design-edit-close{font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;padding:4px 8px}
+#design-edit-body{padding:14px 16px;overflow-y:auto;flex:1}
+#design-edit-textarea{
+  width:100%;min-height:160px;background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:6px;color:var(--tx0);font-size:16px;padding:10px;outline:none;
+  resize:vertical;line-height:1.6;font-family:inherit
+}
+#design-edit-footer{padding:12px 16px;border-top:.5px solid var(--bd0);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.design-edit-btn{font-size:11px;font-family:monospace;padding:7px 14px;border-radius:5px;cursor:pointer}
+#design-save-btn{background:#2A1A3B;color:#9B59B6;border:.5px solid #9B59B6}
+#design-revert-btn{background:transparent;color:var(--tx1);border:.5px solid var(--bd0)}
+#design-history-btn{background:transparent;color:var(--tx1);border:.5px solid var(--bd0)}
+#design-save-msg{font-size:10px;color:#4CAF50;font-family:monospace;display:none}
+#design-history-list{margin-top:10px;border-top:.5px solid var(--bd0);padding-top:10px}
+#design-history-list.hidden{display:none}
+.design-history-item{background:var(--bg0);border-radius:5px;padding:8px;margin-bottom:6px;font-size:11px;cursor:pointer;border:.5px solid var(--bd0)}
+.design-history-item:hover{border-color:#9B59B6}
+.design-history-snippet{color:var(--tx1);max-height:40px;overflow:hidden}
+.design-history-label{font-size:9px;color:#9B59B6;font-family:monospace;margin-bottom:3px}
+.design-field-label{font-size:9px;color:#9B59B6;letter-spacing:1px;text-transform:uppercase;font-family:monospace;margin-bottom:5px}
+
+/* Small toast for save confirmation */
+#galaxy-toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#2A1A3B;border:.5px solid #9B59B6;color:#e8eaf0;font-size:12px;
+  font-family:monospace;padding:9px 16px;border-radius:8px;z-index:400;opacity:0;
+  transition:opacity .2s,transform .2s;pointer-events:none
+}
+#galaxy-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="galaxy-wrap">
+
+  <!-- ── Left: galaxy map canvas ── -->
+  <div id="galaxy-canvas">
+    <svg id="map-svg" viewBox="0 0 1800 1060" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="node-glow">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <rect width="1800" height="1060" fill="#04060e"/>
+      <g id="bg-stars"></g>
+
+      <!-- Faction territory blobs -->
+      <path d="M 230,60 C 290,40 380,55 400,100 C 420,145 410,175 380,200 C 360,215 370,250 340,275 C 310,300 270,310 250,290 C 220,265 195,245 190,210 C 185,175 195,150 210,125 C 220,105 215,75 230,60 Z" fill="#6a0a0a" opacity="0.52"/>
+      <path d="M 380,60 C 440,35 560,45 620,80 C 680,115 695,155 670,190 C 650,218 620,230 590,240 C 555,252 520,265 480,258 C 440,250 400,235 375,210 C 350,185 345,155 355,125 C 362,100 360,78 380,60 Z" fill="#520a78" opacity="0.55"/>
+      <path d="M 290,490 C 330,455 390,445 440,460 C 490,475 530,505 545,545 C 560,585 550,625 520,648 C 495,668 460,672 425,660 C 395,648 370,640 350,618 C 325,592 310,565 300,540 C 290,515 278,510 290,490 Z" fill="#8a0808" opacity="0.52"/>
+      <path d="M 580,360 C 620,335 680,330 730,345 C 780,360 820,385 835,425 C 850,462 845,505 820,535 C 800,560 775,575 745,582 C 710,590 670,588 638,572 C 605,555 578,528 562,495 C 545,460 545,425 558,395 C 566,378 573,370 580,360 Z" fill="#600808" opacity="0.48"/>
+      <path d="M 980,130 C 1030,100 1130,110 1200,150 C 1265,185 1290,235 1280,290 C 1270,340 1240,370 1200,390 C 1165,408 1120,415 1080,408 C 1040,400 1005,380 980,350 C 955,320 940,280 942,240 C 944,200 955,158 980,130 Z" fill="#08105a" opacity="0.58"/>
+      <path d="M 885,508 C 930,488 1000,495 1060,515 C 1120,535 1165,558 1180,605 C 1195,650 1185,700 1150,725 C 1120,748 1070,750 1035,748 C 1005,746 975,740 952,725 C 928,710 910,688 895,665 C 878,640 872,612 875,582 C 878,552 870,520 885,508 Z" fill="#3a3808" opacity="0.52"/>
+
+      <!-- Faction labels -->
+      <text x="245" y="130" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,245,130)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
+      <text x="218" y="158" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,218,158)" stroke="#04060e" stroke-width="3" paint-order="stroke">FRONTIER</text>
+      <text x="440" y="120" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,440,120)" stroke="#04060e" stroke-width="3" paint-order="stroke">SANHEDRIN</text>
+      <text x="460" y="148" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,460,148)" stroke="#04060e" stroke-width="3" paint-order="stroke">CULT</text>
+      <text x="330" y="520" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,330,520)" stroke="#04060e" stroke-width="3" paint-order="stroke">RED STAR</text>
+      <text x="318" y="554" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,318,554)" stroke="#04060e" stroke-width="3" paint-order="stroke">COLLECTIVE</text>
+      <text x="608" y="400" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,608,400)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
+      <text x="588" y="436" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,588,436)" stroke="#04060e" stroke-width="3" paint-order="stroke">HEGEMONY</text>
+      <text x="985" y="190" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,985,190)" stroke="#04060e" stroke-width="3" paint-order="stroke">OMNISYNTH</text>
+      <text x="975" y="228" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,975,228)" stroke="#04060e" stroke-width="3" paint-order="stroke">INDUSTRIES</text>
+      <text x="952" y="580" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,952,580)" stroke="#04060e" stroke-width="3" paint-order="stroke">VESTALIAN</text>
+      <text x="942" y="608" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,942,608)" stroke="#04060e" stroke-width="3" paint-order="stroke">CONTINUITY</text>
+      <text x="948" y="636" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,948,636)" stroke="#04060e" stroke-width="3" paint-order="stroke">GOVERNMENT</text>
+      <text x="95" y="520" font-size="14" font-weight="700" fill="#557788" opacity="0.4" font-family="monospace" letter-spacing="2" transform="rotate(90,95,520)">THE GHOST REEF</text>
+
+      <!-- Jump lanes — rendered by JS from the connections data (single source of truth) -->
+      <g id="jump-lanes"></g>
+
+      <!-- Systems rendered by JS -->
+      <g id="systems"></g>
+    </svg>
+
+    <!-- Canvas overlays -->
+    <div id="map-title">The Orion Arm</div>
+    <button id="ref-mode-btn" onclick="toggleRefMode()">🔐 Ref Mode</button>
+    <button id="design-mode-btn" onclick="toggleDesignMode()">✏ Design Mode</button>
+    <div id="design-banner">
+      <span class="design-banner-lbl">✏ Design Mode</span>
+      <button class="design-banner-btn" id="add-lane-btn" onclick="toggleLinkMode()">+ Add Jump Lane</button>
+      <span class="design-banner-hint" id="design-banner-hint">Tap a system to edit its text. Tap a jump lane to remove it.</span>
+    </div>
+    <div id="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(1.2)">+</button>
+      <button class="zoom-btn" onclick="zoom(0.83)">−</button>
+      <button class="zoom-btn" onclick="resetView()" style="font-size:11px">⌂</button>
+    </div>
+    <div id="map-legend">
+      <div class="leg-row"><div class="leg-swatch" style="background:#6a0a0a"></div>Terran Frontier</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#520a78"></div>Sanhedrin Cult</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#8a0808"></div>Red Star Collective</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#600808"></div>Terran Hegemony</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#08105a"></div>OmniSynth Industries</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#3a3808"></div>Vestalian Continuity Gov.</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#1a2030;border:1px solid #334"></div>Independent</div>
+    </div>
+  </div><!-- end galaxy-canvas -->
+
+  <!-- ── Right: detail panel — identical structure to #sys-detail ── -->
+  <div id="galaxy-detail">
+    <div id="galaxy-dh">
+      <div id="galaxy-dname">THE ORION ARM</div>
+      <div id="galaxy-dtype">Select a system to inspect</div>
+    </div>
+    <div id="galaxy-db">
+      <!-- Overview shown when nothing selected -->
+      <div id="galaxy-overview">
+        <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:14px">
+          The Orion Arm spans hundreds of inhabited systems across six major faction territories.
+          The Archon Collective observes from beyond the charted boundaries.<br><br>
+          <span style="color:var(--accentGold)">Tap any system</span> to inspect it.
+          Long-press to set flags or mark current location.
+        </div>
+        <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">Faction Territories</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6a0a0a;border:.5px solid #ff8888;margin-right:8px;vertical-align:middle"></span>Terran Frontier</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#520a78;border:.5px solid #cc88ff;margin-right:8px;vertical-align:middle"></span>Sanhedrin Cult</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8a0808;border:.5px solid #ff6666;margin-right:8px;vertical-align:middle"></span>Red Star Collective</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#600808;border:.5px solid #00e5ff;margin-right:8px;vertical-align:middle"></span>Terran Hegemony</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#08105a;border:.5px solid #6699ff;margin-right:8px;vertical-align:middle"></span>OmniSynth Industries</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a3808;border:.5px solid #aadd44;margin-right:8px;vertical-align:middle"></span>Vestalian Continuity Gov.</td></tr>
+          <tr style="cursor:default"><td style="padding:5px 0;color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a2030;border:.5px solid #668899;margin-right:8px;vertical-align:middle"></span>Independent / Ghost Reef</td></tr>
+        </table>
+      </div>
+      <!-- System detail — shown when a system is selected -->
+      <div id="galaxy-sys-detail" style="display:none"></div>
+    </div>
+  </div>
+
+</div><!-- end galaxy-wrap -->
+
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div id="ctx-system-name"></div>
+  <div id="ctx-items"></div>
+</div>
+
+<!-- Design Mode inline editor -->
+<div id="design-edit-panel" class="hidden" onclick="if(event.target===this) closeDesignEdit()">
+  <div id="design-edit-card">
+    <div id="design-edit-header">
+      <span id="design-edit-title">EDIT TEXT</span>
+      <button id="design-edit-close" onclick="closeDesignEdit()">✕</button>
+    </div>
+    <div id="design-edit-body">
+      <div id="design-edit-form"></div>
+      <div id="design-history-list" class="hidden"></div>
+    </div>
+    <div id="design-edit-footer">
+      <span style="display:flex;gap:8px">
+        <button id="design-revert-btn" class="design-edit-btn" onclick="revertDesignEdit()">Revert to Original</button>
+        <button id="design-history-btn" class="design-edit-btn" onclick="toggleDesignHistory()">History</button>
+      </span>
+      <span style="display:flex;align-items:center;gap:10px">
+        <span id="design-save-msg">✓ Saved</span>
+        <button id="design-save-btn" class="design-edit-btn" onclick="saveDesignEdit()">Save</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Save toast -->
+<div id="galaxy-toast"></div>
+
+<script>
+// ──  ──
+// FACTION & SYSTEM DATA
+// ──  ──
+const FACTIONS = {
+  hegemony:   { name:'Terran Hegemony',                      color:'#00e5ff' },
+  uhc:        { name:'Vestalian Continuity Government',                         color:'#aadd44' },
+  sanhedrin:  { name:'Congregation of the Second Fall',      color:'#cc88ff' },
+  rsc:        { name:'Red Star Collective',                  color:'#ff6666' },
+  omnisynth:  { name:'OmniSynth Industries',                 color:'#6699ff' },
+  archon:     { name:'Archon Collective',                    color:'#aabbcc' },
+  vast:       { name:'The Vast',                             color:'#8855cc' },
+  independent:{ name:'Independent',                         color:'#66bbaa' },
+  contested:  { name:'Independent (Contested)',              color:'#ddaa44' },
+};
+
+const NODE_COLOR = '#00e5ff';
+
+const SYSTEMS = [
+  // ──  ── The Vast / Ghost Reef (left fringe) ──────────────────────────────
+  { id:'silent-witness',   name:'Gliese 526',          x:90,  y:350, faction:'archon',
+    label:'Silent Night',
+    connections:['whisper'],
+    desc:'Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains.' },
+
+  { id:'whisper',          name:'Gliese 667 Cc',       x:112, y:462, faction:'vast',
+    label:'Whisper',
+    connections:['silent-witness','the-mausoleum','threshold'],
+    desc:'Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all.' },
+
+  { id:'the-mausoleum',    name:'Hyades Cluster',      x:172, y:490, faction:'archon',
+    label:'The Mausoleum',
+    connections:['whisper','threshold','the-fade'],
+    desc:'The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active.' },
+
+  { id:'threshold',        name:'Gliese 229',          x:88,  y:562, faction:'vast',
+    label:'Threshold',
+    connections:['whisper','the-mausoleum','the-fade','echo'],
+    desc:'Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through.' },
+
+  { id:'the-fade',         name:'Gliese 581 D',        x:162, y:548, faction:'vast',
+    label:'The Fade',
+    connections:['the-mausoleum','threshold'],
+    desc:'The Fade — A region of space slowly "unmaking." Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back.' },
+
+  { id:'echo',             name:'Uncharted Nebula',    x:85,  y:648, faction:'vast',
+    label:'Echo',
+    connections:['threshold'],
+    desc:'Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within.' },
+
+  { id:'the-reach',        name:"Kapteyn's Star",     x:218, y:745, faction:'independent',
+    label:'The Reach',
+    connections:['meridian'],
+    desc:"The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight." },
+
+  // ── Congregation of the Second Fall ───────────────────────────────── ──
+  { id:'ironhold',         name:'Gliese 806',          x:295, y:108, faction:'sanhedrin',
+    label:'Redemption',
+    connections:['penitence','redemption'],
+    desc:'Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer.' },
+
+  { id:'penitence',        name:'Gliese 563',          x:298, y:200, faction:'sanhedrin',
+    label:'Penitence',
+    connections:['ironhold','the-garden','sanhedrin-prime'],
+    desc:"Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet." },
+
+  { id:'the-garden',       name:'Gliese 706',          x:290, y:318, faction:'sanhedrin',
+    label:'The Garden',
+    connections:['penitence','sanhedrin-prime','the-hammer'],
+    desc:'The Garden — An agricultural commune run by the Congregation, producing "faithfully grown" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent.' },
+
+  { id:'redemption',       name:'Gliese 505',          x:540, y:145, faction:'sanhedrin',
+    label:'New Jerusalem',
+    connections:['ironhold','new-jerusalem','new-canaan'],
+    desc:"New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work." },
+
+  { id:'new-jerusalem',    name:'Beta Comae',          x:570, y:185, faction:'sanhedrin',
+    label:'New Canaan',
+    connections:['redemption','new-canaan'],
+    desc:'New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit.' },
+
+  { id:'new-canaan',       name:'Ursae Majoris',       x:428, y:175, faction:'sanhedrin',
+    label:'Sanhedrin Prime',
+    connections:['redemption','new-jerusalem','sanhedrin-prime'],
+    desc:"Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades." },
+
+  { id:'sanhedrin-prime',  name:'Gliese 710',          x:428, y:248, faction:'archon',
+    label:'The Echo',
+    connections:['new-canaan','the-garden','graveyard'],
+    desc:'The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols.' },
+
+  { id:'graveyard',        name:'61 Cygni',            x:518, y:248, faction:'contested',
+    label:'Graveyard',
+    connections:['sanhedrin-prime','watchtower'],
+    desc:"Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly." },
+
+  // ── Red Star Collective ────────────────────────────────────────────── ──
+  { id:'the-hammer',       name:'Deep Space (Mobile)', x:418, y:485, faction:'rsc',
+    label:'The Hammer',
+    connections:['the-forge','october-yards','aurelia','watchtower','the-garden'],
+    desc:'The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years.' },
+
+  { id:'the-forge',        name:'Deep Space (Mobile)', x:388, y:558, faction:'rsc',
+    label:'The Forge',
+    connections:['the-hammer','october-yards'],
+    desc:"The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective." },
+
+  { id:'october-yards',    name:'Gliese 406',          x:478, y:592, faction:'rsc',
+    label:'Red Sunrise',
+    connections:['the-forge','the-hammer','red-sunrise','aurelia'],
+    desc:'Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning.' },
+
+  { id:'red-sunrise',      name:'Gliese 445',          x:463, y:645, faction:'rsc',
+    label:'New Hope',
+    connections:['october-yards','meridian'],
+    desc:'New Hope — A secret Vanguard training world, home to "Liberation University." A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed.' },
+
+  // ── Terran Hegemony ────────────────────────────────────────────────── ──
+  { id:'watchtower',       name:'Procyon',             x:602, y:378, faction:'hegemony',
+    label:'Watchtower',
+    connections:['graveyard','vega','aurelia','the-hammer'],
+    desc:'Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told.' },
+
+  { id:'vega',             name:'Vega',                x:700, y:360, faction:'hegemony',
+    label:'Vega',
+    connections:['watchtower','castor'],
+    desc:"Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command." },
+
+  { id:'aurelia',          name:'Epsilon Indi',        x:602, y:478, faction:'hegemony',
+    label:'Aurelia ★',
+    connections:['watchtower','the-hammer','october-yards','sol'],
+    desc:"Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C." },
+
+  { id:'sol',              name:'Sol',                 x:660, y:445, faction:'hegemony',
+    label:'Sol',
+    connections:['castor','pollux','new-horizon'],
+    desc:'Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age.' },
+
+  { id:'castor',           name:'Castor',              x:748, y:385, faction:'hegemony',
+    label:'Castor',
+    connections:['vega','sol','pollux','warehouse'],
+    desc:"Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm." },
+
+  { id:'pollux',           name:'Alpha Centauri',      x:700, y:448, faction:'hegemony',
+    label:'Alpha Centauri',
+    connections:['castor','sol','new-horizon','the-archive','kronos'],
+    desc:'Alpha Centauri — Home to New Horizon, the "First Colony" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim.' },
+
+  { id:'new-horizon',      name:'Groombridge 34',      x:655, y:525, faction:'hegemony',
+    label:'Ironhold',
+    connections:['aurelia','sol','pollux','ophion-prime','the-archive'],
+    desc:"Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense." },
+
+  // ── OmniSynth Industries ──────────────────────────────────────────── ──
+  { id:'warehouse',        name:'Gliese 693',          x:938, y:255, faction:'omnisynth',
+    label:'Warehouse',
+    connections:['castor','profit-margin','kronos'],
+    desc:"Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias." },
+
+  { id:'profit-margin',    name:'Gliese 777',          x:1028,y:205, faction:'omnisynth',
+    label:'Profit Margin',
+    connections:['warehouse','the-anvil','kronos'],
+    desc:'Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service.' },
+
+  { id:'the-anvil',        name:'Gliese 674',          x:1168,y:252, faction:'omnisynth',
+    label:'The Anvil',
+    connections:['profit-margin','terminus'],
+    desc:"The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer." },
+
+  { id:'kronos',           name:'Gliese 667',          x:1042,y:305, faction:'omnisynth',
+    label:'Kronos Prime',
+    connections:['warehouse','profit-margin','terminus','pollux'],
+    desc:'Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security.' },
+
+  { id:'terminus',         name:'Wolf 359',            x:1118,y:342, faction:'independent',
+    label:'Terminus',
+    connections:['the-anvil','kronos','erebus'],
+    desc:'Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through.' },
+
+  { id:'erebus',           name:'TRAPPIST-1',          x:1188,y:408, faction:'independent',
+    label:'Erebus',
+    connections:['terminus','the-museum'],
+    desc:'Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation.' },
+
+  // ── UHC Loyalist ──────────────────────────────────────────────────── ──
+  { id:'the-archive',      name:'Gliese 555',          x:928, y:548, faction:'uhc',
+    label:'The Archive',
+    connections:['pollux','new-horizon','the-museum','vesta','old-earth'],
+    desc:"The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose." },
+
+  { id:'the-museum',       name:'Gliese 754',          x:1028,y:535, faction:'uhc',
+    label:'The Museum',
+    connections:['the-archive','pollux','cypress','erebus'],
+    desc:'The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution.' },
+
+  { id:'vesta',            name:'Eta Cassiopeiae',     x:918, y:618, faction:'uhc',
+    label:'Vestalia',
+    connections:['the-archive','memory','avalon'],
+    desc:'Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space.' },
+
+  { id:'old-earth',        name:'Gliese 667 C',        x:918, y:642, faction:'uhc',
+    label:'Old Earth',
+    connections:['the-archive','memory'],
+    desc:'Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how.' },
+
+  { id:'memory',           name:'Gliese 682',          x:948, y:655, faction:'uhc',
+    label:'Memory',
+    connections:['vesta','old-earth','avalon','zephyria-prime'],
+    desc:'Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world.' },
+
+  { id:'avalon',           name:'Tau Ceti',            x:938, y:715, faction:'contested',
+    label:'Avalon',
+    connections:['vesta','memory','solidarity','zephyria-prime'],
+    desc:"Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly." },
+
+  { id:'zephyria-prime',   name:'Gliese 581',          x:1015,y:732, faction:'contested',
+    label:'Zephyria Prime',
+    connections:['memory','avalon'],
+    desc:'Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything.' },
+
+  { id:'solidarity',       name:'Gliese 293',          x:878, y:760, faction:'rsc',
+    label:'Solidarity',
+    connections:['avalon','dust'],
+    desc:'Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition.' },
+
+  { id:'dust',             name:'Ross 154',            x:888, y:820, faction:'independent',
+    label:'Dust',
+    connections:['solidarity'],
+    desc:'Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered.' },
+
+  { id:'cypress',          name:'36 Ophiuchi A',       x:1108,y:580, faction:'hegemony',
+    label:'Cypress',
+    connections:['the-museum','bastion'],
+    desc:'Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails.' },
+
+  { id:'bastion',          name:'Epsilon Eridani',     x:1238,y:595, faction:'contested',
+    label:'Elysium Prime / Elysium Secundus',
+    connections:['cypress','vanguards-end','elysium-prime'],
+    desc:'Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law.' },
+
+  { id:'vanguards-end',    name:'Wolf 294',            x:1315,y:595, faction:'hegemony',
+    label:"Bastion",
+    connections:['bastion'],
+    desc:"Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence." },
+
+  { id:'elysium-prime',    name:'Luyten 726-8',        x:1205,y:665, faction:'hegemony',
+    label:"Vanguard's End",
+    connections:['bastion','elysium-secundus'],
+    desc:"Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point." },
+
+  { id:'elysium-secundus', name:'Gliese 892',          x:1270,y:678, faction:'archon',
+    label:"The Watch",
+    connections:['elysium-prime'],
+    desc:"The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed." },
+
+  // ──  ── Independent / Neutral systems ────────────────────────────────────
+  { id:'meridian',         name:'82 Eridani',          x:488, y:698, faction:'independent',
+    label:'Meridian / Meridian Prime',
+    connections:['the-reach','solitude','red-sunrise','haven'],
+    desc:"Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate." },
+
+  { id:'solitude',         name:"Luyten's Star",      x:568, y:748, faction:'independent',
+    label:'Solitude',
+    connections:['meridian','haven','ophion-prime'],
+    desc:'Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this.' },
+
+  { id:'haven',            name:'Lacaille 9352',       x:542, y:805, faction:'independent',
+    label:'Haven',
+    connections:['meridian','solitude','meridian-secundus'],
+    desc:"Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous." },
+
+  { id:'ophion-prime',     name:'HD 219134',           x:708, y:698, faction:'independent',
+    label:'Ophion Prime',
+    connections:['solitude','new-horizon','freeside'],
+    desc:"Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly." },
+
+  { id:'freeside',         name:"Barnard's Star",     x:645, y:758, faction:'independent',
+    label:'Freeside',
+    connections:['ophion-prime','meridian-secundus','havens-gate'],
+    desc:'Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort.' },
+
+  { id:'meridian-secundus',name:'Gliese 876',          x:645, y:828, faction:'independent',
+    label:'Freeport Omega',
+    connections:['haven','freeside','havens-gate'],
+    desc:'Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people.' },
+
+  { id:'havens-gate',      name:'Gliese 832',          x:708, y:868, faction:'independent',
+    label:"Haven's Gate",
+    connections:['freeside','meridian-secundus'],
+    desc:"Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from." },
+];
+
+
+const SYSTEM_MAP = {};
+SYSTEMS.forEach(s => SYSTEM_MAP[s.id] = s);
+
+// ──  ──
+// FLAGS
+// ──  ──
+const FLAGS = [
+  { id:'visited',  label:'Visited',          icon:'●', color:'#44cc88', bg:'#0a2a1a', player:true  },
+  { id:'hostile',  label:'Hostile',          icon:'▲', color:'#ff4444', bg:'#2a0808', player:true  },
+  { id:'blockade', label:'Blockade',         icon:'⬡', color:'#ffaa22', bg:'#2a1800', player:true  },
+  { id:'poi',      label:'Point of Interest',icon:'◆', color:'#44aaff', bg:'#081828', player:true  },
+  { id:'ally',     label:'Ally Contact',     icon:'★', color:'#aaddff', bg:'#081828', player:true  },
+  { id:'hook',     label:'Hook',             icon:'◉', color:'#cc88ff', bg:'#180a28', player:false },
+  { id:'heat',     label:'Heat',             icon:'◈', color:'#ff8844', bg:'#280e00', player:false },
+  { id:'archon',   label:'Archon Activity',  icon:'⬟', color:'#ffffff', bg:'#101018', player:false },
+];
+const FLAG_MAP = {};
+FLAGS.forEach(f => FLAG_MAP[f.id] = f);
+
+// ──  ──
+// STATE
+// ──  ──
+let currentLocation = null;
+let systemFlags = {};
+let isRefMode = true;
+let selectedId = null;
+
+// ── Design Mode state ──
+let designModeOn = false;
+let linkMode = false;          // true while "+ Add Jump Lane" is armed
+let linkOrigin = null;         // first system picked during a lane add
+let contentOverrides = {};     // {key: text}  — edited system text
+let contentHistory = {};       // {key: [{value,t}, ...]} most recent first
+let laneAdditions = [];        // canonical lane keys added beyond the base data
+let laneDeletions = [];        // canonical lane keys removed from the base data
+let laneSet = new Set();       // current effective set of undirected lanes (canonical keys)
+
+const DESIGN_MODE_CODE = 'ilovetwix2012!';
+
+// Canonical, order-independent key for an undirected lane between two ids.
+function laneKey(a, b){ return a < b ? a + '|' + b : b + '|' + a; }
+
+// Override-aware text lookup: returns the edited value if one exists,
+// otherwise the original hardcoded value.
+function resolveContent(key, original){
+  return Object.prototype.hasOwnProperty.call(contentOverrides, key) ? contentOverrides[key] : original;
+}
+// Convenience: resolved field for a system (label / name / desc).
+function sysField(sys, field){ return resolveContent('sys-' + sys.id + '-' + field, sys[field] || ''); }
+
+// Build the effective lane set from base connections + additions − deletions,
+// then rebuild every system's `connections` array from that set so the detail
+// panel and the rendered lines share one source of truth.
+function rebuildLanes(){
+  laneSet = new Set();
+  // Base lanes from the hardcoded connections (treated as undirected).
+  SYSTEMS.forEach(s => (s.connections || []).forEach(cid => {
+    if(SYSTEM_MAP[cid] && cid !== s.id) laneSet.add(laneKey(s.id, cid));
+  }));
+  laneDeletions.forEach(k => laneSet.delete(k));
+  laneAdditions.forEach(k => {
+    const [a, b] = k.split('|');
+    if(SYSTEM_MAP[a] && SYSTEM_MAP[b] && a !== b) laneSet.add(k);
+  });
+  // Rebuild connections arrays so existing detail-panel code stays correct.
+  const adj = {};
+  SYSTEMS.forEach(s => adj[s.id] = []);
+  laneSet.forEach(k => {
+    const [a, b] = k.split('|');
+    if(adj[a] && !adj[a].includes(b)) adj[a].push(b);
+    if(adj[b] && !adj[b].includes(a)) adj[b].push(a);
+  });
+  SYSTEMS.forEach(s => s.connections = adj[s.id]);
+}
+
+function loadState(){
+  try {
+    const loc = localStorage.getItem('galaxy_location');
+    if(loc) currentLocation = loc;
+    const fl = localStorage.getItem('galaxy_flags');
+    if(fl){ const raw=JSON.parse(fl); Object.keys(raw).forEach(k=>systemFlags[k]=new Set(raw[k])); }
+    const ov = localStorage.getItem('galaxy_content_overrides');
+    if(ov) contentOverrides = JSON.parse(ov) || {};
+    const hist = localStorage.getItem('galaxy_content_history');
+    if(hist) contentHistory = JSON.parse(hist) || {};
+    const add = localStorage.getItem('galaxy_lane_additions');
+    if(add) laneAdditions = JSON.parse(add) || [];
+    const del = localStorage.getItem('galaxy_lane_deletions');
+    if(del) laneDeletions = JSON.parse(del) || [];
+  } catch(e){}
+}
+function saveState(){
+  try {
+    if(currentLocation) localStorage.setItem('galaxy_location', currentLocation);
+    else localStorage.removeItem('galaxy_location');
+    const out={};
+    Object.keys(systemFlags).forEach(k=>{ if(systemFlags[k].size) out[k]=[...systemFlags[k]]; });
+    localStorage.setItem('galaxy_flags', JSON.stringify(out));
+  } catch(e){}
+}
+function saveContent(){
+  try {
+    localStorage.setItem('galaxy_content_overrides', JSON.stringify(contentOverrides));
+    localStorage.setItem('galaxy_content_history', JSON.stringify(contentHistory));
+  } catch(e){}
+}
+function saveLanes(){
+  try {
+    localStorage.setItem('galaxy_lane_additions', JSON.stringify(laneAdditions));
+    localStorage.setItem('galaxy_lane_deletions', JSON.stringify(laneDeletions));
+  } catch(e){}
+}
+
+function showToast(msg){
+  const t = document.getElementById('galaxy-toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+
+// ──  ──
+// STAR FIELD
+// ──  ──
+function seedStars(){
+  const g=document.getElementById('bg-stars'); let h='';
+
+  // Seeded pseudo-random for reproducible layout
+  let seed=42;
+  function rng(){ seed=(seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/0xffffffff; }
+
+  // ── Milky Way glow — layered gradient ellipses ──────────────────────
+  // Core band running diagonally bottom-left to top-right
+  const bands=[
+    {cx:200,  cy:900, rx:650, ry:220, rot:-28, fill:'#112244', op:0.28},
+    {cx:600,  cy:650, rx:700, ry:180, rot:-28, fill:'#0d1a33', op:0.32},
+    {cx:950,  cy:420, rx:700, ry:200, rot:-28, fill:'#0d1a33', op:0.30},
+    {cx:1350, cy:180, rx:650, ry:190, rot:-28, fill:'#112244', op:0.26},
+    // Secondary arm offset
+    {cx:300,  cy:600, rx:500, ry:120, rot:-18, fill:'#192840', op:0.16},
+    {cx:900,  cy:280, rx:500, ry:110, rot:-18, fill:'#192840', op:0.15},
+    // Core brightening
+    {cx:780,  cy:530, rx:280, ry:100, rot:-28, fill:'#1a2a50', op:0.22},
+    {cx:780,  cy:530, rx:130, ry:50,  rot:-28, fill:'#2a3a60', op:0.20},
+  ];
+  bands.forEach(b=>{
+    h+=`<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" fill="${b.fill}" opacity="${b.op}" transform="rotate(${b.rot},${b.cx},${b.cy})"/>`;
+  });
+
+  // ── Nebula colour washes ─────────────────────────────────────────────
+  const nebulae=[
+    {cx:150,  cy:780, rx:220, ry:110, rot:-15, fill:'#2233aa', op:0.05},
+    {cx:1150, cy:140, rx:260, ry:100, rot:20,  fill:'#553399', op:0.06},
+    {cx:600,  cy:200, rx:180, ry:80,  rot:8,   fill:'#aa4422', op:0.04},
+    {cx:1400, cy:700, rx:200, ry:90,  rot:-10, fill:'#225533', op:0.05},
+    {cx:450,  cy:500, rx:300, ry:80,  rot:-25, fill:'#112255', op:0.07},
+    {cx:1050, cy:850, rx:220, ry:100, rot:5,   fill:'#331155', op:0.05},
+  ];
+  nebulae.forEach(n=>{
+    h+=`<ellipse cx="${n.cx}" cy="${n.cy}" rx="${n.rx}" ry="${n.ry}" fill="${n.fill}" opacity="${n.op}" transform="rotate(${n.rot},${n.cx},${n.cy})"/>`;
+  });
+
+  // ── Dust lane occluder (dark band through the MW for realism) ────────
+  h+=`<ellipse cx="750" cy="520" rx="500" ry="55" fill="#050810" opacity="0.18" transform="rotate(-28,750,520)"/>`;
+  h+=`<ellipse cx="400" cy="730" rx="350" ry="40" fill="#050810" opacity="0.12" transform="rotate(-22,400,730)"/>`;
+
+  // ── Deep background — very faint micro-stars (dusty feel) ───────────
+  for(let i=0;i<3000;i++){
+    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
+    const op=(0.10+rng()*0.25).toFixed(2);
+    h+=`<circle cx="${x}" cy="${y}" r="0.35" fill="#ccd8ee" opacity="${op}"/>`;
+  }
+
+  // ── Mid-field stars ──────────────────────────────────────────────────
+  for(let i=0;i<2200;i++){
+    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
+    const sz=rng();
+    const r=sz<0.7?0.45:sz<0.92?0.7:0.95;
+    const op=(0.25+rng()*0.65).toFixed(2);
+    // Star colour temperature variation
+    const cr=rng();
+    const fill=cr<0.08?'#ffddbb':cr<0.15?'#ffeedd':cr<0.22?'#bbddff':cr<0.28?'#ddeeff':'#ffffff';
+    h+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${op}"/>`;
+  }
+
+  // ── Milky Way dense band — extra stars along the diagonal ───────────
+  for(let i=0;i<2500;i++){
+    const t=rng();
+    const bx=t*1900-50;
+    const by=1060-t*820+(rng()-0.5)*320;
+    if(bx<0||bx>1800||by<0||by>1060) continue;
+    const r=rng()<0.06?0.7:0.3;
+    const op=(0.12+rng()*0.50).toFixed(2);
+    const fill=rng()<0.2?'#aaccff':'#e8eeff';
+    h+=`<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${r}" fill="${fill}" opacity="${op}"/>`;
+  }
+
+  // ── Star clusters (3 distinct patches of higher density) ─────────────
+  const clusters=[
+    {cx:320, cy:820, spread:90,  count:140, col:'#ddeeff'},
+    {cx:1250,cy:300, spread:110, count:160, col:'#eeeeff'},
+    {cx:680, cy:180, spread:75,  count:100, col:'#ffeedd'},
+  ];
+  clusters.forEach(cl=>{
+    for(let i=0;i<cl.count;i++){
+      const angle=rng()*Math.PI*2;
+      const dist=rng()*rng()*cl.spread; // squared for centre concentration
+      const x=(cl.cx+Math.cos(angle)*dist).toFixed(1);
+      const y=(cl.cy+Math.sin(angle)*dist).toFixed(1);
+      const r=rng()<0.1?0.8:0.4;
+      const op=(0.30+rng()*0.60).toFixed(2);
+      h+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${cl.col}" opacity="${op}"/>`;
+    }
+  });
+
+  // ── Foreground bright stars with diffraction spikes ──────────────────
+  const brightStars=[
+    {x:88,  y:245, r:1.8, col:'#ffffff', op:0.9},
+    {x:412, y:820, r:1.6, col:'#ffeedd', op:0.85},
+    {x:950, y:95,  r:2.0, col:'#ddeeff', op:0.95},
+    {x:1380,y:490, r:1.7, col:'#ffffff', op:0.88},
+    {x:650, y:870, r:1.5, col:'#ffeecc', op:0.82},
+    {x:1560,y:180, r:1.8, col:'#ddeeff', op:0.90},
+    {x:220, y:400, r:1.4, col:'#ffffff', op:0.80},
+    {x:1100,cy:650,r:1.6, col:'#eeeeff', op:0.87},
+    {x:780, y:320, r:1.5, col:'#ffffff', op:0.83},
+    {x:1650,y:830, r:1.7, col:'#ffeedd', op:0.86},
+  ];
+  brightStars.forEach(s=>{
+    const y=s.y||s.cy;
+    // Glow halo
+    h+=`<circle cx="${s.x}" cy="${y}" r="${(s.r*3.5).toFixed(1)}" fill="${s.col}" opacity="${(s.op*0.08).toFixed(2)}"/>`;
+    h+=`<circle cx="${s.x}" cy="${y}" r="${(s.r*2).toFixed(1)}" fill="${s.col}" opacity="${(s.op*0.14).toFixed(2)}"/>`;
+    // Core
+    h+=`<circle cx="${s.x}" cy="${y}" r="${s.r}" fill="${s.col}" opacity="${s.op}"/>`;
+    // Diffraction spikes (4-point cross)
+    const sp=s.r*6;
+    h+=`<line x1="${s.x-sp}" y1="${y}" x2="${s.x+sp}" y2="${y}" stroke="${s.col}" stroke-width="0.4" opacity="${(s.op*0.3).toFixed(2)}"/>`;
+    h+=`<line x1="${s.x}" y1="${y-sp}" x2="${s.x}" y2="${y+sp}" stroke="${s.col}" stroke-width="0.4" opacity="${(s.op*0.3).toFixed(2)}"/>`;
+  });
+
+  g.innerHTML=h;
+}
+
+// ──  ──
+// RENDER NODES
+// ──  ──
+function escapeXml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderSystems(){
+  const g=document.getElementById('systems'); let h='';
+  SYSTEMS.forEach(sys=>{
+    const isAurelia=sys.id==='aurelia', r=isAurelia?7:5;
+    const lbl=escapeXml(sysField(sys,'label')||sysField(sys,'name'));
+    h+=`<g class="sys-node" data-id="${sys.id}" onclick="onNodeClick('${sys.id}')" style="cursor:pointer">
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r+9}" fill="transparent"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r+4}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.7" opacity="0.3"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r}" fill="#050810" stroke="${NODE_COLOR}" stroke-width="1.1" filter="url(#node-glow)"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${isAurelia?3.5:2}" fill="${NODE_COLOR}" opacity="0.95"/>
+      ${isAurelia?`<circle cx="${sys.x}" cy="${sys.y}" r="${r+7}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.6" opacity="0.4" stroke-dasharray="3,3"/>`:''}
+      <text x="${sys.x+r+5}" y="${sys.y+3}" font-size="${isAurelia?9:7.5}" fill="${NODE_COLOR}"
+            font-family="'Courier New',monospace" letter-spacing="0.3" opacity="0.9"
+            stroke="#04060e" stroke-width="2" paint-order="stroke">${lbl}</text>
+    </g>`;
+  });
+  g.innerHTML=h;
+}
+
+// ──  ──
+// RENDER JUMP LANES (data-driven, single source of truth)
+// ──  ──
+function renderLanes(){
+  const g=document.getElementById('jump-lanes');
+  let h='';
+  laneSet.forEach(k=>{
+    const [a,b]=k.split('|');
+    const sa=SYSTEM_MAP[a], sb=SYSTEM_MAP[b];
+    if(!sa||!sb) return;
+    // Wider transparent hit-line on top of the visible lane, used as the
+    // tap target for removing lanes while in Design Mode.
+    h+=`<g class="lane-grp" data-key="${k}">
+      <line class="lane" x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}"/>
+      <line class="lane-hit" x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" onclick="onLaneClick('${k}')"/>
+    </g>`;
+  });
+  g.innerHTML=h;
+}
+
+
+// ──  ──
+// LOCATION MARKER
+// ──  ──
+function renderLocationMarker(){
+  document.getElementById('loc-marker-group')?.remove();
+  if(!currentLocation) return;
+  const sys=SYSTEM_MAP[currentLocation]; if(!sys) return;
+  const g=document.getElementById('systems');
+  const marker=document.createElementNS('http://www.w3.org/2000/svg','g');
+  marker.setAttribute('id','loc-marker-group');
+  marker.setAttribute('pointer-events','none');
+  const pulse=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  pulse.setAttribute('cx',sys.x); pulse.setAttribute('cy',sys.y); pulse.setAttribute('r','13');
+  pulse.setAttribute('fill','none'); pulse.setAttribute('stroke','#00e5ff');
+  pulse.setAttribute('stroke-width','1.5'); pulse.setAttribute('class','loc-pulse-ring');
+  const inner=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  inner.setAttribute('cx',sys.x); inner.setAttribute('cy',sys.y); inner.setAttribute('r','9');
+  inner.setAttribute('fill','none'); inner.setAttribute('stroke','#00e5ff');
+  inner.setAttribute('stroke-width','1'); inner.setAttribute('opacity','0.5');
+  const diamond=document.createElementNS('http://www.w3.org/2000/svg','text');
+  diamond.setAttribute('x',sys.x); diamond.setAttribute('y',sys.y-17);
+  diamond.setAttribute('text-anchor','middle'); diamond.setAttribute('font-size','10');
+  diamond.setAttribute('fill','#00e5ff'); diamond.setAttribute('font-family',"'Courier New',monospace");
+  diamond.textContent='◆';
+  marker.appendChild(pulse); marker.appendChild(inner); marker.appendChild(diamond);
+  g.parentNode.insertBefore(marker,g);
+}
+
+function setCurrentLocation(id){
+  if(currentLocation===id) currentLocation=null; else currentLocation=id;
+  saveState(); renderLocationMarker();
+  if(selectedId===id) updateDetailPanel(id);
+}
+
+// ──  ──
+// FLAGS — SVG badges
+// ──  ──
+function visibleFlags(sysId){
+  const all=[...(systemFlags[sysId]||[])];
+  if(isRefMode) return all.map(id=>FLAG_MAP[id]).filter(Boolean);
+  return all.map(id=>FLAG_MAP[id]).filter(f=>f&&f.player);
+}
+
+function renderFlags(){
+  document.querySelectorAll('.sys-flag-group').forEach(e=>e.remove());
+  const svg=document.getElementById('map-svg');
+  SYSTEMS.forEach(sys=>{
+    const flags=visibleFlags(sys.id); if(!flags.length) return;
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','sys-flag-group'); g.setAttribute('pointer-events','none');
+    flags.forEach((f,i)=>{
+      const yOff=12+i*13, x=sys.x+10, y=sys.y+yOff;
+      const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x',x); rect.setAttribute('y',y-8);
+      rect.setAttribute('width',58); rect.setAttribute('height',11);
+      rect.setAttribute('rx',2); rect.setAttribute('fill',f.bg);
+      rect.setAttribute('stroke',f.color); rect.setAttribute('stroke-width','0.4'); rect.setAttribute('opacity','0.9');
+      const icon=document.createElementNS('http://www.w3.org/2000/svg','text');
+      icon.setAttribute('x',x+4); icon.setAttribute('y',y+1);
+      icon.setAttribute('font-size','6'); icon.setAttribute('fill',f.color);
+      icon.setAttribute('font-family',"'Courier New',monospace"); icon.textContent=f.icon;
+      const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x',x+12); lbl.setAttribute('y',y+1);
+      lbl.setAttribute('font-size','5.5'); lbl.setAttribute('fill',f.color);
+      lbl.setAttribute('font-family',"'Courier New',monospace");
+      lbl.setAttribute('letter-spacing','0.3'); lbl.textContent=f.label.toUpperCase();
+      g.appendChild(rect); g.appendChild(icon); g.appendChild(lbl);
+    });
+    svg.querySelector('#systems').after(g);
+  });
+}
+
+function toggleFlag(sysId,flagId){
+  if(!systemFlags[sysId]) systemFlags[sysId]=new Set();
+  if(systemFlags[sysId].has(flagId)) systemFlags[sysId].delete(flagId);
+  else systemFlags[sysId].add(flagId);
+  saveState(); renderFlags();
+  if(ctxTargetId===sysId) openContextMenu(sysId,ctxMenuX,ctxMenuY);
+  if(selectedId===sysId) updateDetailPanel(sysId);
+}
+
+// ──  ──
+// DETAIL PANEL — matching selectBody() from the main tool
+// ──  ──
+function selectSystem(id){
+  const sys=SYSTEM_MAP[id]; if(!sys) return;
+
+  // Clear old selection ring
+  document.querySelectorAll('.sel-ring').forEach(e=>e.remove());
+  selectedId=id;
+
+  // Add selection ring
+  const node=document.querySelector(`[data-id="${id}"]`);
+  if(node){
+    const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
+    ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
+    ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
+    ring.setAttribute('class','sel-ring');
+    node.appendChild(ring);
+  }
+
+  // Update header — label is the location name, name is the star system designation
+  const f=FACTIONS[sys.faction];
+  const nameEl=document.getElementById('galaxy-dname');
+  nameEl.textContent=(sysField(sys,'label')||sysField(sys,'name')).replace(' ★','').toUpperCase();
+  nameEl.style.color=f.color;
+  document.getElementById('galaxy-dtype').textContent=sysField(sys,'name') + ' · ' + f.name;
+
+  // Switch overview → detail
+  document.getElementById('galaxy-overview').style.display='none';
+  document.getElementById('galaxy-sys-detail').style.display='block';
+  updateDetailPanel(id);
+}
+
+function designPencil(key, title){
+  if(!designModeOn) return '';
+  const has=Object.prototype.hasOwnProperty.call(contentOverrides,key);
+  return `<button class="design-edit-pencil-inline" style="margin-left:6px${has?';outline:1px solid #9B59B6;outline-offset:1px':''}" onclick="event.stopPropagation();openDesignEdit('${key}','${title.replace(/'/g,"\\'")}')" title="Edit ${title}">✏</button>`;
+}
+
+function updateDetailPanel(id){
+  const sys=SYSTEM_MAP[id]; if(!sys) return;
+  const f=FACTIONS[sys.faction];
+  const det=document.getElementById('galaxy-sys-detail');
+
+  let html='';
+
+  // Current location badge
+  if(currentLocation===id){
+    html+=`<div style="margin-bottom:8px"><span class="loc-badge">◆ CURRENT LOCATION</span></div>`;
+  }
+
+  // Design-mode editing of the headline label / system name
+  if(designModeOn){
+    html+=`<div class="s-sec" style="margin-top:0">
+      <div class="s-sec-lbl">Names <span style="opacity:.6">(design mode)</span></div>
+      <div class="sg" style="margin:6px 0">
+        <div class="sg-l">Label</div><div class="sg-v">${escapeHtml(sysField(sys,'label')||'—')}${designPencil('sys-'+id+'-label','label')}</div>
+        <div class="sg-l">System</div><div class="sg-v">${escapeHtml(sysField(sys,'name')||'—')}${designPencil('sys-'+id+'-name','system name')}</div>
+      </div>
+    </div>`;
+  }
+
+  // Active flags section
+  const flags=visibleFlags(id);
+  if(flags.length){
+    html+=`<div style="margin-bottom:10px">`;
+    html+=flags.map(fl=>`<span class="flag-badge" style="background:${fl.bg};color:${fl.color};border:.4px solid ${fl.color}">${fl.icon} ${fl.label}</span>`).join('');
+    html+=`</div>`;
+  }
+
+  // Faction info grid — like the UWP/fields grid in selectBody
+  html+=`<div class="sg">
+    <div class="sg-l">Faction</div><div class="sg-v" style="color:${f.color}">${f.name}</div>
+    <div class="sg-l">Jump connections</div><div class="sg-v">${sys.connections.length}</div>
+  </div>`;
+
+  // Description — matching the s-sec Overview block
+  html+=`<div class="s-sec">
+    <div class="s-sec-lbl">Overview ${designPencil('sys-'+id+'-desc','description')}</div>
+    <div class="s-desc">${escapeHtml(sysField(sys,'desc')||'No data available.')}</div>
+  </div>`;
+
+  // Jump connections list — matching the NPC card pattern
+  html+=`<div class="s-sec">
+    <div class="s-sec-lbl">Jump Connections</div>`;
+  if(sys.connections.length){
+    sys.connections.forEach(cid=>{
+      const c=SYSTEM_MAP[cid]; if(!c) return;
+      const cf=FACTIONS[c.faction];
+      const trash=designModeOn
+        ? `<button class="design-edit-pencil-inline danger" style="margin-left:8px" onclick="event.stopPropagation();removeLane('${laneKey(id,cid)}')" title="Remove this jump lane">🗑</button>`
+        : '';
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2)">
+        <span onclick="selectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+          <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
+          <span style="font-size:12px;color:var(--tx0)">${escapeHtml(sysField(c,'label')||sysField(c,'name'))}</span>
+          <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escapeHtml(sysField(c,'name'))}</span>
+        </span>${trash}
+      </div>`;
+    });
+  } else {
+    html+=`<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
+  }
+  if(designModeOn){
+    html+=`<button class="design-add-btn" onclick="toggleLinkMode('${id}')">+ Add Jump Lane from here</button>`;
+  }
+  html+=`</div>`;
+
+  det.innerHTML=html;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function closeSystemDetail(){
+  document.getElementById('galaxy-overview').style.display='block';
+  document.getElementById('galaxy-sys-detail').style.display='none';
+  document.getElementById('galaxy-dname').textContent='THE ORION ARM';
+  document.getElementById('galaxy-dname').style.color='var(--accentGold)';
+  document.getElementById('galaxy-dtype').textContent='Select a system to inspect';
+  document.querySelectorAll('.sel-ring').forEach(e=>e.remove());
+  selectedId=null;
+}
+
+// ──  ──
+// CONTEXT MENU (long-press)
+// ──  ──
+let ctxTargetId=null, ctxMenuX=0, ctxMenuY=0, longPressTimer=null;
+
+function openContextMenu(sysId,x,y){
+  ctxTargetId=sysId; ctxMenuX=x; ctxMenuY=y;
+  const sys=SYSTEM_MAP[sysId]; if(!sys) return;
+  document.getElementById('ctx-system-name').textContent=sysField(sys,'name');
+  const activeFlags=systemFlags[sysId]||new Set();
+  const isCurrentLoc=currentLocation===sysId;
+  let html=`<div class="ctx-item ctx-set-loc" onclick="setCurrentLocation('${sysId}');closeContextMenu()">
+    <span style="font-size:11px">◆</span>
+    <span>${isCurrentLoc?'Clear Current Location':'Set as Current Location'}</span>
+  </div><div class="ctx-divider"></div>
+  <div class="ctx-section-lbl">Player-visible flags</div>`;
+  FLAGS.filter(f=>f.player).forEach(f=>{
+    const on=activeFlags.has(f.id);
+    html+=`<div class="ctx-item${on?' active':''}" onclick="toggleFlag('${sysId}','${f.id}')">
+      <div class="ctx-check">${on?'✓':''}</div>
+      <span style="color:${f.color}">${f.icon}</span><span>${f.label}</span>
+    </div>`;
+  });
+  if(isRefMode){
+    html+=`<div class="ctx-divider"></div><div class="ctx-section-lbl">Referee-only flags</div>`;
+    FLAGS.filter(f=>!f.player).forEach(f=>{
+      const on=activeFlags.has(f.id);
+      html+=`<div class="ctx-item${on?' active':''}" onclick="toggleFlag('${sysId}','${f.id}')">
+        <div class="ctx-check">${on?'✓':''}</div>
+        <span style="color:${f.color}">${f.icon}</span><span>${f.label}</span>
+      </div>`;
+    });
+  }
+  document.getElementById('ctx-items').innerHTML=html;
+  const menu=document.getElementById('ctx-menu');
+  const vw=window.innerWidth, vh=window.innerHeight, mw=210, mh=340;
+  menu.style.left=(x+mw>vw?x-mw:x)+'px';
+  menu.style.top=(y+mh>vh?y-mh:y)+'px';
+  menu.style.display='block';
+}
+
+function closeContextMenu(){ document.getElementById('ctx-menu').style.display='none'; ctxTargetId=null; }
+
+document.addEventListener('pointerdown',e=>{
+  if(!document.getElementById('ctx-menu').contains(e.target)) closeContextMenu();
+});
+
+function attachLongPress(){
+  const sysg=document.getElementById('systems');
+  sysg.addEventListener('pointerdown',e=>{
+    const node=e.target.closest('.sys-node'); if(!node) return;
+    const id=node.dataset.id;
+    longPressTimer=setTimeout(()=>{
+      longPressTimer=null;
+      const sys=SYSTEM_MAP[id];
+      const svgEl=document.getElementById('map-svg');
+      const pt=svgEl.createSVGPoint(); pt.x=sys.x; pt.y=sys.y;
+      const screen=pt.matrixTransform(svgEl.getScreenCTM());
+      openContextMenu(id,screen.x,screen.y+20); e.preventDefault();
+    },500);
+  });
+  sysg.addEventListener('pointerup',()=>{ if(longPressTimer){clearTimeout(longPressTimer);longPressTimer=null;} });
+  sysg.addEventListener('pointermove',()=>{ if(longPressTimer){clearTimeout(longPressTimer);longPressTimer=null;} });
+  sysg.addEventListener('contextmenu',e=>{
+    e.preventDefault();
+    const node=e.target.closest('.sys-node'); if(!node) return;
+    openContextMenu(node.dataset.id,e.clientX,e.clientY);
+  });
+}
+
+// ──  ──
+// REF MODE TOGGLE
+// ──  ──
+function toggleRefMode(){
+  isRefMode=!isRefMode;
+  const btn=document.getElementById('ref-mode-btn');
+  btn.textContent=isRefMode?'🔐 Ref Mode':'👤 Player View';
+  btn.style.borderColor=isRefMode?'#cc88ff':'var(--bd0)';
+  btn.style.color=isRefMode?'#cc88ff':'var(--tx1)';
+  // Player Mode and Design Mode are mutually exclusive. Leaving Ref Mode
+  // forces Design Mode off and hides its toggle entirely.
+  if(!isRefMode && designModeOn) setDesignMode(false);
+  document.getElementById('design-mode-btn').style.display = isRefMode ? '' : 'none';
+  renderFlags();
+  if(selectedId) updateDetailPanel(selectedId);
+}
+
+// ──  ──
+// DESIGN MODE — purple editing layer, mirrors Aurelia
+// ──  ──
+function setDesignMode(on){
+  designModeOn = on;
+  document.getElementById('galaxy-wrap').classList.toggle('design-active', on);
+  const btn=document.getElementById('design-mode-btn');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '✏ Design — ON' : '✏ Design Mode';
+  if(!on){ exitLinkMode(); }
+  // Re-render so affordances + lane interactivity appear/disappear.
+  if(selectedId) updateDetailPanel(selectedId);
+}
+
+function toggleDesignMode(){
+  if(!isRefMode) return; // referee-only
+  if(!designModeOn){
+    const entered = prompt('Enter the Design Mode passcode:');
+    if(entered !== DESIGN_MODE_CODE){
+      if(entered !== null) alert('Incorrect passcode.');
+      return;
+    }
+  }
+  setDesignMode(!designModeOn);
+}
+
+// ── Lane linking (add) ──
+function toggleLinkMode(originId){
+  if(!designModeOn) return;
+  if(linkMode){ exitLinkMode(); return; }
+  linkMode = true;
+  linkOrigin = originId || null;
+  document.getElementById('galaxy-wrap').classList.add('linking-active');
+  document.getElementById('add-lane-btn').classList.add('linking');
+  document.getElementById('add-lane-btn').textContent = '✕ Cancel';
+  updateLinkHint();
+}
+function exitLinkMode(){
+  linkMode = false; linkOrigin = null;
+  const wrap=document.getElementById('galaxy-wrap');
+  wrap.classList.remove('linking-active');
+  const btn=document.getElementById('add-lane-btn');
+  if(btn){ btn.classList.remove('linking'); btn.textContent='+ Add Jump Lane'; }
+  const hint=document.getElementById('design-banner-hint');
+  if(hint) hint.textContent='Tap a system to edit its text. Tap a jump lane to remove it.';
+}
+function updateLinkHint(){
+  const hint=document.getElementById('design-banner-hint');
+  if(!hint) return;
+  hint.textContent = linkOrigin
+    ? `Origin: ${sysField(SYSTEM_MAP[linkOrigin],'label')||linkOrigin}. Tap a destination system.`
+    : 'Tap the origin system, then the destination.';
+}
+
+// Click router for system nodes: in link mode, builds a lane; otherwise selects.
+function onNodeClick(id){
+  if(designModeOn && linkMode){
+    if(!linkOrigin){ linkOrigin = id; updateLinkHint(); return; }
+    if(id === linkOrigin){ showToast('Pick a different destination'); return; }
+    addLane(linkOrigin, id);
+    linkOrigin = null;
+    exitLinkMode();
+    return;
+  }
+  selectSystem(id);
+}
+
+// ── Add / remove lanes with integrity guards ──
+function addLane(a, b){
+  if(a===b){ showToast('Cannot link a system to itself'); return; }
+  if(!SYSTEM_MAP[a] || !SYSTEM_MAP[b]){ showToast('Unknown system'); return; }
+  const k = laneKey(a,b);
+  if(laneSet.has(k)){ showToast('That jump lane already exists'); return; }
+  // Un-delete if previously removed; otherwise record as an addition.
+  const di = laneDeletions.indexOf(k);
+  if(di >= 0) laneDeletions.splice(di,1);
+  else if(!laneAdditions.includes(k)) laneAdditions.push(k);
+  rebuildLanes(); saveLanes();
+  renderLanes(); renderSystems(); renderLocationMarker(); renderFlags(); reselect();
+  showToast('Jump lane added');
+}
+
+function removeLane(k){
+  if(!laneSet.has(k)){ return; }
+  if(!confirm('Remove this jump lane?')) return;
+  // If it was a session addition, just drop it; otherwise tombstone the base lane.
+  const ai = laneAdditions.indexOf(k);
+  if(ai >= 0) laneAdditions.splice(ai,1);
+  else if(!laneDeletions.includes(k)) laneDeletions.push(k);
+  rebuildLanes(); saveLanes();
+  renderLanes(); renderSystems(); renderLocationMarker(); renderFlags(); reselect();
+  showToast('Jump lane removed');
+}
+
+function onLaneClick(k){
+  if(!designModeOn) return;   // lanes are inert outside design mode
+  removeLane(k);
+}
+
+// Re-apply the current selection's detail panel + ring after a structural redraw.
+function reselect(){ if(selectedId && SYSTEM_MAP[selectedId]) selectSystem(selectedId); }
+
+// ── Modal text editor (system label / name / desc) ──
+let designEditKey=null, designEditTitle='';
+
+function openDesignEdit(key, title){
+  designEditKey = key; designEditTitle = title;
+  document.getElementById('design-edit-title').textContent = 'EDIT: ' + title.toUpperCase();
+  const original = designOriginalFor(key);
+  const current = resolveContent(key, original);
+  document.getElementById('design-edit-form').innerHTML =
+    `<textarea id="design-edit-textarea">${escapeHtml(current||'')}</textarea>`;
+  const list=document.getElementById('design-history-list');
+  list.innerHTML=''; list.classList.add('hidden');
+  document.getElementById('design-save-msg').style.display='none';
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+  setTimeout(()=>{ const ta=document.getElementById('design-edit-textarea'); if(ta) ta.focus(); },50);
+}
+
+// Recover the original hardcoded value behind a content key (sys-<id>-<field>).
+function designOriginalFor(key){
+  const m = key.match(/^sys-(.+)-(label|name|desc)$/);
+  if(m){ const s=SYSTEM_MAP[m[1]]; return s ? (s[m[2]] ?? '') : ''; }
+  return '';
+}
+
+function closeDesignEdit(){
+  document.getElementById('design-edit-panel').classList.add('hidden');
+  designEditKey=null;
+}
+
+function saveDesignEdit(){
+  if(!designEditKey) return;
+  const val = document.getElementById('design-edit-textarea').value;
+  const key = designEditKey;
+  const prev = resolveContent(key, designOriginalFor(key));
+  if(!contentHistory[key]) contentHistory[key]=[];
+  contentHistory[key].unshift({value:prev, t:Date.now()});
+  contentHistory[key]=contentHistory[key].slice(0,10);
+  contentOverrides[key]=val;
+  saveContent();
+  const msg=document.getElementById('design-save-msg');
+  msg.style.display='inline'; setTimeout(()=>msg.style.display='none',1500);
+  showToast('Saved');
+  // Reflect live on map + panel.
+  renderSystems(); renderLocationMarker(); renderFlags(); reselect();
+}
+
+function revertDesignEdit(){
+  if(!designEditKey) return;
+  if(!confirm('Revert this field to its original campaign text? This removes your override.')) return;
+  const key=designEditKey;
+  delete contentOverrides[key];
+  saveContent();
+  const ta=document.getElementById('design-edit-textarea');
+  if(ta) ta.value = designOriginalFor(key);
+  renderSystems(); renderLocationMarker(); renderFlags(); reselect();
+  showToast('Reverted to original');
+}
+
+function toggleDesignHistory(){
+  const list=document.getElementById('design-history-list');
+  if(!list.classList.contains('hidden')){ list.classList.add('hidden'); list.innerHTML=''; return; }
+  const hist=contentHistory[designEditKey]||[];
+  if(!hist.length){
+    list.innerHTML='<div style="font-size:11px;color:var(--tx1);padding:4px 0">No earlier versions saved yet.</div>';
+  } else {
+    list.innerHTML=hist.map((h,i)=>`<div class="design-history-item" onclick="restoreHistoryEntry(${i})">
+      <div class="design-history-label">${new Date(h.t).toLocaleString()}</div>
+      <div class="design-history-snippet">${escapeHtml((h.value||'').slice(0,120))}${(h.value||'').length>120?'…':''}</div>
+    </div>`).join('');
+  }
+  list.classList.remove('hidden');
+}
+
+function restoreHistoryEntry(i){
+  const hist=contentHistory[designEditKey]||[];
+  if(!hist[i]) return;
+  const ta=document.getElementById('design-edit-textarea');
+  if(ta) ta.value = hist[i].value || '';
+  document.getElementById('design-history-list').classList.add('hidden');
+}
+
+
+// ──  ──
+// PAN & ZOOM
+// ──  ──
+let scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+const canvas=document.getElementById('galaxy-canvas');
+const mapSvg=document.getElementById('map-svg');
+
+function applyT(){ mapSvg.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; }
+
+function zoom(f,cx,cy){
+  const r=canvas.getBoundingClientRect();
+  const px=cx??r.width/2, py=cy??r.height/2;
+  const ns=Math.max(0.25,Math.min(4,scale*f));
+  const ratio=ns/scale;
+  tx=px-ratio*(px-tx); ty=py-ratio*(py-ty); scale=ns; applyT();
+}
+
+function resetView(){
+  const r=canvas.getBoundingClientRect();
+  scale=Math.min(r.width/1800,r.height/1060)*0.92;
+  tx=(r.width-1800*scale)/2; ty=(r.height-1060*scale)/2; applyT();
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.sys-node')||e.target.closest('.lane-hit')||e.target.closest('#zoom-controls')||e.target.closest('#ref-mode-btn')||e.target.closest('#design-mode-btn')||e.target.closest('#design-banner')||e.target.closest('#map-legend')) return;
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{ if(!dragging) return; tx+=e.clientX-lastX; ty+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; applyT(); });
+canvas.addEventListener('pointerup',()=>{ dragging=false; canvas.classList.remove('panning'); });
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); zoom(e.deltaY<0?1.12:0.89,e.clientX,e.clientY); },{passive:false});
+let lastDist=null;
+canvas.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(lastDist) zoom(d/lastDist,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);
+    lastDist=d;
+  }
+},{passive:false});
+canvas.addEventListener('touchend',()=>lastDist=null);
+
+// ──  ──
+// INIT
+// ──  ──
+loadState();          // overrides, lane additions/deletions, flags, location
+rebuildLanes();       // build effective lane set + connections from data + edits
+seedStars();
+renderSystems();
+renderLanes();
+resetView();
+renderLocationMarker();
+renderFlags();
+attachLongPress();
+// Design Mode toggle is referee-only; visible by default (isRefMode starts true).
+document.getElementById('design-mode-btn').style.display = isRefMode ? '' : 'none';
+// Select Aurelia on load since it's the current campaign location
+setTimeout(()=>selectSystem('aurelia'),400);
+</script>
+</body>
+</html>

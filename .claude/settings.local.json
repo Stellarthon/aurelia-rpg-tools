@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(winget install --id GitHub.cli -e --accept-package-agreements --accept-source-agreements)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); gh --version)",
+      "PowerShell(gh --version)",
+      "PowerShell(gh auth status)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); gh --version; gh auth status)",
+      "Bash(git mv *)",
+      "Bash(mv \"aurelia_combined_v31__17_ \\(1\\).html\" \"index.html\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(rm index.html)",
+      "Bash(mv aurelia_combined_v32.html index.html)"
+    ]
+  }
+}
