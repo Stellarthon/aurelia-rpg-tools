@@ -36,6 +36,16 @@
   --txD:#c0392b;--bgD:#fce6e4;
   --accentGold:#8a6512;--accentGoldBg:#fbf0d9;
 }
+#float-panels.light-mode{
+  --bg0:#ffffff;--bg1:#f4f5f7;--bg2:#eaecf0;
+  --bd0:#d8dbe2;--bd1:#e2e5ea;--bd2:#eaecf0;
+  --tx0:#1a1d29;--tx1:#5c6178;
+  --txI:#2255cc;--bgI:#e3ecfc;
+  --txS:#1f7a4f;--bgS:#e3f5e9;
+  --txW:#9a6420;--bgW:#fbeedc;
+  --txD:#c0392b;--bgD:#fce6e4;
+  --accentGold:#8a6512;--accentGoldBg:#fbf0d9;
+}
 /* The orrery, station map, and Aurelia surface views use var(--bg0) for
    their own background just like the rest of the chrome — but they're
    meant to stay dark and atmospheric in both themes, so they're pinned
@@ -63,6 +73,203 @@ body.light-mode-body{background:#ffffff;color:#1a1d29}
 button{font-family:var(--font);cursor:pointer;border:none;background:none}
 textarea{font-family:var(--font)}
 
+/* ── NPC Creator modal ── */
+#npc-creator-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.6);z-index:210;
+  display:none;align-items:flex-start;justify-content:center
+}
+#npc-creator-modal.open{display:flex}
+#npc-creator-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  margin-top:48px;width:600px;max-width:94vw;max-height:86vh;overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column
+}
+#npc-creator-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#npc-creator-title{font-size:12px;font-weight:700;font-family:monospace;letter-spacing:1.5px;color:#9B59B6;text-transform:uppercase}
+#npc-creator-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px}
+#npc-creator-close:hover{color:var(--tx0)}
+.npc-creator-tabs{display:flex;gap:0;border-bottom:.5px solid var(--bd0);flex-shrink:0}
+.npc-creator-tab{
+  flex:1;text-align:center;padding:10px;font-size:11px;font-family:monospace;
+  font-weight:700;letter-spacing:.5px;color:var(--tx1);cursor:pointer;
+  border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none
+}
+.npc-creator-tab.on{color:#9B59B6;border-bottom-color:#9B59B6}
+.npc-creator-tab:hover{color:var(--tx0)}
+#npc-creator-body{padding:16px}
+.npc-form-row{margin-bottom:12px}
+.npc-form-lbl{font-size:10px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);margin-bottom:4px;display:block}
+.npc-form-input,.npc-form-textarea{
+  width:100%;font-size:12px;font-family:var(--font);color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  padding:7px 9px;outline:none;box-sizing:border-box
+}
+.npc-form-input:focus,.npc-form-textarea:focus{border-color:#9B59B6}
+.npc-form-textarea{resize:vertical;min-height:54px;line-height:1.5}
+.npc-stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.npc-stat-cell{display:flex;flex-direction:column;gap:2px}
+.npc-stat-cell label{font-size:9px;font-family:monospace;color:var(--tx1);text-align:center}
+.npc-stat-cell input{
+  width:100%;font-size:13px;font-family:monospace;font-weight:700;text-align:center;
+  color:var(--accentGold);background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:4px;padding:5px 2px;outline:none;box-sizing:border-box
+}
+.npc-stat-cell input:focus{border-color:#9B59B6}
+.npc-creator-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.npc-creator-btn{
+  font-size:12px;font-family:var(--font);font-weight:600;
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:9px 18px;cursor:pointer;color:var(--tx0)
+}
+.npc-creator-btn:hover{background:var(--bd0)}
+.npc-creator-btn.primary{background:#2A1A3B;color:#C98BE8;border-color:#9B59B6}
+.npc-creator-btn.primary:hover{opacity:.85}
+.npc-creator-btn:disabled{opacity:.4;cursor:not-allowed}
+.npc-rows-editor{display:flex;flex-direction:column;gap:8px}
+.npc-row-edit{display:grid;grid-template-columns:100px 1fr auto;gap:6px;align-items:start}
+.npc-row-edit input,.npc-row-edit textarea{
+  font-size:11px;font-family:var(--font);color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;
+  padding:5px 7px;outline:none;box-sizing:border-box
+}
+.npc-row-edit textarea{resize:vertical;min-height:32px;line-height:1.4}
+.npc-row-del{background:none;border:none;color:var(--tx1);cursor:pointer;font-size:13px;padding:4px}
+.npc-row-del:hover{color:#d45050}
+.npc-row-add{font-size:10px;font-family:monospace;color:#9B59B6;background:transparent;border:1px dashed #9B59B6;border-radius:5px;padding:6px;cursor:pointer;width:100%;margin-top:4px}
+.npc-gen-hint{font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:14px}
+.npc-ai-status{font-size:11px;color:var(--tx1);font-style:italic;margin-top:10px;min-height:16px}
+.npc-ai-status.error{color:#d45050;font-style:normal}
+.npc-preview{background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:12px;margin-top:12px}
+.npc-preview-name{font-size:14px;font-weight:700;color:#9B59B6}
+.npc-preview-role{font-size:11px;color:var(--tx1);margin-bottom:8px}
+.npc-preview-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;font-family:monospace;color:var(--tx0)}
+.npc-preview-skills{font-size:11px;color:var(--accentGold);margin-bottom:8px}
+.npc-preview-row{font-size:11px;color:var(--tx0);margin-bottom:3px;line-height:1.4}
+
+/* ── Body Creator modal (mirrors #npc-creator-*) ── */
+#body-creator-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.6);z-index:210;
+  display:none;align-items:flex-start;justify-content:center
+}
+#body-creator-modal.open{display:flex}
+#body-creator-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  margin-top:48px;width:600px;max-width:94vw;max-height:86vh;overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column
+}
+#body-creator-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#body-creator-title{font-size:12px;font-weight:700;font-family:monospace;letter-spacing:1.5px;color:#9B59B6;text-transform:uppercase}
+#body-creator-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px}
+#body-creator-close:hover{color:var(--tx0)}
+#body-creator-body{padding:16px}
+.body-uwp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.body-uwp-cell{display:flex;flex-direction:column;gap:3px}
+.body-uwp-cell label{font-size:9px;font-family:monospace;letter-spacing:.5px;text-transform:uppercase;color:var(--tx1);display:flex;justify-content:space-between;align-items:center}
+.body-uwp-cell .uwp-roll{background:none;border:none;color:#9B59B6;cursor:pointer;font-size:11px;padding:0 2px}
+.body-uwp-cell .uwp-roll:hover{color:#C98BE8}
+.body-uwp-cell input{
+  width:100%;font-size:13px;font-family:monospace;font-weight:700;text-align:center;
+  color:var(--accentGold);background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:4px;padding:6px 4px;outline:none;box-sizing:border-box
+}
+.body-uwp-cell input:focus{border-color:#9B59B6}
+.body-uwp-string{
+  font-family:monospace;font-size:20px;font-weight:700;color:var(--accentGold);
+  text-align:center;letter-spacing:2px;background:var(--bg0);border:.5px solid var(--bd0);
+  border-radius:6px;padding:10px;margin-bottom:6px
+}
+.body-uwp-decode{font-size:10px;color:var(--tx1);font-family:monospace;line-height:1.6;margin-bottom:4px}
+.body-uwp-trade{font-size:11px;color:#9B59B6;font-family:monospace;margin-bottom:10px;min-height:14px}
+.body-select{
+  width:100%;font-size:12px;font-family:var(--font);color:var(--tx0);
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  padding:7px 9px;outline:none;box-sizing:border-box
+}
+.body-select:focus{border-color:#9B59B6}
+.body-color-row{display:flex;align-items:center;gap:8px}
+.body-color-row input[type=color]{width:40px;height:32px;padding:0;border:.5px solid var(--bd0);border-radius:5px;background:var(--bg0);cursor:pointer}
+.body-check-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx0)}
+.body-check-row input{width:16px;height:16px;accent-color:#9B59B6}
+
+/* ── Session Tools modal ── */
+#session-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.55);z-index:200;
+  display:none;align-items:flex-start;justify-content:center
+}
+#session-modal.open{display:flex}
+#session-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  margin-top:60px;width:560px;max-width:92vw;max-height:82vh;overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);display:flex;flex-direction:column
+}
+#session-card-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#session-card-title{font-size:12px;font-weight:700;font-family:monospace;letter-spacing:1.5px;color:var(--accentGold);text-transform:uppercase}
+#session-card-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px}
+#session-card-close:hover{color:var(--tx0)}
+#session-card-body{padding:14px 16px}
+.session-section{margin-bottom:16px}
+.session-section-title{font-size:10px;font-family:monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx1);margin-bottom:8px}
+.session-btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.session-btn{
+  font-size:11px;font-family:var(--font);font-weight:600;
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:8px 14px;cursor:pointer;color:var(--tx0);display:flex;align-items:center;gap:6px
+}
+.session-btn:hover{background:var(--bd0);border-color:var(--accentGold)}
+.session-btn.primary{background:var(--bgI);color:var(--txI);border-color:var(--txI)}
+.session-recap-output{
+  margin-top:10px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:12px;font-size:12px;line-height:1.6;color:var(--tx0);
+  white-space:pre-wrap;max-height:340px;overflow-y:auto;font-family:var(--font)
+}
+.session-recap-empty{color:var(--tx1);font-style:italic;font-size:11px}
+.session-stat-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)}
+.session-stat-row:last-child{border-bottom:none}
+.session-stat-row span:first-child{color:var(--tx1)}
+
+/* ── Toast notifications ── */
+#toast-container{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;
+  pointer-events:none
+}
+.toast{
+  background:var(--bg1);border:.5px solid var(--bd0);border-left:3px solid var(--accentGold);
+  border-radius:6px;padding:10px 16px;font-size:12px;font-family:var(--font);
+  color:var(--tx0);box-shadow:0 4px 16px rgba(0,0,0,.45);
+  display:flex;align-items:center;gap:8px;max-width:80vw;
+  animation:toast-in .25s cubic-bezier(.2,.8,.2,1);
+  pointer-events:auto
+}
+.toast.toast-out{animation:toast-out .25s ease-in forwards}
+.toast-icon{font-size:14px;flex-shrink:0}
+.toast.success{border-left-color:#4caf82}
+.toast.success .toast-icon{color:#4caf82}
+.toast.error{border-left-color:#d45050}
+.toast.error .toast-icon{color:#d45050}
+.toast.info{border-left-color:var(--accentGold)}
+@keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(8px)}}
+
+/* ── Z-INDEX LAYERING MAP (documented to prevent stacking regressions) ──
+   Floating panels (event-log/init/health/quest): 50–55
+   Right-panel content stack (tab-bar/area-hdr/top-bar): 60, via #right-panel
+     and #sys-detail which establish a stacking context at z-index:70 so all
+     their children sit above the floating panels regardless of child z-index.
+   Main header (#hdr): 61
+   Right/sys detail panel stacking context: 70
+   Modals/overlays (settings/sheet/qref/identity): 150–220 (full-screen)
+   Keep new floating elements below 70 unless they must overlay the detail panel.
+   ──────────────────────────────────────────────────────────────────────── */
 /* ── Root shell ── */
 #root{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg2)}
 
@@ -71,7 +278,7 @@ textarea{font-family:var(--font)}
   display:flex;align-items:center;justify-content:space-between;
   padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
   flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
-}
+;z-index:61}
 #hdr-title{font-size:13px;font-weight:700;color:var(--accentGold);letter-spacing:1px;font-family:monospace;white-space:nowrap}
 #build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap}
 #breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
@@ -139,6 +346,7 @@ textarea{font-family:var(--font)}
 
 /* ── Player mode hides ── */
 #root.pm-active .ref-only{display:none!important}
+#float-panels.pm-active .ref-only{display:none!important}
 #root.pm-active .rsr-marker{display:none!important}
 #root.pm-active .rsr-legend{display:none!important}
 #root.pm-active .top-bar-sub{display:none}
@@ -157,7 +365,7 @@ textarea{font-family:var(--font)}
 #sys-detail{
   width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
   display:flex;flex-direction:column;overflow:hidden
-}
+;position:relative;z-index:70}
 #sys-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
 #sys-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
 #sys-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
@@ -234,14 +442,14 @@ textarea{font-family:var(--font)}
   width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
   display:flex;flex-direction:column;overflow:hidden
 }
-.top-bar{background:var(--bg1);border-bottom:.5px solid var(--bd2);padding:8px 12px;flex-shrink:0;text-align:center}
+.top-bar{background:var(--bg1);border-bottom:.5px solid var(--bd2);padding:8px 12px;flex-shrink:0;text-align:center;position:relative;z-index:60}
 .top-bar-title{font-size:13px;font-weight:600;color:var(--tx0)}
 .top-bar-sub{font-size:10px;color:var(--tx1);margin-top:2px}
-#area-hdr{padding:10px 14px;border-bottom:.5px solid var(--bd2);flex-shrink:0;background:var(--bg0);text-align:center;display:none}
+#area-hdr{padding:10px 14px;border-bottom:.5px solid var(--bd2);flex-shrink:0;background:var(--bg0);text-align:center;display:none;position:relative;z-index:60}
 .atag{display:inline-block;font-size:9px;font-family:monospace;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-weight:700;margin-bottom:4px}
 .aname{font-size:15px;font-weight:600;color:var(--tx0)}
 .asub{font-size:11px;color:var(--tx1);margin-top:2px}
-#tab-bar{display:flex;border-bottom:.5px solid var(--bd2);background:var(--bg1);flex-shrink:0;overflow-x:auto;scrollbar-width:none;display:none}
+#tab-bar{display:flex;border-bottom:.5px solid var(--bd2);background:var(--bg1);flex-shrink:0;overflow-x:auto;scrollbar-width:none;display:none;position:relative;z-index:60}
 .tab{border:none;background:none;padding:9px 10px;font-size:11px;font-family:var(--font);color:var(--tx1);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0;flex:1;text-align:center}
 .tab.on{color:var(--tx0);font-weight:600;border-bottom-color:var(--txI)}
 #detail{flex:1;overflow-y:auto;padding:12px 12px 80px 12px;background:var(--bg0);-webkit-overflow-scrolling:touch;min-height:0}
@@ -336,6 +544,20 @@ textarea{font-family:var(--font)}
   letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
 }
 #btn-enter-station:hover{background:#16447A}
+
+/* ── Generic body close-up view ── */
+#view-body{display:flex;flex:1;overflow:hidden;min-height:0}
+#body-view-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
+#body-disc-svg{width:100%;height:100%;display:block}
+#body-view-detail{
+  width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
+  display:flex;flex-direction:column;overflow:hidden
+}
+#bv-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
+#bv-dname{font-size:15px;font-weight:700;color:#4A90D9}
+#bv-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
+#bv-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+#root.light-mode #body-view-panel{background:#dfe6f2}
 
 /* ── Orrery animations ── */
 @keyframes star-pulse {
@@ -852,9 +1074,11 @@ textarea{font-family:var(--font)}
 #settings-menu.hidden{display:none}
 #settings-menu-card{
   background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
-  margin:50px 14px 0 0;padding:12px;min-width:320px;max-width:90vw;
+  margin:50px 14px 0 0;padding:12px;width:340px;max-width:90vw;
   max-height:85vh;overflow-y:auto;
-  box-shadow:0 4px 20px rgba(0,0,0,.5)
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
+  /* Fixed width prevents layout reflow when archon section re-renders */
+  min-width:300px;flex-shrink:0
 }
 .settings-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -874,11 +1098,25 @@ textarea{font-family:var(--font)}
 
 
 /* ── NPC Location Tracker ── */
+/* ── NPC disposition marker ── */
+.npc-dispo-row{display:flex;gap:4px;margin-top:4px;align-items:center}
+.npc-dispo-pill{
+  font-size:9px;font-family:monospace;font-weight:700;letter-spacing:.5px;
+  border-radius:3px;padding:2px 7px;cursor:pointer;border:.5px solid transparent;
+  opacity:.4;transition:opacity .12s,border-color .12s
+}
+.npc-dispo-pill:hover{opacity:.8}
+.npc-dispo-pill.active{opacity:1;border-color:currentColor}
+.npc-dispo-hostile{background:#2e1010;color:#d45050}
+.npc-dispo-neutral{background:#1e1e2e;color:#8b91a8}
+.npc-dispo-friendly{background:#0f2e20;color:#4caf82}
+
 .npc-location-badge{
   display:inline-flex;align-items:center;gap:4px;
   font-size:9px;font-family:monospace;font-weight:700;letter-spacing:.5px;
   background:#0d2235;color:#4A90D9;border:.5px solid #4A90D955;
-  border-radius:3px;padding:2px 6px;margin-top:3px;cursor:default
+  border-radius:0 0 0 4px;padding:3px 8px;cursor:default;
+  border-top:.5px solid #4A90D922
 }
 .npc-location-badge.has-location{cursor:pointer}
 .npc-location-badge.has-location:hover{background:#1a3550;border-color:#4A90D9}
@@ -1522,12 +1760,13 @@ input#ui-scale-range{
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
-        <button id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
+        <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
       <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
+    <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
@@ -1599,6 +1838,24 @@ input#ui-scale-range{
           <div id="aur-loc-detail" class="v-hidden"></div>
           <button id="btn-enter-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ ENTER AURELIA ORBITAL STATION</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       GENERIC BODY CLOSE-UP VIEW (any planet / moon / belt / star)
+  ══════════════════════════════════════ -->
+  <div id="view-body" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+      <div id="body-view-panel">
+        <svg id="body-disc-svg" viewBox="0 0 800 600"></svg>
+      </div>
+      <div id="body-view-detail">
+        <div id="bv-dh">
+          <div id="bv-dname">BODY</div>
+          <div id="bv-dtype">SELECT A BODY</div>
+        </div>
+        <div id="bv-db"></div>
       </div>
     </div>
   </div>
@@ -1713,150 +1970,20 @@ input#ui-scale-range{
 
 
   <!-- ── Event Log (floating panel) ── -->
-  <div id="event-log-wrap">
-    <div id="event-log-header" onclick="toggleEventLog()">
-      <span id="event-log-title">EVENT LOG</span>
-      <span id="event-log-count">0</span>
-      <span id="event-log-toggle">▼</span>
-    </div>
-    <div id="event-log-body"></div>
-    <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
-    <div class="panel-resize-handle" data-panel="event-log-wrap"></div>
-  </div>
   <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
-  <div id="health-wrap" class="ref-only">
-    <div id="health-header" onclick="toggleHealthPanel()">
-      <span id="health-title">♥ NPC HEALTH</span>
-      <span id="health-count">0</span>
-      <span id="health-toggle">▼</span>
-    </div>
-    <div id="health-body"></div>
-    <div class="panel-resize-handle" data-panel="health-wrap"></div>
-  </div>
   <!-- ── Initiative Tracker (referee-only, floating panel) ── -->
-  <div id="init-wrap" class="ref-only">
-    <div id="init-header" onclick="toggleInitPanel()">
-      <span id="init-title">⚔ INITIATIVE</span>
-      <span id="init-count">0</span>
-      <span id="init-toggle">▼</span>
-    </div>
-    <div id="init-body"></div>
-    <div id="init-foot">
-      <div id="init-mode-row">
-        <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-          <input type="checkbox" id="init-roll-mode" style="accent-color:var(--accentGold)">
-          Roll 2D6 + mod automatically
-        </label>
-      </div>
-      <div id="init-addrow">
-        <input type="text" id="init-name-input" placeholder="Name" maxlength="30">
-        <input type="number" inputmode="numeric" id="init-score-input" placeholder="Score">
-        <input type="number" inputmode="numeric" id="init-dex-input" placeholder="DEX" title="DEX modifier">
-        <input type="number" inputmode="numeric" id="init-int-input" placeholder="INT" title="INT modifier">
-        <button class="init-add-btn" onclick="addCombatant()">+ Add</button>
-      </div>
-      <div id="init-quickadd"></div>
-      <div id="init-actions">
-        <button class="init-action-btn" onclick="sortInitiative()">Sort</button>
-        <button class="init-action-btn" onclick="nextTurn()">Next Turn ▸</button>
-        <button class="init-action-btn primary" onclick="clearInitiative()">Clear All</button>
-      </div>
-    </div>
-    <div class="panel-resize-handle" data-panel="init-wrap"></div>
-  </div>
 
   <!-- ── Identity modal (shown once per device to non-referees) ── -->
-  <div id="identity-modal" class="hidden">
-    <div id="identity-card">
-      <h3>WHO'S PLAYING?</h3>
-      <p>Pick your character name so the referee knows whose notes they're reading. This is remembered on this device.</p>
-      <div id="identity-quick"></div>
-      <input type="text" id="identity-input" placeholder="Type a name..." maxlength="24">
-      <button id="identity-confirm" onclick="confirmIdentity()">Continue</button>
-    </div>
-  </div>
 
   <!-- ── Sheet menu (small popover from the Sheets button) ── -->
-  <div id="sheet-menu" class="hidden" onclick="if(event.target===this) closeSheetMenu()">
-    <div id="sheet-menu-card"></div>
-  </div>
 
   <!-- ── Settings menu (small popover from the gear icon) ── -->
-  <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
-    <div id="settings-menu-card"></div>
-  </div>
 
   <!-- ── Quest Log panel ── -->
 
-  <!-- ── Quick Reference sidebar ── -->
-  <div id="qref-overlay" onclick="if(event.target===this)closeQref()"></div>
-  <div id="qref-panel">
-    <div id="qref-hdr">
-      <span id="qref-title">📖 Quick Reference</span>
-      <button id="qref-close" onclick="closeQref()">✕</button>
-    </div>
-    <div id="qref-search-wrap">
-      <input id="qref-search" type="text" placeholder="Filter rules..." oninput="renderQref()">
-    </div>
-    <div id="qref-body"></div>
-  </div>
 
-  <div id="quest-wrap" class="hidden">
-    <div id="quest-header" onclick="toggleQuestCollapse()">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 QUEST LOG</span>
-        <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
-      </div>
-      <span id="quest-toggle">▼</span>
-    </div>
-    <div id="quest-body"></div>
-    <div id="quest-foot" class="ref-only">
-      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Quest</button>
-    </div>
-    <div class="panel-resize-handle" id="quest-resize"></div>
-  </div>
 
   <!-- ── Quest editor modal ── -->
-  <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
-    <div id="quest-edit-card">
-      <div id="quest-edit-header">
-        <span id="quest-edit-title">NEW QUEST</span>
-        <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
-      </div>
-      <div id="quest-edit-body">
-        <div class="design-field-group">
-          <div class="design-field-label">Quest Title</div>
-          <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
-        </div>
-        <div class="design-field-group">
-          <div class="design-field-label">Status</div>
-          <select id="qe-status" class="design-field-input">
-            <option value="active">Active</option>
-            <option value="complete">Complete</option>
-            <option value="hidden">Hidden (referee only)</option>
-          </select>
-        </div>
-        <div class="design-field-group">
-          <div class="design-field-label">Player Description (visible to players)</div>
-          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this quest..."></textarea>
-        </div>
-        <div class="design-field-group">
-          <div class="design-field-label">Referee Notes (private)</div>
-          <textarea id="qe-ref-note" class="design-field-textarea" placeholder="Your private notes, planned outcomes, hooks..."></textarea>
-        </div>
-        <div class="design-field-group">
-          <div class="design-field-label">Objectives</div>
-          <div id="qe-objectives"></div>
-          <button onclick="addQuestObjective()" style="margin-top:6px;font-size:11px;font-family:monospace;background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px 12px;cursor:pointer;width:100%">+ Add Objective</button>
-        </div>
-      </div>
-      <div id="quest-edit-footer">
-        <button id="qe-delete-btn" onclick="deleteQuest()" class="hidden">🗑 Delete</button>
-        <button onclick="closeQuestEditor()">Cancel</button>
-        <button id="qe-save-btn" onclick="saveQuestEdit()">Save</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ── Character sheet modal ── -->
   <div id="sheet-modal" class="hidden" onclick="if(event.target===this) closeSheet()">
@@ -1899,21 +2026,223 @@ input#ui-scale-range{
     </div>
   </div>
 </div><!-- #root -->
+<div id="float-panels">
+  <div id="toast-container"></div>
+
+  <!-- ── NPC Creator modal ── -->
+  <div id="npc-creator-modal" onclick="if(event.target===this)closeNpcCreator()">
+    <div id="npc-creator-card">
+      <div id="npc-creator-hdr">
+        <span id="npc-creator-title">✦ Add NPC</span>
+        <button id="npc-creator-close" onclick="closeNpcCreator()">✕</button>
+      </div>
+      <div class="npc-creator-tabs">
+        <button class="npc-creator-tab on" id="npc-tab-manual" onclick="setNpcCreatorMode('manual')">✍ Manual</button>
+        <button class="npc-creator-tab" id="npc-tab-random" onclick="setNpcCreatorMode('random')">🎲 Random</button>
+        <button class="npc-creator-tab" id="npc-tab-ai" onclick="setNpcCreatorMode('ai')">✨ AI</button>
+      </div>
+      <div id="npc-creator-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Body Creator modal (reuses npc-creator-* styling) ── -->
+  <div id="body-creator-modal" onclick="if(event.target===this)closeBodyCreator()">
+    <div id="body-creator-card">
+      <div id="body-creator-hdr">
+        <span id="body-creator-title">✦ Add Body</span>
+        <button id="body-creator-close" onclick="closeBodyCreator()">✕</button>
+      </div>
+      <div class="npc-creator-tabs" id="body-creator-tabs">
+        <button class="npc-creator-tab on" id="body-tab-manual" onclick="setBodyCreatorMode('manual')">✍ Manual</button>
+        <button class="npc-creator-tab" id="body-tab-random" onclick="setBodyCreatorMode('random')">🎲 Random (UWP)</button>
+      </div>
+      <div id="body-creator-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Session Tools modal ── -->
+  <div id="session-modal" onclick="if(event.target===this)closeSessionTools()">
+    <div id="session-card">
+      <div id="session-card-hdr">
+        <span id="session-card-title">🎬 Session Tools</span>
+        <button id="session-card-close" onclick="closeSessionTools()">✕</button>
+      </div>
+      <div id="session-card-body">
+        <div class="session-section">
+          <div class="session-section-title">Session Recap</div>
+          <div class="session-btn-row">
+            <button class="session-btn primary" onclick="generateSessionRecap()">✨ Generate recap</button>
+          </div>
+          <div id="session-recap-output" class="session-recap-output" style="display:none"></div>
+        </div>
+        <div class="session-section">
+          <div class="session-section-title">Export</div>
+          <div class="session-btn-row">
+            <button class="session-btn" onclick="exportSessionLog()">📄 Export session log (.txt)</button>
+            <button class="session-btn" onclick="copySessionLog()">📋 Copy to clipboard</button>
+          </div>
+        </div>
+        <div class="session-section">
+          <div class="session-section-title">Current Session</div>
+          <div id="session-stats"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="event-log-wrap">
+    <div id="event-log-header" onclick="toggleEventLog()">
+      <span id="event-log-title">EVENT LOG</span>
+      <span id="event-log-count">0</span>
+      <span id="event-log-toggle">▼</span>
+    </div>
+    <div id="event-log-body"></div>
+    <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
+    <div class="panel-resize-handle" data-panel="event-log-wrap"></div>
+  </div>
+
+  <div id="health-wrap" class="ref-only">
+    <div id="health-header" onclick="toggleHealthPanel()">
+      <span id="health-title">♥ NPC HEALTH</span>
+      <span id="health-count">0</span>
+      <span id="health-toggle">▼</span>
+    </div>
+    <div id="health-body"></div>
+    <div class="panel-resize-handle" data-panel="health-wrap"></div>
+  </div>
+
+  <div id="init-wrap" class="ref-only">
+    <div id="init-header" onclick="toggleInitPanel()">
+      <span id="init-title">⚔ INITIATIVE</span>
+      <span id="init-count">0</span>
+      <span id="init-toggle">▼</span>
+    </div>
+    <div id="init-body"></div>
+    <div id="init-foot">
+      <div id="init-mode-row">
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="init-roll-mode" style="accent-color:var(--accentGold)">
+          Roll 2D6 + mod automatically
+        </label>
+      </div>
+      <div id="init-addrow">
+        <input type="text" id="init-name-input" placeholder="Name" maxlength="30">
+        <input type="number" inputmode="numeric" id="init-score-input" placeholder="Score">
+        <input type="number" inputmode="numeric" id="init-dex-input" placeholder="DEX" title="DEX modifier">
+        <input type="number" inputmode="numeric" id="init-int-input" placeholder="INT" title="INT modifier">
+        <button class="init-add-btn" onclick="addCombatant()">+ Add</button>
+      </div>
+      <div id="init-quickadd"></div>
+      <div id="init-actions">
+        <button class="init-action-btn" onclick="sortInitiative()">Sort</button>
+        <button class="init-action-btn" onclick="nextTurn()">Next Turn ▸</button>
+        <button class="init-action-btn primary" onclick="clearInitiative()">Clear All</button>
+      </div>
+    </div>
+    <div class="panel-resize-handle" data-panel="init-wrap"></div>
+  </div>
+
+  <div id="identity-modal" class="hidden">
+    <div id="identity-card">
+      <h3>WHO'S PLAYING?</h3>
+      <p>Pick your character name so the referee knows whose notes they're reading. This is remembered on this device.</p>
+      <div id="identity-quick"></div>
+      <input type="text" id="identity-input" placeholder="Type a name..." maxlength="24">
+      <button id="identity-confirm" onclick="confirmIdentity()">Continue</button>
+    </div>
+  </div>
+
+  <div id="sheet-menu" class="hidden" onclick="if(event.target===this) closeSheetMenu()">
+    <div id="sheet-menu-card"></div>
+  </div>
+
+  <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
+    <div id="settings-menu-card"></div>
+  </div>
+
+  <!-- ── Quick Reference sidebar ── -->
+  <div id="qref-overlay" onclick="if(event.target===this)closeQref()"></div>
+  <div id="qref-panel">
+    <div id="qref-hdr">
+      <span id="qref-title">📖 Quick Reference</span>
+      <button id="qref-close" onclick="closeQref()">✕</button>
+    </div>
+    <div id="qref-search-wrap">
+      <input id="qref-search" type="text" placeholder="Filter rules..." oninput="renderQref()">
+    </div>
+    <div id="qref-body"></div>
+  </div>
+
+  <div id="quest-wrap" class="hidden">
+    <div id="quest-header" onclick="toggleQuestCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 QUEST LOG</span>
+        <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="quest-toggle">▼</span>
+    </div>
+    <div id="quest-body"></div>
+    <div id="quest-foot" class="ref-only">
+      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Quest</button>
+    </div>
+    <div class="panel-resize-handle" id="quest-resize"></div>
+  </div>
+
+  <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
+    <div id="quest-edit-card">
+      <div id="quest-edit-header">
+        <span id="quest-edit-title">NEW QUEST</span>
+        <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div id="quest-edit-body">
+        <div class="design-field-group">
+          <div class="design-field-label">Quest Title</div>
+          <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Status</div>
+          <select id="qe-status" class="design-field-input">
+            <option value="active">Active</option>
+            <option value="complete">Complete</option>
+            <option value="hidden">Hidden (referee only)</option>
+          </select>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Player Description (visible to players)</div>
+          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this quest..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Referee Notes (private)</div>
+          <textarea id="qe-ref-note" class="design-field-textarea" placeholder="Your private notes, planned outcomes, hooks..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Objectives</div>
+          <div id="qe-objectives"></div>
+          <button onclick="addQuestObjective()" style="margin-top:6px;font-size:11px;font-family:monospace;background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px 12px;cursor:pointer;width:100%">+ Add Objective</button>
+        </div>
+      </div>
+      <div id="quest-edit-footer">
+        <button id="qe-delete-btn" onclick="deleteQuest()" class="hidden">🗑 Delete</button>
+        <button onclick="closeQuestEditor()">Cancel</button>
+        <button id="qe-save-btn" onclick="saveQuestEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+</div><!-- #float-panels -->
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM DATA
 // ═══════════════════════════════════════════════════════════════════════════
-const BODIES = [
-  {id:"auros",name:"Auros",type:"K3 V Orange Dwarf · Primary Star",tag:null,color:"#E07030",orbitAU:"—",uwpString:"—",diameter:"~1.08 M☉ diameter",period:"—",isMoon:false,isStar:true,hook:false,
+const BASE_BODIES_AUROS = [
+  {id:"auros",name:"Auros",type:"K3 V Orange Dwarf · Primary Star",tag:null,color:"#E07030",orbitAU:"—",uwpString:"—",diameter:"~1.08 M☉ diameter",period:"—",isMoon:false,isStar:true,hook:false,displayRadius:18,
   desc:"A calm, long-lived orange dwarf approximately 78% the mass of Sol. Its light gives Aurelia's sky its distinctive copper tint and bathes the inner system in warm amber-gold. K-type stars are considered ideal for long-term colonisation: low flare activity, extended main-sequence lifespan, stable output for billions of years.\n\nThe Hegemony chose this system deliberately. Nothing about Aurelia was an accident.",
   refNote:"K-type stars have significantly lower UV output than G-type. The UV index at Aurelia's surface is roughly 30% lower than a Sol-equivalent world — affecting everything from agriculture to the atmospheric chemistry the Cleaners live with. The Hegemony's xenobiologists know this. The colonists were not told.",
   readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
 
-  {id:"scoria",name:"Scoria",type:"Terrestrial · Scorched Rock",tag:"FLAVOUR",color:"#887755",orbitAU:"0.28 AU",uwpString:"X100000-0",diameter:"~4,800 km",period:"48 standard days",isMoon:false,isStar:false,hook:false,
+  {id:"scoria",name:"Scoria",type:"Terrestrial · Scorched Rock",tag:"FLAVOUR",color:"#887755",orbitAU:"0.28 AU",uwpString:"X100000-0",diameter:"~4,800 km",period:"48 standard days",isMoon:false,isStar:false,hook:false,displayRadius:7,
   desc:"A tidally locked inner world — ~430°C on the day side, -180°C on the night side. No atmosphere worth naming. A dead archive of early system formation, the night side covered in concentric impact craters.",
   refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:1},
 
-  {id:"aurelia",name:"Aurelia",type:"Terrestrial · Jewel World",tag:"CAMPAIGN HUB",color:"#4A90D9",orbitAU:"0.71 AU",uwpString:"B867976-C",diameter:"~11,400 km",period:"214 standard days",isMoon:false,isStar:false,hook:true,
+  {id:"aurelia",name:"Aurelia",type:"Terrestrial · Jewel World",tag:"CAMPAIGN HUB",color:"#4A90D9",orbitAU:"0.71 AU",uwpString:"B867976-C",diameter:"~11,400 km",period:"214 standard days",isMoon:false,isStar:false,hook:true,displayRadius:11,
   desc:"The campaign's heart. A warm, dense world with extensive ocean coverage, a copper-tinted sky, and a population of 800 million in coastal arcologies and the deep-water city known as the Cradle.\n\nThe Hegemony's showpiece. Every promotional image shows the turquoise south coast and the twin peaks of the Spire Range.\n\nThe atmosphere has a classified taint: long-term unfiltered exposure causes progressive respiratory degradation over 20–30 years. The data is suppressed. The Cleaners know. The surface population does not.",
   refNote:"The atmospheric taint is the Hegemony's dirtiest secret. The Cleaners living underground aren't just a lower caste — they're the only long-term survivors. Surface residents have a life expectancy 18 years shorter than published health data suggests. The RSR has a copy of the suppressed epidemiological study.",
   readAloud:"Aurelia from orbit: the atmosphere catches Auros's orange light and scatters it into something the colour of a lit copper kettle. The night side shows city-glow in chains along the coastline. The orbital station sits at L2, permanently in Aurelia's shadow.",
@@ -1924,11 +2253,11 @@ const BODIES = [
   refNote:"The relay station on the far side: no guards, no power. Navigation requires Vacc Suit 8+ and Navigation 6+ to find the right crater without a working beacon.",
   readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
 
-  {id:"greymantle",name:"Greymantle",type:"Terrestrial · Ice-Rock",tag:"FLAVOUR",color:"#9999AA",orbitAU:"1.8 AU",uwpString:"D200100-4",diameter:"~6,200 km",period:"~2.4 standard years",isMoon:false,isStar:false,hook:false,
+  {id:"greymantle",name:"Greymantle",type:"Terrestrial · Ice-Rock",tag:"FLAVOUR",color:"#9999AA",orbitAU:"1.8 AU",uwpString:"D200100-4",diameter:"~6,200 km",period:"~2.4 standard years",isMoon:false,isStar:false,hook:false,displayRadius:8,
   desc:"A cold, thin-atmosphered mid-system world with ~100 people in a pressurised way-station. Greymantle's main industry is being on the route between Aurelia and the Veil — Class D starport, refuelling tanks, two people who don't ask questions about cargo manifests.",
   refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:3},
 
-  {id:"veil",name:"The Veil",type:"Asteroid Belt",tag:"ADVENTURE HOOK",color:"#8B7355",orbitAU:"1.3 AU",uwpString:"E000200-5",diameter:"Diffuse belt, ~0.4 AU wide",period:"~1.8 standard years (inner edge)",isMoon:false,isStar:false,hook:true,
+  {id:"veil",name:"The Veil",type:"Asteroid Belt",tag:"ADVENTURE HOOK",color:"#8B7355",orbitAU:"1.3 AU",uwpString:"E000200-5",diameter:"Diffuse belt, ~0.4 AU wide",period:"~1.8 standard years (inner edge)",isMoon:false,isStar:false,hook:true,beltDensity:420,
   desc:"A dense asteroid belt — remnant of a planet that failed to coalesce, or perhaps one that was broken apart. At certain orbital positions it creates a faint dust haze visible from Aurelia at dawn.\n\nSmall, unlicensed population of ~300 belt miners, scavengers, and people avoiding questions. Their settlement: Cairn Station, Law Level 0.",
   refNote:"The information broker Sable operates out of Cairn Station. She has authenticated records of the Meridian's Edge's prior registration — the ship's history includes a job the Hegemony would very much like to keep quiet.",
   readAloud:"The belt doesn't look like much at approach — scattered rocks catching Auros's amber light. Then the density increases and navigation gets serious. Cairn Station announces itself with running lights and a comms challenge.",
@@ -1937,7 +2266,7 @@ const BODIES = [
   events:[{t:"At Cairn Station",e:"A miner with a fresh burn scar on his forearm watches the crew from the bar. He's been there since they arrived. When they move, he repositions — not toward them, just repositioning. Working for someone, or paranoid from too long in the belt. Both are possible."}],
   orbitPos:4},
 
-  {id:"tanath",name:"Tanath",type:"Gas Giant · Major",tag:"ADVENTURE HOOK",color:"#C87941",orbitAU:"5.4 AU",uwpString:"D——0164-8",diameter:"~140,000 km (est.)",period:"12.3 standard years",isMoon:false,isStar:false,hook:true,
+  {id:"tanath",name:"Tanath",type:"Gas Giant · Major",tag:"ADVENTURE HOOK",color:"#C87941",orbitAU:"5.4 AU",uwpString:"D——0164-8",diameter:"~140,000 km (est.)",period:"12.3 standard years",isMoon:false,isStar:false,hook:true,displayRadius:18,ringStyle:"major",
   desc:"A warm, massive gas giant banded in deep amber and rust-red — a miniature echo of Auros itself. OmniSynth's Extraction Rig Tanath-7 operates in the upper atmosphere, extracting fuel for sale. Technically a licensed commercial operation. In practice also a data relay, crew rotation point, and a place to fence things without clean provenance.",
   refNote:"Tanath-7 is staffed by ~60 rotating OmniSynth contractors and a permanent administrative staff. Station manager Forlan has been on Tanath-7 longer than any three contractors combined. She knows what the rig is really used for. She has opinions about it.",
   readAloud:"Tanath fills the screen even at standard approach distance. Deep amber striations over rust-red, white ammonia clouds at the poles in slow spirals. At the terminator, the night side glows faintly from internal heat.",
@@ -1954,16 +2283,33 @@ const BODIES = [
   refNote:"Good place to overhear things. Workers talk freely because they don't think anyone important is listening. Rumours about the Dark Moon surface here — seed this hook if needed.",
   readAloud:null,npcs:[],checks:[],events:[{t:"At the bar",e:"Two off-duty contractors talk in low voices about something they saw on the sensor logs. They stop when they notice the crew listening. One looks at the other. The other shakes his head slightly."}],orbitPos:null},
 
-  {id:"darkmoon",name:"The Dark Moon",type:"Moon · CLASSIFIED",tag:"CLASSIFIED",color:"#2A2A3A",orbitAU:"Tanath moon III (unlisted)",uwpString:"X200000-0",diameter:"~3,100 km",period:"22.7 standard days (retrograde)",isMoon:true,parentId:"tanath",isStar:false,hook:true,
+  {id:"darkmoon",name:"The Dark Moon",type:"Moon · CLASSIFIED",tag:"CLASSIFIED",color:"#2A2A3A",orbitAU:"Tanath moon III (unlisted)",uwpString:"X200000-0",diameter:"~3,100 km",period:"22.7 standard days (retrograde)",isMoon:true,parentId:"tanath",isStar:false,hook:true,decoration:"cluster",
   desc:"Not on standard charts. Not in the Hegemony's public registry. Not visible on the orbital station's navigation display.\n\nRetrograde orbit — it moves opposite to the other Tanath moons, which means it formed elsewhere, was captured, or was placed there. The Hegemony sensor array on Esk is deliberately pointed away from it.",
   refNote:"Choose one of the three theories and commit to it before the crew gets here. Seed the other two as plausible distractions — red herrings with enough truth to be convincing.\n\nThree theories:\n1. An Eidolon ruin site — pre-Collapse xenoarchaeology the Hegemony is keeping off the books.\n2. A Project Chimera black site — active research they cannot afford to have inspected.\n3. Something older than either. Nothing that arrived in this system built it.",
   readAloud:"There is nothing on sensors where there should be nothing. Then — briefly, for eleven seconds — there is something. Then there is nothing again. The sensor logs do not retain the eleven seconds. This is not a glitch.",
   npcs:[],checks:[],events:[],orbitPos:null},
 
-  {id:"ouros",name:"Ouros",type:"Ice Giant · Outer System",tag:"FLAVOUR",color:"#2AABB8",orbitAU:"14.2 AU",uwpString:"X——0000-0",diameter:"~38,000 km",period:"53.4 standard years",isMoon:false,isStar:false,hook:false,
+  {id:"ouros",name:"Ouros",type:"Ice Giant · Outer System",tag:"FLAVOUR",color:"#2AABB8",orbitAU:"14.2 AU",uwpString:"X——0000-0",diameter:"~38,000 km",period:"53.4 standard years",isMoon:false,isStar:false,hook:false,displayRadius:13,ringStyle:"subtle",
   desc:"A pale blue-green ice giant in the deep outer system. No installations. No traffic. Three small unnamed moons, none surveyed beyond preliminary pass data. The Hegemony has no interest in the deep outer system at present. The Archon Collective may.",
   refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:6}
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM-SCOPED BODY MODEL
+// ═══════════════════════════════════════════════════════════════════════════
+// BASE_BODIES_AUROS is the canonical hardcoded data for the Auros system.
+// To allow other star systems to be built later (each a node on the Orion Arm
+// galaxy map), bodies live inside a system wrapper and all design-mode body
+// edits are namespaced by system id. Today there is exactly one system —
+// 'auros' — but the storage schema and renderer are already multi-system
+// ready, so dropping in a second system is a data change, not a rewrite.
+const SYSTEMS = {
+  auros: { id:'auros', name:'Auros', base: BASE_BODIES_AUROS }
+};
+let currentSystemId = 'auros';
+
+function currentSystem(){ return SYSTEMS[currentSystemId]; }
+function baseBodiesFor(sysId){ return (SYSTEMS[sysId] ? SYSTEMS[sysId].base : []); }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATION DATA
@@ -2257,6 +2603,8 @@ const rootEl = document.getElementById("root");
 function togglePM(){
   pmCheck.checked = !pmCheck.checked;
   rootEl.classList.toggle("pm-active", pmCheck.checked);
+  const fp = document.getElementById('float-panels');
+  if(fp) fp.classList.toggle('pm-active', pmCheck.checked);
   if(pmCheck.checked) forceDesignModeOff();
   try {
     if(pmCheck.checked) localStorage.setItem("aurelia_pm","1");
@@ -2283,66 +2631,119 @@ pmCheck.addEventListener("change", function(){
   renderWhoAmI();
   if(this.checked) startPolling(); else stopPolling();
 });
-try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active"); startPolling(); } } catch(e){}
+try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active")
+    const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; startPolling(); } } catch(e){}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM MAP
 // ═══════════════════════════════════════════════════════════════════════════
 let selectedBody = null;
 
-// Fixed positions for veil asteroids (never change)
-const VEIL_DOTS = [
-  [388,238],[400,228],[395,252],[410,242],[378,245],[392,258],[406,264],
-  [418,248],[376,256],[402,272],[388,268],[412,232],[422,258],[380,228],[370,248]
-];
+// ═══════════════════════════════════════════════════════════════════════════
+// ORRERY  —  generic, data-driven, computed from N orbit slots
+// ═══════════════════════════════════════════════════════════════════════════
+// The orbital layout is derived from the number of occupied orbit positions in
+// the current system rather than a hardcoded lookup table, so a system with any
+// number of bodies lays out correctly. Decorations (rings, asteroid clusters,
+// belt dot-fields) are read off body fields, so referee-created bodies can have
+// them too. Star position (SX,SY) and tilt are fixed to preserve the look.
 
-const ORBIT_X = {1:0.13,2:0.26,3:0.40,4:0.50,5:0.65,6:0.82};
+const ORR_SX = 594, ORR_SY = 180;
+const ORR_TILT = -28 * Math.PI / 180;
+const ORR_COS = Math.cos(ORR_TILT), ORR_SIN = Math.sin(ORR_TILT);
+const ORR_INNER_A = 75;    // semi-major of orbit slot 1
+const ORR_OUTER_A = 435;   // semi-major of the outermost slot
+const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
+const ORR_PLANET_T = 207 * Math.PI / 180; // fan angle (bottom-left)
+
+// Semi-major / semi-minor for orbit slot p (1..maxP), linearly spaced.
+function orbitAxes(p, maxP){
+  let a;
+  if(maxP <= 1) a = (ORR_INNER_A + ORR_OUTER_A) / 2;
+  else a = ORR_INNER_A + (ORR_OUTER_A - ORR_INNER_A) * (p - 1) / (maxP - 1);
+  return [a, a * ORR_AXIS_RATIO];
+}
+function orbitPoint(a, b, t){
+  const ex = a * Math.cos(t), ey = b * Math.sin(t);
+  return [ ORR_SX + ex*ORR_COS - ey*ORR_SIN, ORR_SY + ex*ORR_SIN + ey*ORR_COS ];
+}
+function isBeltBody(b){ return /asteroid belt/i.test(b.type || ''); }
+// Deterministic 32-bit LCG seeded from a string (body id) — same belt every render.
+function seedFromString(str){
+  let h = 2166136261 >>> 0;
+  for(let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function lcgNext(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
 
 function buildOrrery(){
   const svg = document.getElementById("orrery-svg");
+  if(!svg) return;
   const W=800, H=500;
+  const bodies = getBodies();
+
+  // Max occupied orbit slot drives the layout. Default 6 so a near-empty
+  // system still spaces sensibly.
+  const orbitPositions = bodies.filter(b => !b.isStar && !b.isMoon && b.orbitPos)
+                               .map(b => b.orbitPos);
+  const maxP = orbitPositions.length ? Math.max(6, Math.max.apply(null, orbitPositions)) : 6;
 
   // ── Body list table ────────────────────────────────────────
   const tbl = document.getElementById("body-list-table");
-  tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>UWP</th><th></th></tr>`;
-  BODIES.forEach(b => {
-    if(b.isMoon) return;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
-          <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
-      <td style="color:var(--tx1);font-size:10px">${b.type.split('·')[0].trim()}</td>
-      <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${b.uwpString}</td>
-      <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
-    tr.style.cursor="pointer";
-    tr.onclick = () => selectBody(b.id);
-    tbl.appendChild(tr);
-  });
+  if(tbl){
+    tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>UWP</th><th></th></tr>`;
+    bodies.forEach(b => {
+      if(b.isMoon) return;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
+            <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
+        <td style="color:var(--tx1);font-size:10px">${(b.type||'').split('·')[0].trim()}</td>
+        <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${b.uwpString||'—'}</td>
+        <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
+      tr.style.cursor="pointer";
+      tr.onclick = () => selectBody(b.id);
+      tbl.appendChild(tr);
+    });
+  }
+
+  // ── Design-mode "Add Body" control (sibling of the table) ──
+  const ovEl = document.getElementById("sys-overview");
+  if(ovEl){
+    let addBtn = document.getElementById("design-add-body-btn");
+    if(designModeOn && isReferee()){
+      if(!addBtn){
+        addBtn = document.createElement("button");
+        addBtn.id = "design-add-body-btn";
+        addBtn.className = "design-add-btn";
+        addBtn.style.cssText = "width:100%;margin-top:10px";
+        addBtn.textContent = "+ Add Body";
+        addBtn.onclick = openBodyCreator;
+        ovEl.appendChild(addBtn);
+      }
+    } else if(addBtn){
+      addBtn.remove();
+    }
+  }
 
   let html = "";
 
-  // ── Defs — gradients used for planet shading ───────────────
+  // ── Defs — background + per-body shading gradients ─────────
   html += `<defs>
     <radialGradient id="bg-grad" cx="70%" cy="15%" r="80%">
       <stop offset="0%" stop-color="#0d1a35"/>
       <stop offset="100%" stop-color="#070a10"/>
     </radialGradient>`;
-
-  // Per-planet radial gradients: lighter upper-right (toward Auros), dark lower-left
-  // This replaces the shadow ellipse hack entirely
-  const PLANET_COLORS = {
-    scoria:"#887755", aurelia:"#4A90D9", greymantle:"#9999AA",
-    tanath:"#C87941", ouros:"#2AABB8"
-  };
-  Object.entries(PLANET_COLORS).forEach(([id, col]) => {
-    // Lighten for highlight
-    html += `<radialGradient id="pg-${id}" cx="65%" cy="30%" r="75%">
+  // A shading gradient for every non-star, non-belt body (generic — works for
+  // referee-added bodies as well as the original ones).
+  bodies.forEach(b => {
+    if(b.isStar || isBeltBody(b)) return;
+    html += `<radialGradient id="pg-${b.id}" cx="65%" cy="30%" r="75%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
-      <stop offset="35%" stop-color="${col}" stop-opacity="0"/>
+      <stop offset="35%" stop-color="${b.color}" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000820" stop-opacity="0.45"/>
     </radialGradient>`;
   });
-
   html += `</defs>`;
   html += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#bg-grad)"/>`;
 
@@ -2364,186 +2765,84 @@ function buildOrrery(){
     html += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}"${cls?' class="'+cls+'"':''} pointer-events="none"/>`;
   });
 
-  // ── Isometric layout ───────────────────────────────────────
-  // Star sits top-right. Orbits are tilted ellipses. Planets fan bottom-left.
-  // To centre the system: the outermost orbit (Ouros, a=440) at tilt -28°
-  // spans roughly x: SX-440*cos28 to SX+440*cos28 = SX ± 388
-  // We want the visual centre of the fan to sit at ~W*0.42, H*0.38
-  // So star goes at approx (W*0.42 + 388*0.82, H*0.38 - 440*sin28*0.5) ≈ (660, 120)
-  // Star at SX=594, SY=180 — centres the visual mass of the fan in the viewBox
+  const tiltDeg = (ORR_TILT * 180 / Math.PI).toFixed(1);
 
-  const SX = 594, SY = 180;
-  const TILT = -28 * Math.PI / 180;
-  const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
-
-  function orbitPoint(a, b, t){
-    const ex = a * Math.cos(t);
-    const ey = b * Math.sin(t);
-    return [
-      SX + ex*cosT - ey*sinT,
-      SY + ex*sinT + ey*cosT
-    ];
+  // ── Orbit ellipses (one per slot, belt slots styled copper) ─
+  const beltSlots = {};
+  bodies.forEach(b => { if(isBeltBody(b) && b.orbitPos) beltSlots[b.orbitPos] = true; });
+  for(let p = maxP; p >= 1; p--){
+    const [a,b] = orbitAxes(p, maxP);
+    const isBelt = !!beltSlots[p];
+    html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
+      stroke="${isBelt ? '#8B735566' : '#1a3a6a'}"
+      stroke-width="${isBelt ? '3' : '1'}"
+      stroke-dasharray="${isBelt ? '2,3' : '5,6'}"
+      opacity="${isBelt ? '0.7' : '0.55'}"
+      transform="rotate(${tiltDeg},${ORR_SX},${ORR_SY})"/>`;
   }
 
-  const ORBITS = {
-    1: [75,  30],
-    2: [142, 56],
-    3: [205, 81],
-    4: [262, 103],
-    5: [345, 136],
-    6: [435, 172],
-  };
-
-  const PLANET_T = {
-    1: 205 * Math.PI/180,
-    2: 215 * Math.PI/180,
-    3: 210 * Math.PI/180,
-    4: 208 * Math.PI/180,
-    5: 205 * Math.PI/180,
-    6: 200 * Math.PI/180,
-  };
-
-  // ── Orbit ellipses ─────────────────────────────────────────
-  const tiltDeg = (TILT * 180 / Math.PI).toFixed(1);
-  [6,5,4,3,2,1].forEach(i => {
-    const [a,b] = ORBITS[i];
-    const isVeil = i===4;
-    html += `<ellipse cx="${SX}" cy="${SY}" rx="${a}" ry="${b}" fill="none"
-      stroke="${isVeil ? '#8B735566' : '#1a3a6a'}"
-      stroke-width="${isVeil ? '3' : '1'}"
-      stroke-dasharray="${isVeil ? '2,3' : '5,6'}"
-      opacity="${isVeil ? '0.7' : '0.55'}"
-      transform="rotate(${tiltDeg},${SX},${SY})"/>`;
+  // ── Asteroid belts — seeded procedural dot fields ──────────
+  bodies.forEach(b => {
+    if(!isBeltBody(b) || !b.orbitPos) return;
+    const [va, vb] = orbitAxes(b.orbitPos, maxP);
+    const col = b.color || '#8B7355';
+    const density = Math.max(20, Math.min(600, b.beltDensity || 160));
+    const VIBE = ['va','vb','vc','vd','ve','vf','vg','vh'];
+    let rng = seedFromString(b.id || 'belt');
+    for(let i=0;i<density;i++){
+      rng = lcgNext(rng); const arcFrac = (rng % 10000) / 10000;
+      rng = lcgNext(rng); const radialJitter = ((rng % 10000) / 10000 - 0.5) * 0.28;
+      rng = lcgNext(rng); const dotSize = 0.7 + (rng % 10000)/10000 * 1.8;
+      rng = lcgNext(rng); const op = 0.3 + (rng % 10000)/10000 * 0.6;
+      rng = lcgNext(rng); const vibeClass = VIBE[rng % 8];
+      rng = lcgNext(rng); const vibeDur = (1.8 + (rng % 10000)/10000 * 2.4).toFixed(2);
+      rng = lcgNext(rng); const vibeDelay = ((rng % 10000)/10000 * 3.0).toFixed(2);
+      const ang = arcFrac * Math.PI * 2;
+      const ra = va * (1 + radialJitter), rb = vb * (1 + radialJitter);
+      const ex = ra * Math.cos(ang), ey = rb * Math.sin(ang);
+      const vx = ORR_SX + ex*ORR_COS - ey*ORR_SIN;
+      const vy = ORR_SY + ex*ORR_SIN + ey*ORR_COS;
+      html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" class="ast ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s" pointer-events="none"/>`;
+    }
+    // Belt click target + label at the fan position
+    const [bpx,bpy] = orbitPoint(va, vb, ORR_PLANET_T);
+    if(selectedBody===b.id) html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${(va+2).toFixed(1)}" ry="${(vb+2).toFixed(1)}" fill="${col}" opacity="0.08" transform="rotate(${tiltDeg},${ORR_SX},${ORR_SY})" pointer-events="none"/>`;
+    html += `<circle cx="${bpx.toFixed(1)}" cy="${bpy.toFixed(1)}" r="28" fill="transparent" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+    html += `<text x="${bpx.toFixed(1)}" y="${(bpy+32).toFixed(1)}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
+    if(b.hook) html += `<text x="${(bpx+18).toFixed(1)}" y="${(bpy-12).toFixed(1)}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
   });
 
-  // ── Seeded pseudo-random asteroid belt (Veil) ─────────────
-  // Asteroids use absolute screen coords (simpler, no group transform needed).
-  // Each gets a CSS vibration class for subtle shimmer.
-  const veilOrb = ORBITS[4];
-  const VEIL_COLOR = '#8B7355';
-  function lcg(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
-  const VIBE_NAMES = ['va','vb','vc','vd','ve','vf','vg','vh'];
-  let rng = 42;
-  const VEIL_COUNT = 120;
-  for(let i=0; i<VEIL_COUNT; i++){
-    rng = lcg(rng);
-    // Arc: full visible sweep ~140° to ~265° (wider than before)
-    const arcFrac = (rng % 10000) / 10000;
-    rng = lcg(rng);
-    // Wider radial spread — ±22% of orbit size
-    const radialJitter = ((rng % 10000) / 10000 - 0.5) * 0.20;
-    rng = lcg(rng);
-    const dotSize = 0.7 + (rng % 10000)/10000 * 1.8;
-    rng = lcg(rng);
-    const op = 0.3 + (rng % 10000)/10000 * 0.6;
-    rng = lcg(rng);
-    // Vibration: random class, random duration 1.8–4.2s, random delay 0–3s
-    const vibeClass = VIBE_NAMES[rng % 8];
-    rng = lcg(rng);
-    const vibeDur = (1.8 + (rng % 10000)/10000 * 2.4).toFixed(2);
-    rng = lcg(rng);
-    const vibeDelay = ((rng % 10000)/10000 * 3.0).toFixed(2);
+  // ── Draw order: planets far→near, then star, then moons ────
+  const planets = bodies.filter(b => !b.isStar && !b.isMoon && !isBeltBody(b) && b.orbitPos)
+                        .sort((a,b) => (b.orbitPos||0) - (a.orbitPos||0));
+  const star = bodies.find(b => b.isStar);
+  const moons = bodies.filter(b => b.isMoon);
 
-    const baseAngle = (175 + arcFrac * 62) * Math.PI / 180;
-    const [va2, vb2] = veilOrb;
-    const ra = va2 * (1 + radialJitter);
-    const rb = vb2 * (1 + radialJitter);
-    const ex = ra * Math.cos(baseAngle);
-    const ey = rb * Math.sin(baseAngle);
-    const vx = SX + ex*cosT - ey*sinT;
-    const vy = SY + ex*sinT + ey*cosT;
-    html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${VEIL_COLOR}" opacity="${op.toFixed(2)}" class="ast ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s" pointer-events="none"/>`;
+  // Helper: where a parent body sits, so moons can hang off it
+  function parentPos(parentId){
+    const p = bodies.find(b => b.id === parentId);
+    if(!p || !p.orbitPos) return null;
+    return orbitPoint(...orbitAxes(p.orbitPos, maxP), ORR_PLANET_T);
   }
 
-  // ── Draw bodies back-to-front ──────────────────────────────
-  const drawOrder = [
-    BODIES.find(b=>b.id==='ouros'),
-    BODIES.find(b=>b.id==='tanath'),
-    ...BODIES.filter(b=>b.parentId==='tanath'),
-    BODIES.find(b=>b.id==='greymantle'),
-    BODIES.find(b=>b.id==='aurelia'),
-    BODIES.find(b=>b.id==='pallor'),
-    BODIES.find(b=>b.id==='scoria'),
-    BODIES.find(b=>b.isStar),
-  ].filter(Boolean);
-
-  // Veil click target — draw before other bodies so planets render on top
-  {
-    const [vpx,vpy] = orbitPoint(...ORBITS[4], PLANET_T[4]);
-    const veil = BODIES.find(b=>b.id==='veil');
-    if(selectedBody==='veil') html += `<ellipse cx="${SX}" cy="${SY}" rx="${ORBITS[4][0]+2}" ry="${ORBITS[4][1]+2}" fill="${veil.color}" opacity="0.08" transform="rotate(${tiltDeg},${SX},${SY})" pointer-events="none"/>`;
-    html += `<circle cx="${vpx.toFixed(1)}" cy="${vpy.toFixed(1)}" r="28" fill="transparent" data-body="veil" class="body-node" style="cursor:pointer"/>`;
-    html += `<text x="${vpx.toFixed(1)}" y="${(vpy+32).toFixed(1)}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">The Veil</text>`;
-    html += `<text x="${(vpx+18).toFixed(1)}" y="${(vpy-12).toFixed(1)}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
-  }
-
-  drawOrder.forEach(b => {
-    if(b.isStar){
-      html += `<circle id="star-glow-outer" cx="${SX}" cy="${SY}" r="52" fill="${b.color}" opacity="0.06"/>`;
-      html += `<circle id="star-glow-mid" cx="${SX}" cy="${SY}" r="38" fill="${b.color}" opacity="0.12"/>`;
-      html += `<circle cx="${SX}" cy="${SY}" r="26" fill="${b.color}" opacity="0.22"/>`;
-      html += `<circle cx="${SX}" cy="${SY}" r="18" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(selectedBody===b.id) html += `<circle cx="${SX}" cy="${SY}" r="26" fill="none" stroke="${b.color}" stroke-width="1.5" opacity="0.7" pointer-events="none"/>`;
-      html += `<text x="${SX}" y="${SY+36}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
-      return;
-    }
-
-    let px, py, r;
-
-    // ── Pallor (Aurelia moon) ─────────────────────────────────
-    if(b.isMoon && b.parentId==='aurelia'){
-      const [ax,ay] = orbitPoint(...ORBITS[2], PLANET_T[2]);
-      px = ax + 22; py = ay - 15; r = 4;
-      html += `<line x1="${ax}" y1="${ay}" x2="${px}" y2="${py}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
-      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="#B0B0B0" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#pg-greymantle)" pointer-events="none"/>`;
-      html += `<text x="${px+7}" y="${py+3}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">Pallor</text>`;
-      return;
-    }
-
-    // ── Tanath moons ─────────────────────────────────────────
-    if(b.isMoon && b.parentId==='tanath'){
-      const [tx,ty] = orbitPoint(...ORBITS[5], PLANET_T[5]);
-      const mOffsets = {esk:[-22,-10], nara:[26,-8], darkmoon:[14,20]};
-      const [mx,my] = mOffsets[b.id] || [20,-10];
-      px = tx+mx; py = ty+my; r = 4;
-      html += `<line x1="${tx}" y1="${ty}" x2="${px}" y2="${py}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
-      html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" ${b.id==='darkmoon'?'opacity="0.4"':''} data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-      if(b.hook) html += `<text x="${px+5}" y="${py-4}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
-      html += `<text x="${px+8}" y="${py+3}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">${b.name}</text>`;
-      return;
-    }
-
-    // ── Skip veil — handled above ──────────────────────────────
-    if(b.id==='veil') return;
-
-    // ── Regular planets ───────────────────────────────────────
-    [px,py] = orbitPoint(...ORBITS[b.orbitPos], PLANET_T[b.orbitPos]);
-    r = b.id==='tanath'?18:b.id==='ouros'?13:b.id==='aurelia'?11:b.id==='greymantle'?8:7;
+  // ── Planets ────────────────────────────────────────────────
+  planets.forEach(b => {
+    const [px,py] = orbitPoint(...orbitAxes(b.orbitPos, maxP), ORR_PLANET_T);
+    const r = b.displayRadius || 7;
     const gid = `pg-${b.id}`;
-
-    // Outer glow
     if(selectedBody===b.id) html += `<circle cx="${px}" cy="${py}" r="${r+7}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
-
-    // Planet base colour — group wraps planet + label for animation
-    html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${PLANET_T[b.orbitPos]}">`;
+    html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-
-    // Shading gradient overlay
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" pointer-events="none"/>`;
 
-    // Tanath rings — drawn before the planet-front-occluder
-    if(b.id==='tanath'){
+    // Rings — data-driven via ringStyle: 'major' | 'subtle'
+    if(b.ringStyle === 'major'){
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+14}" ry="${(r+14)*0.27}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.3" pointer-events="none"/>`;
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+9}" ry="${(r+9)*0.27}" fill="none" stroke="${b.color}" stroke-width="3.5" opacity="0.55" pointer-events="none"/>`;
-      // Front of ring passes in front of planet — redraw top half of planet over back ring
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
-    }
-
-    // Ouros — subtle ring
-    if(b.id==='ouros'){
+    } else if(b.ringStyle === 'subtle'){
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+8}" ry="${(r+8)*0.22}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.38" pointer-events="none"/>`;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
@@ -2551,7 +2850,53 @@ function buildOrrery(){
 
     if(b.hook) html += `<text x="${px+r+2}" y="${py-r-1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
     html += `<text x="${px}" y="${py+r+14}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
-    html += `</g>`; // end anim-planet group
+    html += `</g>`;
+  });
+
+  // ── Star ───────────────────────────────────────────────────
+  if(star){
+    const sr = star.displayRadius || 18;
+    html += `<circle id="star-glow-outer" cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*2.9}" fill="${star.color}" opacity="0.06"/>`;
+    html += `<circle id="star-glow-mid" cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*2.1}" fill="${star.color}" opacity="0.12"/>`;
+    html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*1.45}" fill="${star.color}" opacity="0.22"/>`;
+    html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr}" fill="${star.color}" data-body="${star.id}" class="body-node" style="cursor:pointer"/>`;
+    if(selectedBody===star.id) html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*1.45}" fill="none" stroke="${star.color}" stroke-width="1.5" opacity="0.7" pointer-events="none"/>`;
+    html += `<text x="${ORR_SX}" y="${ORR_SY+sr+18}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">${star.name}</text>`;
+  }
+
+  // ── Moons — fanned generically around their parent ─────────
+  // Group by parent so multiple moons spread out instead of overlapping.
+  const moonsByParent = {};
+  moons.forEach(m => { (moonsByParent[m.parentId] = moonsByParent[m.parentId] || []).push(m); });
+  Object.keys(moonsByParent).forEach(pid => {
+    const base = parentPos(pid);
+    if(!base) return;
+    const [bx,by] = base;
+    const list = moonsByParent[pid];
+    const parentBody = bodies.find(b => b.id === pid);
+    const pr = (parentBody && parentBody.displayRadius) || 11;
+    const ringR = pr + 16;
+    list.forEach((m, idx) => {
+      // Spread moons across an arc on the sunward/upper side
+      const frac = list.length === 1 ? 0.5 : idx / (list.length - 1);
+      const ang = (-140 + frac * 200) * Math.PI / 180; // -140°..+60°
+      const mx = bx + ringR * Math.cos(ang);
+      const my = by + ringR * 0.6 * Math.sin(ang);
+      const mr = 4;
+      html += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
+      html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="${m.color}" ${m.decoration==='dim'?'opacity="0.4"':''} data-body="${m.id}" class="body-node" style="cursor:pointer"/>`;
+      const gid = `pg-${m.id}`;
+      html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="url(#${gid})" pointer-events="none"/>`;
+      if(m.hook) html += `<text x="${(mx+5).toFixed(1)}" y="${(my-4).toFixed(1)}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
+      // Optional asteroid-cluster decoration near the moon
+      if(m.decoration === 'cluster'){
+        html += `<text x="${(mx+25).toFixed(1)}" y="${(my+3).toFixed(1)}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">${m.name}</text>`;
+        const dm = [{dx:-8,dy:-4,r:1.1},{dx:-12,dy:1,r:0.8},{dx:-5,dy:5,r:1.3},{dx:-9,dy:-8,r:0.7},{dx:4,dy:-6,r:0.9},{dx:8,dy:-3,r:1.0}];
+        dm.forEach(a => { html += `<circle cx="${(mx+a.dx).toFixed(1)}" cy="${(my+a.dy).toFixed(1)}" r="${a.r}" fill="#8B7355" opacity="0.7" pointer-events="none"/>`; });
+      } else {
+        html += `<text x="${(mx+7).toFixed(1)}" y="${(my+3).toFixed(1)}" fill="#8b91a8" font-size="7" font-family="monospace" dominant-baseline="middle" pointer-events="none">${m.name}</text>`;
+      }
+    });
   });
 
   svg.innerHTML = html;
@@ -2561,31 +2906,12 @@ function buildOrrery(){
   });
 }
 
-function selectBody(id){
-  selectedBody = id;
-  const body = BODIES.find(b=>b.id===id);
-  if(!body) return;
-  buildOrrery();
-
-  document.getElementById("sys-overview").classList.add("v-hidden");
-  const det = document.getElementById("sys-body-detail");
-  det.classList.remove("v-hidden");
-
-  const nm = document.getElementById("sys-dname");
-  nm.textContent = body.name.toUpperCase();
-  nm.style.color = body.color;
-  document.getElementById("sys-dtype").textContent = body.type.toUpperCase();
-
-  const stBtn = document.getElementById("btn-view-station");
-  if(body.id==="aurelia"){
-    stBtn.classList.remove("v-hidden");
-    stBtn.textContent = "⬡ VIEW AURELIA UP CLOSE";
-    stBtn.onclick = function(){ goAurelia(); };
-  } else {
-    stBtn.classList.add("v-hidden");
-  }
-
-  const pm = pmCheck.checked;
+// Shared renderer for a body's content sections (UWP header, fields, overview,
+// read-aloud, referee note, NPCs, checks, events). Used by BOTH the orrery
+// detail panel (selectBody) and the close-up body view (buildBodyView) so the
+// two never diverge and their design-mode edits resolve to the same keys.
+function renderBodyContentSections(body, pm){
+  const id = body.id;
   let html = "";
 
   if(body.uwpString&&body.uwpString!=="—"){
@@ -2601,7 +2927,7 @@ function selectBody(id){
   const sbDescKey = 'body-'+id+'-desc';
   designOriginalRegistry[sbDescKey] = body.desc;
   const sbDescText = resolveContent(sbDescKey, body.desc);
-  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, sbDescText.replace(/\n/g,"<br>"))}</div></div>`;
+  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, (sbDescText||'').replace(/\n/g,"<br>"))}</div></div>`;
 
   if(!pm&&body.readAloud){
     const sbReadKey = 'body-'+id+'-readAloud';
@@ -2613,13 +2939,13 @@ function selectBody(id){
     const sbRefKey = 'body-'+id+'-refNote';
     designOriginalRegistry[sbRefKey] = body.refNote;
     const sbRefText = resolveContent(sbRefKey, body.refNote);
-    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${designWrap(sbRefKey, body.refNote, sbRefText.replace(/\n/g,"<br>"))}</div>`;
+    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${designWrap(sbRefKey, body.refNote, (sbRefText||'').replace(/\n/g,"<br>"))}</div>`;
   }
 
   if(!pm&&body.npcs&&body.npcs.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
     body.npcs.forEach((n,i)=>{
-      const nid=`sys-npc-${i}`;
+      const nid=`sys-npc-${id}-${i}`;
       const rowListKey = 'body-'+id+'-npc-'+i+'-rows';
       const rowBaseKey = 'body-'+id+'-npc-'+i+'-row-';
       const mergedRows = mergeListWithAdditions(n.rows, rowListKey, rowBaseKey);
@@ -2664,9 +2990,364 @@ function selectBody(id){
     body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`);
     html += `</div>`;
   }
+  return html;
+}
+
+function selectBody(id){
+  selectedBody = id;
+  const body = getBodies().find(b=>b.id===id);
+  if(!body) return;
+  buildOrrery();
+
+  document.getElementById("sys-overview").classList.add("v-hidden");
+  const det = document.getElementById("sys-body-detail");
+  det.classList.remove("v-hidden");
+
+  const nm = document.getElementById("sys-dname");
+  nm.textContent = body.name.toUpperCase();
+  nm.style.color = body.color;
+  document.getElementById("sys-dtype").textContent = body.type.toUpperCase();
+
+  const stBtn = document.getElementById("btn-view-station");
+  if(body.id==="aurelia"){
+    stBtn.classList.remove("v-hidden");
+    stBtn.textContent = "⬡ VIEW AURELIA UP CLOSE";
+    stBtn.onclick = function(){ goAurelia(); };
+  } else {
+    stBtn.classList.add("v-hidden");
+  }
+
+  const pm = pmCheck.checked;
+  let html = "";
+
+  // Generic close-up entry — every body except Aurelia (which keeps its
+  // bespoke view until Phase 3 migrates it onto this engine).
+  if(body.id!=="aurelia"){
+    html += `<button class="design-add-btn" style="width:100%;margin-bottom:10px;border-color:var(--accentGold);color:var(--accentGold)" onclick="goBodyView('${body.id}')">⊙ View ${escHtml(body.name)} up close</button>`;
+  }
+
+  html += renderBodyContentSections(body, pm);
+
+  // ── Design-mode body controls ──────────────────────────────
+  if(designModeOn && isReferee()){
+    const added = isAddedBody(body.id);
+    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Body</div>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openBodyEditor('${body.id}')">✦ Edit Body Properties</button>
+      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteBody('${body.id}')">🗑 ${added?'Delete This Body':'Remove This Body'}</button>
+    </div>`;
+  }
 
   det.innerHTML = html;
   setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}], body.name);
+}
+
+// Returns to the system body-list overview (used after deleting the body
+// currently being inspected, and reachable from the breadcrumb).
+function goSystemOverview(){
+  selectedBody = null;
+  const det = document.getElementById("sys-body-detail");
+  if(det){ det.classList.add("v-hidden"); det.innerHTML = ""; }
+  const ov = document.getElementById("sys-overview");
+  if(ov) ov.classList.remove("v-hidden");
+  const nm = document.getElementById("sys-dname");
+  if(nm){ nm.textContent = "AURELIAN SYSTEM"; nm.style.color = ""; }
+  const dt = document.getElementById("sys-dtype");
+  if(dt) dt.textContent = "SELECT A BODY TO INSPECT";
+  const stBtn = document.getElementById("btn-view-station");
+  if(stBtn) stBtn.classList.add("v-hidden");
+  document.getElementById("breadcrumb").innerHTML = "";
+  buildOrrery();
+}
+
+// True if the body id belongs to a referee-added body (vs a base body).
+function isAddedBody(id){
+  return (bodyAdditions[currentSystemId] || []).some(b => b.id === id);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERIC BODY CLOSE-UP VIEW  —  Phase 1
+// ═══════════════════════════════════════════════════════════════════════════
+// A data-driven close-up page for any body. The disc visual is chosen from the
+// body's discStyle (auto-derived from type when not explicitly set), so a gas
+// giant, ice world, scorched rock, ocean world, star, moon, or belt each read
+// differently. The right panel reuses renderBodyContentSections so its content
+// and design-mode edits stay in lockstep with the orrery detail panel.
+// Locations (Phase 2) and interiors (Phase 4) hang off this same view later.
+
+// Pick the visual treatment for a body. Explicit body.discStyle wins; otherwise
+// derive from type keywords / flags. Returns one of:
+//   star | belt | gasgiant | ocean | ice | rock | moon
+function bodyDiscStyle(body){
+  if(body.discStyle) return body.discStyle;
+  const t = (body.type || '').toLowerCase();
+  if(body.isStar) return 'star';
+  if(/asteroid belt|belt/.test(t)) return 'belt';
+  if(/gas giant|ice giant/.test(t)) return 'gasgiant';
+  if(body.isMoon) return 'moon';
+  if(/jewel|ocean|garden/.test(t)) return 'ocean';
+  if(/ice/.test(t)) return 'ice';
+  return 'rock';
+}
+
+// Friendly label for the disc-style picker in the body editor (Phase-1 read-only
+// display; editor wiring uses the same keys).
+const DISC_STYLE_LABELS = {
+  star:'Star', belt:'Asteroid Belt', gasgiant:'Gas / Ice Giant',
+  ocean:'Ocean / Jewel', ice:'Ice World', rock:'Rock World', moon:'Moon'
+};
+
+// ── Disc renderer ──────────────────────────────────────────────────────────
+// Returns an SVG inner-markup string for the fixed 800×600 viewBox. Pure SVG so
+// every body is self-contained and portable across systems (no bespoke CSS
+// divs). Seeded by body id so craters / belts are stable across renders.
+function renderBodyDisc(body){
+  const W=800, H=600, CX=400, CY=300;
+  const style = bodyDiscStyle(body);
+  const col = body.color || '#8b91a8';
+  let s = '';
+
+  // ── Background star field (deterministic) ──
+  const STARS = [
+    [32,22],[88,55],[155,18],[245,48],[348,12],[472,38],[588,68],[672,22],[748,50],
+    [62,105],[152,132],[318,98],[428,128],[548,88],[648,118],[740,105],
+    [22,188],[138,208],[232,168],[408,198],[528,178],[688,198],[772,168],
+    [48,278],[158,298],[268,258],[398,288],[512,278],[638,268],[752,308],
+    [88,368],[208,388],[372,348],[468,408],[608,368],[712,388],
+    [30,455],[140,478],[280,442],[430,465],[570,445],[700,470],[770,445],
+    [60,525],[180,548],[350,515],[490,538],[650,518],[750,540]
+  ];
+  STARS.forEach(([x,y],i) => {
+    const r = i%5===0 ? 1.5 : 1;
+    const op = 0.2 + (i%3)*0.15;
+    s += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}" pointer-events="none"/>`;
+  });
+
+  // ── Ambient star-light glow from upper-right (toward Auros) ──
+  s += `<defs>
+    <radialGradient id="bv-ambient" cx="82%" cy="12%" r="65%">
+      <stop offset="0%" stop-color="#E07030" stop-opacity="0.13"/>
+      <stop offset="100%" stop-color="#E07030" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bv-base" cx="64%" cy="30%" r="78%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="42%" stop-color="${col}" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000610" stop-opacity="0.55"/>
+    </radialGradient>
+    <clipPath id="bv-clip"><circle cx="${CX}" cy="${CY}" r="110"/></clipPath>
+  </defs>`;
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#bv-ambient)"/>`;
+
+  if(style === 'belt')      s += discBelt(body, CX, CY, col);
+  else if(style === 'star') s += discStar(body, CX, CY, col);
+  else                      s += discPlanet(body, CX, CY, col, style);
+
+  return s;
+}
+
+// Seeded RNG helpers reuse the orrery's seedFromString / lcgNext.
+function discRng(seedStr){
+  let rng = seedFromString(seedStr || 'body');
+  return () => { rng = lcgNext(rng); return (rng % 100000) / 100000; };
+}
+
+// ── Planet-like disc (ocean / ice / rock / gasgiant / moon) ──
+function discPlanet(body, CX, CY, col, style){
+  const PR = style==='moon' ? 80 : style==='gasgiant' ? 122 : 110;
+  let s = '';
+  const rnd = discRng(body.id);
+
+  // Soft outer atmosphere / glow halo (skip for airless rock & moon → thinner)
+  const airy = (style==='ocean' || style==='gasgiant' || style==='ice');
+  if(airy){
+    s += `<circle cx="${CX}" cy="${CY}" r="${PR+12}" fill="${col}" opacity="0.05" pointer-events="none"/>`;
+    s += `<circle cx="${CX}" cy="${CY}" r="${PR+5}" fill="none" stroke="${col}" stroke-width="6" opacity="0.10" pointer-events="none"/>`;
+  }
+
+  // Base sphere — body colour, click target for entering (Phase 2+)
+  s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="${col}" data-body="${body.id}" class="bv-disc" style="cursor:default"/>`;
+
+  // Clipped style-specific surface detail
+  s += `<g clip-path="url(#bv-clip)">`;
+
+  if(style === 'gasgiant'){
+    // Horizontal banding — alternating light/dark translucent strips
+    const bands = 7;
+    for(let i=0;i<bands;i++){
+      const yy = CY - PR + (i + 0.5) * (2*PR/bands);
+      const h  = (2*PR/bands) * (0.62 + rnd()*0.5);
+      const light = i % 2 === 0;
+      s += `<ellipse cx="${CX}" cy="${yy.toFixed(1)}" rx="${PR}" ry="${(h/2).toFixed(1)}" fill="${light?'#ffffff':'#000610'}" opacity="${(light?0.07:0.14).toFixed(2)}"/>`;
+    }
+    // A storm oval (great spot)
+    const spotY = CY + (rnd()-0.5)*PR*0.7;
+    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.22).toFixed(1)}" ry="${(PR*0.12).toFixed(1)}" fill="#ffffff" opacity="0.10"/>`;
+    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.12).toFixed(1)}" ry="${(PR*0.06).toFixed(1)}" fill="#000610" opacity="0.12"/>`;
+  } else if(style === 'ocean'){
+    // Cloud swirls + landmass blots
+    for(let i=0;i<5;i++){
+      const a = rnd()*Math.PI*2, d = rnd()*PR*0.75;
+      const x = CX + Math.cos(a)*d, y = CY + Math.sin(a)*d;
+      s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(18+rnd()*36).toFixed(1)}" ry="${(10+rnd()*16).toFixed(1)}" fill="#ffffff" opacity="${(0.06+rnd()*0.08).toFixed(2)}" transform="rotate(${(rnd()*60-30).toFixed(0)},${x.toFixed(1)},${y.toFixed(1)})"/>`;
+    }
+    for(let i=0;i<3;i++){
+      const a = rnd()*Math.PI*2, d = rnd()*PR*0.6;
+      const x = CX + Math.cos(a)*d, y = CY + Math.sin(a)*d;
+      s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(14+rnd()*22).toFixed(1)}" ry="${(9+rnd()*14).toFixed(1)}" fill="#1d3b2a" opacity="0.18"/>`;
+    }
+  } else if(style === 'ice'){
+    // Frost sheen + fracture lines
+    for(let i=0;i<4;i++){
+      const a = rnd()*Math.PI*2, d = rnd()*PR*0.7;
+      const x = CX + Math.cos(a)*d, y = CY + Math.sin(a)*d;
+      s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(16+rnd()*28).toFixed(1)}" ry="${(8+rnd()*12).toFixed(1)}" fill="#ffffff" opacity="${(0.07+rnd()*0.07).toFixed(2)}"/>`;
+    }
+    for(let i=0;i<5;i++){
+      const x1 = CX-PR + rnd()*2*PR, y1 = CY-PR + rnd()*2*PR;
+      const x2 = x1 + (rnd()*60-30), y2 = y1 + (rnd()*60-30);
+      s += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#cfe4ff" stroke-width="0.8" opacity="0.25"/>`;
+    }
+  } else { // rock & moon
+    // Craters — seeded; rim highlight + dark floor
+    const n = style==='moon' ? 9 : 12;
+    for(let i=0;i<n;i++){
+      const a = rnd()*Math.PI*2, d = rnd()*PR*0.82;
+      const x = CX + Math.cos(a)*d, y = CY + Math.sin(a)*d;
+      const cr = 3 + rnd()*11;
+      s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cr.toFixed(1)}" fill="#000610" opacity="0.16"/>`;
+      s += `<circle cx="${(x-cr*0.25).toFixed(1)}" cy="${(y-cr*0.25).toFixed(1)}" r="${(cr*0.7).toFixed(1)}" fill="#ffffff" opacity="0.05"/>`;
+    }
+  }
+  s += `</g>`;
+
+  // Shading gradient overlay (limb darkening + sunward highlight)
+  s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="url(#bv-base)" pointer-events="none"/>`;
+
+  // Terminator shadow (sunward from upper-right → shadow lower-left)
+  s += `<g clip-path="url(#bv-clip)"><ellipse cx="${CX-36}" cy="${CY+18}" rx="${PR*0.92}" ry="${PR}" fill="#000610" opacity="0.30" transform="rotate(-18,${CX-36},${CY+18})"/></g>`;
+
+  // Rings (data-driven, reusing body.ringStyle)
+  if(body.ringStyle === 'major' || body.ringStyle === 'subtle'){
+    const rr = body.ringStyle==='major' ? PR+44 : PR+30;
+    const sw = body.ringStyle==='major' ? 9 : 5;
+    s += `<ellipse cx="${CX}" cy="${CY}" rx="${rr}" ry="${(rr*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${sw}" opacity="0.28" pointer-events="none"/>`;
+    s += `<ellipse cx="${CX}" cy="${CY}" rx="${(rr-sw-3).toFixed(1)}" ry="${((rr-sw-3)*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${(sw*0.5).toFixed(1)}" opacity="0.18" pointer-events="none"/>`;
+    // Redraw front half of planet over the back of the ring
+    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="${col}" pointer-events="none"/>`;
+    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="url(#bv-base)" pointer-events="none"/>`;
+  }
+
+  // Name label
+  s += `<text x="${CX}" y="${CY+PR+30}" text-anchor="middle" fill="${body.hook?'#E8A020':'#8b91a8'}" font-size="13" font-family="monospace" font-weight="700" letter-spacing="2" pointer-events="none">${(body.name||'').toUpperCase()}</text>`;
+  return s;
+}
+
+// ── Star disc — glowing core + corona, no terminator ──
+function discStar(body, CX, CY, col){
+  let s = '';
+  s += `<circle cx="${CX}" cy="${CY}" r="190" fill="${col}" opacity="0.05" pointer-events="none"/>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="150" fill="${col}" opacity="0.08" pointer-events="none"/>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="118" fill="${col}" opacity="0.14" pointer-events="none"/>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="92" fill="${col}" opacity="0.30" pointer-events="none"/>`;
+  // Core with soft white centre
+  s += `<defs><radialGradient id="bv-star" cx="50%" cy="42%" r="60%">
+    <stop offset="0%" stop-color="#fff7ec" stop-opacity="0.95"/>
+    <stop offset="55%" stop-color="${col}"/>
+    <stop offset="100%" stop-color="${col}"/>
+  </radialGradient></defs>`;
+  s += `<circle cx="${CX}" cy="${CY}" r="78" fill="url(#bv-star)" data-body="${body.id}" class="bv-disc"/>`;
+  // Subtle flare ticks around the rim
+  const rnd = discRng(body.id);
+  for(let i=0;i<14;i++){
+    const a = (i/14)*Math.PI*2 + rnd()*0.2;
+    const r1 = 80, r2 = 80 + 8 + rnd()*22;
+    s += `<line x1="${(CX+Math.cos(a)*r1).toFixed(1)}" y1="${(CY+Math.sin(a)*r1).toFixed(1)}" x2="${(CX+Math.cos(a)*r2).toFixed(1)}" y2="${(CY+Math.sin(a)*r2).toFixed(1)}" stroke="${col}" stroke-width="2" opacity="0.25" pointer-events="none"/>`;
+  }
+  s += `<text x="${CX}" y="${CY+118}" text-anchor="middle" fill="#E8A020" font-size="13" font-family="monospace" font-weight="700" letter-spacing="2" pointer-events="none">${(body.name||'').toUpperCase()}</text>`;
+  return s;
+}
+
+// ── Belt disc — dense procedural rock field, no sphere ──
+function discBelt(body, CX, CY, col){
+  let s = '';
+  const rnd = discRng(body.id);
+  const count = Math.max(120, Math.min(600, body.beltDensity || 280));
+  // A broad tilted band across the view
+  for(let i=0;i<count;i++){
+    const ang = rnd()*Math.PI*2;
+    const rad = 60 + rnd()*230;
+    const x = CX + Math.cos(ang)*rad;
+    const y = CY + Math.sin(ang)*rad*0.42; // flatten into a belt
+    const r = 0.7 + rnd()*2.6;
+    const op = 0.25 + rnd()*0.6;
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" pointer-events="none"/>`;
+  }
+  // A few larger “named rock” candidates (Phase 2 turns these into locations)
+  for(let i=0;i<5;i++){
+    const ang = rnd()*Math.PI*2, rad = 90 + rnd()*180;
+    const x = CX + Math.cos(ang)*rad, y = CY + Math.sin(ang)*rad*0.42;
+    const r = 6 + rnd()*7;
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${col}"/>`;
+    s += `<circle cx="${(x-r*0.3).toFixed(1)}" cy="${(y-r*0.3).toFixed(1)}" r="${(r*0.6).toFixed(1)}" fill="#ffffff" opacity="0.07"/>`;
+  }
+  s += `<text x="${CX}" y="${CY+150}" text-anchor="middle" fill="${body.hook?'#E8A020':'#8b91a8'}" font-size="13" font-family="monospace" font-weight="700" letter-spacing="2" pointer-events="none">${(body.name||'').toUpperCase()}</text>`;
+  return s;
+}
+
+// ── View build + navigation ─────────────────────────────────────────────────
+function buildBodyView(id){
+  const body = getBodies().find(b => b.id === id);
+  if(!body){ goSystem(); return; }
+  selectedBody = id;
+
+  const svg = document.getElementById('body-disc-svg');
+  if(svg) svg.innerHTML = renderBodyDisc(body);
+
+  const nm = document.getElementById('bv-dname');
+  if(nm){ nm.textContent = body.name.toUpperCase(); nm.style.color = body.color; }
+  const dt = document.getElementById('bv-dtype');
+  if(dt) dt.textContent = (body.type||'').toUpperCase();
+
+  const pm = pmCheck.checked;
+  let html = '';
+  html += renderBodyContentSections(body, pm);
+
+  // Phase-2 placeholder: locations live here. Kept visible only to referees so
+  // the structure is obvious during testing without confusing players.
+  if(!pm){
+    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+      <div class="s-sec-lbl" style="color:var(--tx1)">Locations</div>
+      <div style="font-size:11px;color:var(--tx1);line-height:1.5">Surface sites, stations, and bases for ${escHtml(body.name)} will be addable here.</div>
+    </div>`;
+  }
+
+  // Design-mode body controls, same as the orrery detail panel
+  if(designModeOn && isReferee()){
+    const added = isAddedBody(body.id);
+    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Body</div>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openBodyEditor('${body.id}')">✦ Edit Body Properties</button>
+      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteBody('${body.id}')">🗑 ${added?'Delete This Body':'Remove This Body'}</button>
+    </div>`;
+  }
+
+  const db = document.getElementById('bv-db');
+  if(db) db.innerHTML = html;
+
+  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"System",fn:"goSystem"}], body.name);
+  document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
+}
+
+function goBodyView(id){
+  playViewTransition(() => {
+    currentView = "body";
+    document.getElementById("view-system").classList.add("v-hidden");
+    document.getElementById("view-aurelia").classList.add("v-hidden");
+    document.getElementById("view-station").classList.add("v-hidden");
+    document.getElementById("view-body").classList.remove("v-hidden");
+    document.getElementById("view-body").style.display = "flex";
+    buildBodyView(id);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2690,6 +3371,7 @@ function enterStation(){
     currentView = "station";
     document.getElementById("view-system").classList.add("v-hidden");
     document.getElementById("view-aurelia").classList.add("v-hidden");
+    document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-station").classList.remove("v-hidden");
     document.getElementById("view-station").style.display="flex";
     document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
@@ -2703,11 +3385,12 @@ function goSystem(){
     currentView = "system";
     document.getElementById("view-station").classList.add("v-hidden");
     document.getElementById("view-aurelia").classList.add("v-hidden");
+    document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-system").classList.remove("v-hidden");
     document.getElementById("view-system").style.display="flex";
     document.getElementById("hdr-title").textContent = "AURELIAN SYSTEM";
     if(selectedBody){
-      const b=BODIES.find(x=>x.id===selectedBody);
+      const b=getBodies().find(x=>x.id===selectedBody);
       setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}],b?b.name:"");
     } else {
       document.getElementById("breadcrumb").innerHTML="";
@@ -2778,19 +3461,20 @@ function renderHeader(){
   const a=MAIN[cur], sub=curSub&&a.subs&&a.subs[curSub];
   h.style.display="block";
   h.innerHTML=`<span class="atag" style="background:${a.tagBg};color:${a.tagColor}">${a.tag}</span>`
-    +`<div class="aname">${sub?a.label+" → "+sub.label:a.label}</div>`
-    +`<div class="asub">${sub?sub.sub:a.sub}</div>`;
+    +`<div class="aname">${sub?a.label+" → "+sub.label:a.label}</div>`;
 }
 
 function renderTabs(){
   const tb=document.getElementById("tab-bar");
   if(!cur){tb.style.display="none";return;}
   const pm=pmCheck.checked;
-  const refOnly=["npcs","checks","events","refnotes"]; // desc tab visible in PM but shows cleaned content
-  const allTabs=[["overview","Overview"],["desc","Description"],["npcs","NPCs"],["checks","Checks"],["events","Events"],["refnotes","Ref Notes"],["notes","My Notes"]];
+  const refOnly=["npcs","checks","events","refnotes"];
+  const allTabs=[["overview","Overview"],["npcs","NPCs"],["checks","Checks"],["events","Events"],["refnotes","Ref Notes"],["notes","My Notes"]];
   const tabs=pm?allTabs.filter(([k])=>!refOnly.includes(k)):allTabs;
   const hasSubs=!curSub&&MAIN[cur].subs&&Object.keys(MAIN[cur].subs).length>0;
-  if(!tabs.map(t=>t[0]).includes(curTab)) curTab="overview";
+  const validTabs = tabs.map(t=>t[0]);
+  if(hasSubs) validTabs.push("subareas");
+  if(!validTabs.includes(curTab)) curTab="overview";
   tb.style.display="flex";
   let html=tabs.map(([k,l])=>`<button class="tab${curTab===k?" on":""}" onclick="setTab('${k}')">${l}</button>`).join("");
   if(hasSubs) html+=`<button class="tab${curTab==="subareas"?" on":""}" onclick="setTab('subareas')">Sub-areas</button>`;
@@ -2853,9 +3537,19 @@ function renderDetail(){
     d.innerHTML=html;
   } else if(curTab==="npcs"){
     let html=backBtn;
-    if(!a.npcs||a.npcs.length===0){d.innerHTML=html+`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No named NPCs in this area.</div>`;return;}
-    html+=a.npcs.map((n,i)=>{
-      const nid="sta-npc-"+cur+(curSub||"")+i;
+    const npcListKey = stKeyForNpcs();
+    const npcBaseKey = "sta-npc-"+cur+(curSub||"");
+    const mergedNpcs = mergeListWithAdditions(a.npcs, npcListKey, npcBaseKey);
+    const addNpcBtn = designModeOn
+      ? `<button class="design-add-btn" style="margin-bottom:10px;width:100%" onclick="openNpcCreator()">+ Add NPC</button>`
+      : '';
+    if(!mergedNpcs.length){
+      d.innerHTML = html + addNpcBtn + `<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No named NPCs in this area.</div>`;
+      return;
+    }
+    html += addNpcBtn;
+    html+=mergedNpcs.map(({item:n, key:nidKey, isAddition})=>{
+      const nid=nidKey;
       const rowListKey = nid+'-rows';
       const rowBaseKey = nid+'-row-';
       const mergedRows = mergeListWithAdditions(n.rows, rowListKey, rowBaseKey);
@@ -2867,11 +3561,19 @@ function renderDetail(){
         return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
-      return `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div>${!pmCheck.checked ? npcLocationBadgeHTML(n.name) : ''}</div>
-        <span class="chev" id="${nid}-chev">▾</span></div>
-        <div class="npc-body" id="${nid}">
-          ${!pmCheck.checked ? npcLocEditorHTML(n.name) : ''}
+      const locBadge = !pmCheck.checked ? npcLocationBadgeHTML(n.name) : '';
+      const dispoBadge = !pmCheck.checked ? npcDispoBadgeHTML(n.name) : '';
+      const locEditor = !pmCheck.checked ? npcLocEditorHTML(n.name) : '';
+      const hasLocEditor = npcLocEditorOpen === npcKey(n.name);
+      const bodyOpen = hasLocEditor ? ' open' : '';
+      const delNpcBtn = (designModeOn && isAddition)
+        ? `<button class="design-edit-pencil-inline danger" style="margin-left:6px" onclick="event.stopPropagation();deleteAddedNpc('${npcListKey}','${nidKey}')" title="Delete this NPC">🗑</button>`
+        : '';
+      return `<div class="npc-card"${hasLocEditor ? ' style="overflow:visible"' : ''}><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
+        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div>${locBadge}${dispoBadge}</div>
+        <span style="display:flex;align-items:center;gap:2px">${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
+        <div class="npc-body${bodyOpen}" id="${nid}">
+          ${locEditor}
           <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
           <div class="skill-row">${n.skills}</div>
           ${rowsHTML}
@@ -2955,11 +3657,7 @@ function renderDetail(){
   } else if(curTab==="subareas"){
     const subs=MAIN[cur].subs||{}, keys=Object.keys(subs);
     if(!keys.length){d.innerHTML=`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No sub-areas defined.</div>`;return;}
-    d.innerHTML=`<div class="blk-lbl" style="margin-bottom:8px">Select a Sub-Area</div><div class="sub-grid">${keys.map(k=>`<button class="sub-btn" data-subid="${k}"><div class="sub-btn-name">${subs[k].label}</div><div class="sub-btn-desc">${subs[k].sub||""}</div></button>`).join("")}</div>`;
-    d.querySelectorAll('.sub-btn[data-subid]').forEach(btn => {
-      btn.addEventListener('click', () => selSub(btn.getAttribute('data-subid')));
-      btn.addEventListener('touchend', e => { e.preventDefault(); selSub(btn.getAttribute('data-subid')); });
-    });
+    d.innerHTML=`<div class="blk-lbl" style="margin-bottom:8px">Select a Sub-Area</div><div class="sub-grid">${keys.map(k=>`<button class="sub-btn" onclick="selSub('${k}')" ontouchend="event.preventDefault();selSub('${k}')"><div class="sub-btn-name">${subs[k].label}</div><div class="sub-btn-desc">${subs[k].sub||""}</div></button>`).join("")}</div>`;
   } else if(curTab==="notes"){
     const key=cur+(curSub?"_"+curSub:"");
     if(pmCheck.checked){
@@ -3039,7 +3737,7 @@ function toggleNPC(id,hdr){
 function saveNote(){
   const key=cur+(curSub?"_"+curSub:"");
   const ta=document.getElementById("nta");
-  if(ta){ notes[key]=ta.value; const m=document.getElementById("smsg"); if(m){m.style.display="inline";setTimeout(()=>m.style.display="none",1500);} }
+  if(ta){ notes[key]=ta.value; const m=document.getElementById("smsg"); if(m){m.style.display="inline";setTimeout(()=>m.style.display="none",1500);} showToast('Note saved'); }
 }
 
 function renderFooter(){
@@ -3619,7 +4317,7 @@ function buildAureliaMap(){
 }
 
 function selectPallor(){
-  const pallor = BODIES.find(b => b.id === 'pallor');
+  const pallor = getBodies().find(b => b.id === 'pallor');
   if(!pallor) return;
   selectedLoc = null;
   pallorSelected = true;
@@ -3716,6 +4414,7 @@ function goAurelia(){
     currentView = 'aurelia';
     document.getElementById('view-system').classList.add('v-hidden');
     document.getElementById('view-station').classList.add('v-hidden');
+    document.getElementById('view-body').classList.add('v-hidden');
     document.getElementById('view-aurelia').classList.remove('v-hidden');
     document.getElementById('view-aurelia').style.display = 'flex';
     document.getElementById('hdr-title').textContent = 'AURELIA';
@@ -4103,7 +4802,7 @@ function buildQuickAddList(){
     (area.npcs||[]).forEach(consider);
     if(area.subs) Object.values(area.subs).forEach(sub => (sub.npcs||[]).forEach(consider));
   });
-  BODIES.forEach(b => (b.npcs||[]).forEach(consider));
+  getBodies().forEach(b => (b.npcs||[]).forEach(consider));
 
   const wrap = document.getElementById('init-quickadd');
   if(!wrap) return;
@@ -4284,6 +4983,7 @@ async function pollRevealState(){
       if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
       if(currentView === 'aurelia' && pallorSelected) selectPallor();
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -4302,6 +5002,7 @@ async function pollRevealState(){
       if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
       if(currentView === 'aurelia' && pallorSelected) selectPallor();
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -4402,7 +5103,7 @@ function hideAllAreas(){
 // campaign state, and re-asking for them every reset would be annoying.
 function resetCampaign(){
   if(!isReferee()) return;
-  if(!confirm('Reset the whole campaign?\n\nThis wipes reveal status, RSR markers, the event log, the station clock, the initiative tracker, AND any Design Mode text edits or added/removed checks, events, and NPC rows — for EVERYONE. This cannot be undone.')) return;
+  if(!confirm('Reset the whole campaign?\n\nThis wipes reveal status, RSR markers, the event log, the station clock, the initiative tracker, AND any Design Mode edits — including added/removed/edited bodies, checks, events, and NPC rows — for EVERYONE. This cannot be undone.')) return;
 
   // Local-only state
   try {
@@ -4425,6 +5126,9 @@ function resetCampaign(){
   contentHistory = {};
   contentAdditions = {};
   contentDeletions = {};
+  bodyAdditions = {};
+  bodyDeletions = {};
+  bodyPropertyOverrides = {};
   questLog = [];
 
   // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
@@ -4434,6 +5138,9 @@ function resetCampaign(){
   saveContentHistory();
   saveContentAdditions();
   saveContentDeletions();
+  saveBodyAdditions();
+  saveBodyDeletions();
+  saveBodyPropertyOverrides();
   saveQuestLog();
 
   // Re-render everything currently visible
@@ -4444,7 +5151,8 @@ function resetCampaign(){
   if(questPanelOpen) renderQuestPanel();
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
   if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); if(pallorSelected) selectPallor(); }
-  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
+  if(currentView === 'body'){ if(selectedBody && getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
 
   alert('Campaign reset.');
 }
@@ -4673,26 +5381,43 @@ let lightModeOn = false;
 const UI_SCALE_STEPS = [75, 85, 100, 115, 130, 150];
 const UI_SCALE_DEFAULT = 100;
 
+// Cached so the hot path (pointermove during drag, ~60Hz) doesn't hit
+// localStorage on every call. Invalidated whenever the scale is changed.
+let _uiScaleCache = null;
 function getUIScale(){
+  if(_uiScaleCache !== null) return _uiScaleCache;
   try {
     const v = parseInt(localStorage.getItem('aurelia_ui_scale'), 10);
-    if(UI_SCALE_STEPS.includes(v)) return v;
+    if(UI_SCALE_STEPS.includes(v)){ _uiScaleCache = v; return v; }
   } catch(e){}
+  _uiScaleCache = UI_SCALE_DEFAULT;
   return UI_SCALE_DEFAULT;
 }
 
 function applyUIScale(pct){
   const scale = pct / 100;
+  // Use transform:scale on #root with inverse-sized dimensions.
+  // Setting width/height to (100/s)vw/(100/s)vh means the layout box
+  // is logically larger than the viewport, but after scale(s) it renders
+  // at exactly 100vw x 100vh — no clipping, no black space at any scale.
+  //
+  // The floating panels (event-log, init, health, quest, etc.) are now
+  // children of #float-panels, which is a sibling of #root and NOT
+  // inside the transform, so they always render at viewport scale.
+  //
+  // Pointer event compensation: e.clientX/Y are in screen (scaled) space;
+  // CSS layout coords are in logical (pre-scale) space. Divide by scale
+  // everywhere we convert pointer coords to layout coords.
+  document.documentElement.style.zoom = '';
   const root = document.getElementById('root');
   if(!root) return;
+  root.style.zoom = '';
   if(scale === 1){
     root.style.transform = '';
     root.style.width = '';
     root.style.height = '';
     root.style.transformOrigin = '';
   } else {
-    // Scale from top-left, then inverse-scale the declared dimensions so the
-    // element still fills the full viewport without scroll bars or clipping.
     root.style.transformOrigin = 'top left';
     root.style.transform = 'scale(' + scale + ')';
     root.style.width  = (100 / scale) + 'vw';
@@ -4703,6 +5428,7 @@ function applyUIScale(pct){
 function onUIScaleInput(idx){
   // Live preview as thumb drags — update fill bar and value label without full re-render
   const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  _uiScaleCache = pct;  // keep cache in sync
   applyUIScale(pct);
   const fill = document.getElementById('ui-scale-fill');
   if(fill) fill.style.width = (parseInt(idx,10) / (UI_SCALE_STEPS.length-1) * 100) + '%';
@@ -4712,6 +5438,7 @@ function onUIScaleInput(idx){
 
 function onUIScaleCommit(idx){
   const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  _uiScaleCache = pct;  // keep cache in sync
   applyUIScale(pct);
   try { localStorage.setItem('aurelia_ui_scale', pct); } catch(e){}
   // Re-render the menu so step labels update their highlight
@@ -4793,7 +5520,7 @@ function buildSearchIndex(){
   });
 
   // ── System bodies (includes Pallor) ──
-  BODIES.forEach(b => {
+  getBodies().forEach(b => {
     idx.push({type:'System Body', name:b.name, sub:b.type||'', nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
     if(b.npcs && ref){
       b.npcs.forEach((n,i) => {
@@ -5122,14 +5849,39 @@ function escArchon(s){
 // ── Stepper ───────────────────────────────────────────────────────────────
 
 function archonStep(key, delta){
-  archonDraft[key] = Math.max(-2, Math.min(2, (archonDraft[key]||0) + delta));
-  renderSettingsMenu(true);
-  // Restore the textarea content after re-render
+  archonDraft[key] = Math.max(-5, Math.min(5, (archonDraft[key]||0) + delta));
+  // Partial update: only refresh the stepper spans and draft total — 
+  // avoids full card re-render which changes card height and loses textarea
+  ARCHON_AXES.forEach(a => {
+    const v = archonDraft[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    // Each stepper span has a unique position; find it by its sibling buttons
+    const steppers = document.querySelectorAll('.archon-axis-stepper');
+    steppers.forEach(s => {
+      const lbl = s.closest('.archon-axis-input-row')?.querySelector('.archon-axis-input-lbl');
+      if(lbl && lbl.textContent.trim() === a.label){
+        const span = s.querySelector('span');
+        if(span){
+          span.textContent = archonScoreLabel(v);
+          span.className = 'archon-axis-score ' + cls;
+        }
+      }
+    });
+  });
+  // Update draft total
+  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
+  const totalSpan = document.querySelector('.archon-add-form .archon-axis-score');
+  if(totalSpan){
+    totalSpan.textContent = archonScoreLabel(draftTotal);
+    totalSpan.className = 'archon-axis-score ' + draftCls;
+  }
 }
 
 function archonResetDraft(){
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
   renderSettingsMenu(true);
+  // textarea is intentionally cleared on reset
 }
 
 // ── Submit / delete ───────────────────────────────────────────────────────
@@ -5147,6 +5899,7 @@ function submitArchonEntry(){
   saveArchonLog();
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
   renderSettingsMenu(true);
+  showToast('Morality action logged');
 }
 
 function deleteArchonEntry(id){
@@ -5163,6 +5916,8 @@ function toggleLightMode(){
   lightModeOn = !lightModeOn;
   rootEl.classList.toggle('light-mode', lightModeOn);
   document.body.classList.toggle('light-mode-body', lightModeOn);
+  const fp = document.getElementById('float-panels');
+  if(fp) fp.classList.toggle('light-mode', lightModeOn);
   try {
     if(lightModeOn) localStorage.setItem('aurelia_theme', 'light');
     else localStorage.removeItem('aurelia_theme');
@@ -5175,6 +5930,8 @@ try {
     lightModeOn = true;
     rootEl.classList.add('light-mode');
     document.body.classList.add('light-mode-body');
+    const fp = document.getElementById('float-panels');
+    if(fp) fp.classList.add('light-mode');
   }
 } catch(e){}
 
@@ -5358,6 +6115,62 @@ async function saveContentDeletions(){
   catch(e){ console.error('Content deletions save failed', e); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BODY ADD / REMOVE / EDIT STORES  (system-scoped, Supabase-synced)
+// ═══════════════════════════════════════════════════════════════════════════
+// Three stores parallel to the content-* stores above, but operating on whole
+// bodies (planets, moons, asteroid belts) rather than text/sub-items. Each is
+// namespaced by system id so other star systems can be populated later without
+// migration:
+//   bodyAdditions:        {sysId: [bodyObj, ...]}      referee-created bodies
+//   bodyDeletions:        {sysId: {bodyId: {body, t}}} tombstones on base bodies
+//   bodyPropertyOverrides:{sysId: {bodyId: {field:val}}} metadata edits to base bodies
+let bodyAdditions = {};
+let bodyDeletions = {};
+let bodyPropertyOverrides = {};
+
+async function loadBodyStores(){
+  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r ? JSON.parse(r.value) : {}; }
+  catch(e){ bodyAdditions = {}; }
+  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r ? JSON.parse(r.value) : {}; }
+  catch(e){ bodyDeletions = {}; }
+  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  catch(e){ bodyPropertyOverrides = {}; }
+}
+async function saveBodyAdditions(){
+  try { await supaStorage.set('body-additions', JSON.stringify(bodyAdditions), true); }
+  catch(e){ console.error('Body additions save failed', e); }
+}
+async function saveBodyDeletions(){
+  try { await supaStorage.set('body-deletions', JSON.stringify(bodyDeletions), true); }
+  catch(e){ console.error('Body deletions save failed', e); }
+}
+async function saveBodyPropertyOverrides(){
+  try { await supaStorage.set('body-prop-overrides', JSON.stringify(bodyPropertyOverrides), true); }
+  catch(e){ console.error('Body property overrides save failed', e); }
+}
+
+// The computed body set for a system: base bodies (minus tombstoned ones, with
+// any metadata overrides applied) followed by referee-added bodies. EVERY
+// render path reads through this rather than touching base data directly, so
+// add / remove / edit all apply retroactively to the original bodies too.
+function effectiveBodies(sysId){
+  sysId = sysId || currentSystemId;
+  const dels = bodyDeletions[sysId] || {};
+  const props = bodyPropertyOverrides[sysId] || {};
+  const out = [];
+  baseBodiesFor(sysId).forEach(b => {
+    if(dels[b.id]) return;
+    const ov = props[b.id];
+    out.push(ov ? Object.assign({}, b, ov) : b);
+  });
+  (bodyAdditions[sysId] || []).forEach(b => { if(!dels[b.id]) out.push(b); });
+  return out;
+}
+// Convenience getter used throughout the rendering code in place of the old
+// hardcoded BODIES array.
+function getBodies(){ return effectiveBodies(currentSystemId); }
+
 // Combines hardcoded items + additions, with deleted ones filtered out,
 // and a per-item key attached to each so the caller can wire up edit/
 // delete pencils consistently regardless of whether the item is original
@@ -5384,10 +6197,12 @@ async function deleteContentItem(key, item){
   if(!confirm('Remove this? You can restore it later from "Show Removed Items" if you change your mind.')) return;
   contentDeletions[key] = { item, t: Date.now() };
   await saveContentDeletions();
+  showToast('Item removed', 'info');
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
   if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
 }
 
 // Adds a brand-new blank item to the given list, saves it, re-renders so
@@ -5424,6 +6239,7 @@ async function addNewNpcRow(listKey){
   await saveContentAdditions();
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
   const newIdx = contentAdditions[listKey].length - 1;
   const newKey = listKey.replace(/-rows$/, '-row-') + 'add' + newIdx;
   openDesignEditNpcRow(newKey, blank);
@@ -5437,15 +6253,32 @@ async function restoreDeletedItem(key){
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
   if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
 }
 
 function openRemovedItemsPanel(){
   const keys = Object.keys(contentDeletions);
+  // Removed bodies across all systems (each has its own restore path)
+  const bodyEntries = [];
+  Object.keys(bodyDeletions || {}).forEach(sysId => {
+    Object.keys(bodyDeletions[sysId] || {}).forEach(bid => {
+      bodyEntries.push({ sysId, bid, entry: bodyDeletions[sysId][bid] });
+    });
+  });
   let html = '';
-  if(!keys.length){
+  if(!keys.length && !bodyEntries.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
-    html = keys.map(key => {
+    // Removed bodies first (more significant), then content items
+    const bodyHtml = bodyEntries.map(({sysId, bid, entry}) => {
+      const b = entry.body || {};
+      const snippet = `🪐 ${b.name || bid}${b.uwpString && b.uwpString!=='—' ? ' · '+b.uwpString : ''}`;
+      return `<div class="design-history-item" onclick="restoreDeletedBody('${sysId.replace(/'/g,"\\'")}','${bid.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore body</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
+    const itemHtml = keys.map(key => {
       const entry = contentDeletions[key];
       const item = entry.item;
       let snippet;
@@ -5459,6 +6292,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
+    html = bodyHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
@@ -5519,6 +6353,7 @@ function toggleDesignMode(){
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
       if(currentView === 'aurelia' && pallorSelected) selectPallor();
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
 }
 
 // Wraps a piece of displayed text with a pencil-edit affordance when
@@ -5758,12 +6593,14 @@ async function saveDesignEdit(){
   const msg = document.getElementById('design-save-msg');
   msg.style.display = 'inline';
   setTimeout(() => { msg.style.display = 'none'; }, 1500);
+  showToast('Content saved');
 
   // Re-render the underlying view so the change is visible immediately
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
   if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
 }
 
 async function revertDesignEdit(){
@@ -5777,6 +6614,7 @@ async function revertDesignEdit(){
   if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
   if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
 }
 
 function toggleDesignHistory(){
@@ -5856,11 +6694,19 @@ function makePanelDraggable(panelId, headerId){
     // before clearing right/bottom, so a tap that never moves the mouse
     // produces zero visible change.
     dragging = true;
-    startX = e.clientX; startY = e.clientY;
+    const uiS = getUIScale() / 100;
+    startX = e.clientX / uiS; startY = e.clientY / uiS;
     const rect = panel.getBoundingClientRect();
-    startLeft = rect.left; startTop = rect.top;
+    // getBoundingClientRect is in screen (scaled) space; divide by scale
+    // to convert to CSS layout coords that style.left/top expect.
+    // NOTE: panels are now outside #root so they are NOT affected by the
+    // scale transform — rect coords equal layout coords, so uiS = 1 here
+    // effectively. But keeping the division for correctness if scale ever
+    // changes approach again.
+    startLeft = rect.left / uiS;
+    startTop  = rect.top  / uiS;
     panel.style.left = startLeft + 'px';
-    panel.style.top = startTop + 'px';
+    panel.style.top  = startTop  + 'px';
     panel.style.right = 'auto';
     panel.style.bottom = 'auto';
     header.setPointerCapture(e.pointerId);
@@ -5870,7 +6716,8 @@ function makePanelDraggable(panelId, headerId){
   let moved = false;
   header.addEventListener('pointermove', (e) => {
     if(!dragging) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
+    const uiS2 = getUIScale() / 100;
+    const dx = e.clientX / uiS2 - startX, dy = e.clientY / uiS2 - startY;
     if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
     if(!moved) return;
     let newLeft = startLeft + dx, newTop = startTop + dy;
@@ -5909,9 +6756,10 @@ function makePanelResizable(panelId){
 
   handle.addEventListener('pointerdown', (e) => {
     resizing = true;
-    startX = e.clientX; startY = e.clientY;
+    const uiS = getUIScale() / 100;
+    startX = e.clientX / uiS; startY = e.clientY / uiS;
     const rect = panel.getBoundingClientRect();
-    startW = rect.width; startH = rect.height;
+    startW = rect.width / uiS; startH = rect.height / uiS;
     handle.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
@@ -5919,7 +6767,8 @@ function makePanelResizable(panelId){
 
   handle.addEventListener('pointermove', (e) => {
     if(!resizing) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
+    const uiS = getUIScale() / 100;
+    const dx = e.clientX / uiS - startX, dy = e.clientY / uiS - startY;
     const newW = startW + dx, newH = startH + dy;
     panel.style.width = newW + 'px';
     panel.style.height = newH + 'px';
@@ -6175,6 +7024,7 @@ async function saveQuestEdit(){
   await saveQuestLog();
   closeQuestEditor();
   if(questPanelOpen) renderQuestPanel();
+  showToast(questEditingId ? 'Quest updated' : 'Quest added');
 }
 
 async function deleteQuest(){
@@ -6184,6 +7034,7 @@ async function deleteQuest(){
   await saveQuestLog();
   closeQuestEditor();
   if(questPanelOpen) renderQuestPanel();
+  showToast('Quest deleted', 'info');
 }
 
 // ── Player polling extension ──────────────────────────────────────────────
@@ -6213,6 +7064,19 @@ loadContentOverrides().then(() => {
   if(currentView === 'aurelia' && selectedLoc){ selectLoc(selectedLoc); }
   if(currentView === 'aurelia' && pallorSelected){ selectPallor(); }
   if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
+});
+loadBodyStores().then(() => {
+  // Rebuild the system view so any added/removed/edited bodies appear
+  if(typeof buildOrrery === 'function') buildOrrery();
+  if(currentView === 'system' && selectedBody){
+    // If the selected body was deleted while away, fall back to overview
+    if(getBodies().find(b => b.id === selectedBody)) selectBody(selectedBody);
+    else goSystemOverview();
+  }
+  if(currentView === 'body' && selectedBody){
+    if(getBodies().find(b => b.id === selectedBody)) buildBodyView(selectedBody);
+    else goSystem();
+  }
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 
@@ -6390,6 +7254,1053 @@ function renderQref(){
 // Escape closes qref — now handled by kbdDispatch
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SESSION TOOLS — export + recap
+// ═══════════════════════════════════════════════════════════════════════════
+// Reads the existing event log (newest-first), the clock, revealed areas,
+// quests, and NPC locations to produce a session summary the referee can
+// keep in their notes.
+
+function openSessionTools(){
+  if(!isReferee()) return;
+  document.getElementById('session-modal').classList.add('open');
+  renderSessionStats();
+  // Reset recap output
+  const out = document.getElementById('session-recap-output');
+  if(out){ out.style.display = 'none'; out.textContent = ''; }
+}
+
+function closeSessionTools(){
+  document.getElementById('session-modal').classList.remove('open');
+}
+
+function renderSessionStats(){
+  const el = document.getElementById('session-stats');
+  if(!el) return;
+  const revealedCount = Object.values(revealedAreas).filter(Boolean).length;
+  const questActive = questLog.filter(q => q.status === 'active').length;
+  const questDone = questLog.filter(q => q.status === 'complete').length;
+  const npcsPlaced = Object.values(npcLocations).filter(l => l.area).length;
+  el.innerHTML =
+    '<div class="session-stat-row"><span>Station time</span><span>' + clockDisplay(clockMinutes) + '</span></div>' +
+    '<div class="session-stat-row"><span>Events logged</span><span>' + eventLog.length + '</span></div>' +
+    '<div class="session-stat-row"><span>Areas revealed</span><span>' + revealedCount + '</span></div>' +
+    '<div class="session-stat-row"><span>Quests active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
+    '<div class="session-stat-row"><span>NPCs placed on station</span><span>' + npcsPlaced + '</span></div>';
+}
+
+// Build a plain-text session log from current state.
+function buildSessionLogText(){
+  const lines = [];
+  lines.push('AURELIA — SESSION LOG');
+  lines.push('Generated: ' + new Date().toLocaleString());
+  lines.push('Station time at export: ' + clockDisplay(clockMinutes));
+  lines.push('='.repeat(48));
+  lines.push('');
+
+  // Event log — oldest first for readability
+  lines.push('EVENT TIMELINE');
+  lines.push('-'.repeat(48));
+  if(!eventLog.length){
+    lines.push('(no events logged)');
+  } else {
+    [...eventLog].reverse().forEach(e => {
+      const area = e.area ? ' [' + e.area + ']' : '';
+      lines.push(e.time + area + ' — ' + e.text);
+    });
+  }
+  lines.push('');
+
+  // Quests
+  const activeQ = questLog.filter(q => q.status === 'active');
+  const doneQ = questLog.filter(q => q.status === 'complete');
+  if(activeQ.length || doneQ.length){
+    lines.push('QUESTS');
+    lines.push('-'.repeat(48));
+    activeQ.forEach(q => lines.push('[ACTIVE] ' + q.title));
+    doneQ.forEach(q => lines.push('[DONE]   ' + q.title));
+    lines.push('');
+  }
+
+  // NPC positions
+  const placed = Object.entries(npcLocations).filter(([k,l]) => l.area);
+  if(placed.length){
+    lines.push('NPC POSITIONS (at export)');
+    lines.push('-'.repeat(48));
+    placed.forEach(([k,l]) => {
+      const name = k.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+      lines.push(name + ' — ' + npcAreaLabel(l.area, l.sub) + (l.note ? ' (' + l.note + ')' : ''));
+    });
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function exportSessionLog(){
+  const text = buildSessionLogText();
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'aurelia-session-' + stamp + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Session log exported');
+}
+
+function copySessionLog(){
+  const text = buildSessionLogText();
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('Copied to clipboard'))
+      .catch(() => showToast('Copy failed — try export instead', 'error'));
+  } else {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast('Copied to clipboard'); }
+    catch(e){ showToast('Copy failed — try export instead', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
+// Generate a narrative-style recap from the event log.
+// Deterministic and local — groups events by area and time, written in
+// past tense as session-notes prose.
+function generateSessionRecap(){
+  const out = document.getElementById('session-recap-output');
+  if(!out) return;
+  out.style.display = 'block';
+
+  if(!eventLog.length){
+    out.innerHTML = '<span class="session-recap-empty">No events logged yet. The recap builds from the event timeline as the session plays out — advance the clock and trigger events first.</span>';
+    return;
+  }
+
+  const events = [...eventLog].reverse(); // oldest first
+  const parts = [];
+  parts.push('SESSION RECAP — ' + new Date().toLocaleDateString());
+  parts.push('');
+
+  // Opening
+  parts.push('The session ran from ' + events[0].time + ' to ' + events[events.length-1].time + ' station time, across ' + events.length + ' logged ' + (events.length === 1 ? 'beat' : 'beats') + '.');
+  parts.push('');
+
+  // Group consecutive events by area
+  let lastArea = null;
+  events.forEach(e => {
+    if(e.area && e.area !== lastArea){
+      parts.push('• At ' + (e.area) + ':');
+      lastArea = e.area;
+    }
+    const prefix = e.area ? '   ' : '• ';
+    parts.push(prefix + e.time + ' — ' + e.text);
+  });
+
+  // Quest status
+  const activeQ = questLog.filter(q => q.status === 'active');
+  const doneQ = questLog.filter(q => q.status === 'complete');
+  if(doneQ.length){
+    parts.push('');
+    parts.push('Resolved this campaign: ' + doneQ.map(q => q.title).join('; ') + '.');
+  }
+  if(activeQ.length){
+    parts.push('');
+    parts.push('Still open: ' + activeQ.map(q => q.title).join('; ') + '.');
+  }
+
+  out.textContent = parts.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+// Lightweight, reusable feedback for save/edit/delete actions.
+// showToast('Location saved')  → success (default)
+// showToast('Could not save', 'error')
+// showToast('Time advanced', 'info')
+let _toastTimer = null;
+function showToast(message, type){
+  type = type || 'success';
+  const container = document.getElementById('toast-container');
+  if(!container) return;
+  const icons = { success:'✓', error:'✕', info:'•' };
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.innerHTML = '<span class="toast-icon">' + (icons[type]||'✓') + '</span><span>' +
+    String(message).replace(/</g,'&lt;') + '</span>';
+  container.appendChild(toast);
+  // Auto-dismiss after 2.4s
+  setTimeout(() => {
+    toast.classList.add('toast-out');
+    setTimeout(() => toast.remove(), 250);
+  }, 2400);
+  // Cap stack at 4
+  while(container.children.length > 4){
+    container.firstChild.remove();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NPC CREATOR (design mode) — manual / random / AI
+// ═══════════════════════════════════════════════════════════════════════════
+// New NPCs are stored in contentAdditions[areaNpcListKey] and render through
+// mergeListWithAdditions alongside the hardcoded NPCs.
+
+// The list key for the currently-selected area/sub's NPC additions.
+function stKeyForNpcs(){
+  return cur + (curSub ? '_' + curSub : '') + '-npcs';
+}
+
+// ── Random generator tables (Traveller-flavoured, Hegemony setting) ────────
+const NPC_GEN = {
+  firstNames: ['Sable','Dara','Petra','Cho','Mira','Owan','Teva','Yumi','Forlan','Riven',
+    'Calla','Nadia','Esen','Brannt','Vesh','Corin','Imara','Dax','Lel','Soraya',
+    'Kesh','Anuk','Marlo','Tibor','Wen','Galla','Rho','Senna','Ulric','Vance'],
+  lastNames: ['Mwenye','Sousa','Bin-Ha','Saenz','Frey','Adeyemi','Vey','Cole','Marek','Dane',
+    'Oduya','Reyes','Okonkwo','Sato','Halvorsen','Nazari','Bex','Tarn','Ileri','Voss'],
+  roles: [
+    'Dock worker','Station clerk','Cargo handler','Maintenance tech','Security officer',
+    'Bartender','Shop assistant','Medical orderly','Comms operator','Customs inspector',
+    'Fuel broker','Black-market fixer','Hegemony liaison','Freelance pilot','Data courier',
+    'Sensor technician','Life-support engineer','Quartermaster','Bureaucrat','Off-duty marine'],
+  manners: [
+    'Brisk and businesslike, no time for small talk.',
+    'Nervous, keeps glancing at the exits.',
+    'Warm and chatty, knows everyone by name.',
+    'Flat affect, answers in as few words as possible.',
+    'Overly formal, hides behind procedure.',
+    'Tired, has done this shift a thousand times.',
+    'Sharp-eyed, sizes the crew up immediately.',
+    'Friendly veneer over clear wariness.'],
+  wants: [
+    'Wants the shift to end without incident.',
+    'Owes someone money and it shows.',
+    'Looking for a way off the station.',
+    'Quietly gathering information for a third party.',
+    'Wants to be left alone.',
+    'Hoping the crew can solve a small problem for them.',
+    'Protecting a secret that could cost them their post.',
+    'Trying to make a name for themselves.'],
+  hooks: [
+    'Saw something on the maintenance level they shouldn\'t have.',
+    'Knows a back route that bypasses security.',
+    'Has a cousin in the RSR cell.',
+    'Holds a grudge against the Hegemony delegation.',
+    'Can be bribed, but only with information.',
+    'Recognises one of the PCs from somewhere.',
+    'Carries a data wafer they\'re afraid to hand over.',
+    'Has been skimming inventory for months.']
+};
+
+function gen_pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function gen_2d6(){ return (Math.floor(Math.random()*6)+1) + (Math.floor(Math.random()*6)+1); }
+
+// Build a random NPC object matching the schema.
+function generateRandomNpc(){
+  const name = gen_pick(NPC_GEN.firstNames) + ' ' + gen_pick(NPC_GEN.lastNames);
+  const role = gen_pick(NPC_GEN.roles);
+  const stats = { STR:gen_2d6(), DEX:gen_2d6(), END:gen_2d6(), INT:gen_2d6(), EDU:gen_2d6(), SOC:gen_2d6() };
+  // Skills: pick 2-3 plausible from role
+  const skillPool = ['Admin','Streetwise','Persuade','Recon','Computers','Engineer','Gun Combat',
+    'Melee','Stealth','Broker','Carouse','Investigate','Mechanic','Medic','Pilot','Deception'];
+  const nSkills = 2 + Math.floor(Math.random()*2);
+  const chosen = [];
+  while(chosen.length < nSkills){
+    const s = gen_pick(skillPool);
+    if(!chosen.find(c => c.startsWith(s))) chosen.push(s + ' ' + (1 + Math.floor(Math.random()*2)));
+  }
+  const rows = [
+    ['Manner', gen_pick(NPC_GEN.manners)],
+    ['Wants', gen_pick(NPC_GEN.wants)],
+    ['Hook', gen_pick(NPC_GEN.hooks)]
+  ];
+  return { name, role, stats, skills: chosen.join(', '), rows };
+}
+
+// ── Persist a new NPC into the current area ────────────────────────────────
+async function commitNewNpc(npc){
+  const listKey = stKeyForNpcs();
+  if(!contentAdditions[listKey]) contentAdditions[listKey] = [];
+  contentAdditions[listKey].push(npc);
+  await saveContentAdditions();
+  if(currentView === 'station' && cur) renderDetail();
+  showToast('NPC "' + npc.name + '" added');
+}
+
+async function deleteAddedNpc(listKey, nidKey){
+  if(!confirm('Delete this NPC? This cannot be undone.')) return;
+  // nidKey ends with 'addN'; extract N
+  const m = nidKey.match(/add(\d+)$/);
+  if(!m){ showToast('Could not delete NPC', 'error'); return; }
+  const idx = parseInt(m[1], 10);
+  if(contentAdditions[listKey] && contentAdditions[listKey][idx]){
+    contentAdditions[listKey].splice(idx, 1);
+    await saveContentAdditions();
+    if(currentView === 'station' && cur) renderDetail();
+    showToast('NPC deleted', 'info');
+  }
+}
+
+// ── NPC Creator modal logic ────────────────────────────────────────────────
+let npcCreatorMode = 'manual';
+let npcCreatorDraft = null;   // working NPC object for random/AI preview
+let npcCreatorRows = [];      // working rows for manual mode
+
+function openNpcCreator(){
+  if(!isReferee() || !designModeOn) return;
+  if(!cur){ showToast('Select an area first', 'error'); return; }
+  npcCreatorMode = 'manual';
+  npcCreatorDraft = null;
+  npcCreatorRows = [['Manner',''],['Wants','']];
+  document.getElementById('npc-creator-modal').classList.add('open');
+  setNpcCreatorMode('manual');
+}
+
+function closeNpcCreator(){
+  document.getElementById('npc-creator-modal').classList.remove('open');
+}
+
+function setNpcCreatorMode(mode){
+  npcCreatorMode = mode;
+  ['manual','random','ai'].forEach(m => {
+    const tab = document.getElementById('npc-tab-'+m);
+    if(tab) tab.classList.toggle('on', m === mode);
+  });
+  renderNpcCreatorBody();
+}
+
+function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderNpcCreatorBody(){
+  const body = document.getElementById('npc-creator-body');
+  if(!body) return;
+  const areaLabel = MAIN[cur] ? (curSub && MAIN[cur].subs && MAIN[cur].subs[curSub] ? MAIN[cur].subs[curSub].label : MAIN[cur].label) : '';
+
+  if(npcCreatorMode === 'manual'){
+    body.innerHTML = renderManualForm(areaLabel);
+  } else if(npcCreatorMode === 'random'){
+    body.innerHTML = renderRandomPanel(areaLabel);
+  } else if(npcCreatorMode === 'ai'){
+    body.innerHTML = renderAiPanel(areaLabel);
+  }
+}
+
+// ── Manual form ────────────────────────────────────────────────────────────
+function renderManualForm(areaLabel){
+  const d = npcCreatorDraft || { name:'', role:'', stats:{STR:7,DEX:7,END:7,INT:7,EDU:7,SOC:7}, skills:'' };
+  const rows = npcCreatorRows;
+  const statCells = ['STR','DEX','END','INT','EDU','SOC'].map(s =>
+    `<div class="npc-stat-cell"><label>${s}</label><input type="number" min="0" max="15" id="npc-stat-${s}" value="${d.stats[s]}"></div>`
+  ).join('');
+  const rowsHtml = rows.map((r,i) =>
+    `<div class="npc-row-edit">
+      <input type="text" placeholder="Label" value="${escAttr(r[0])}" oninput="npcCreatorRows[${i}][0]=this.value">
+      <textarea placeholder="Detail" oninput="npcCreatorRows[${i}][1]=this.value">${escHtml(r[1])}</textarea>
+      <button class="npc-row-del" onclick="npcCreatorRows.splice(${i},1);renderNpcCreatorBody()" title="Remove">✕</button>
+    </div>`
+  ).join('');
+
+  return `
+    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(areaLabel)}</b>. Fill in what you need — only a name is required.</div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Name</label>
+      <input type="text" class="npc-form-input" id="npc-f-name" value="${escAttr(d.name)}" placeholder="e.g. Petra Sousa">
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Role</label>
+      <input type="text" class="npc-form-input" id="npc-f-role" value="${escAttr(d.role)}" placeholder="e.g. Guardhouse officer">
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Characteristics</label>
+      <div class="npc-stat-grid">${statCells}</div>
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Skills</label>
+      <input type="text" class="npc-form-input" id="npc-f-skills" value="${escAttr(d.skills)}" placeholder="e.g. Admin 2, Persuade 1, Gun Combat 1">
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Details</label>
+      <div class="npc-rows-editor">${rowsHtml}</div>
+      <button class="npc-row-add" onclick="npcCreatorRows.push(['','']);renderNpcCreatorBody()">+ Add detail row</button>
+    </div>
+    <div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeNpcCreator()">Cancel</button>
+      <button class="npc-creator-btn primary" onclick="saveManualNpc()">Add NPC</button>
+    </div>`;
+}
+
+function collectManualForm(){
+  const name = (document.getElementById('npc-f-name')||{}).value || '';
+  const role = (document.getElementById('npc-f-role')||{}).value || '';
+  const skills = (document.getElementById('npc-f-skills')||{}).value || '';
+  const stats = {};
+  ['STR','DEX','END','INT','EDU','SOC'].forEach(s => {
+    const el = document.getElementById('npc-stat-'+s);
+    stats[s] = el ? (parseInt(el.value,10) || 0) : 7;
+  });
+  const rows = npcCreatorRows.filter(r => r[0].trim() || r[1].trim());
+  return { name: name.trim(), role: role.trim(), stats, skills: skills.trim(), rows };
+}
+
+async function saveManualNpc(){
+  const npc = collectManualForm();
+  if(!npc.name){ showToast('NPC needs a name', 'error'); return; }
+  await commitNewNpc(npc);
+  closeNpcCreator();
+}
+
+// ── Random panel ───────────────────────────────────────────────────────────
+function renderRandomPanel(areaLabel){
+  const d = npcCreatorDraft;
+  const preview = d ? renderNpcPreview(d) : '<div class="npc-gen-hint">Click <b style="color:var(--tx0)">Roll NPC</b> to generate a random Traveller NPC. Roll as many times as you like, then add the one you want.</div>';
+  return `
+    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(areaLabel)}</b>. Characteristics are rolled 2D6; manner, wants, and hook come from setting-flavoured tables.</div>
+    <div style="text-align:center;margin-bottom:8px">
+      <button class="npc-creator-btn primary" onclick="rollRandomNpc()">🎲 Roll NPC</button>
+    </div>
+    <div id="npc-random-preview">${preview}</div>
+    ${d ? `<div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeNpcCreator()">Cancel</button>
+      <button class="npc-creator-btn" onclick="editDraftInManual()">✍ Tweak first</button>
+      <button class="npc-creator-btn primary" onclick="saveDraftNpc()">Add this NPC</button>
+    </div>` : ''}`;
+}
+
+function rollRandomNpc(){
+  npcCreatorDraft = generateRandomNpc();
+  renderNpcCreatorBody();
+}
+
+// ── AI panel ───────────────────────────────────────────────────────────────
+function renderAiPanel(areaLabel){
+  const d = npcCreatorDraft;
+  const preview = d ? renderNpcPreview(d) : '';
+  return `
+    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(areaLabel)}</b>. Describe the NPC you want (a phrase is enough) and the AI will write one that fits the Aurelia setting — Hegemony-controlled station, RSR undercurrent, copper-tinted world.</div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Prompt</label>
+      <textarea class="npc-form-textarea" id="npc-ai-prompt" placeholder="e.g. a jittery dockworker who owes money to the wrong people">${d && d._prompt ? escHtml(d._prompt) : ''}</textarea>
+    </div>
+    <div style="text-align:center">
+      <button class="npc-creator-btn primary" id="npc-ai-gen-btn" onclick="generateAiNpc()">✨ Generate NPC</button>
+    </div>
+    <div class="npc-ai-status" id="npc-ai-status"></div>
+    <div id="npc-ai-preview">${preview}</div>
+    ${d ? `<div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeNpcCreator()">Cancel</button>
+      <button class="npc-creator-btn" onclick="editDraftInManual()">✍ Tweak first</button>
+      <button class="npc-creator-btn primary" onclick="saveDraftNpc()">Add this NPC</button>
+    </div>` : ''}`;
+}
+
+async function generateAiNpc(){
+  const promptEl = document.getElementById('npc-ai-prompt');
+  const status = document.getElementById('npc-ai-status');
+  const btn = document.getElementById('npc-ai-gen-btn');
+  const userPrompt = (promptEl ? promptEl.value : '').trim();
+  if(!userPrompt){ status.textContent = 'Describe the NPC first.'; status.classList.add('error'); return; }
+  status.classList.remove('error');
+  status.textContent = 'Generating…';
+  if(btn) btn.disabled = true;
+
+  const areaLabel = MAIN[cur] ? (curSub && MAIN[cur].subs && MAIN[cur].subs[curSub] ? MAIN[cur].subs[curSub].label : MAIN[cur].label) : '';
+
+  const sys = "You are generating an NPC for a Traveller 2nd Edition tabletop RPG campaign set on Aurelia Orbital Station — a Hegemony-controlled station orbiting a copper-tinted jewel world. There is an underground resistance (the RSR) and corporate interests (OmniSynth). Respond with ONLY a JSON object, no markdown, no preamble. Schema: {\"name\":string, \"role\":string (short, includes location like '" + areaLabel + "'), \"stats\":{\"STR\":int,\"DEX\":int,\"END\":int,\"INT\":int,\"EDU\":int,\"SOC\":int} (each 2-12, rolled like 2D6), \"skills\":string (comma-separated, e.g. 'Admin 2, Persuade 1'), \"rows\":[[label,text],...] (3-4 referee-facing detail rows like Manner, Wants, Hook, On the ship — concise, evocative, setting-appropriate)}. Keep it grounded and usable at the table.";
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: sys,
+        messages: [{ role: "user", content: "NPC to generate: " + userPrompt }]
+      })
+    });
+    if(!response.ok) throw new Error('API returned ' + response.status);
+    const data = await response.json();
+    let text = (data.content || []).map(c => c.type === 'text' ? c.text : '').join('').trim();
+    text = text.replace(/```json/gi,'').replace(/```/g,'').trim();
+    const npc = JSON.parse(text);
+    // Validate shape
+    if(!npc.name || !npc.stats){ throw new Error('Malformed NPC'); }
+    npc._prompt = userPrompt;
+    npcCreatorDraft = npc;
+    status.textContent = '';
+    renderNpcCreatorBody();
+  } catch(err){
+    status.classList.add('error');
+    status.textContent = 'Generation failed: ' + (err.message || 'unknown error') + '. Try again or use Manual/Random.';
+    if(btn) btn.disabled = false;
+  }
+}
+
+// ── Shared preview + save for random/AI drafts ─────────────────────────────
+function renderNpcPreview(npc){
+  const stats = Object.entries(npc.stats||{}).map(([k,v]) => `${k} ${v}`).join('  ');
+  const rows = (npc.rows||[]).map(r => `<div class="npc-preview-row"><b>${escHtml(r[0])}:</b> ${escHtml(r[1])}</div>`).join('');
+  return `
+    <div class="npc-preview">
+      <div class="npc-preview-name">${escHtml(npc.name)}</div>
+      <div class="npc-preview-role">${escHtml(npc.role||'')}</div>
+      <div class="npc-preview-stats">${stats}</div>
+      ${npc.skills ? `<div class="npc-preview-skills">${escHtml(npc.skills)}</div>` : ''}
+      ${rows}
+    </div>`;
+}
+
+async function saveDraftNpc(){
+  if(!npcCreatorDraft){ return; }
+  const npc = { ...npcCreatorDraft };
+  delete npc._prompt;
+  if(!npc.name){ showToast('NPC needs a name', 'error'); return; }
+  await commitNewNpc(npc);
+  closeNpcCreator();
+}
+
+// Move the current draft into the manual editor for tweaking before saving.
+function editDraftInManual(){
+  if(npcCreatorDraft){
+    npcCreatorRows = (npcCreatorDraft.rows || []).map(r => [r[0], r[1]]);
+    if(!npcCreatorRows.length) npcCreatorRows = [['','']];
+  }
+  setNpcCreatorMode('manual');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BODY CREATOR  —  add planets / moons / asteroid belts in design mode
+// ═══════════════════════════════════════════════════════════════════════════
+// Mirrors the NPC creator's structure: a modal with Manual and Random (UWP)
+// tabs, a working draft, and a commit that pushes into bodyAdditions (system-
+// scoped, Supabase-synced). Random generation follows Mongoose Traveller 2e /
+// World Builder's Handbook world-profile rules.
+
+let bodyCreatorMode = 'manual';
+let bodyCreatorDraft = null;   // {starport,size,atm,hydro,pop,gov,law,tech} for random tab
+let bodyEditTargetId = null;   // when editing an existing body's properties
+
+const BODY_CLASS_OPTIONS = [
+  ['planet','Planet'],['moon','Moon'],['belt','Asteroid Belt'],
+  ['gasgiant','Gas Giant'],['star','Star']
+];
+const BODY_TAG_OPTIONS = ['','FLAVOUR','ADVENTURE HOOK','CLASSIFIED','RESTRICTED','CAMPAIGN HUB'];
+
+// ── Dice ───────────────────────────────────────────────────────────────────
+function d6(){ return 1 + Math.floor(Math.random()*6); }
+function roll2d6(){ return d6() + d6(); }
+function ehex(n){ // Traveller extended hex: 0-9 then A.. (skips I,O)
+  n = Math.max(0, Math.round(n));
+  const digits = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return n < digits.length ? digits[n] : 'Z';
+}
+function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+
+// ── UWP generation (Traveller 2e core / World Builder's Handbook) ──────────
+function genStarport(){
+  const r = roll2d6();
+  if(r<=4) return 'E'; // 2-4
+  if(r<=6) return 'D'; // 5-6
+  if(r<=8) return 'C'; // 7-8
+  if(r<=10) return 'B'; // 9-10
+  return 'A'; // 11-12
+}
+function genUWP(){
+  const starport = genStarport();
+  const size = clamp(roll2d6() - 2, 0, 15);
+  let atm;
+  if(size === 0) atm = 0;
+  else atm = clamp(roll2d6() - 7 + size, 0, 15);
+  let hydro;
+  if(size <= 1) hydro = 0;
+  else {
+    let dm = 0;
+    if(atm <= 1 || atm >= 10) dm -= 4;
+    hydro = clamp(roll2d6() - 7 + atm + dm, 0, 10);
+  }
+  const pop = clamp(roll2d6() - 2, 0, 15);
+  let gov = (pop === 0) ? 0 : clamp(roll2d6() - 7 + pop, 0, 15);
+  let law = (pop === 0) ? 0 : clamp(roll2d6() - 7 + gov, 0, 15);
+  const tech = (pop === 0) ? 0 : genTechLevel(starport, size, atm, hydro, pop, gov);
+  return { starport, size, atm, hydro, pop, gov, law, tech };
+}
+// Tech Level: 1d6 + DMs from starport / size / atmosphere / hydro / pop / gov
+function genTechLevel(starport, size, atm, hydro, pop, gov){
+  let dm = 0;
+  // Starport
+  dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
+  // Size
+  if(size <= 1) dm += 2; else if(size <= 4) dm += 1;
+  // Atmosphere
+  if(atm <= 3 || atm >= 10) dm += 1;
+  // Hydrographics
+  if(hydro === 9) dm += 1; else if(hydro === 10) dm += 2;
+  // Population
+  if(pop >= 1 && pop <= 5) dm += 1; else if(pop === 9) dm += 2; else if(pop >= 10) dm += 4;
+  // Government
+  if(gov === 0 || gov === 5) dm += 1; else if(gov === 7) dm += 2; else if(gov >= 13) dm -= 2;
+  return clamp(d6() + dm, 0, 33);
+}
+function uwpToString(u, starport){
+  const sp = starport || u.starport;
+  return `${sp}${ehex(u.size)}${ehex(u.atm)}${ehex(u.hydro)}${ehex(u.pop)}${ehex(u.gov)}${ehex(u.law)}-${ehex(u.tech)}`;
+}
+// Trade codes from the world profile (subset of the standard table)
+function tradeCodes(u){
+  const c = [];
+  const {size,atm,hydro,pop,gov,law} = u;
+  if(atm>=4&&atm<=9 && hydro>=4&&hydro<=8 && pop>=5&&pop<=7) c.push('Ag');
+  if(size===0&&atm===0&&hydro===0) c.push('As');
+  if(pop===0&&gov===0&&law===0) c.push('Ba');
+  if(atm>=2&&hydro===0) c.push('De');
+  if(atm>=10&&hydro>=1) c.push('Fl');
+  if(size>=6&&size<=8 && (atm===5||atm===6||atm===8) && hydro>=5&&hydro<=7) c.push('Ga');
+  if(pop>=9) c.push('Hi');
+  if(['A','B'].includes(u.starport) && atm<=3 && (hydro<=3) && pop>=9) c.push('In');
+  if(pop>=1&&pop<=3) c.push('Lo');
+  if(atm<=3 && hydro<=3 && pop>=6) c.push('Na');
+  if(pop>=4&&pop<=6) c.push('Ni');
+  if(atm>=2&&atm<=5 && hydro<=3) c.push('Po');
+  if((atm===6||atm===8) && pop>=6&&pop<=8 && gov>=4&&gov<=9) c.push('Ri');
+  if(hydro>=10) c.push('Wa');
+  if(atm===0) c.push('Va');
+  return c;
+}
+const UWP_FIELD_LABELS = {
+  starport:'Starport', size:'Size', atm:'Atmosphere', hydro:'Hydrographics',
+  pop:'Population', gov:'Government', law:'Law Level', tech:'Tech Level'
+};
+// Human-readable decode for the preview
+function decodeUWP(u){
+  const sizeKm = u.size===0 ? 'belt/<1,000 km' : '~'+(u.size*1600).toLocaleString()+' km';
+  return [
+    `Starport ${u.starport}`,
+    `Size ${ehex(u.size)} (${sizeKm})`,
+    `Atmo ${ehex(u.atm)}`,
+    `Hydro ${ehex(u.hydro)} (${u.hydro*10}% water)`,
+    `Pop ${ehex(u.pop)} (10^${u.pop})`,
+    `Gov ${ehex(u.gov)}`,
+    `Law ${ehex(u.law)}`,
+    `TL ${ehex(u.tech)}`
+  ].join(' · ');
+}
+
+// ── Open / close / mode ────────────────────────────────────────────────────
+function openBodyCreator(){
+  if(!isReferee() || !designModeOn) return;
+  bodyCreatorMode = 'manual';
+  bodyCreatorDraft = null;
+  bodyEditTargetId = null;
+  document.getElementById('body-creator-title').textContent = '✦ Add Body';
+  document.getElementById('body-creator-tabs').style.display = 'flex';
+  document.getElementById('body-creator-modal').classList.add('open');
+  setBodyCreatorMode('manual');
+}
+function closeBodyCreator(){
+  document.getElementById('body-creator-modal').classList.remove('open');
+  bodyEditTargetId = null;
+}
+function setBodyCreatorMode(mode){
+  bodyCreatorMode = mode;
+  ['manual','random'].forEach(m => {
+    const tab = document.getElementById('body-tab-'+m);
+    if(tab) tab.classList.toggle('on', m === mode);
+  });
+  renderBodyCreatorBody();
+}
+function renderBodyCreatorBody(){
+  const body = document.getElementById('body-creator-body');
+  if(!body) return;
+  if(bodyCreatorMode === 'manual') body.innerHTML = renderBodyManualForm();
+  else body.innerHTML = renderBodyRandomPanel();
+}
+
+// ── Shared field helpers ───────────────────────────────────────────────────
+function bodyClassSelect(selected){
+  return `<select class="body-select" id="body-f-class" onchange="onBodyClassChange()">${
+    BODY_CLASS_OPTIONS.map(([v,l]) => `<option value="${v}"${v===selected?' selected':''}>${l}</option>`).join('')
+  }</select>`;
+}
+function bodyParentSelect(selected){
+  const opts = getBodies().filter(b => !b.isMoon).map(b =>
+    `<option value="${b.id}"${b.id===selected?' selected':''}>${escHtml(b.name)}</option>`).join('');
+  return `<select class="body-select" id="body-f-parent">${opts || '<option value="">(no parent bodies)</option>'}</select>`;
+}
+function bodyTagSelect(selected){
+  return `<select class="body-select" id="body-f-tag">${
+    BODY_TAG_OPTIONS.map(t => `<option value="${t}"${t===selected?' selected':''}>${t||'(none)'}</option>`).join('')
+  }</select>`;
+}
+function bodyOrbitSelect(selected){
+  let opts = '';
+  for(let i=1;i<=12;i++) opts += `<option value="${i}"${i===selected?' selected':''}>Orbit slot ${i}</option>`;
+  return `<select class="body-select" id="body-f-orbit">${opts}</select>`;
+}
+function onBodyClassChange(){
+  const cls = (document.getElementById('body-f-class')||{}).value;
+  const parentRow = document.getElementById('body-parent-row');
+  const orbitRow = document.getElementById('body-orbit-row');
+  const beltRow = document.getElementById('body-belt-row');
+  if(parentRow) parentRow.style.display = (cls==='moon') ? '' : 'none';
+  if(orbitRow) orbitRow.style.display = (cls==='moon') ? 'none' : '';
+  if(beltRow) beltRow.style.display = (cls==='belt') ? '' : 'none';
+}
+
+// Suggest the next free orbit slot
+function nextFreeOrbitSlot(){
+  const used = {};
+  getBodies().forEach(b => { if(b.orbitPos) used[b.orbitPos] = true; });
+  for(let i=1;i<=12;i++) if(!used[i]) return i;
+  return 12;
+}
+
+// ── Manual form ────────────────────────────────────────────────────────────
+function renderBodyManualForm(prefill){
+  const d = prefill || bodyCreatorDraft || {};
+  const cls = d.bodyClass || 'planet';
+  const orbit = d.orbitPos || nextFreeOrbitSlot();
+  const color = d.color || '#8b91a8';
+  return `
+    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(currentSystem().name)} system</b>. Only a name is required.</div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Name</label>
+      <input type="text" class="npc-form-input" id="body-f-name" value="${escAttr(d.name)}" placeholder="e.g. Halcyon">
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Body class</label>
+      ${bodyClassSelect(cls)}
+    </div>
+    <div class="npc-form-row" id="body-parent-row" style="display:${cls==='moon'?'':'none'}">
+      <label class="npc-form-lbl">Parent body</label>
+      ${bodyParentSelect(d.parentId)}
+    </div>
+    <div class="npc-form-row" id="body-orbit-row" style="display:${cls==='moon'?'none':''}">
+      <label class="npc-form-lbl">Orbit slot (inner → outer)</label>
+      ${bodyOrbitSelect(orbit)}
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Type label (free text)</label>
+      <input type="text" class="npc-form-input" id="body-f-type" value="${escAttr(d.type)}" placeholder="e.g. Terrestrial · Ice-Rock">
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">UWP</label>
+      <input type="text" class="npc-form-input" id="body-f-uwp" value="${escAttr(d.uwpString)}" placeholder="e.g. B867976-C or — " style="font-family:monospace">
+    </div>
+    <div class="body-uwp-grid">
+      <div class="npc-form-row"><label class="npc-form-lbl">Orbit (AU / note)</label>
+        <input type="text" class="npc-form-input" id="body-f-orbitau" value="${escAttr(d.orbitAU)}" placeholder="e.g. 2.4 AU"></div>
+      <div class="npc-form-row"><label class="npc-form-lbl">Diameter</label>
+        <input type="text" class="npc-form-input" id="body-f-diameter" value="${escAttr(d.diameter)}" placeholder="e.g. ~6,200 km"></div>
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Period</label>
+      <input type="text" class="npc-form-input" id="body-f-period" value="${escAttr(d.period)}" placeholder="e.g. ~2.4 standard years">
+    </div>
+    <div class="body-uwp-grid">
+      <div class="npc-form-row"><label class="npc-form-lbl">Colour</label>
+        <div class="body-color-row"><input type="color" id="body-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#8b91a8'}"><input type="text" class="npc-form-input" id="body-f-colorhex" value="${escAttr(color)}" oninput="syncBodyColorHex()" style="font-family:monospace"></div></div>
+      <div class="npc-form-row"><label class="npc-form-lbl">Tag</label>${bodyTagSelect(d.tag||'')}</div>
+    </div>
+    <div class="npc-form-row" id="body-belt-row" style="display:${cls==='belt'?'':'none'}">
+      <label class="npc-form-lbl">Belt density (dot count, 20–600)</label>
+      <input type="number" class="npc-form-input" id="body-f-density" min="20" max="600" value="${d.beltDensity||160}">
+    </div>
+    <div class="npc-form-row body-check-row">
+      <input type="checkbox" id="body-f-hook" ${d.hook?'checked':''}><label for="body-f-hook" style="margin:0;cursor:pointer">Adventure hook (gold highlight + ! marker)</label>
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Overview / description</label>
+      <textarea class="npc-form-textarea" id="body-f-desc" style="min-height:70px">${escHtml(d.desc)}</textarea>
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Referee note</label>
+      <textarea class="npc-form-textarea" id="body-f-refnote" style="min-height:50px">${escHtml(d.refNote)}</textarea>
+    </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Read aloud</label>
+      <textarea class="npc-form-textarea" id="body-f-readaloud" style="min-height:50px">${escHtml(d.readAloud)}</textarea>
+    </div>
+    <div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeBodyCreator()">Cancel</button>
+      <button class="npc-creator-btn primary" onclick="saveBodyFromForm()">${bodyEditTargetId?'Save Changes':'Add Body'}</button>
+    </div>`;
+}
+function syncBodyColorHex(){
+  const hex = (document.getElementById('body-f-colorhex')||{}).value || '';
+  if(/^#[0-9a-fA-F]{6}$/.test(hex)){ const c = document.getElementById('body-f-color'); if(c) c.value = hex; }
+}
+
+// Maps a body-class choice to the boolean/type flags the renderer expects
+function applyBodyClass(obj, cls){
+  obj.isStar = (cls === 'star');
+  obj.isMoon = (cls === 'moon');
+  if(cls === 'belt' && !/asteroid belt/i.test(obj.type||'')){
+    obj.type = obj.type ? obj.type : 'Asteroid Belt';
+    if(!/asteroid belt/i.test(obj.type)) obj.type = 'Asteroid Belt';
+  }
+  return obj;
+}
+
+function collectBodyForm(){
+  const g = id => (document.getElementById(id)||{}).value;
+  const cls = g('body-f-class') || 'planet';
+  const name = (g('body-f-name')||'').trim();
+  let type = (g('body-f-type')||'').trim();
+  if(cls === 'belt' && !/asteroid belt/i.test(type)) type = type ? (type + ' · Asteroid Belt') : 'Asteroid Belt';
+  if(cls === 'gasgiant' && !type) type = 'Gas Giant';
+  if(cls === 'moon' && !type) type = 'Moon';
+  if(cls === 'star' && !type) type = 'Star';
+  const obj = {
+    name,
+    type: type || 'Terrestrial',
+    tag: g('body-f-tag') || null,
+    color: (g('body-f-colorhex')||'').trim() || '#8b91a8',
+    orbitAU: (g('body-f-orbitau')||'').trim() || '—',
+    uwpString: (g('body-f-uwp')||'').trim() || '—',
+    diameter: (g('body-f-diameter')||'').trim() || '—',
+    period: (g('body-f-period')||'').trim() || '—',
+    isMoon: cls === 'moon',
+    isStar: cls === 'star',
+    hook: !!(document.getElementById('body-f-hook')||{}).checked,
+    desc: g('body-f-desc') || '',
+    refNote: (g('body-f-refnote')||'').trim() || null,
+    readAloud: (g('body-f-readaloud')||'').trim() || null,
+    npcs: [], checks: [], events: []
+  };
+  if(cls === 'moon'){
+    obj.parentId = g('body-f-parent') || null;
+    obj.orbitPos = null;
+  } else {
+    obj.orbitPos = parseInt(g('body-f-orbit'),10) || nextFreeOrbitSlot();
+  }
+  if(cls === 'belt'){
+    obj.beltDensity = clamp(parseInt(g('body-f-density'),10)||160, 20, 600);
+  }
+  // Sensible display radius defaults by class
+  obj.displayRadius = cls==='star'?18 : cls==='gasgiant'?16 : cls==='moon'?4 : 8;
+  return obj;
+}
+
+async function saveBodyFromForm(){
+  const obj = collectBodyForm();
+  if(!obj.name){ showToast('Body needs a name', 'error'); return; }
+  if(obj.isMoon && !obj.parentId){ showToast('Pick a parent body for the moon', 'error'); return; }
+  // UWP light validation (allow — for unprofiled bodies)
+  if(obj.uwpString && obj.uwpString !== '—' && !/^[A-EX][0-9A-Z–—-]{6}-?[0-9A-Z]$/i.test(obj.uwpString.replace(/—/g,'-'))){
+    if(!confirm('That UWP doesn\'t look standard. Save it anyway?')) return;
+  }
+  if(bodyEditTargetId){
+    await commitBodyEdit(bodyEditTargetId, obj);
+  } else {
+    await commitNewBody(obj);
+  }
+  closeBodyCreator();
+}
+
+// ── Random (UWP) panel ─────────────────────────────────────────────────────
+function renderBodyRandomPanel(){
+  const u = bodyCreatorDraft && bodyCreatorDraft._uwp;
+  let preview;
+  if(!u){
+    preview = '<div class="npc-gen-hint">Click <b style="color:var(--tx0)">Roll UWP</b> to generate a Traveller world profile. Re-roll the whole thing or any single field, override any value, then add it.</div>';
+  } else {
+    const sp = u.starport;
+    const cells = ['starport','size','atm','hydro','pop','gov','law','tech'].map(f => {
+      const val = f==='starport' ? sp : ehex(u[f]);
+      return `<div class="body-uwp-cell">
+        <label>${UWP_FIELD_LABELS[f]}<button class="uwp-roll" onclick="rerollUwpField('${f}')" title="Re-roll">🎲</button></label>
+        <input type="text" id="uwp-f-${f}" value="${val}" oninput="onUwpFieldEdit('${f}',this.value)">
+      </div>`;
+    }).join('');
+    const trades = tradeCodes(u);
+    preview = `
+      <div class="body-uwp-string" id="uwp-string">${uwpToString(u, sp)}</div>
+      <div class="body-uwp-decode">${decodeUWP(u)}</div>
+      <div class="body-uwp-trade">Trade: ${trades.length?trades.join(' '):'—'}</div>
+      <div class="body-uwp-grid">${cells}</div>`;
+  }
+  return `
+    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(currentSystem().name)} system</b>. Profile rolled per Traveller 2e world-generation rules.</div>
+    <div style="text-align:center;margin-bottom:10px">
+      <button class="npc-creator-btn primary" onclick="rollFullUwp()">🎲 Roll UWP</button>
+    </div>
+    <div id="uwp-preview">${preview}</div>
+    ${u ? `<div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeBodyCreator()">Cancel</button>
+      <button class="npc-creator-btn" onclick="uwpToManual()">✍ Add details first</button>
+      <button class="npc-creator-btn primary" onclick="uwpToManual(true)">Continue →</button>
+    </div>` : ''}`;
+}
+function rollFullUwp(){
+  bodyCreatorDraft = bodyCreatorDraft || {};
+  bodyCreatorDraft._uwp = genUWP();
+  renderBodyCreatorBody();
+}
+function rerollUwpField(field){
+  if(!bodyCreatorDraft || !bodyCreatorDraft._uwp) return;
+  const u = bodyCreatorDraft._uwp;
+  if(field === 'starport') u.starport = genStarport();
+  else if(field === 'size') u.size = clamp(roll2d6()-2,0,15);
+  else if(field === 'atm') u.atm = u.size===0?0:clamp(roll2d6()-7+u.size,0,15);
+  else if(field === 'hydro'){ let dm=0; if(u.atm<=1||u.atm>=10)dm-=4; u.hydro = u.size<=1?0:clamp(roll2d6()-7+u.atm+dm,0,10); }
+  else if(field === 'pop') u.pop = clamp(roll2d6()-2,0,15);
+  else if(field === 'gov') u.gov = u.pop===0?0:clamp(roll2d6()-7+u.pop,0,15);
+  else if(field === 'law') u.law = u.pop===0?0:clamp(roll2d6()-7+u.gov,0,15);
+  else if(field === 'tech') u.tech = u.pop===0?0:genTechLevel(u.starport,u.size,u.atm,u.hydro,u.pop,u.gov);
+  renderBodyCreatorBody();
+}
+function ehexToNum(ch){
+  const digits = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const i = digits.indexOf((ch||'').toUpperCase());
+  return i < 0 ? 0 : i;
+}
+function onUwpFieldEdit(field, val){
+  if(!bodyCreatorDraft || !bodyCreatorDraft._uwp) return;
+  const u = bodyCreatorDraft._uwp;
+  if(field === 'starport') u.starport = (val||'X').toUpperCase().slice(0,1);
+  else u[field] = ehexToNum(val);
+  // Live-update the string + decode without a full re-render (keeps focus)
+  const s = document.getElementById('uwp-string');
+  if(s) s.textContent = uwpToString(u, u.starport);
+  const dec = document.querySelector('.body-uwp-decode');
+  if(dec) dec.textContent = decodeUWP(u);
+  const tr = document.querySelector('.body-uwp-trade');
+  if(tr){ const t = tradeCodes(u); tr.textContent = 'Trade: ' + (t.length?t.join(' '):'—'); }
+}
+// Move the rolled UWP into the manual form so the referee can name it / add prose
+function uwpToManual(){
+  const u = bodyCreatorDraft && bodyCreatorDraft._uwp;
+  const prefill = {
+    uwpString: u ? uwpToString(u, u.starport) : '',
+    bodyClass: (u && u.size === 0) ? 'belt' : 'planet',
+    beltDensity: 160,
+    color: (u && u.size===0) ? '#8B7355' : '#8b91a8'
+  };
+  bodyCreatorDraft = Object.assign({}, prefill);
+  bodyCreatorMode = 'manual';
+  ['manual','random'].forEach(m => { const t=document.getElementById('body-tab-'+m); if(t) t.classList.toggle('on', m==='manual'); });
+  document.getElementById('body-creator-body').innerHTML = renderBodyManualForm(prefill);
+  // Apply class-dependent visibility after injecting
+  onBodyClassChange();
+}
+
+// ── Commit / edit / delete ─────────────────────────────────────────────────
+async function commitNewBody(obj){
+  obj.id = 'body-add-' + Date.now() + '-' + Math.floor(Math.random()*1000);
+  if(!bodyAdditions[currentSystemId]) bodyAdditions[currentSystemId] = [];
+  bodyAdditions[currentSystemId].push(obj);
+  await saveBodyAdditions();
+  buildOrrery();
+  showToast('Body "' + obj.name + '" added');
+  selectBody(obj.id);
+}
+
+// Open the editor pre-filled with an existing body's current (effective) values
+function openBodyEditor(id){
+  if(!isReferee() || !designModeOn) return;
+  const b = getBodies().find(x => x.id === id);
+  if(!b){ showToast('Body not found', 'error'); return; }
+  bodyEditTargetId = id;
+  bodyCreatorMode = 'manual';
+  const cls = b.isStar?'star' : b.isMoon?'moon' : /asteroid belt/i.test(b.type||'')?'belt' : /gas giant/i.test(b.type||'')?'gasgiant' : 'planet';
+  bodyCreatorDraft = {
+    name:b.name, type:b.type, tag:b.tag||'', color:b.color, orbitAU:b.orbitAU,
+    uwpString:b.uwpString, diameter:b.diameter, period:b.period, hook:!!b.hook,
+    desc:b.desc, refNote:b.refNote, readAloud:b.readAloud, parentId:b.parentId,
+    orbitPos:b.orbitPos, beltDensity:b.beltDensity, bodyClass:cls
+  };
+  document.getElementById('body-creator-title').textContent = '✦ Edit Body Properties';
+  document.getElementById('body-creator-tabs').style.display = 'none';
+  document.getElementById('body-creator-modal').classList.add('open');
+  document.getElementById('body-creator-body').innerHTML = renderBodyManualForm(bodyCreatorDraft);
+  onBodyClassChange();
+}
+
+async function commitBodyEdit(id, obj){
+  obj.id = id;
+  if(isAddedBody(id)){
+    // Edit the addition in place (preserve its npcs/checks/events)
+    const arr = bodyAdditions[currentSystemId] || [];
+    const idx = arr.findIndex(b => b.id === id);
+    if(idx >= 0){
+      const prev = arr[idx];
+      obj.npcs = prev.npcs || []; obj.checks = prev.checks || []; obj.events = prev.events || [];
+      arr[idx] = obj;
+      await saveBodyAdditions();
+    }
+  } else {
+    // Base body — store only the changed metadata fields as overrides so the
+    // body's checks/events/npcs and identity stay anchored to the base data.
+    const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
+    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar'];
+    const ov = {};
+    fields.forEach(f => {
+      const nv = obj[f];
+      // Normalise null/'' equivalence so we don't store no-op overrides
+      const bv = base[f];
+      const norm = v => (v === '' || v === undefined) ? null : v;
+      if(norm(nv) !== norm(bv)) ov[f] = nv;
+    });
+    if(!bodyPropertyOverrides[currentSystemId]) bodyPropertyOverrides[currentSystemId] = {};
+    if(Object.keys(ov).length) bodyPropertyOverrides[currentSystemId][id] = ov;
+    else delete bodyPropertyOverrides[currentSystemId][id];
+    await saveBodyPropertyOverrides();
+  }
+  buildOrrery();
+  showToast('Body updated');
+  selectBody(id);
+}
+
+async function deleteBody(id){
+  const b = getBodies().find(x => x.id === id);
+  if(!b) return;
+  // Warn if this body has moons that will be orphaned
+  const moons = getBodies().filter(x => x.isMoon && x.parentId === id);
+  let msg = `Remove "${b.name}"? You can restore it from "Show Removed Items".`;
+  if(moons.length) msg = `"${b.name}" has ${moons.length} moon(s) which will no longer have a parent. ` + msg;
+  if(!confirm(msg)) return;
+  if(isAddedBody(id)){
+    const arr = bodyAdditions[currentSystemId] || [];
+    const idx = arr.findIndex(x => x.id === id);
+    if(idx >= 0){
+      // Keep a tombstone so it appears in "Removed Items" for restore
+      if(!bodyDeletions[currentSystemId]) bodyDeletions[currentSystemId] = {};
+      bodyDeletions[currentSystemId][id] = { body: arr[idx], t: Date.now(), wasAddition: true };
+      arr.splice(idx, 1);
+      await saveBodyAdditions();
+      await saveBodyDeletions();
+    }
+  } else {
+    if(!bodyDeletions[currentSystemId]) bodyDeletions[currentSystemId] = {};
+    bodyDeletions[currentSystemId][id] = { body: b, t: Date.now(), wasAddition: false };
+    await saveBodyDeletions();
+  }
+  showToast('Body removed', 'info');
+  goSystemOverview();
+}
+
+async function restoreDeletedBody(sysId, id){
+  const entry = (bodyDeletions[sysId] || {})[id];
+  if(!entry) return;
+  if(entry.wasAddition){
+    if(!bodyAdditions[sysId]) bodyAdditions[sysId] = [];
+    bodyAdditions[sysId].push(entry.body);
+    await saveBodyAdditions();
+  }
+  delete bodyDeletions[sysId][id];
+  await saveBodyDeletions();
+  if(currentView === 'system'){ buildOrrery(); }
+  closeRemovedItemsPanel();
+  showToast('Body restored');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // NPC LOCATION TRACKER
 // ═══════════════════════════════════════════════════════════════════════════
 // npcLocations: { [npcKey]: { area, sub, note, schedule: [{id,mins,area,sub,note}] } }
@@ -6462,6 +8373,33 @@ function npcParseAreaValue(val){
 }
 
 // ── Render location badge (injected into NPC card header) ─────────────────
+
+// ── NPC disposition (Hostile / Neutral / Friendly) ────────────────────────
+// Stored on the npcLocations record so it persists with the NPC. Pairs with
+// the Reaction table in the Rules sidebar.
+function npcDispoBadgeHTML(name){
+  const k = npcKey(name);
+  const cur = (npcLocations[k] && npcLocations[k].dispo) || '';
+  const opt = [
+    {v:'hostile',  label:'Hostile',  cls:'npc-dispo-hostile'},
+    {v:'neutral',  label:'Neutral',  cls:'npc-dispo-neutral'},
+    {v:'friendly', label:'Friendly', cls:'npc-dispo-friendly'},
+  ];
+  return '<div class="npc-dispo-row" onclick="event.stopPropagation()">' +
+    opt.map(o =>
+      '<span class="npc-dispo-pill ' + o.cls + (cur === o.v ? ' active' : '') +
+      '" onclick="setNpcDispo(\'' + k + '\',\'' + o.v + '\')">' + o.label + '</span>'
+    ).join('') +
+    '</div>';
+}
+
+function setNpcDispo(k, dispo){
+  if(!npcLocations[k]) npcLocations[k] = { area:'', sub:'', note:'', schedule:[] };
+  // Toggle off if tapping the active one
+  npcLocations[k].dispo = (npcLocations[k].dispo === dispo) ? '' : dispo;
+  npcLocSave();
+  if(currentView === 'station') renderDetail();
+}
 
 function npcLocationBadgeHTML(name){
   const k = npcKey(name);
@@ -6573,6 +8511,7 @@ function npcLocSaveEditor(k, name){
   npcLocSave();
   npcLocEditorOpen = null;
   if(currentView === 'station') renderDetail();
+  showToast('Location saved for ' + name);
 }
 
 function npcLocClear(k){
@@ -6819,6 +8758,21 @@ document.addEventListener('keydown', e => {
 });
 
 kbdLoad();
+// ── First-run keyboard shortcut hint ──────────────────────────────────────
+// Surfaces the existence of shortcuts once, so they're discoverable without
+// forcing the user to open Settings. Shows a single toast on first load.
+(function showShortcutHintOnce(){
+  try {
+    if(localStorage.getItem('aurelia_kbd_hint_seen') === '1') return;
+    // Delay so it doesn't collide with load
+    setTimeout(() => {
+      if(typeof showToast === 'function'){
+        showToast('Tip: press R for Rules, Q for Quests, / to search. Rebind in Settings.', 'info');
+        try { localStorage.setItem('aurelia_kbd_hint_seen', '1'); } catch(e){}
+      }
+    }, 1800);
+  } catch(e){}
+})();
 
 loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on-demand in Settings
 renderEventLog();
