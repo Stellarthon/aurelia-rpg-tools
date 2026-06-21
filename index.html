@@ -2852,6 +2852,12 @@ function buildOrrery(){
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
     html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+    const tUrlP = textureUrlFor(b);
+    if(tUrlP){
+      const tp = escAttr(tUrlP);
+      html += `<clipPath id="orr-tex-${b.id}"><circle cx="${px}" cy="${py}" r="${r}"/></clipPath>`;
+      html += `<image href="${tp}" xlink:href="${tp}" x="${px-r}" y="${py-r}" width="${2*r}" height="${2*r}" preserveAspectRatio="xMidYMid slice" clip-path="url(#orr-tex-${b.id})" pointer-events="none"/>`;
+    }
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" pointer-events="none"/>`;
 
     // Rings — data-driven via ringStyle: 'major' | 'subtle'
@@ -2904,6 +2910,12 @@ function buildOrrery(){
       html += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="${m.color}" ${m.decoration==='dim'?'opacity="0.4"':''} data-body="${m.id}" class="body-node" style="cursor:pointer"/>`;
       const gid = `pg-${m.id}`;
+      const tUrlM = textureUrlFor(m);
+      if(tUrlM){
+        const tm = escAttr(tUrlM);
+        html += `<clipPath id="orr-tex-${m.id}"><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}"/></clipPath>`;
+        html += `<image href="${tm}" xlink:href="${tm}" x="${(mx-mr).toFixed(1)}" y="${(my-mr).toFixed(1)}" width="${2*mr}" height="${2*mr}" preserveAspectRatio="xMidYMid slice" clip-path="url(#orr-tex-${m.id})" pointer-events="none"/>`;
+      }
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="url(#${gid})" pointer-events="none"/>`;
       if(m.hook) html += `<text x="${(mx+5).toFixed(1)}" y="${(my-4).toFixed(1)}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
       // Optional asteroid-cluster decoration near the moon
@@ -3172,16 +3184,34 @@ function discPlanet(body, CX, CY, col, style){
     s += `<circle cx="${CX}" cy="${CY}" r="${PR+5}" fill="none" stroke="${col}" stroke-width="6" opacity="0.10" pointer-events="none"/>`;
   }
 
-  // Base sphere — body colour, click target for entering (Phase 2+)
+  // Base sphere — body colour, click target for entering (Phase 2+); also the
+  // fallback fill shown under/around a photo texture while it loads or if it
+  // fails to resolve.
   s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="${col}" data-body="${body.id}" class="bv-disc" style="cursor:default"/>`;
-
-  // Clipped style-specific surface detail
-  s += `<g clip-path="url(#bv-clip)">`;
 
   // Gas-giant band detail is captured in a variable so it can be re-emitted
   // over the lower hemisphere after the ring-occlusion redraw — otherwise the
   // flat front-half repaint erases the banding on the bottom of ringed giants.
+  // (Stays empty for photo-textured bodies, so the ring redraw is skipped.)
   let ggDetail = '';
+
+  const texUrl = textureUrlFor(body);
+  if(texUrl){
+    // ── Data-driven photo texture ────────────────────────────────────────────
+    // A pre-rendered lit globe PNG (hosted, transparent background) replaces the
+    // procedural surface AND the heavy shading/terminator — the image already
+    // carries its own lighting. Clipped to the body's actual radius for safety.
+    s += `<clipPath id="bv-tex-clip"><circle cx="${CX}" cy="${CY}" r="${PR}"/></clipPath>`;
+    const tex = escAttr(texUrl);
+    s += `<image href="${tex}" xlink:href="${tex}" x="${CX-PR}" y="${CY-PR}" width="${2*PR}" height="${2*PR}" preserveAspectRatio="xMidYMid slice" clip-path="url(#bv-tex-clip)" pointer-events="none"/>`;
+    // A light limb-darkening pass so the globe seats into the scene rather than
+    // looking pasted on — much softer than the procedural disc's full shading.
+    s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="url(#bv-base)" opacity="0.4" pointer-events="none"/>`;
+  } else {
+
+  // Clipped style-specific surface detail
+  s += `<g clip-path="url(#bv-clip)">`;
+
   if(style === 'gasgiant'){
     // Horizontal banding — alternating light/dark translucent strips
     const bands = 7;
@@ -3238,6 +3268,7 @@ function discPlanet(body, CX, CY, col, style){
 
   // Terminator shadow (sunward from upper-right → shadow lower-left)
   s += `<g clip-path="url(#bv-clip)"><ellipse cx="${CX-36}" cy="${CY+18}" rx="${PR*0.92}" ry="${PR}" fill="#000610" opacity="0.30" transform="rotate(-18,${CX-36},${CY+18})"/></g>`;
+  } // ── end procedural (non-textured) surface ──
 
   // Rings (data-driven, reusing body.ringStyle)
   if(body.ringStyle === 'major' || body.ringStyle === 'subtle'){
@@ -5069,6 +5100,64 @@ function buildQuickAddList(){
 const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
 const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
+
+// ── Hosted planet-surface globe textures ────────────────────────────────────
+// Pre-rendered lit globe PNGs in the public Supabase Storage bucket "globes".
+// The catalog SELF-POPULATES at runtime by listing the bucket (an anon SELECT
+// policy on the globes bucket allows this), so uploading/removing textures needs
+// no code change. A body picks one by filename (body.texture); textureUrlFor()
+// resolves it to the encoded public URL. Resolution order:
+//   body.textureUrl (full URL escape hatch) > '__none__' (force procedural) >
+//   body.texture (explicit catalog file) > auto-match by planet type.
+const TEXTURE_BASE = SUPABASE_URL + '/storage/v1/object/public/globes/';
+let textureCatalog = []; // filenames in the globes bucket, loaded at runtime
+
+async function loadTextureCatalog(){
+  try {
+    const res = await fetch(SUPABASE_URL + '/storage/v1/object/list/globes', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
+    });
+    if(!res.ok) return;
+    const list = await res.json();
+    textureCatalog = (Array.isArray(list) ? list : [])
+      .filter(o => o && o.id && /\.(png|jpe?g|webp)$/i.test(o.name))  // real image files only (skip folders/placeholders)
+      .map(o => o.name);
+  } catch(e){ /* offline / blocked — leave empty; bodies with an explicit texture still resolve */ }
+}
+
+// Which texture category best fits a body, from its type keywords / disc style.
+function defaultTextureCategory(body){
+  const t = (body.type || '').toLowerCase();
+  const style = bodyDiscStyle(body);
+  if(style === 'star' || style === 'belt' || style === 'moon') return null; // keep procedural
+  if(style === 'gasgiant' || /gas giant|ice giant/.test(t)) return 'gaseous';
+  if(/volcan|scorch|lava|molten/.test(t)) return 'volcanic';
+  if(/desert|arid|dune|barren/.test(t)) return 'desert';
+  if(/ocean|jewel|garden|terran|earth|temperate/.test(t)) return 'terran';
+  if(style === 'ice' || /ice|frozen|glacial|tundra/.test(t)) return 'ice';
+  if(style === 'ocean') return 'terran';
+  if(style === 'rock') return 'desert';
+  return null;
+}
+// Pick a catalog file for a body's auto-category, deterministically varied by id
+// so two same-type worlds don't always get the identical globe.
+function defaultTextureFile(body){
+  const cat = defaultTextureCategory(body);
+  if(!cat) return null;
+  const matches = textureCatalog.filter(f => f.toLowerCase().startsWith(cat));
+  if(!matches.length) return null;
+  const seed = (typeof seedFromString === 'function') ? Math.abs(seedFromString(body.id)) : 0;
+  return matches[seed % matches.length];
+}
+function textureUrlFor(body){
+  if(body.textureUrl) return body.textureUrl;                  // explicit full URL wins
+  if(body.texture === '__none__') return null;                 // forced procedural
+  if(body.texture) return TEXTURE_BASE + encodeURIComponent(body.texture); // explicit catalog file
+  const auto = defaultTextureFile(body);                       // auto-match by type
+  return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
+}
 
 const supaStorage = {
   async get(key, shared){
@@ -7704,6 +7793,12 @@ loadLocationStores().then(() => {
     else buildBodyView(selectedBody);
   }
 });
+loadTextureCatalog().then(() => {
+  // Re-render any view that draws textures once the catalog (and thus auto-by-type
+  // defaults) is known — the body close-up and the orrery both use globe images.
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  if(typeof buildOrrery === 'function') buildOrrery();
+});
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -8562,6 +8657,27 @@ function bodyTagSelect(selected){
     BODY_TAG_OPTIONS.map(t => `<option value="${t}"${t===selected?' selected':''}>${t||'(none)'}</option>`).join('')
   }</select>`;
 }
+// Grouped picker of the hosted globe textures (value = exact filename, '' = auto
+// by type, '__none__' = forced procedural). Populated from the runtime catalog.
+function bodyTextureSelect(selected){
+  const groups = {};
+  textureCatalog.forEach(f => {
+    const g = (f.match(/^[A-Za-z]+/) || ['Other'])[0];
+    (groups[g] = groups[g] || []).push(f);
+  });
+  let opts = `<option value=""${!selected?' selected':''}>(Auto — match planet type)</option>`;
+  opts += `<option value="__none__"${selected==='__none__'?' selected':''}>(None — procedural disc)</option>`;
+  Object.keys(groups).forEach(g => {
+    opts += `<optgroup label="${escAttr(g)}">`;
+    groups[g].forEach(f => {
+      const label = f.replace(/_1920x1080/i,'').replace(/\.(png|jpe?g|webp)$/i,'').trim();
+      opts += `<option value="${escAttr(f)}"${f===selected?' selected':''}>${escHtml(label)}</option>`;
+    });
+    opts += `</optgroup>`;
+  });
+  if(!textureCatalog.length) opts += `<optgroup label="(texture list still loading — reopen this editor)"></optgroup>`;
+  return `<select class="body-select" id="body-f-texture">${opts}</select>`;
+}
 function bodyOrbitSelect(selected){
   let opts = '';
   for(let i=1;i<=12;i++) opts += `<option value="${i}"${i===selected?' selected':''}>Orbit slot ${i}</option>`;
@@ -8651,6 +8767,10 @@ function renderBodyManualForm(prefill){
       <label class="npc-form-lbl">Read aloud</label>
       <textarea class="npc-form-textarea" id="body-f-readaloud" style="min-height:50px">${escHtml(d.readAloud)}</textarea>
     </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Surface texture — hosted globe (optional)</label>
+      ${bodyTextureSelect(d.texture||'')}
+    </div>
     <div class="npc-creator-footer">
       <button class="npc-creator-btn" onclick="closeBodyCreator()">Cancel</button>
       <button class="npc-creator-btn primary" onclick="saveBodyFromForm()">${bodyEditTargetId?'Save Changes':'Add Body'}</button>
@@ -8699,6 +8819,7 @@ function collectBodyForm(){
     desc: g('body-f-desc') || '',
     refNote: (g('body-f-refnote')||'').trim() || null,
     readAloud: (g('body-f-readaloud')||'').trim() || null,
+    texture: g('body-f-texture') || null,
     npcs: [], checks: [], events: []
   };
   if(cls === 'moon'){
@@ -8875,7 +8996,7 @@ async function commitBodyEdit(id, obj){
     // Base body — store only the changed metadata fields as overrides so the
     // body's checks/events/npcs and identity stay anchored to the base data.
     const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
-    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle'];
+    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
     const ov = {};
     fields.forEach(f => {
       const nv = obj[f];
@@ -8891,7 +9012,10 @@ async function commitBodyEdit(id, obj){
   }
   buildOrrery();
   showToast('Body updated');
-  selectBody(id);
+  // Refresh whichever view is showing this body so edits (texture included)
+  // appear immediately instead of needing a back-and-forth navigation.
+  if(currentView === 'body' && selectedBody === id) buildBodyView(id);
+  else selectBody(id);
 }
 
 async function deleteBody(id){
