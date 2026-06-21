@@ -46,16 +46,17 @@
   --txD:#c0392b;--bgD:#fce6e4;
   --accentGold:#8a6512;--accentGoldBg:#fbf0d9;
 }
-/* The orrery, station map, and Aurelia surface views use var(--bg0) for
+/* The orrery, station map, and body close-up views use var(--bg0) for
    their own background just like the rest of the chrome — but they're
-   meant to stay dark and atmospheric in both themes, so they're pinned
-   back explicitly here rather than participating in the light-mode
-   variable swap above. Their DETAIL panels (#sys-detail, #right-panel,
-   #aurelia-detail) are NOT included here and correctly flip with
-   everything else, since that's where the readable text content lives. */
+   meant to stay dark and atmospheric in both themes (a star field on a
+   light background reads wrong), so they're pinned back explicitly here
+   rather than participating in the light-mode variable swap above. Their
+   DETAIL panels (#sys-detail, #right-panel, #body-view-detail) are NOT
+   included here and correctly flip with everything else, since that's
+   where the readable text content lives. */
 #root.light-mode #orrery-panel,
 #root.light-mode #map-panel,
-#root.light-mode #aurelia-panel{
+#root.light-mode #body-view-panel{
   background:#0f1117;
 }
 /* ── Reset ── */
@@ -196,6 +197,46 @@ textarea{font-family:var(--font)}
 .body-color-row input[type=color]{width:40px;height:32px;padding:0;border:.5px solid var(--bd0);border-radius:5px;background:var(--bg0);cursor:pointer}
 .body-check-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx0)}
 .body-check-row input{width:16px;height:16px;accent-color:#9B59B6}
+
+/* ── Location layer (Phase 2) ── */
+#place-loc-hint{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:30;
+  display:none;align-items:center;justify-content:center;pointer-events:none
+}
+.place-hint-inner{
+  background:rgba(15,52,96,0.92);border:1px solid #4A90D9;border-radius:20px;
+  padding:7px 16px;font-size:12px;color:#cfe4ff;font-family:monospace;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);pointer-events:auto;display:flex;align-items:center;gap:8px
+}
+.place-hint-inner button{
+  background:transparent;border:1px solid #4A90D9;border-radius:12px;color:#8fc4f5;
+  font-size:11px;padding:2px 10px;cursor:pointer;font-family:monospace
+}
+.place-hint-inner button:hover{background:#16447A}
+.loc-list-row{
+  display:flex;align-items:center;padding:7px 8px;border-radius:5px;cursor:pointer;
+  margin-bottom:3px;transition:background .12s
+}
+.loc-list-row:hover{background:var(--bg1)}
+/* The Location Creator reuses the #body-creator-* visual language */
+#loc-creator-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.6);z-index:210;
+  display:none;align-items:flex-start;justify-content:center
+}
+#loc-creator-modal.open{display:flex}
+#loc-creator-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  margin-top:48px;width:600px;max-width:94vw;max-height:86vh;overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column
+}
+#loc-creator-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#loc-creator-title{font-size:12px;font-weight:700;font-family:monospace;letter-spacing:1.5px;color:#9B59B6;text-transform:uppercase}
+#loc-creator-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px}
+#loc-creator-close:hover{color:var(--tx0)}
+#loc-creator-body{padding:16px}
 
 /* ── Session Tools modal ── */
 #session-modal{
@@ -408,13 +449,7 @@ textarea{font-family:var(--font)}
 .nrl{color:#b89bd9;font-weight:700}.nrv{color:#e8eaf0}
 
 /* station-only "view station" button */
-#btn-view-station{
-  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
-  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
-  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
-  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
-}
-#btn-view-station:hover{background:#16447A}
+/* #btn-view-station now uses the shared .view-close-btn style (see above). */
 
 /* Checks */
 .chk{background:#1A3B1A;border:1px solid #4CAF5066;border-radius:5px;margin-bottom:8px;overflow:hidden}
@@ -525,27 +560,7 @@ textarea{font-family:var(--font)}
 #event-log-clear{font-size:9px;color:var(--tx1);padding:5px 12px;border-top:.5px solid var(--bd0);cursor:pointer;text-align:right;flex-shrink:0}
 #event-log-clear:hover{color:#C0392B}
 
-/* ── Aurelia page ── */
-#view-aurelia{display:flex;flex:1;overflow:hidden;min-height:0}
-#aurelia-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
-#aurelia-svg{width:100%;height:100%;display:block}
-#aurelia-detail{
-  width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
-  display:flex;flex-direction:column;overflow:hidden
-}
-#aur-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
-#aur-dname{font-size:15px;font-weight:700;color:#4A90D9}
-#aur-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
-#aur-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
-#btn-enter-station{
-  display:block;width:calc(100% - 28px);margin:12px 14px;padding:10px;
-  background:#0F3460;border:1px solid #4A90D9;border-radius:var(--rad);
-  color:#4A90D9;font-size:12px;font-weight:700;font-family:monospace;
-  letter-spacing:1px;text-align:center;cursor:pointer;transition:background .15s;flex-shrink:0
-}
-#btn-enter-station:hover{background:#16447A}
-
-/* ── Generic body close-up view ── */
+/* ── Generic body close-up view (Aurelia's bespoke page lived here pre-Phase 3) ── */
 #view-body{display:flex;flex:1;overflow:hidden;min-height:0}
 #body-view-panel{flex:1;min-width:0;background:var(--bg0);overflow:hidden;position:relative}
 #body-disc-svg{width:100%;height:100%;display:block}
@@ -557,7 +572,7 @@ textarea{font-family:var(--font)}
 #bv-dname{font-size:15px;font-weight:700;color:#4A90D9}
 #bv-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
 #bv-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
-#root.light-mode #body-view-panel{background:#dfe6f2}
+/* Body close-up stays dark in light mode — pinned with the orrery/station above. */
 
 /* ── Orrery animations ── */
 @keyframes star-pulse {
@@ -600,93 +615,12 @@ textarea{font-family:var(--font)}
 .vg { animation-name: vibe-g; }
 .vh { animation-name: vibe-h; }
 
-/* ── Aurelia page ── */
+/* ── Orbital station icon pulse (generic — any location with isStation) ── */
 @keyframes station-pulse {
   0%,100% { opacity: 0.7; }
   50%      { opacity: 1.0; }
 }
-#station-icon-group { animation: station-pulse 3s ease-in-out infinite; }
-
-/* Scrolling planet surface — permanent div, never touched by buildAureliaMap */
-#planet-surface {
-  position: absolute;
-  width: 20%;
-  aspect-ratio: 1 / 1;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 1;
-  background:
-    /* ── Land masses — spread across all quadrants, ~38% coverage ── */
-    /* Northern continent — large, upper left */
-    radial-gradient(ellipse 30% 18% at 32% 24%, #2d6040 0%, #2a5838 50%, transparent 100%),
-    radial-gradient(ellipse 18% 11% at 48% 18%, #346848 0%, #2d6040 45%, transparent 100%),
-    radial-gradient(ellipse 12% 8%  at 60% 26%, #2a5838 0%, transparent 75%),
-    /* North polar ice */
-    radial-gradient(ellipse 20% 7%  at 44% 6%,  #ddeef8 0%, #c8e0f0 55%, transparent 100%),
-    /* Eastern continent */
-    radial-gradient(ellipse 16% 22% at 78% 34%, #2a6040 0%, #256035 50%, transparent 100%),
-    radial-gradient(ellipse 10% 12% at 88% 48%, #2d6848 0%, transparent 70%),
-    /* Western island chain */
-    radial-gradient(ellipse 9%  15% at 14% 38%, #2a6040 0%, #246035 55%, transparent 100%),
-    radial-gradient(ellipse 7%  9%  at 10% 54%, #256035 0%, transparent 75%),
-    radial-gradient(ellipse 5%  7%  at 18% 65%, #2a5838 0%, transparent 70%),
-    /* Equatorial belt — broken landmass */
-    radial-gradient(ellipse 20% 11% at 55% 50%, #2d6848 0%, #256038 50%, transparent 100%),
-    radial-gradient(ellipse 14% 9%  at 36% 55%, #2a6040 0%, transparent 70%),
-    radial-gradient(ellipse 8%  10% at 70% 60%, #256035 0%, transparent 70%),
-    /* Southern continent — large */
-    radial-gradient(ellipse 26% 15% at 40% 72%, #256035 0%, #2a5838 50%, transparent 100%),
-    radial-gradient(ellipse 16% 11% at 24% 78%, #2d6040 0%, transparent 65%),
-    radial-gradient(ellipse 12% 8%  at 58% 76%, #246035 0%, transparent 70%),
-    radial-gradient(ellipse 10% 7%  at 70% 82%, #2a6040 0%, transparent 65%),
-    /* South polar ice */
-    radial-gradient(ellipse 16% 6%  at 46% 95%, #d0e8f5 0%, #c0d8e8 50%, transparent 100%),
-    /* Far east islands */
-    radial-gradient(ellipse 6%  9%  at 92% 62%, #2a6040 0%, transparent 70%),
-    radial-gradient(ellipse 5%  6%  at 86% 74%, #256035 0%, transparent 70%),
-    /* Central scatter */
-    radial-gradient(ellipse 7%  5%  at 48% 40%, #2d6040 0%, transparent 80%),
-    radial-gradient(ellipse 5%  8%  at 25% 46%, #246035 0%, transparent 75%),
-    /* ── Ocean base ── */
-    radial-gradient(circle at 38% 32%, #2a6a8a 0%, #1a4a6a 45%, #0d2a40 100%);
-}
-
-/* Atmosphere + lighting overlay — sits above surface, below SVG */
-#planet-atmos {
-  position: absolute;
-  width: 22%;
-  aspect-ratio: 1 / 1;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 2;
-  background:
-    /* Pole darkening — top and bottom get darker */
-    linear-gradient(
-      180deg,
-      rgba(0,8,20,0.45) 0%,
-      transparent 25%,
-      transparent 75%,
-      rgba(0,8,20,0.40) 100%
-    ),
-    radial-gradient(circle at 35% 30%,
-      rgba(106,176,212,0.18) 0%,
-      rgba(74,144,217,0.04) 55%,
-      transparent 70%
-    );
-  box-shadow:
-    inset -22px -10px 38px rgba(0,8,32,0.60),
-    inset 10px 8px 20px rgba(106,176,212,0.08),
-    0 0 28px 8px rgba(74,144,217,0.08);
-}
-
-/* SVG on top, absolute fill */
-#aurelia-panel { position: relative; }
-#aurelia-svg   { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; }
+.loc-station-icon { animation: station-pulse 3s ease-in-out infinite; }
 
 /* ── Initiative Tracker (referee-only) ── */
 #init-wrap{
@@ -1095,7 +1029,82 @@ textarea{font-family:var(--font)}
   display:flex;align-items:center;justify-content:center;font-size:11px
 }
 #root.light-mode .theme-toggle-knob{transform:translateX(28px);background:#E8A020}
+/* Generic on/off state for .theme-toggle reused outside light-mode
+   (referee toggles, reveal switch). Light-mode keeps its own rule above. */
+.theme-toggle.on{background:#1A3B1A;border-color:#4CAF50}
+.theme-toggle.on .theme-toggle-knob{transform:translateX(28px);background:#4CAF50}
+.theme-toggle:focus-visible{outline:2px solid var(--accentGold);outline-offset:2px}
 
+/* ── Standardized "view up close" button (system / Aurelia / station entry) ── */
+.view-close-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:11px;font-family:monospace;font-weight:700;letter-spacing:1px;
+  color:var(--accentGold);background:var(--accentGoldBg);
+  border:.5px solid var(--accentGold);border-radius:6px;padding:9px 12px;
+  cursor:pointer;text-transform:uppercase;transition:background .12s,color .12s;
+  margin:12px 0 4px 0;flex-shrink:0
+}
+.view-close-btn:hover{background:var(--accentGold);color:var(--bg0)}
+.view-close-btn:active{transform:translateY(1px)}
+.view-close-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Referee toggles: disable ambient animations / hide orbital rings ── */
+/* Pure-CSS + class on #root, so it applies to existing AND future elements. */
+#root.anim-off #star-glow-outer,
+#root.anim-off #star-glow-mid,
+#root.anim-off .twinkle-a,
+#root.anim-off .twinkle-b,
+#root.anim-off .twinkle-c,
+#root.anim-off .ast,
+#root.anim-off .loc-station-icon{animation:none!important}
+#root.rings-off .orbit-ring{display:none!important}
+
+/* ── Referee + Design header menus (cloned from #settings-menu) ── */
+#referee-menu,#design-menu{
+  position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;
+  display:flex;align-items:flex-start;justify-content:flex-end
+}
+#referee-menu.hidden,#design-menu.hidden{display:none}
+#referee-menu-card,#design-menu-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  margin:50px 14px 0 0;padding:12px;width:340px;max-width:90vw;
+  max-height:85vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,.5);
+  min-width:300px;flex-shrink:0
+}
+#referee-menu-btn,#design-menu-btn{
+  font-size:13px;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;line-height:1
+}
+#referee-menu-btn:hover,#design-menu-btn:hover{background:var(--bd0);color:var(--tx0)}
+#design-menu-btn{display:none}
+#root.design-active #design-menu-btn{display:inline-flex;align-items:center}
+#design-menu-btn{color:#9B59B6;border-color:#9B59B6}
+
+/* ── Header back arrow ── */
+#back-btn{
+  font-size:15px;line-height:1;color:var(--tx1);background:transparent;
+  border:.5px solid var(--bd0);border-radius:6px;padding:5px 11px;cursor:pointer;
+  flex-shrink:0;font-weight:700
+}
+#back-btn:hover{background:var(--bd0);color:var(--tx0)}
+#back-btn.hidden{display:none}
+
+/* ── Session button — elevated for contrast on the dark header (WCAG AA) ── */
+#session-btn{
+  font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);
+  background:var(--accentGoldBg);border:.5px solid var(--accentGold);
+  border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap
+}
+#session-btn:hover{background:var(--accentGold);color:var(--bg0)}
+#root.light-mode #session-btn{color:#8a5a00;border-color:#caa14a;background:#fbf2dc}
+
+/* ── Dynamic referee-box manager (Design menu) ── */
+.boxmgr-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:.5px solid var(--bg2)}
+.boxmgr-row input.boxmgr-name{flex:1;min-width:0;font-size:11px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 7px}
+.boxmgr-vis{font-size:9px;font-family:monospace;color:var(--tx1);white-space:nowrap}
+.boxmgr-del{background:transparent;border:.5px solid var(--bd0);color:#d45050;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 7px;flex-shrink:0}
+.boxmgr-del:hover{border-color:#d45050}
 
 /* ── NPC Location Tracker ── */
 /* ── NPC disposition marker ── */
@@ -1262,7 +1271,7 @@ textarea{font-family:var(--font)}
 #qref-overlay.open{pointer-events:auto}
 
 #qref-panel{
-  position:fixed;top:0;right:0;width:340px;max-width:92vw;height:100vh;
+  position:fixed;top:0;right:0;width:680px;max-width:92vw;height:100vh;
   background:var(--bg1);border-left:.5px solid var(--bd0);
   display:flex;flex-direction:column;z-index:171;
   box-shadow:-4px 0 24px rgba(0,0,0,.5);
@@ -1317,6 +1326,12 @@ textarea{font-family:var(--font)}
 }
 .qref-pos{background:#0f2e20;color:#4caf82}
 .qref-neg{background:#2e1010;color:#d45050}
+/* On tablet/desktop the doubled-width panel flows sections into two columns;
+   collapses to a single column on phones. break-inside keeps tables intact. */
+@media(min-width:760px){
+  #qref-body{column-count:2;column-gap:24px}
+  .qref-section{break-inside:avoid}
+}
 .qref-neu{background:var(--bg0);color:var(--tx1)}
 
 /* ── Archon Morality Tracker ── */
@@ -1740,6 +1755,7 @@ input#ui-scale-range{
 
   <!-- ── Header ── -->
   <div id="hdr">
+    <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <div id="hdr-title">AURELIAN SYSTEM</div>
       <span id="build-version" title="Build version">v30.3</span>
@@ -1760,6 +1776,8 @@ input#ui-scale-range{
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
+    <button id="referee-menu-btn" class="ref-only" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
+    <button id="design-menu-btn" class="ref-only" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
         <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
       <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
@@ -1806,41 +1824,15 @@ input#ui-scale-range{
             <table class="btbl" id="body-list-table"></table>
           </div>
           <div id="sys-body-detail" class="v-hidden"></div>
-          <button id="btn-view-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ VIEW AURELIA UP CLOSE</button>
+          <button id="btn-view-station" class="view-close-btn v-hidden" onclick="enterStation()">⬡ View Aurelia up close</button>
         </div>
       </div>
     </div>
   </div>
 
 
-  <!-- ══════════════════════════════════════
-       AURELIA PAGE (intermediary)
-  ══════════════════════════════════════ -->
-  <div id="view-aurelia" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
-    <div style="display:flex;flex:1;overflow:hidden;min-height:0">
-      <div id="aurelia-panel">
-        <div id="planet-surface"></div>
-        <div id="planet-atmos"></div>
-        <svg id="aurelia-svg" viewBox="0 0 800 600"></svg>
-      </div>
-      <div id="aurelia-detail">
-        <div id="aur-dh">
-          <div id="aur-dname">AURELIA</div>
-          <div id="aur-dtype">SELECT A LOCATION</div>
-        </div>
-        <div id="aur-db">
-          <div id="aur-overview">
-            <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:12px">
-              Jewel world of the Hegemony. Population 800 million. UWP: <span style="color:var(--accentGold);font-family:monospace">B867976-C</span><br><br>
-              Select a location node to inspect it. The Orbital Station can be entered from here.
-            </div>
-          </div>
-          <div id="aur-loc-detail" class="v-hidden"></div>
-          <button id="btn-enter-station" class="v-hidden" onclick="enterStation()" style="width:100%;margin:12px 0 4px 0">⬡ ENTER AURELIA ORBITAL STATION</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Aurelia's bespoke #view-aurelia page was retired in Phase 3 — Aurelia now
+       uses the generic body close-up view below, like every other body. -->
 
   <!-- ══════════════════════════════════════
        GENERIC BODY CLOSE-UP VIEW (any planet / moon / belt / star)
@@ -2060,6 +2052,17 @@ input#ui-scale-range{
     </div>
   </div>
 
+  <!-- ── Location Creator modal (Phase 2) ── -->
+  <div id="loc-creator-modal" onclick="if(event.target===this)closeLocationCreator()">
+    <div id="loc-creator-card">
+      <div id="loc-creator-hdr">
+        <span id="loc-creator-title">✦ Add Location</span>
+        <button id="loc-creator-close" onclick="closeLocationCreator()">✕</button>
+      </div>
+      <div id="loc-creator-body"></div>
+    </div>
+  </div>
+
   <!-- ── Session Tools modal ── -->
   <div id="session-modal" onclick="if(event.target===this)closeSessionTools()">
     <div id="session-card">
@@ -2157,6 +2160,14 @@ input#ui-scale-range{
 
   <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
     <div id="settings-menu-card"></div>
+  </div>
+
+  <div id="referee-menu" class="hidden" onclick="if(event.target===this) closeRefereeMenu()">
+    <div id="referee-menu-card"></div>
+  </div>
+
+  <div id="design-menu" class="hidden" onclick="if(event.target===this) closeDesignMenu()">
+    <div id="design-menu-card"></div>
   </div>
 
   <!-- ── Quick Reference sidebar ── -->
@@ -2611,7 +2622,7 @@ function togglePM(){
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
-  if(currentView === "aurelia") buildAureliaMap();
+  if(currentView === "body" && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
@@ -2625,7 +2636,7 @@ pmCheck.addEventListener("change", function(){
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
-  if(currentView === "aurelia") buildAureliaMap();
+  if(currentView === "body" && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
@@ -2667,7 +2678,14 @@ function orbitPoint(a, b, t){
   const ex = a * Math.cos(t), ey = b * Math.sin(t);
   return [ ORR_SX + ex*ORR_COS - ey*ORR_SIN, ORR_SY + ex*ORR_SIN + ey*ORR_COS ];
 }
-function isBeltBody(b){ return /asteroid belt/i.test(b.type || ''); }
+function isBeltBody(b){
+  // An explicit discStyle (set when a referee picks a class in the body editor)
+  // is authoritative both ways, so a body can never read as a belt in one view
+  // and a planet in another. Falls back to the type string for un-edited base
+  // data (e.g. The Veil's "Asteroid Belt").
+  if(b.discStyle) return b.discStyle === 'belt';
+  return /asteroid belt/i.test(b.type || '');
+}
 // Deterministic 32-bit LCG seeded from a string (body id) — same belt every render.
 function seedFromString(str){
   let h = 2166136261 >>> 0;
@@ -2773,7 +2791,7 @@ function buildOrrery(){
   for(let p = maxP; p >= 1; p--){
     const [a,b] = orbitAxes(p, maxP);
     const isBelt = !!beltSlots[p];
-    html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
+    html += `<ellipse class="orbit-ring" cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
       stroke="${isBelt ? '#8B735566' : '#1a3a6a'}"
       stroke-width="${isBelt ? '3' : '1'}"
       stroke-dasharray="${isBelt ? '2,3' : '5,6'}"
@@ -2834,6 +2852,12 @@ function buildOrrery(){
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
     html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
+    const tUrlP = textureUrlFor(b);
+    if(tUrlP){
+      const tp = escAttr(tUrlP);
+      html += `<clipPath id="orr-tex-${b.id}"><circle cx="${px}" cy="${py}" r="${r}"/></clipPath>`;
+      html += `<image href="${tp}" xlink:href="${tp}" x="${px-r}" y="${py-r}" width="${2*r}" height="${2*r}" preserveAspectRatio="xMidYMid slice" clip-path="url(#orr-tex-${b.id})" pointer-events="none"/>`;
+    }
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" pointer-events="none"/>`;
 
     // Rings — data-driven via ringStyle: 'major' | 'subtle'
@@ -2886,6 +2910,12 @@ function buildOrrery(){
       html += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="${m.color}" ${m.decoration==='dim'?'opacity="0.4"':''} data-body="${m.id}" class="body-node" style="cursor:pointer"/>`;
       const gid = `pg-${m.id}`;
+      const tUrlM = textureUrlFor(m);
+      if(tUrlM){
+        const tm = escAttr(tUrlM);
+        html += `<clipPath id="orr-tex-${m.id}"><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}"/></clipPath>`;
+        html += `<image href="${tm}" xlink:href="${tm}" x="${(mx-mr).toFixed(1)}" y="${(my-mr).toFixed(1)}" width="${2*mr}" height="${2*mr}" preserveAspectRatio="xMidYMid slice" clip-path="url(#orr-tex-${m.id})" pointer-events="none"/>`;
+      }
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="url(#${gid})" pointer-events="none"/>`;
       if(m.hook) html += `<text x="${(mx+5).toFixed(1)}" y="${(my-4).toFixed(1)}" fill="#E8A020" font-size="9" font-weight="700" pointer-events="none">!</text>`;
       // Optional asteroid-cluster decoration near the moon
@@ -2929,18 +2959,14 @@ function renderBodyContentSections(body, pm){
   const sbDescText = resolveContent(sbDescKey, body.desc);
   html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, (sbDescText||'').replace(/\n/g,"<br>"))}</div></div>`;
 
-  if(!pm&&body.readAloud){
-    const sbReadKey = 'body-'+id+'-readAloud';
-    designOriginalRegistry[sbReadKey] = body.readAloud;
-    const sbReadText = resolveContent(sbReadKey, body.readAloud);
-    html += `<div class="s-blk read"><div class="s-blk-lbl">Read Aloud</div>${designWrap(sbReadKey, body.readAloud, sbReadText)}</div>`;
-  }
-  if(!pm&&body.refNote){
-    const sbRefKey = 'body-'+id+'-refNote';
-    designOriginalRegistry[sbRefKey] = body.refNote;
-    const sbRefText = resolveContent(sbRefKey, body.refNote);
-    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">Referee Note</div>${designWrap(sbRefKey, body.refNote, (sbRefText||'').replace(/\n/g,"<br>"))}</div>`;
-  }
+  // Referee boxes (Read Aloud, Referee Note, + any custom box types) are
+  // registry-driven so adding / removing / renaming a box propagates to every
+  // body. Built-ins keep their original content keys for back-compat.
+  html += renderBoxTypesHTML(
+    bt => bt.builtin ? ('body-'+id+'-'+bt.key) : ('body-'+id+'-box-'+bt.key),
+    bk => body[bk],
+    pm, false
+  );
 
   if(!pm&&body.npcs&&body.npcs.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">NPCs</div>`;
@@ -3008,23 +3034,16 @@ function selectBody(id){
   nm.style.color = body.color;
   document.getElementById("sys-dtype").textContent = body.type.toUpperCase();
 
+  // The legacy bespoke "View Aurelia" button is retired — Aurelia now uses the
+  // same generic close-up button as every other body (below). Keep it hidden.
   const stBtn = document.getElementById("btn-view-station");
-  if(body.id==="aurelia"){
-    stBtn.classList.remove("v-hidden");
-    stBtn.textContent = "⬡ VIEW AURELIA UP CLOSE";
-    stBtn.onclick = function(){ goAurelia(); };
-  } else {
-    stBtn.classList.add("v-hidden");
-  }
+  if(stBtn) stBtn.classList.add("v-hidden");
 
   const pm = pmCheck.checked;
   let html = "";
 
-  // Generic close-up entry — every body except Aurelia (which keeps its
-  // bespoke view until Phase 3 migrates it onto this engine).
-  if(body.id!=="aurelia"){
-    html += `<button class="design-add-btn" style="width:100%;margin-bottom:10px;border-color:var(--accentGold);color:var(--accentGold)" onclick="goBodyView('${body.id}')">⊙ View ${escHtml(body.name)} up close</button>`;
-  }
+  // Generic close-up entry — every body, Aurelia included.
+  html += `<button class="view-close-btn" onclick="goBodyView('${body.id}')">⊙ View ${escHtml(body.name)} up close</button>`;
 
   html += renderBodyContentSections(body, pm);
 
@@ -3057,6 +3076,7 @@ function goSystemOverview(){
   const stBtn = document.getElementById("btn-view-station");
   if(stBtn) stBtn.classList.add("v-hidden");
   document.getElementById("breadcrumb").innerHTML = "";
+  updateBackBtn();
   buildOrrery();
 }
 
@@ -3082,7 +3102,7 @@ function bodyDiscStyle(body){
   if(body.discStyle) return body.discStyle;
   const t = (body.type || '').toLowerCase();
   if(body.isStar) return 'star';
-  if(/asteroid belt|belt/.test(t)) return 'belt';
+  if(/asteroid belt/.test(t)) return 'belt';  // matches isBeltBody exactly
   if(/gas giant|ice giant/.test(t)) return 'gasgiant';
   if(body.isMoon) return 'moon';
   if(/jewel|ocean|garden/.test(t)) return 'ocean';
@@ -3164,8 +3184,30 @@ function discPlanet(body, CX, CY, col, style){
     s += `<circle cx="${CX}" cy="${CY}" r="${PR+5}" fill="none" stroke="${col}" stroke-width="6" opacity="0.10" pointer-events="none"/>`;
   }
 
-  // Base sphere — body colour, click target for entering (Phase 2+)
+  // Base sphere — body colour, click target for entering (Phase 2+); also the
+  // fallback fill shown under/around a photo texture while it loads or if it
+  // fails to resolve.
   s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="${col}" data-body="${body.id}" class="bv-disc" style="cursor:default"/>`;
+
+  // Gas-giant band detail is captured in a variable so it can be re-emitted
+  // over the lower hemisphere after the ring-occlusion redraw — otherwise the
+  // flat front-half repaint erases the banding on the bottom of ringed giants.
+  // (Stays empty for photo-textured bodies, so the ring redraw is skipped.)
+  let ggDetail = '';
+
+  const texUrl = textureUrlFor(body);
+  if(texUrl){
+    // ── Data-driven photo texture ────────────────────────────────────────────
+    // A pre-rendered lit globe PNG (hosted, transparent background) replaces the
+    // procedural surface AND the heavy shading/terminator — the image already
+    // carries its own lighting. Clipped to the body's actual radius for safety.
+    s += `<clipPath id="bv-tex-clip"><circle cx="${CX}" cy="${CY}" r="${PR}"/></clipPath>`;
+    const tex = escAttr(texUrl);
+    s += `<image href="${tex}" xlink:href="${tex}" x="${CX-PR}" y="${CY-PR}" width="${2*PR}" height="${2*PR}" preserveAspectRatio="xMidYMid slice" clip-path="url(#bv-tex-clip)" pointer-events="none"/>`;
+    // A light limb-darkening pass so the globe seats into the scene rather than
+    // looking pasted on — much softer than the procedural disc's full shading.
+    s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="url(#bv-base)" opacity="0.4" pointer-events="none"/>`;
+  } else {
 
   // Clipped style-specific surface detail
   s += `<g clip-path="url(#bv-clip)">`;
@@ -3177,12 +3219,13 @@ function discPlanet(body, CX, CY, col, style){
       const yy = CY - PR + (i + 0.5) * (2*PR/bands);
       const h  = (2*PR/bands) * (0.62 + rnd()*0.5);
       const light = i % 2 === 0;
-      s += `<ellipse cx="${CX}" cy="${yy.toFixed(1)}" rx="${PR}" ry="${(h/2).toFixed(1)}" fill="${light?'#ffffff':'#000610'}" opacity="${(light?0.07:0.14).toFixed(2)}"/>`;
+      ggDetail += `<ellipse cx="${CX}" cy="${yy.toFixed(1)}" rx="${PR}" ry="${(h/2).toFixed(1)}" fill="${light?'#ffffff':'#000610'}" opacity="${(light?0.07:0.14).toFixed(2)}"/>`;
     }
     // A storm oval (great spot)
     const spotY = CY + (rnd()-0.5)*PR*0.7;
-    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.22).toFixed(1)}" ry="${(PR*0.12).toFixed(1)}" fill="#ffffff" opacity="0.10"/>`;
-    s += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.12).toFixed(1)}" ry="${(PR*0.06).toFixed(1)}" fill="#000610" opacity="0.12"/>`;
+    ggDetail += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.22).toFixed(1)}" ry="${(PR*0.12).toFixed(1)}" fill="#ffffff" opacity="0.10"/>`;
+    ggDetail += `<ellipse cx="${(CX-PR*0.2).toFixed(1)}" cy="${spotY.toFixed(1)}" rx="${(PR*0.12).toFixed(1)}" ry="${(PR*0.06).toFixed(1)}" fill="#000610" opacity="0.12"/>`;
+    s += ggDetail;
   } else if(style === 'ocean'){
     // Cloud swirls + landmass blots
     for(let i=0;i<5;i++){
@@ -3225,6 +3268,7 @@ function discPlanet(body, CX, CY, col, style){
 
   // Terminator shadow (sunward from upper-right → shadow lower-left)
   s += `<g clip-path="url(#bv-clip)"><ellipse cx="${CX-36}" cy="${CY+18}" rx="${PR*0.92}" ry="${PR}" fill="#000610" opacity="0.30" transform="rotate(-18,${CX-36},${CY+18})"/></g>`;
+  } // ── end procedural (non-textured) surface ──
 
   // Rings (data-driven, reusing body.ringStyle)
   if(body.ringStyle === 'major' || body.ringStyle === 'subtle'){
@@ -3232,9 +3276,16 @@ function discPlanet(body, CX, CY, col, style){
     const sw = body.ringStyle==='major' ? 9 : 5;
     s += `<ellipse cx="${CX}" cy="${CY}" rx="${rr}" ry="${(rr*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${sw}" opacity="0.28" pointer-events="none"/>`;
     s += `<ellipse cx="${CX}" cy="${CY}" rx="${(rr-sw-3).toFixed(1)}" ry="${((rr-sw-3)*0.26).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${(sw*0.5).toFixed(1)}" opacity="0.18" pointer-events="none"/>`;
-    // Redraw front half of planet over the back of the ring
-    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="${col}" pointer-events="none"/>`;
-    s += `<path d="M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z" fill="url(#bv-base)" pointer-events="none"/>`;
+    // Redraw the front (lower) half of the planet over the back of the ring.
+    // For gas giants, re-emit the band detail clipped to that lower hemisphere
+    // so the bottom half keeps its banding rather than rendering flat.
+    const frontHalf = `M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z`;
+    s += `<path d="${frontHalf}" fill="${col}" pointer-events="none"/>`;
+    if(ggDetail){
+      s += `<clipPath id="bv-front"><path d="${frontHalf}"/></clipPath>`;
+      s += `<g clip-path="url(#bv-clip)"><g clip-path="url(#bv-front)">${ggDetail}</g></g>`;
+    }
+    s += `<path d="${frontHalf}" fill="url(#bv-base)" pointer-events="none"/>`;
   }
 
   // Name label
@@ -3299,9 +3350,17 @@ function buildBodyView(id){
   const body = getBodies().find(b => b.id === id);
   if(!body){ goSystem(); return; }
   selectedBody = id;
+  selectedBodyLoc = null;
 
   const svg = document.getElementById('body-disc-svg');
-  if(svg) svg.innerHTML = renderBodyDisc(body);
+  if(svg){
+    const PR = bodyDiscPR(body);
+    svg.innerHTML = renderBodyDisc(body) + renderElevators(body, 400, 300, PR)
+      + renderMoonNodes(body, 400, 300, PR) + renderLocationNodes(body, 400, 300, PR);
+    wireLocationNodes(svg);
+    wireMoonNodes(svg);
+    attachDiscTapHandler(svg);
+  }
 
   const nm = document.getElementById('bv-dname');
   if(nm){ nm.textContent = body.name.toUpperCase(); nm.style.color = body.color; }
@@ -3312,14 +3371,8 @@ function buildBodyView(id){
   let html = '';
   html += renderBodyContentSections(body, pm);
 
-  // Phase-2 placeholder: locations live here. Kept visible only to referees so
-  // the structure is obvious during testing without confusing players.
-  if(!pm){
-    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
-      <div class="s-sec-lbl" style="color:var(--tx1)">Locations</div>
-      <div style="font-size:11px;color:var(--tx1);line-height:1.5">Surface sites, stations, and bases for ${escHtml(body.name)} will be addable here.</div>
-    </div>`;
-  }
+  // Locations on/around this body (surface sites, stations, bases).
+  html += renderLocationsSection(body, pm);
 
   // Design-mode body controls, same as the orrery detail panel
   if(designModeOn && isReferee()){
@@ -3342,12 +3395,591 @@ function goBodyView(id){
   playViewTransition(() => {
     currentView = "body";
     document.getElementById("view-system").classList.add("v-hidden");
-    document.getElementById("view-aurelia").classList.add("v-hidden");
     document.getElementById("view-station").classList.add("v-hidden");
     document.getElementById("view-body").classList.remove("v-hidden");
     document.getElementById("view-body").style.display = "flex";
     buildBodyView(id);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOCATION LAYER — render, tap-to-place, CRUD, detail   (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let selectedBodyLoc = null;     // currently inspected location id (body view)
+let placingLocation = null;     // {bodyId, repositionId?} while in tap-to-place mode
+
+// Disc radius for a body — MUST match the radii used in renderBodyDisc so
+// location placement and the visual agree. Star/belt have no real surface, so a
+// notional radius is used and their locations are always orbital.
+function bodyDiscPR(body){
+  const style = bodyDiscStyle(body);
+  if(style === 'star') return 78;
+  if(style === 'belt') return 70;
+  if(style === 'moon') return 80;
+  if(style === 'gasgiant') return 122;
+  return 110;
+}
+function bodyHasSurface(body){
+  const style = bodyDiscStyle(body);
+  return style !== 'star' && style !== 'belt';
+}
+
+// ── Render location nodes onto the disc (appended after renderBodyDisc) ──
+function renderLocationNodes(body, CX, CY, PR){
+  const locs = effectiveLocations(currentSystemId, body.id);
+  if(!locs.length) return '';
+  const showLocks = !isReferee();
+  let s = '';
+  locs.forEach(loc => {
+    const nx = Math.round(CX + (loc.sx||0) * PR);
+    const ny = Math.round(CY + (loc.sy||0) * PR);
+    const isSelected = selectedBodyLoc === loc.id;
+    const isLocked = showLocks && !isRevealed(loc.id);
+    const col = loc.color || '#4A90D9';
+
+    if(loc.isStation){
+      // ── Orbital station icon — generic: any location with isStation gets the
+      // mini space-station glyph (hub + cross arms + solar panels + antenna),
+      // ported from the retired bespoke Aurelia renderer. ──
+      const sel = isSelected;
+      const sc = sel ? 1.4 : 1.0;
+      const ang0 = Math.atan2((loc.sy||0), (loc.sx||0));
+      const ex0 = CX + Math.cos(ang0) * (PR + 4);
+      const ey0 = CY + Math.sin(ang0) * (PR + 4);
+      s += `<line x1="${ex0.toFixed(1)}" y1="${ey0.toFixed(1)}" x2="${nx}" y2="${ny}" stroke="${col}" stroke-width="0.6" stroke-dasharray="3,5" opacity="0.35" pointer-events="none"/>`;
+      s += `<g data-loc="${loc.id}" class="loc-node loc-station-icon" style="cursor:pointer" transform="translate(${nx},${ny}) scale(${sc})">`;
+      if(sel){
+        s += `<circle cx="0" cy="0" r="22" fill="${col}" opacity="0.12" pointer-events="none"/>`;
+        s += `<circle cx="0" cy="0" r="16" fill="${col}" opacity="0.18" pointer-events="none"/>`;
+      }
+      s += `<circle cx="0" cy="0" r="13" fill="none" stroke="${col}" stroke-width="1" opacity="${sel?0.6:0.35}" pointer-events="none"/>`;
+      s += `<circle cx="0" cy="0" r="5" fill="${sel?col+'88':'#0d1828'}" stroke="${col}" stroke-width="1.2" pointer-events="all"/>`;
+      s += `<line x1="-13" y1="0" x2="13" y2="0" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
+      s += `<line x1="0" y1="-13" x2="0" y2="13" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
+      s += `<rect x="-18" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
+      s += `<rect x="-24" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
+      s += `<rect x="13" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
+      s += `<rect x="19" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
+      s += `<rect x="-1.5" y="7" width="3" height="7" fill="${col}" opacity="${sel?0.8:0.5}" pointer-events="none"/>`;
+      s += `<rect x="-4" y="13" width="8" height="2.5" rx="1" fill="${col}" opacity="${sel?0.7:0.4}" pointer-events="none"/>`;
+      s += `<line x1="0" y1="-14" x2="0" y2="-19" stroke="${col}" stroke-width="0.8" opacity="0.6" pointer-events="none"/>`;
+      s += `<circle cx="0" cy="-20" r="1.2" fill="${col}" opacity="0.7" pointer-events="none"/>`;
+      s += `</g>`;
+      if(loc.hook) s += `<text x="${nx+20}" y="${ny-14}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+      const nameColor = loc.hook ? '#E8A020' : col;
+      s += `<text x="${nx+28}" y="${ny+4}" text-anchor="start" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${escHtml(loc.name)}</text>`;
+    } else if(loc.surface){
+      const r = 7;
+      if(isSelected){
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+8}" fill="${col}" opacity="0.15" pointer-events="none"/>`;
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+4}" fill="${col}" opacity="0.2" pointer-events="none"/>`;
+      }
+      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? col+'55' : '#0d1828dd'}" stroke="${col}" stroke-width="${isSelected?2:1.3}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?3:1.6}" fill="${col}" opacity="${isSelected?0.95:0.7}" pointer-events="none"/>`;
+      if(loc.hook) s += `<text x="${nx+r+1}" y="${ny-r}" fill="#E8A020" font-size="10" font-weight="700" pointer-events="none">!</text>`;
+      const labelDist = r + 4;
+      let lx, anchor;
+      if((loc.sx||0) >= 0){ lx = nx + labelDist; anchor = 'start'; } else { lx = nx - labelDist; anchor = 'end'; }
+      const ly = ny + ((loc.sy||0) < -0.3 ? -2 : (loc.sy||0) > 0.3 ? 12 : 4);
+      const nameColor = loc.hook ? '#E8A020' : col;
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="#05070a" font-size="9" font-family="monospace" font-weight="700" pointer-events="none" opacity="0.6" stroke="#05070a" stroke-width="3">${escHtml(loc.name)}</text>`;
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${escHtml(loc.name)}</text>`;
+    } else {
+      // Orbital node — spoke line from disc edge to the node
+      const ang = Math.atan2((loc.sy||0), (loc.sx||0));
+      const ex = CX + Math.cos(ang) * (PR + 4);
+      const ey = CY + Math.sin(ang) * (PR + 4);
+      s += `<line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${nx}" y2="${ny}" stroke="${col}" stroke-width="0.6" stroke-dasharray="3,5" opacity="0.35" pointer-events="none"/>`;
+      const r = 9;
+      if(isSelected){
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+10}" fill="${col}" opacity="0.12" pointer-events="none"/>`;
+        s += `<circle cx="${nx}" cy="${ny}" r="${r+5}" fill="${col}" opacity="0.18" pointer-events="none"/>`;
+      }
+      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? col+'44' : '#0d1828'}" stroke="${col}" stroke-width="${isSelected?2:1.2}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
+      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?4:2}" fill="${col}" opacity="${isSelected?0.9:0.6}" pointer-events="none"/>`;
+      if(loc.hook) s += `<text x="${nx+r+2}" y="${ny-r+1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
+      const labelDist = r + 5; let lx, ly, anchor;
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      if(Math.abs(cosA) > 0.3){ lx = nx + (cosA>0?labelDist:-labelDist); ly = ny + (Math.abs(sinA)>0.6?(sinA>0?12:-4):4); anchor = cosA>0?'start':'end'; }
+      else { lx = nx; ly = ny + (sinA>0?r+13:-(r+4)); anchor = 'middle'; }
+      const nameColor = loc.hook ? '#E8A020' : col;
+      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${escHtml(loc.name)}</text>`;
+    }
+
+    if(isLocked){
+      const bx = loc.isStation ? nx+13 : loc.surface ? nx+6 : nx+9;
+      const by = loc.isStation ? ny-13 : loc.surface ? ny-6 : ny-9;
+      s += `<circle cx="${bx}" cy="${by}" r="7" fill="#0a0c12" stroke="#555570" stroke-width="1" pointer-events="none"/>`;
+      s += `<text x="${bx}" y="${by+3}" text-anchor="middle" font-size="8" pointer-events="none">🔒</text>`;
+    }
+  });
+  return s;
+}
+
+// Wire location-node clicks (called after svg.innerHTML is set in buildBodyView)
+function wireLocationNodes(svg){
+  if(!svg) return;
+  svg.querySelectorAll('.loc-node').forEach(el => {
+    el.addEventListener('click', () => selectBodyLocation(el.getAttribute('data-loc')));
+    el.addEventListener('touchend', e => { e.preventDefault(); selectBodyLocation(el.getAttribute('data-loc')); });
+  });
+}
+
+// ── Space elevators (data-driven) ──────────────────────────────────────────
+// Any location with elevatorTo:'<otherLocId>' draws an animated shaft between
+// its node and the target's node — the same flourish Aurelia's Station↔Capitol
+// elevator used, now generic so any world can have one. Drawn beneath the nodes.
+function renderElevators(body, CX, CY, PR){
+  const locs = effectiveLocations(currentSystemId, body.id);
+  let s = '';
+  locs.forEach(loc => {
+    if(!loc.elevatorTo) return;
+    const target = locs.find(l => l.id === loc.elevatorTo);
+    if(!target) return;
+    const sx = CX + (loc.sx||0) * PR, sy = CY + (loc.sy||0) * PR;
+    const cx2 = CX + (target.sx||0) * PR, cy2 = CY + (target.sy||0) * PR;
+    s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#4A90D9" stroke-width="5" opacity="0.10" pointer-events="none"/>`;
+    s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#7AB8E8" stroke-width="1.5" opacity="0.55" pointer-events="none"/>`;
+    const steps = 7;
+    for(let i = 1; i < steps; i++){
+      const t = i / steps;
+      const tx = sx + (cx2 - sx) * t, ty = sy + (cy2 - sy) * t;
+      s += `<line x1="${tx-3}" y1="${ty}" x2="${tx+3}" y2="${ty}" stroke="#7AB8E8" stroke-width="1" opacity="0.4" pointer-events="none"/>`;
+    }
+    const carDefs = [
+      { dur: 7.5, delay: 0,   reverse: false },
+      { dur: 8.2, delay: 3.0, reverse: false },
+      { dur: 7.0, delay: 1.5, reverse: true  }
+    ];
+    carDefs.forEach(({dur, delay, reverse}) => {
+      const keyPoints = reverse ? '1;0' : '0;1';
+      s += `<circle r="2.2" fill="#E8A020"><animateMotion dur="${dur}s" repeatCount="indefinite" keyPoints="${keyPoints}" keyTimes="0;1" path="M ${sx} ${sy} L ${cx2} ${cy2}" begin="-${delay}s"/></circle>`;
+    });
+    const midX = (sx + cx2) / 2, midY = (sy + cy2) / 2;
+    s += `<text x="${midX+8}" y="${midY+3}" fill="#7AB8E8" font-size="7" font-family="monospace" opacity="0.6" pointer-events="none">elevator</text>`;
+  });
+  return s;
+}
+
+// ── Moon nodes (data-driven) ────────────────────────────────────────────────
+// A body's moons appear in its close-up as orbital glyphs that navigate to the
+// moon's own close-up (goBodyView). Generic: any parent's moons behave the same,
+// so Pallor is no longer a hand-placed special case. The flattened orbit at
+// PR+120 / ·0.31 reproduces the bespoke Pallor orbit for a PR=110 planet.
+function renderMoonNodes(body, CX, CY, PR){
+  const moons = getBodies().filter(b => b.isMoon && b.parentId === body.id);
+  if(!moons.length) return '';
+  let s = '';
+  const A = PR + 120, B = (PR + 120) * 0.31;
+  moons.forEach((moon, i) => {
+    const ang = (210 + i * 70) * Math.PI / 180;
+    const mx = Math.round(CX + Math.cos(ang) * A);
+    const my = Math.round(CY + Math.sin(ang) * B);
+    const mcol = moon.color || '#B0B0B0';
+    if(i === 0){
+      s += `<ellipse cx="${CX}" cy="${CY}" rx="${A}" ry="${B.toFixed(1)}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.30" pointer-events="none"/>`;
+    }
+    s += `<defs><radialGradient id="moon-grad-${moon.id}" cx="35%" cy="30%" r="70%"><stop offset="0%" stop-color="#d0d0d0"/><stop offset="60%" stop-color="${mcol}"/><stop offset="100%" stop-color="#6a6a72"/></radialGradient></defs>`;
+    s += `<circle cx="${mx}" cy="${my}" r="18" fill="${mcol}" opacity="0.12" pointer-events="none"/>`;
+    s += `<circle cx="${mx}" cy="${my}" r="14" fill="url(#moon-grad-${moon.id})" data-moon="${moon.id}" class="moon-node" style="cursor:pointer"/>`;
+    s += `<circle cx="${mx-4}" cy="${my-3}" r="3" fill="none" stroke="#888890" stroke-width="0.8" opacity="0.5" pointer-events="none"/>`;
+    s += `<circle cx="${mx+5}" cy="${my+4}" r="2" fill="none" stroke="#888890" stroke-width="0.6" opacity="0.4" pointer-events="none"/>`;
+    s += `<ellipse cx="${mx+5}" cy="${my}" rx="8" ry="14" fill="#000820" opacity="0.38" pointer-events="none"/>`;
+    s += `<text x="${mx}" y="${my+28}" text-anchor="middle" fill="#B0B0B0" font-size="8" font-family="monospace" pointer-events="none">${escHtml(moon.name)}</text>`;
+    s += `<text x="${mx}" y="${my+38}" text-anchor="middle" fill="#555570" font-size="7" font-family="monospace" pointer-events="none">moon</text>`;
+  });
+  return s;
+}
+function wireMoonNodes(svg){
+  if(!svg) return;
+  svg.querySelectorAll('.moon-node').forEach(el => {
+    el.addEventListener('click', () => goBodyView(el.getAttribute('data-moon')));
+    el.addEventListener('touchend', e => { e.preventDefault(); goBodyView(el.getAttribute('data-moon')); });
+  });
+}
+
+// ── Locations section in the body-view detail panel ──
+function renderLocationsSection(body, pm){
+  const locs = effectiveLocations(currentSystemId, body.id);
+  let html = `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+    <div class="s-sec-lbl" style="color:var(--tx1)">Locations</div>`;
+  // Players see only revealed locations; referees see all.
+  const visible = locs.filter(l => isReferee() || isRevealed(l.id));
+  if(!visible.length){
+    html += `<div style="font-size:11px;color:var(--tx1);line-height:1.5">${isReferee() ? 'No locations yet. Add surface sites, stations, or bases below.' : 'No locations available here.'}</div>`;
+  } else {
+    visible.forEach(l => {
+      const rev = isRevealed(l.id);
+      const lockDot = (isReferee() && !rev) ? '<span title="Hidden from players" style="color:#d45050">●</span> ' : '';
+      html += `<div class="loc-list-row" onclick="selectBodyLocation('${l.id}')">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${l.color||'#4A90D9'};margin-right:7px;vertical-align:middle"></span>
+        <span style="color:${l.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${l.hook?'700':'400'}">${lockDot}${escHtml(l.name)}</span>
+        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:6px">${l.surface?'surface':'orbital'}</span>
+      </div>`;
+    });
+  }
+  if(designModeOn && isReferee()){
+    html += `<button class="design-add-btn" style="width:100%;margin-top:8px" onclick="beginPlaceLocation('${body.id}')">+ Add Location</button>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Tap-to-place ──
+function beginPlaceLocation(bodyId, repositionId){
+  if(!isReferee() || !designModeOn) return;
+  placingLocation = { bodyId, repositionId: repositionId || null };
+  const panel = document.getElementById('body-view-panel');
+  if(panel){
+    let hint = document.getElementById('place-loc-hint');
+    if(!hint){
+      hint = document.createElement('div');
+      hint.id = 'place-loc-hint';
+      panel.appendChild(hint);
+    }
+    const body = getBodies().find(b => b.id === bodyId);
+    const surf = body && bodyHasSurface(body);
+    hint.innerHTML = `<div class="place-hint-inner">📍 Tap ${surf ? 'the surface for a ground site, or out in orbit for a station' : 'anywhere in the field to place'} — <button onclick="cancelPlaceLocation()">cancel</button></div>`;
+    hint.style.display = 'flex';
+  }
+  // Add a capture overlay on the svg
+  const svg = document.getElementById('body-disc-svg');
+  if(svg) svg.style.cursor = 'crosshair';
+}
+function cancelPlaceLocation(){
+  placingLocation = null;
+  const hint = document.getElementById('place-loc-hint');
+  if(hint) hint.style.display = 'none';
+  const svg = document.getElementById('body-disc-svg');
+  if(svg) svg.style.cursor = '';
+}
+// Convert a pointer event on the disc SVG into sx/sy (PR units) and act on it.
+function handleDiscTap(evt){
+  if(!placingLocation) return;
+  const svg = document.getElementById('body-disc-svg');
+  const body = getBodies().find(b => b.id === placingLocation.bodyId);
+  if(!svg || !body) { cancelPlaceLocation(); return; }
+  const pt = svg.createSVGPoint();
+  const touch = (evt.changedTouches && evt.changedTouches[0]) || evt;
+  pt.x = touch.clientX; pt.y = touch.clientY;
+  const ctm = svg.getScreenCTM();
+  if(!ctm) { cancelPlaceLocation(); return; }
+  const p = pt.matrixTransform(ctm.inverse());
+  const CX = 400, CY = 300, PR = bodyDiscPR(body);
+  let sx = (p.x - CX) / PR, sy = (p.y - CY) / PR;
+  // Clamp to a sane field so a wild tap doesn't fly off-canvas
+  const d = Math.sqrt(sx*sx + sy*sy);
+  const MAXD = 2.4;
+  if(d > MAXD){ sx = sx/d*MAXD; sy = sy/d*MAXD; }
+  const surface = bodyHasSurface(body) && d <= 1.0;
+  const repositionId = placingLocation.repositionId;
+  cancelPlaceLocation();
+  if(repositionId){
+    const found = findLocation(repositionId);
+    if(found){
+      // writeLocationFields updates the in-memory store synchronously before its
+      // async save, so the immediate rebuild already reflects the new position.
+      writeLocationFields(repositionId, found.bodyId, { sx:+sx.toFixed(3), sy:+sy.toFixed(3), surface });
+      buildBodyView(body.id); selectBodyLocation(repositionId); showToast('Location moved');
+    }
+  } else {
+    openLocationCreator(body.id, { sx:+sx.toFixed(3), sy:+sy.toFixed(3), surface });
+  }
+}
+
+// ── Location Creator modal (reuses #body-creator-* styling) ──
+let locCreatorDraft = null;
+let locEditTargetId = null;
+function openLocationCreator(bodyId, pos, editLoc){
+  if(!isReferee() || !designModeOn) return;
+  locCreatorDraft = editLoc ? Object.assign({}, editLoc) : Object.assign({ bodyId }, pos);
+  locEditTargetId = editLoc ? editLoc.id : null;
+  document.getElementById('loc-creator-title').textContent = editLoc ? '✦ Edit Location' : '✦ Add Location';
+  document.getElementById('loc-creator-modal').classList.add('open');
+  renderLocCreatorBody(bodyId);
+}
+function closeLocationCreator(){
+  document.getElementById('loc-creator-modal').classList.remove('open');
+  locEditTargetId = null; locCreatorDraft = null;
+}
+function renderLocCreatorBody(bodyId){
+  const d = locCreatorDraft || {};
+  const body = getBodies().find(b => b.id === (d.bodyId || bodyId));
+  const posLabel = d.surface ? 'Surface site' : 'Orbital';
+  const color = d.color || '#4A90D9';
+  const TAGS = ['','ACTIVE LOCATION','HEGEMONY','CORPORATE','MILITARY','DEEP WATER','LANDMARK','UNDERDECK','CLASSIFIED','RESTRICTED','SETTLEMENT','STATION','MINE','RESEARCH'];
+  document.getElementById('loc-creator-body').innerHTML = `
+    <div class="npc-gen-hint">${escHtml(body?body.name:'')} · <b style="color:var(--tx0)">${posLabel}</b>
+      <button class="design-add-btn" style="margin-left:8px;padding:2px 8px" onclick="repositionFromCreator()">Move pin</button></div>
+    <div class="npc-form-row"><label class="npc-form-lbl">Name</label>
+      <input type="text" class="npc-form-input" id="loc-f-name" value="${escAttr(d.name)}" placeholder="e.g. Cairn Station"></div>
+    <div class="npc-form-row"><label class="npc-form-lbl">Type / subtitle</label>
+      <input type="text" class="npc-form-input" id="loc-f-type" value="${escAttr(d.type)}" placeholder="e.g. Mining outpost"></div>
+    <div class="body-uwp-grid">
+      <div class="npc-form-row"><label class="npc-form-lbl">Colour</label>
+        <div class="body-color-row"><input type="color" id="loc-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#4A90D9'}"><input type="text" class="npc-form-input" id="loc-f-colorhex" value="${escAttr(color)}" oninput="syncLocColorHex()" style="font-family:monospace"></div></div>
+      <div class="npc-form-row"><label class="npc-form-lbl">Tag</label>
+        <select class="body-select" id="loc-f-tag">${TAGS.map(t=>`<option value="${t}"${t===(d.tag||'')?' selected':''}>${t||'(none)'}</option>`).join('')}</select></div>
+    </div>
+    <div class="npc-form-row body-check-row">
+      <input type="checkbox" id="loc-f-hook" ${d.hook?'checked':''}><label for="loc-f-hook" style="margin:0;cursor:pointer">Adventure hook (gold highlight + ! marker)</label>
+    </div>
+    <div class="npc-form-row"><label class="npc-form-lbl">Overview / description</label>
+      <textarea class="npc-form-textarea" id="loc-f-desc" style="min-height:80px">${escHtml(d.desc)}</textarea></div>
+    <div class="npc-form-row"><label class="npc-form-lbl">Referee note</label>
+      <textarea class="npc-form-textarea" id="loc-f-refnote" style="min-height:50px">${escHtml(d.refNote)}</textarea></div>
+    <div class="npc-form-row"><label class="npc-form-lbl">Read aloud</label>
+      <textarea class="npc-form-textarea" id="loc-f-readaloud" style="min-height:50px">${escHtml(d.readAloud)}</textarea></div>
+    <div class="npc-creator-footer">
+      <button class="npc-creator-btn" onclick="closeLocationCreator()">Cancel</button>
+      <button class="npc-creator-btn primary" onclick="saveLocationFromForm()">${locEditTargetId?'Save Changes':'Add Location'}</button>
+    </div>`;
+}
+function syncLocColorHex(){
+  const hex = (document.getElementById('loc-f-colorhex')||{}).value || '';
+  if(/^#[0-9a-fA-F]{6}$/.test(hex)){ const c=document.getElementById('loc-f-color'); if(c) c.value = hex; }
+}
+// Re-enter tap-to-place from inside the creator (keeps the draft details)
+function repositionFromCreator(){
+  collectLocDraft();
+  const bodyId = locCreatorDraft.bodyId;
+  closeLocationCreatorKeepDraft();
+  beginPlaceLocationForDraft(bodyId);
+}
+function closeLocationCreatorKeepDraft(){
+  document.getElementById('loc-creator-modal').classList.remove('open');
+}
+function beginPlaceLocationForDraft(bodyId){
+  placingLocation = { bodyId, draftReturn:true };
+  const panel = document.getElementById('body-view-panel');
+  if(panel){
+    let hint = document.getElementById('place-loc-hint');
+    if(!hint){ hint = document.createElement('div'); hint.id='place-loc-hint'; panel.appendChild(hint); }
+    hint.innerHTML = `<div class="place-hint-inner">📍 Tap to move the pin — <button onclick="cancelPlaceLocation()">cancel</button></div>`;
+    hint.style.display = 'flex';
+  }
+  const svg = document.getElementById('body-disc-svg');
+  if(svg) svg.style.cursor = 'crosshair';
+}
+function collectLocDraft(){
+  const g = id => (document.getElementById(id)||{}).value;
+  if(!locCreatorDraft) locCreatorDraft = {};
+  locCreatorDraft.name = (g('loc-f-name')||'').trim();
+  locCreatorDraft.type = (g('loc-f-type')||'').trim();
+  locCreatorDraft.color = (g('loc-f-colorhex')||'').trim() || '#4A90D9';
+  locCreatorDraft.tag = g('loc-f-tag') || '';
+  locCreatorDraft.hook = !!(document.getElementById('loc-f-hook')||{}).checked;
+  locCreatorDraft.desc = g('loc-f-desc') || '';
+  locCreatorDraft.refNote = (g('loc-f-refnote')||'').trim();
+  locCreatorDraft.readAloud = (g('loc-f-readaloud')||'').trim();
+}
+async function saveLocationFromForm(){
+  collectLocDraft();
+  const d = locCreatorDraft;
+  if(!d.name){ showToast('Location needs a name', 'error'); return; }
+  if(locEditTargetId){
+    await commitLocationEdit(locEditTargetId, d);
+  } else {
+    await commitNewLocation(d);
+  }
+  closeLocationCreator();
+}
+
+// ── Commit / edit / delete / restore ──
+async function commitNewLocation(d){
+  const bodyId = d.bodyId;
+  const loc = {
+    id: 'loc-add-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+    bodyId,
+    name: d.name, type: d.type || '', color: d.color || '#4A90D9',
+    tag: d.tag || '', hook: !!d.hook,
+    surface: !!d.surface, sx: d.sx||0, sy: d.sy||0,
+    desc: d.desc || '', refNote: d.refNote || null, readAloud: d.readAloud || null,
+    interiorId: null
+  };
+  if(!locationAdditions[currentSystemId]) locationAdditions[currentSystemId] = {};
+  if(!locationAdditions[currentSystemId][bodyId]) locationAdditions[currentSystemId][bodyId] = [];
+  locationAdditions[currentSystemId][bodyId].push(loc);
+  await saveLocationAdditions();
+  buildBodyView(bodyId);
+  showToast('Location "' + loc.name + '" added');
+  selectBodyLocation(loc.id);
+}
+// Write a set of {field:value} onto a location, branching base vs added exactly
+// like the body engine: an added location is edited in place; a base location
+// stores only its changed fields as overrides (vs BASE_LOCATIONS) so the base
+// data stays pristine and restorable. Mirrors commitBodyEdit.
+async function writeLocationFields(locId, bodyId, fields){
+  if(isAddedLocation(currentSystemId, locId)){
+    const arr = (locationAdditions[currentSystemId] || {})[bodyId] || [];
+    const loc = arr.find(l => l.id === locId);
+    if(loc){ Object.assign(loc, fields); await saveLocationAdditions(); }
+  } else {
+    const base = baseLocationsFor(currentSystemId, bodyId).find(l => l.id === locId) || {};
+    if(!locationPropertyOverrides[currentSystemId]) locationPropertyOverrides[currentSystemId] = {};
+    const ov = Object.assign({}, locationPropertyOverrides[currentSystemId][locId] || {});
+    const norm = v => (v === '' || v === undefined) ? null : v;
+    Object.keys(fields).forEach(f => {
+      if(norm(fields[f]) !== norm(base[f])) ov[f] = fields[f];
+      else delete ov[f];
+    });
+    if(Object.keys(ov).length) locationPropertyOverrides[currentSystemId][locId] = ov;
+    else delete locationPropertyOverrides[currentSystemId][locId];
+    await saveLocationPropertyOverrides();
+  }
+}
+async function commitLocationEdit(locId, d){
+  const found = findLocation(locId);
+  if(!found){ showToast('Location not found','error'); return; }
+  const fields = {
+    name: d.name, type: d.type || '', color: d.color || '#4A90D9',
+    tag: d.tag || '', hook: !!d.hook,
+    desc: d.desc || '', refNote: d.refNote || null, readAloud: d.readAloud || null
+  };
+  if(d.sx!==undefined) fields.sx = d.sx;
+  if(d.sy!==undefined) fields.sy = d.sy;
+  if(d.surface!==undefined) fields.surface = d.surface;
+  await writeLocationFields(locId, found.bodyId, fields);
+  buildBodyView(found.bodyId);
+  showToast('Location updated');
+  selectBodyLocation(locId);
+}
+async function deleteLocation(locId){
+  const found = findLocation(locId);
+  if(!found) return;
+  if(!confirm(`Remove "${found.loc.name}"? You can restore it from "Show Removed Items".`)) return;
+  const bodyId = found.bodyId;
+  if(!locationDeletions[currentSystemId]) locationDeletions[currentSystemId] = {};
+  if(isAddedLocation(currentSystemId, locId)){
+    const arr = locationAdditions[currentSystemId][bodyId];
+    const idx = arr.findIndex(l => l.id === locId);
+    if(idx >= 0){
+      locationDeletions[currentSystemId][locId] = { loc: arr[idx], t: Date.now(), bodyId, wasAddition:true };
+      arr.splice(idx, 1);
+      await saveLocationAdditions();
+    }
+  } else {
+    // Base location — tombstone only; effectiveLocations filters it out. The
+    // base data and any property override survive for a clean restore.
+    locationDeletions[currentSystemId][locId] = { loc: found.loc, t: Date.now(), bodyId, wasAddition:false };
+  }
+  await saveLocationDeletions();
+  selectedBodyLoc = null;
+  showToast('Location removed','info');
+  buildBodyView(bodyId);
+}
+async function restoreDeletedLocation(sysId, locId){
+  const entry = (locationDeletions[sysId] || {})[locId];
+  if(!entry) return;
+  const bodyId = entry.bodyId;
+  if(entry.wasAddition){
+    if(!locationAdditions[sysId]) locationAdditions[sysId] = {};
+    if(!locationAdditions[sysId][bodyId]) locationAdditions[sysId][bodyId] = [];
+    locationAdditions[sysId][bodyId].push(entry.loc);
+    await saveLocationAdditions();
+  }
+  // Base locations need no re-add — clearing the tombstone makes effectiveLocations
+  // surface them again (with their property override, if any, still applied).
+  delete locationDeletions[sysId][locId];
+  await saveLocationDeletions();
+  if(currentView === 'body' && selectedBody === bodyId) buildBodyView(bodyId);
+  if(typeof closeRemovedItemsPanel === 'function') closeRemovedItemsPanel();
+  showToast('Location restored');
+}
+
+// ── Location detail (right panel) ──
+function selectBodyLocation(locId){
+  if(placingLocation) return; // a tap during placement is a pin drop, not a select
+  const found = findLocation(locId);
+  if(!found){ return; }
+  const loc = found.loc;
+  selectedBodyLoc = locId;
+  const body = getBodies().find(b => b.id === found.bodyId);
+  // Re-render disc so the selected node highlights
+  const svg = document.getElementById('body-disc-svg');
+  if(svg){ const PR = bodyDiscPR(body); svg.innerHTML = renderBodyDisc(body) + renderElevators(body, 400, 300, PR) + renderMoonNodes(body, 400, 300, PR) + renderLocationNodes(body, 400, 300, PR); wireLocationNodes(svg); wireMoonNodes(svg); attachDiscTapHandler(svg); }
+
+  const pm = pmCheck.checked;
+  const nm = document.getElementById('bv-dname');
+  if(nm){ nm.textContent = loc.name.toUpperCase(); nm.style.color = loc.color || '#4A90D9'; }
+  const dt = document.getElementById('bv-dtype');
+  if(dt) dt.textContent = (loc.type || loc.tag || 'LOCATION').toUpperCase();
+
+  let html = `<button class="design-add-btn" style="width:100%;margin-bottom:10px" onclick="buildBodyView('${found.bodyId}')">← Back to ${escHtml(body?body.name:'body')}</button>`;
+
+  // Reveal gate for players
+  if(pm && !isRevealed(locId)){
+    html += `<div class="empty" style="height:160px"><div class="empty-icon">🔒</div>
+      <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
+      <div style="font-size:12px;max-width:220px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
+    const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
+    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+    return;
+  }
+
+  if(!pm){ html += revealToggleRowHTML(locId); }
+
+  // Interior entry (e.g. Aurelia Orbital Station). The Station sub-app itself is
+  // unchanged for Phase 3 — only its entry point moved onto the generic view.
+  if(loc.isStation || loc.interiorId){
+    html += `<button class="view-close-btn" style="margin-bottom:10px" onclick="enterStation()">⬡ Enter ${escHtml(loc.name)}</button>`;
+  }
+
+  // Overview
+  const dKey = 'loc-'+locId+'-desc';
+  designOriginalRegistry[dKey] = loc.desc;
+  const dText = resolveContent(dKey, loc.desc);
+  html += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
+    <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
+    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(dKey, loc.desc, (dText||'').split('\n').join('<br>'))}</div></div>`;
+
+  if(!pm && loc.readAloud){
+    const rKey = 'loc-'+locId+'-readAloud';
+    designOriginalRegistry[rKey] = loc.readAloud;
+    const rText = resolveContent(rKey, loc.readAloud);
+    html += `<div class="s-blk read"><div class="s-blk-lbl">READ ALOUD</div>${designWrap(rKey, loc.readAloud, rText)}</div>`;
+  }
+  if(!pm && loc.refNote){
+    const nKey = 'loc-'+locId+'-refNote';
+    designOriginalRegistry[nKey] = loc.refNote;
+    const nText = resolveContent(nKey, loc.refNote);
+    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(nKey, loc.refNote, (nText||'').split('\n').join('<br>'))}</div>`;
+  }
+
+  // Custom referee boxes (parity with the retired bespoke view) — keeps any
+  // existing loc-<id>-box-* edits showing and gives every location custom boxes.
+  html += renderBoxTypesHTML(bt => 'loc-'+locId+'-box-'+bt.key, null, pm, true);
+
+  // Design-mode location controls
+  if(designModeOn && isReferee()){
+    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Location</div>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openLocationEditor('${locId}')">✦ Edit Location</button>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="beginPlaceLocation('${found.bodyId}','${locId}')">📍 Reposition</button>
+      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteLocation('${locId}')">🗑 Delete Location</button>
+    </div>`;
+  }
+
+  const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
+  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+}
+function goBackToBodyFromLoc(){
+  if(selectedBody) buildBodyView(selectedBody);
+  else goSystem();
+}
+function openLocationEditor(locId){
+  const found = findLocation(locId);
+  if(!found) return;
+  openLocationCreator(found.bodyId, null, found.loc);
+}
+
+// Attach the tap-to-place handler to the disc svg (idempotent)
+function attachDiscTapHandler(svg){
+  if(!svg || svg._discTapWired) return;
+  svg.addEventListener('click', handleDiscTap);
+  svg.addEventListener('touchend', handleDiscTap);
+  svg._discTapWired = true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3370,7 +4002,6 @@ function enterStation(){
   playViewTransition(() => {
     currentView = "station";
     document.getElementById("view-system").classList.add("v-hidden");
-    document.getElementById("view-aurelia").classList.add("v-hidden");
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-station").classList.remove("v-hidden");
     document.getElementById("view-station").style.display="flex";
@@ -3384,7 +4015,6 @@ function goSystem(){
   playViewTransition(() => {
     currentView = "system";
     document.getElementById("view-station").classList.add("v-hidden");
-    document.getElementById("view-aurelia").classList.add("v-hidden");
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-system").classList.remove("v-hidden");
     document.getElementById("view-system").style.display="flex";
@@ -3395,6 +4025,7 @@ function goSystem(){
     } else {
       document.getElementById("breadcrumb").innerHTML="";
     }
+    updateBackBtn();
   });
 }
 
@@ -3402,6 +4033,22 @@ function setBreadcrumb(crumbs,current){
   const el=document.getElementById("breadcrumb");
   el.innerHTML=crumbs.map(c=>`<span class="bc-link" onclick="${c.fn}()">${c.label}</span><span class="bc-sep"> › </span>`).join("")
     +(current?`<span style="color:#8b91a8">${current}</span>`:"");
+  updateBackBtn();
+}
+
+// Hierarchical back-arrow (kept alongside the breadcrumb). Steps one level up
+// from the current view; hidden at the root (system view, no body selected).
+function navBack(){
+  if(currentView === 'station'){ goAurelia(); return; }
+  if(currentView === 'body'){ goSystem(); return; }
+  if(currentView === 'system' && selectedBody){ goSystemOverview(); return; }
+  // system root — nothing above it
+}
+function updateBackBtn(){
+  const btn = document.getElementById('back-btn');
+  if(!btn) return;
+  const atRoot = (currentView === 'system' && !selectedBody);
+  btn.classList.toggle('hidden', atRoot);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3508,14 +4155,7 @@ function renderDetail(){
     let html=backBtn;
     // Referee-only reveal toggle (only shown when NOT in player mode, on top-level areas)
     if(!pm && isTopLevelArea){
-      const rev = isRevealed(cur);
-      html += `<div class="reveal-toggle-row">
-        <span class="reveal-toggle-lbl">👁 Player visibility</span>
-        <div style="display:flex;gap:6px">
-          <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${cur}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
-          <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
-        </div>
-      </div>`;
+      html += revealToggleRowHTML(cur);
     }
     const stKey = cur+(curSub?"_"+curSub:"");
     if(a.read){
@@ -3534,6 +4174,9 @@ function renderDetail(){
         ${a.ship.lines.map(([k,v])=>`<div style="display:grid;grid-template-columns:120px 1fr;gap:6px;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--bg2)"><span style="color:var(--tx1);font-weight:700">${k}</span><span style="color:var(--tx0)">${v}</span></div>`).join("")}
       </div></div>`;
     }
+    // Custom referee boxes (the area already shows its own Read Aloud + Referee
+    // Context above, so only the registry's custom box types are appended here).
+    html += renderBoxTypesHTML(bt => 'sta-'+stKey+'-box-'+bt.key, null, pm, true);
     d.innerHTML=html;
   } else if(curTab==="npcs"){
     let html=backBtn;
@@ -3979,449 +4622,78 @@ function openElevator(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AURELIA LOCATIONS DATA
+// BASE LOCATIONS DATA  (hardcoded, system→body keyed) — Phase 3
 // ═══════════════════════════════════════════════════════════════════════════
-const AURELIA_LOCS = [
+// Aurelia's seven sites, migrated off the retired bespoke AURELIA_LOCS array
+// onto the generic location engine. Layered by effectiveLocations exactly like
+// BASE_BODIES_AUROS is by effectiveBodies. IDs are preserved byte-for-byte so
+// existing referee text edits (loc-<id>-*) and reveal state still resolve.
+//   sx/sy are offsets from disc centre in planet-radius (PR=110) units. The
+//   orbital station was converted from its old angle:270/dist:0.72 polar form:
+//   sx = cos(270°)·(400·0.72·0.92)/110 = 0 ;  sy = sin(270°)·(300·0.72·0.92)/110 = -1.806
+const BASE_LOCATIONS = {
+  auros: {
+    aurelia: [
   {
-    id:"station", name:"Aurelia Orbital Station", angle:270, dist:0.72,
-    color:"#4A90D9", hook:true, isStation:true,
-    tag:"ACTIVE LOCATION", tagBg:"#0F3460", tagColor:"#4A90D9",
+    id:"station", name:"Aurelia Orbital Station", surface:false, sx:0, sy:-1.806,
+    color:"#4A90D9", hook:true, isStation:true, interiorId:"aurelia-station", elevatorTo:"capitol",
+    tag:"ACTIVE LOCATION",
     desc:"The station sits at the L2 Lagrange point, permanently in Aurelia's shadow. A mid-sized orbital platform serving commercial docking, transit, and Hegemony administrative functions.\n\nThe crew's current location.",
     refNote:"Enter the station to access the full station map and all areas."
   },
   {
     id:"capitol", name:"Aurelia Capitol", surface:true, sx:-0.02, sy:-0.44,
     color:"#D4A843", hook:false,
-    tag:"HEGEMONY", tagBg:"#3D2B1F", tagColor:"#D4A843",
+    tag:"HEGEMONY",
     desc:"The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford.",
     refNote:"The Capitol is where Hegemony policy for the Aurelian system is made. The Governor-General's residence is here, as is the regional OmniSynth licensing office."
   },
   {
     id:"cradle", name:"The Cradle", surface:true, sx:0.30, sy:0.06,
     color:"#2AABB8", hook:true,
-    tag:"DEEP WATER", tagBg:"#0a2530", tagColor:"#2AABB8",
+    tag:"DEEP WATER",
     desc:"Aurelia's most extraordinary city — built on the ocean floor in the equatorial deep trench, pressurised and lit from within. Visible from orbit as a faint blue-white glow through 600 metres of water.\n\nPopulation 12 million. The Cradle operates under a different legal framework from the surface — a legacy of the engineering charter that built it. The Hegemony's reach here is real but thinner.",
     refNote:"The Cradle is the closest thing Aurelia has to a free city. Black markets, off-charter research, people who don't want to be found. The RSR has significant infrastructure here."
   },
   {
     id:"hegemony-base", name:"Hegemony Garrison", surface:true, sx:0.32, sy:0.58,
     color:"#534AB7", hook:false,
-    tag:"MILITARY", tagBg:"#1e1e2e", tagColor:"#8b91a8",
+    tag:"MILITARY",
     desc:"A Hegemony Navy installation on the northern continent's high plateau. Mostly administrative — a handful of frigates on rotation, a rapid-response ground force, the regional communications hub.\n\nNot a combat posting. The Hegemony has not needed combat on Aurelia. The garrison commander finds this increasingly difficult to explain to new arrivals who expected action.",
     refNote:"The garrison holds sealed orders for three scenarios. One of them involves the Cleaners. Nobody at the garrison knows this."
   },
   {
     id:"spire-range", name:"Spire Range", surface:true, sx:-0.44, sy:0.50,
     color:"#9999AA", hook:false,
-    tag:"LANDMARK", tagBg:"#1e2030", tagColor:"#9999AA",
+    tag:"LANDMARK",
     desc:"The twin mountain peaks that appear in every Hegemony promotional image of Aurelia. Geologically ancient, atmospherically dramatic — the peaks catch the copper-tinted light of Auros at dawn and dusk and turn a shade of red that colonists have named the Auros Kiss.\n\nPopular tourist destination. Four licensed resort complexes at mid-altitude. Above 4,000 metres, only licensed research expeditions.",
     refNote:"A pre-Collapse observatory sits at 5,200 metres on the eastern peak. It stopped broadcasting forty years ago. It still has power."
   },
   {
     id:"omnisynth", name:"OmniSynth Arcology", surface:true, sx:-0.66, sy:0.12,
     color:"#C87941", hook:true,
-    tag:"CORPORATE", tagBg:"#2e1f0a", tagColor:"#C87941",
+    tag:"CORPORATE",
     desc:"OmniSynth's primary Aurelian facility — a self-contained arcology on the southern coast housing 80,000 employees and their dependents. Research, manufacturing, and administrative functions. The arcology has its own power grid, water supply, and internal security force.\n\nFrom outside, it looks like a very clean small city. From inside, it looks like a company town.",
     refNote:"Project Chimera's above-ground operations are administered from the OmniSynth Arcology's sub-level C. Sub-level C is not on the official floor plan."
   },
   {
     id:"underdeck", name:"Underdeck Entrance", surface:true, sx:-0.20, sy:-0.30,
     color:"#A32D2D", hook:true,
-    tag:"UNDERDECK", tagBg:"#2e1010", tagColor:"#d45050",
+    tag:"UNDERDECK",
     desc:"The surface access point for Aurelia's Cleaner settlements — a pressurised transition zone between the atmosphere above and the filtered tunnels below. Multiple entrances exist; this is the one that appears on Hegemony maps, marked as Infrastructure Access — Authorised Personnel Only.\n\nThe ones that don't appear on any map are more interesting.",
     refNote:"The Cleaner settlements beneath Aurelia's surface house approximately 2 million people. They breathe filtered air, grow food under artificial light, and know the surface population's life expectancy. The RSR's deepest infrastructure is down here."
   }
-];
-
-let selectedLoc = null;
-let pallorSelected = false; // tracks the Pallor special-case selection for re-render purposes
-
-function buildAureliaMap(){
-  const svg = document.getElementById('aurelia-svg');
-  if(!svg) return;
-  const W=800, H=600, CX=400, CY=300;
-  const PR = 110; // planet radius
-  let s = '';
-
-  // ── Background stars ───────────────────────────────────────
-  const STARS = [
-    [32,22],[88,55],[155,18],[245,48],[348,12],[472,38],[588,68],[672,22],[748,50],
-    [62,105],[152,132],[318,98],[428,128],[548,88],[648,118],[740,105],
-    [22,188],[138,208],[232,168],[408,198],[528,178],[688,198],[772,168],
-    [48,278],[158,298],[268,258],[398,288],[512,278],[638,268],[752,308],
-    [88,368],[208,388],[372,348],[468,408],[608,368],[712,388],
-    [30,455],[140,478],[280,442],[430,465],[570,445],[700,470],[770,445],
-    [60,525],[180,548],[350,515],[490,538],[650,518],[750,540]
-  ];
-  STARS.forEach(([x,y],i) => {
-    const r = i%5===0 ? 1.5 : 1;
-    const op = 0.2 + (i%3)*0.15;
-    s += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}" pointer-events="none"/>`;
-  });
-
-  // Auros ambient glow
-  s += `<defs>
-    <radialGradient id="auros-light" cx="85%" cy="10%" r="60%">
-      <stop offset="0%" stop-color="#E07030" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#E07030" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="pallor-grad" cx="35%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#d0d0d0"/>
-      <stop offset="60%" stop-color="#a0a0a8"/>
-      <stop offset="100%" stop-color="#6a6a72"/>
-    </radialGradient>
-    <clipPath id="planet-clip">
-      <circle cx="${CX}" cy="${CY}" r="${PR}"/>
-    </clipPath>
-  </defs>`;
-  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#auros-light)"/>`;
-
-  // ── Pallor orbit ring — wider than before ─────────────────
-  const PALLOR_A = 230, PALLOR_B = 72; // wider orbit
-  const PALLOR_ANGLE = 210;
-  const palRad = PALLOR_ANGLE * Math.PI / 180;
-  const pallX = Math.round(CX + Math.cos(palRad) * PALLOR_A);
-  const pallY = Math.round(CY + Math.sin(palRad) * PALLOR_B);
-
-  s += `<ellipse cx="${CX}" cy="${CY}" rx="${PALLOR_A}" ry="${PALLOR_B}" fill="none" stroke="#444466" stroke-width="0.8" stroke-dasharray="5,6" opacity="0.35"/>`;
-
-  // ── Connection lines (behind planet) — only for orbiting nodes ──
-  AURELIA_LOCS.forEach(loc => {
-    if(loc.surface) return; // surface-anchored locations don't need a spoke line
-    const rad = loc.angle * Math.PI / 180;
-    const nx = CX + Math.cos(rad) * (CX * loc.dist * 0.92);
-    const ny = CY + Math.sin(rad) * (CY * loc.dist * 0.92);
-    const ex = CX + Math.cos(rad) * (PR + 6);
-    const ey = CY + Math.sin(rad) * (PR + 6);
-    s += `<line x1="${ex}" y1="${ey}" x2="${nx}" y2="${ny}" stroke="${loc.color}" stroke-width="0.6" stroke-dasharray="3,5" opacity="0.35"/>`;
-  });
-
-  // ── Planet SVG layer — transparent circle for hit-testing + overlays ──
-  // The actual texture is the CSS #planet-surface div beneath the SVG.
-  // The SVG adds: terminator shadow, limb brightening, atmosphere rim, label.
-  // A transparent circle catches the planet's click area.
-
-  // Terminator + light overlays (clipped to planet circle)
-  s += `<g clip-path="url(#planet-clip)">`;
-  s += `<ellipse cx="${CX+32}" cy="${CY}" rx="${PR*0.7}" ry="${PR}" fill="#000820" opacity="0.32" transform="rotate(15,${CX+32},${CY})"/>`;
-  s += `<ellipse cx="${CX+28}" cy="${CY-38}" rx="${PR*0.55}" ry="${PR*0.45}" fill="#E07030" opacity="0.05"/>`;
-  s += `</g>`;
-
-  // Limb brightening / atmosphere edge
-  s += `<circle cx="${CX}" cy="${CY}" r="${PR}" fill="none" stroke="#5ab0e8" stroke-width="5" opacity="0.16" pointer-events="none"/>`;
-  s += `<circle cx="${CX}" cy="${CY}" r="${PR+1}" fill="none" stroke="#4a90D9" stroke-width="2" opacity="0.09" pointer-events="none"/>`;
-  s += `<circle cx="${CX}" cy="${CY}" r="${PR+10}" fill="none" stroke="#4a90D9" stroke-width="6" opacity="0.05" pointer-events="none"/>`;
-
-  s += `<text x="${CX}" y="${CY+6}" text-anchor="middle" fill="#6ab8e8" font-size="10" font-family="monospace" font-weight="700" opacity="0.35" letter-spacing="3" pointer-events="none">AURELIA</text>`;
-
-  // ── Space elevator — connects Orbital Station (above, in orbit) to
-  // Capitol (now a surface location on the planet itself) ──
-  // Trimmed to actually end at Capitol's surface position rather than
-  // passing through to the opposite side of the planet. A few small
-  // orange "car" dots animate up and down the shaft via CSS.
-  {
-    const stationLoc = AURELIA_LOCS.find(l => l.id === 'station');
-    const capitolLoc = AURELIA_LOCS.find(l => l.id === 'capitol');
-    if(stationLoc && capitolLoc){
-      const sRad = stationLoc.angle * Math.PI / 180;
-      const sx = CX + Math.cos(sRad) * (CX * stationLoc.dist * 0.92);
-      const sy = CY + Math.sin(sRad) * (CY * stationLoc.dist * 0.92);
-      const cx2 = CX + capitolLoc.sx * PR;
-      const cy2 = CY + capitolLoc.sy * PR;
-
-      // Soft glow underneath the shaft
-      s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#4A90D9" stroke-width="5" opacity="0.10" pointer-events="none"/>`;
-      // Main shaft — solid, distinct from dashed spoke lines
-      s += `<line x1="${sx}" y1="${sy}" x2="${cx2}" y2="${cy2}" stroke="#7AB8E8" stroke-width="1.5" opacity="0.55" pointer-events="none"/>`;
-      // Rail-car tick marks along the shaft (static, structural)
-      const steps = 7;
-      for(let i = 1; i < steps; i++){
-        const t = i / steps;
-        const tx = sx + (cx2 - sx) * t;
-        const ty = sy + (cy2 - sy) * t;
-        s += `<line x1="${tx-3}" y1="${ty}" x2="${tx+3}" y2="${ty}" stroke="#7AB8E8" stroke-width="1" opacity="0.4" pointer-events="none"/>`;
-      }
-      // Animated elevator cars — small orange dots travelling the shaft.
-      // All start visually at the Station end. Two travel down toward
-      // Capitol, one travels back up toward the Station, staggered so
-      // they don't all move in lockstep. Slower than before.
-      s += `<path id="elevator-path" d="M ${sx} ${sy} L ${cx2} ${cy2}" fill="none" stroke="none"/>`;
-      const carDefs = [
-        { dur: 7.5, delay: 0,   reverse: false },
-        { dur: 8.2, delay: 3.0, reverse: false },
-        { dur: 7.0, delay: 1.5, reverse: true  },
-      ];
-      carDefs.forEach(({dur, delay, reverse}) => {
-        const keyPoints = reverse ? '1;0' : '0;1';
-        s += `<circle r="2.2" fill="#E8A020">
-          <animateMotion dur="${dur}s" repeatCount="indefinite" keyPoints="${keyPoints}" keyTimes="0;1" path="M ${sx} ${sy} L ${cx2} ${cy2}" begin="-${delay}s"/>
-        </circle>`;
-      });
-      // Small label at the midpoint
-      const midX = (sx + cx2) / 2, midY = (sy + cy2) / 2;
-      s += `<text x="${midX+8}" y="${midY+3}" fill="#7AB8E8" font-size="7" font-family="monospace" opacity="0.6" pointer-events="none">elevator</text>`;
-    }
+    ]
   }
-
-  // ── Pallor (moon) ────────────────────────────────────────
-  s += `<circle cx="${pallX}" cy="${pallY}" r="18" fill="#5a5a62" opacity="0.12" pointer-events="none"/>`;
-  s += `<circle cx="${pallX}" cy="${pallY}" r="14" fill="url(#pallor-grad)" data-body="pallor" class="body-node" style="cursor:pointer"/>`;
-  s += `<circle cx="${pallX-4}" cy="${pallY-3}" r="3" fill="none" stroke="#888890" stroke-width="0.8" opacity="0.5" pointer-events="none"/>`;
-  s += `<circle cx="${pallX+5}" cy="${pallY+4}" r="2" fill="none" stroke="#888890" stroke-width="0.6" opacity="0.4" pointer-events="none"/>`;
-  s += `<ellipse cx="${pallX+5}" cy="${pallY}" rx="8" ry="14" fill="#000820" opacity="0.38" pointer-events="none"/>`;
-  s += `<text x="${pallX}" y="${pallY+28}" text-anchor="middle" fill="#B0B0B0" font-size="8" font-family="monospace" pointer-events="none">Pallor</text>`;
-  s += `<text x="${pallX}" y="${pallY+38}" text-anchor="middle" fill="#555570" font-size="7" font-family="monospace" pointer-events="none">moon · 18.3d</text>`;
-
-  // ── Location nodes ───────────────────────────────────────
-  const showLocks = !isReferee();
-  AURELIA_LOCS.forEach(loc => {
-    let nx, ny, rad;
-    if(loc.surface){
-      // Surface-anchored: position is an offset from planet centre, in
-      // units of planet radius (PR). sx/sy range roughly -1..1.
-      nx = Math.round(CX + loc.sx * PR);
-      ny = Math.round(CY + loc.sy * PR);
-      rad = Math.atan2(loc.sy, loc.sx); // used only for label-side heuristics below
-    } else {
-      rad = loc.angle * Math.PI / 180;
-      nx = Math.round(CX + Math.cos(rad) * (CX * loc.dist * 0.92));
-      ny = Math.round(CY + Math.sin(rad) * (CY * loc.dist * 0.92));
-    }
-    const isSelected = selectedLoc === loc.id;
-    const isLocked = showLocks && !isRevealed(loc.id);
-
-    if(loc.isStation){
-      // ── Orbital station icon ─────────────────────────────
-      // Drawn as a mini space station: central hub + cross arms + solar panels
-      const sel = isSelected;
-      const sc = sel ? 1.4 : 1.0; // scale up when selected
-      const col = loc.color; // #4A90D9
-
-      s += `<g id="station-icon-group" data-loc="${loc.id}" class="loc-node" style="cursor:pointer" transform="translate(${nx},${ny}) scale(${sc})">`;
-
-      // Selection glow
-      if(sel){
-        s += `<circle cx="0" cy="0" r="22" fill="${col}" opacity="0.12" pointer-events="none"/>`;
-        s += `<circle cx="0" cy="0" r="16" fill="${col}" opacity="0.18" pointer-events="none"/>`;
-      }
-
-      // Docking ring (outer torus suggestion — two concentric circles)
-      s += `<circle cx="0" cy="0" r="13" fill="none" stroke="${col}" stroke-width="1" opacity="${sel?0.6:0.35}" pointer-events="none"/>`;
-
-      // Central hub
-      s += `<circle cx="0" cy="0" r="5" fill="${sel?col+'88':'#0d1828'}" stroke="${col}" stroke-width="1.2" pointer-events="all"/>`;
-
-      // Cross arms (station spine)
-      s += `<line x1="-13" y1="0" x2="13" y2="0" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
-      s += `<line x1="0" y1="-13" x2="0" y2="13" stroke="${col}" stroke-width="1.2" opacity="${sel?0.9:0.7}" pointer-events="none"/>`;
-
-      // Solar panels — left arm
-      s += `<rect x="-18" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
-      s += `<rect x="-24" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
-      // Solar panels — right arm
-      s += `<rect x="13" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.85:0.55}" pointer-events="none"/>`;
-      s += `<rect x="19" y="-4" width="5" height="8" rx="1" fill="${col}" opacity="${sel?0.75:0.45}" pointer-events="none"/>`;
-
-      // Docking arm (extending down)
-      s += `<rect x="-1.5" y="7" width="3" height="7" fill="${col}" opacity="${sel?0.8:0.5}" pointer-events="none"/>`;
-      s += `<rect x="-4" y="13" width="8" height="2.5" rx="1" fill="${col}" opacity="${sel?0.7:0.4}" pointer-events="none"/>`;
-
-      // Antenna (top)
-      s += `<line x1="0" y1="-14" x2="0" y2="-19" stroke="${col}" stroke-width="0.8" opacity="0.6" pointer-events="none"/>`;
-      s += `<circle cx="0" cy="-20" r="1.2" fill="${col}" opacity="0.7" pointer-events="none"/>`;
-
-      s += `</g>`;
-
-      // Label
-      if(loc.hook) s += `<text x="${nx+20}" y="${ny-14}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
-      const nameColor = '#E8A020';
-      s += `<text x="${nx+28}" y="${ny+4}" text-anchor="start" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
-
-    } else if(loc.surface){
-      // ── Surface-anchored location (sits directly on the planet) ──
-      const r = 7; // smaller than orbiting nodes — they're packed onto a small visible disc
-      if(isSelected){
-        s += `<circle cx="${nx}" cy="${ny}" r="${r+8}" fill="${loc.color}" opacity="0.15" pointer-events="none"/>`;
-        s += `<circle cx="${nx}" cy="${ny}" r="${r+4}" fill="${loc.color}" opacity="0.2" pointer-events="none"/>`;
-      }
-      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'55' : '#0d1828dd'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.3}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
-      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?3:1.6}" fill="${loc.color}" opacity="${isSelected?0.95:0.7}" pointer-events="none"/>`;
-
-      if(loc.hook) s += `<text x="${nx+r+1}" y="${ny-r}" fill="#E8A020" font-size="10" font-weight="700" pointer-events="none">!</text>`;
-
-      // Label placed to whichever side has more room, based on offset direction
-      const labelDist = r + 4;
-      let lx, ly, anchor;
-      if(loc.sx >= 0){ lx = nx + labelDist; anchor = 'start'; }
-      else { lx = nx - labelDist; anchor = 'end'; }
-      ly = ny + (loc.sy < -0.3 ? -2 : loc.sy > 0.3 ? 12 : 4);
-      const nameColor = loc.hook ? '#E8A020' : loc.color;
-      // Small text-shadow effect via duplicate dark text underneath, so labels
-      // stay readable against the busy planet texture
-      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="#05070a" font-size="9" font-family="monospace" font-weight="700" pointer-events="none" opacity="0.6" stroke="#05070a" stroke-width="3">${loc.name}</text>`;
-      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
-
-    } else {
-      // Regular orbiting location node
-      const r = 9;
-      if(isSelected){
-        s += `<circle cx="${nx}" cy="${ny}" r="${r+10}" fill="${loc.color}" opacity="0.12" pointer-events="none"/>`;
-        s += `<circle cx="${nx}" cy="${ny}" r="${r+5}" fill="${loc.color}" opacity="0.18" pointer-events="none"/>`;
-      }
-      s += `<circle cx="${nx}" cy="${ny}" r="${r}" fill="${isSelected ? loc.color+'44' : '#0d1828'}" stroke="${loc.color}" stroke-width="${isSelected?2:1.2}" data-loc="${loc.id}" class="loc-node" style="cursor:pointer"/>`;
-      s += `<circle cx="${nx}" cy="${ny}" r="${isSelected?4:2}" fill="${loc.color}" opacity="${isSelected?0.9:0.6}" pointer-events="none"/>`;
-
-      if(loc.hook) s += `<text x="${nx+r+2}" y="${ny-r+1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
-
-      const cosA = Math.cos(rad), sinA = Math.sin(rad);
-      const labelDist = r + 5;
-      let lx, ly, anchor;
-      if(Math.abs(cosA) > 0.3){
-        lx = nx + (cosA > 0 ? labelDist : -labelDist);
-        ly = ny + (Math.abs(sinA) > 0.6 ? (sinA > 0 ? 12 : -4) : 4);
-        anchor = cosA > 0 ? 'start' : 'end';
-      } else {
-        lx = nx; ly = ny + (sinA > 0 ? r+13 : -(r+4)); anchor = 'middle';
-      }
-      const nameColor = loc.hook ? '#E8A020' : loc.color;
-      s += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="${nameColor}" font-size="9" font-family="monospace" font-weight="${isSelected?'700':'400'}" pointer-events="none">${loc.name}</text>`;
-    }
-
-    // Lock badge — overlaid on top of either node type, player-only, unrevealed only
-    if(isLocked){
-      const bx = loc.isStation ? nx+13 : loc.surface ? nx+6 : nx+9;
-      const by = loc.isStation ? ny-13 : loc.surface ? ny-6 : ny-9;
-      s += `<circle cx="${bx}" cy="${by}" r="7" fill="#0a0c12" stroke="#555570" stroke-width="1" pointer-events="none"/>`;
-      s += `<text x="${bx}" y="${by+3}" text-anchor="middle" font-size="8" pointer-events="none">🔒</text>`;
-    }
-  });
-
-  svg.innerHTML = s;
-
-  // Pallor click
-  svg.querySelectorAll('.body-node[data-body="pallor"]').forEach(el => {
-    el.addEventListener('click', selectPallor);
-    el.addEventListener('touchend', e => { e.preventDefault(); selectPallor(); });
-  });
-
-  // Station icon click
-  svg.querySelectorAll('#station-icon-group').forEach(el => {
-    el.addEventListener('click', () => selectLoc(el.getAttribute('data-loc')));
-    el.addEventListener('touchend', e => { e.preventDefault(); selectLoc(el.getAttribute('data-loc')); });
-  });
-
-  svg.querySelectorAll('.loc-node').forEach(el => {
-    el.addEventListener('click', () => selectLoc(el.getAttribute('data-loc')));
-    el.addEventListener('touchend', e => { e.preventDefault(); selectLoc(el.getAttribute('data-loc')); });
-  });
-}
-
-function selectPallor(){
-  const pallor = getBodies().find(b => b.id === 'pallor');
-  if(!pallor) return;
-  selectedLoc = null;
-  pallorSelected = true;
-  document.getElementById('aur-dname').textContent = 'PALLOR';
-  document.getElementById('aur-dname').style.color = '#B0B0B0';
-  document.getElementById('aur-dtype').textContent = 'MOON · TIDALLY LOCKED · Y200000-0';
-  document.getElementById('aur-overview').classList.add('v-hidden');
-  document.getElementById('btn-enter-station').classList.add('v-hidden');
-  const det = document.getElementById('aur-loc-detail');
-  det.classList.remove('v-hidden');
-  const pm = pmCheck.checked;
-  const pDescKey = 'loc-pallor-desc';
-  designOriginalRegistry[pDescKey] = pallor.desc;
-  const pDescText = resolveContent(pDescKey, pallor.desc);
-  let pHTML = `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
-    <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
-    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(pDescKey, pallor.desc, pDescText)}</div>
-  </div>`;
-  if(!pm && pallor.refNote){
-    const pRefKey = 'loc-pallor-refNote';
-    designOriginalRegistry[pRefKey] = pallor.refNote;
-    const pRefText = resolveContent(pRefKey, pallor.refNote);
-    pHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(pRefKey, pallor.refNote, pRefText)}</div>`;
-  }
-  det.innerHTML = pHTML;
-  buildAureliaMap();
-}
-
-function selectLoc(id){
-  selectedLoc = id;
-  pallorSelected = false;
-  const loc = AURELIA_LOCS.find(l => l.id === id);
-  if(!loc) return;
-  buildAureliaMap();
-
-  document.getElementById('aur-overview').classList.add('v-hidden');
-  const det = document.getElementById('aur-loc-detail');
-  det.classList.remove('v-hidden');
-
-  const nm = document.getElementById('aur-dname');
-  nm.textContent = loc.name.toUpperCase();
-  nm.style.color = loc.color;
-  document.getElementById('aur-dtype').textContent = loc.tag;
-
-  const pm = pmCheck.checked;
-
-  // ── Reveal gate ──────────────────────────────────────────
-  if(pm && !isRevealed(id)){
-    document.getElementById('btn-enter-station').classList.add('v-hidden');
-    det.innerHTML = `<div class="empty" style="height:200px"><div class="empty-icon">🔒</div>
-      <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
-      <div style="font-size:12px;max-width:200px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
-    setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
-    return;
-  }
-
-  // Show/hide Enter Station button
-  const stBtn = document.getElementById('btn-enter-station');
-  loc.isStation ? stBtn.classList.remove('v-hidden') : stBtn.classList.add('v-hidden');
-
-  let detHTML = '';
-  if(!pm){
-    const rev = isRevealed(id);
-    detHTML += `<div class="reveal-toggle-row">
-      <span class="reveal-toggle-lbl">👁 Player visibility</span>
-      <div style="display:flex;gap:6px">
-        <button class="reveal-btn ${rev?'is-revealed':'is-hidden'}" onclick="toggleReveal('${id}')">${rev?'REVEALED ✓':'HIDDEN — Reveal'}</button>
-        <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
-      </div>
-    </div>`;
-  }
-  detHTML += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px"><div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div><div class="s-desc" style="font-size:12px;line-height:1.65">${(() => {
-    const lk = 'loc-'+id+'-desc';
-    designOriginalRegistry[lk] = loc.desc;
-    const t = resolveContent(lk, loc.desc);
-    return designWrap(lk, loc.desc, t.split('\n').join('<br>'));
-  })()}</div></div>`;
-  if(!pm && loc.refNote){
-    const lrk = 'loc-'+id+'-refNote';
-    designOriginalRegistry[lrk] = loc.refNote;
-    const rt = resolveContent(lrk, loc.refNote);
-    detHTML += `<div class="s-blk ref"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(lrk, loc.refNote, rt)}</div>`;
-  }
-  det.innerHTML = detHTML;
-
-  setBreadcrumb([{label:'Aurelian System',fn:'goSystem'},{label:'Aurelia',fn:'goAurelia'}], loc.name);
-}
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// UPDATED VIEW SWITCHING — add Aurelia as intermediary
+// AURELIA NAVIGATION — now a thin wrapper over the generic body view
 // ═══════════════════════════════════════════════════════════════════════════
-function goAurelia(){
-  playViewTransition(() => {
-    currentView = 'aurelia';
-    document.getElementById('view-system').classList.add('v-hidden');
-    document.getElementById('view-station').classList.add('v-hidden');
-    document.getElementById('view-body').classList.add('v-hidden');
-    document.getElementById('view-aurelia').classList.remove('v-hidden');
-    document.getElementById('view-aurelia').style.display = 'flex';
-    document.getElementById('hdr-title').textContent = 'AURELIA';
-    setBreadcrumb([{label:'Aurelian System',fn:'goSystem'}], 'Aurelia');
-    buildAureliaMap();
-  });
-}
+// Aurelia is no longer a bespoke intermediary view: it is just the most richly
+// populated instance of the generic body-and-location engine. goAurelia is kept
+// as a named entry point because breadcrumbs (enterStation) and navBack call it.
+function goAurelia(){ goBodyView('aurelia'); }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INITIATIVE TRACKER (referee-only)
@@ -4829,6 +5101,64 @@ const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
 const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
 
+// ── Hosted planet-surface globe textures ────────────────────────────────────
+// Pre-rendered lit globe PNGs in the public Supabase Storage bucket "globes".
+// The catalog SELF-POPULATES at runtime by listing the bucket (an anon SELECT
+// policy on the globes bucket allows this), so uploading/removing textures needs
+// no code change. A body picks one by filename (body.texture); textureUrlFor()
+// resolves it to the encoded public URL. Resolution order:
+//   body.textureUrl (full URL escape hatch) > '__none__' (force procedural) >
+//   body.texture (explicit catalog file) > auto-match by planet type.
+const TEXTURE_BASE = SUPABASE_URL + '/storage/v1/object/public/globes/';
+let textureCatalog = []; // filenames in the globes bucket, loaded at runtime
+
+async function loadTextureCatalog(){
+  try {
+    const res = await fetch(SUPABASE_URL + '/storage/v1/object/list/globes', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
+    });
+    if(!res.ok) return;
+    const list = await res.json();
+    textureCatalog = (Array.isArray(list) ? list : [])
+      .filter(o => o && o.id && /\.(png|jpe?g|webp)$/i.test(o.name))  // real image files only (skip folders/placeholders)
+      .map(o => o.name);
+  } catch(e){ /* offline / blocked — leave empty; bodies with an explicit texture still resolve */ }
+}
+
+// Which texture category best fits a body, from its type keywords / disc style.
+function defaultTextureCategory(body){
+  const t = (body.type || '').toLowerCase();
+  const style = bodyDiscStyle(body);
+  if(style === 'star' || style === 'belt' || style === 'moon') return null; // keep procedural
+  if(style === 'gasgiant' || /gas giant|ice giant/.test(t)) return 'gaseous';
+  if(/volcan|scorch|lava|molten/.test(t)) return 'volcanic';
+  if(/desert|arid|dune|barren/.test(t)) return 'desert';
+  if(/ocean|jewel|garden|terran|earth|temperate/.test(t)) return 'terran';
+  if(style === 'ice' || /ice|frozen|glacial|tundra/.test(t)) return 'ice';
+  if(style === 'ocean') return 'terran';
+  if(style === 'rock') return 'desert';
+  return null;
+}
+// Pick a catalog file for a body's auto-category, deterministically varied by id
+// so two same-type worlds don't always get the identical globe.
+function defaultTextureFile(body){
+  const cat = defaultTextureCategory(body);
+  if(!cat) return null;
+  const matches = textureCatalog.filter(f => f.toLowerCase().startsWith(cat));
+  if(!matches.length) return null;
+  const seed = (typeof seedFromString === 'function') ? Math.abs(seedFromString(body.id)) : 0;
+  return matches[seed % matches.length];
+}
+function textureUrlFor(body){
+  if(body.textureUrl) return body.textureUrl;                  // explicit full URL wins
+  if(body.texture === '__none__') return null;                 // forced procedural
+  if(body.texture) return TEXTURE_BASE + encodeURIComponent(body.texture); // explicit catalog file
+  const auto = defaultTextureFile(body);                       // auto-match by type
+  return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
+}
+
 const supaStorage = {
   async get(key, shared){
     try {
@@ -4956,7 +5286,7 @@ async function pollRevealState(){
     if(changed){
       revealedAreas = fresh;
       if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-      if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -4980,10 +5310,8 @@ async function pollRevealState(){
     if(overridesChanged){
       contentOverrides = freshOverrides;
       if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-      if(currentView === 'aurelia' && pallorSelected) selectPallor();
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -4999,10 +5327,8 @@ async function pollRevealState(){
       contentAdditions = freshAdditions;
       contentDeletions = freshDeletions;
       if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-      if(currentView === 'aurelia' && pallorSelected) selectPallor();
       if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -5051,7 +5377,7 @@ async function manualRefresh(){
     const fresh = res ? JSON.parse(res.value) : {};
     revealedAreas = fresh;
     if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-    if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+    if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     btn.classList.add('just-updated');
     btn.innerHTML = '<span class="refresh-icon">✓</span> Updated';
     setTimeout(() => {
@@ -5075,6 +5401,23 @@ function isRevealed(areaId){
   return !!revealedAreas[areaId];
 }
 
+// Shared referee "player visibility" control — a keyboard-accessible switch
+// (reusing .theme-toggle) wired to toggleReveal. Used by both the station and
+// Aurelia detail panels so the affordance is identical in both places.
+function revealToggleRowHTML(id){
+  const rev = isRevealed(id);
+  return `<div class="reveal-toggle-row">
+      <span class="reveal-toggle-lbl">👁 Player visibility — ${rev ? '<b style="color:#4CAF50">revealed</b>' : '<b style="color:#d45050">hidden</b>'}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="theme-toggle ${rev?'on':''}" role="switch" tabindex="0" aria-checked="${rev}"
+             title="${rev ? 'Revealed to players — tap to hide' : 'Hidden from players — tap to reveal'}"
+             onclick="toggleReveal('${id}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReveal('${id}');}"><div class="theme-toggle-knob"></div></div>
+        <button class="reveal-btn" style="background:transparent;color:var(--tx1);border-color:var(--bd0)" onclick="hideAllAreas()" title="Reset all areas to hidden, for testing">Hide All</button>
+      </div>
+    </div>`;
+}
+
 function toggleReveal(areaId){
   if(!isReferee()) return; // safety — only referee can toggle
   revealedAreas[areaId] = !revealedAreas[areaId];
@@ -5082,7 +5425,7 @@ function toggleReveal(areaId){
   // The save happens in the background; if it fails, the button still
   // reflects local intent and a retry happens on the next poll cycle.
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
-  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
   saveRevealState(); // fire-and-forget
 }
 
@@ -5091,7 +5434,7 @@ function hideAllAreas(){
   if(!confirm('Hide all areas and locations from players? This resets the reveal state for testing.')) return;
   revealedAreas = {};
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
-  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); }
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
   saveRevealState();
 }
 
@@ -5129,6 +5472,10 @@ function resetCampaign(){
   bodyAdditions = {};
   bodyDeletions = {};
   bodyPropertyOverrides = {};
+  locationAdditions = {};
+  locationDeletions = {};
+  locationPropertyOverrides = {};
+  selectedBodyLoc = null;
   questLog = [];
 
   // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
@@ -5141,6 +5488,9 @@ function resetCampaign(){
   saveBodyAdditions();
   saveBodyDeletions();
   saveBodyPropertyOverrides();
+  saveLocationAdditions();
+  saveLocationDeletions();
+  saveLocationPropertyOverrides();
   saveQuestLog();
 
   // Re-render everything currently visible
@@ -5150,7 +5500,6 @@ function resetCampaign(){
   renderInit();
   if(questPanelOpen) renderQuestPanel();
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
-  if(currentView === 'aurelia') { buildAureliaMap(); if(selectedLoc) selectLoc(selectedLoc); if(pallorSelected) selectPallor(); }
   if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
   if(currentView === 'body'){ if(selectedBody && getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
 
@@ -5514,23 +5863,25 @@ function buildSearchIndex(){
     }
   });
 
-  // ── Aurelia locations (Pallor lives in BODIES, handled separately below) ──
-  AURELIA_LOCS.forEach(loc => {
-    idx.push({type:'Location', name:loc.name, sub:'Aurelia', nav:{view:'aurelia', locId:loc.id}});
+  // ── Locations on/around every body (generic — any world can own them) ──
+  getBodies().forEach(b => {
+    effectiveLocations(currentSystemId, b.id).forEach(loc => {
+      idx.push({type:'Location', name:loc.name, sub:b.name, nav:{view:'body', bodyId:b.id, locId:loc.id}});
+    });
   });
 
-  // ── System bodies (includes Pallor) ──
+  // ── System bodies (includes moons like Pallor) ──
   getBodies().forEach(b => {
-    idx.push({type:'System Body', name:b.name, sub:b.type||'', nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+    idx.push({type:'System Body', name:b.name, sub:b.type||'', nav:{view:'system', bodyId:b.id}});
     if(b.npcs && ref){
       b.npcs.forEach((n,i) => {
-        idx.push({type:'NPC', name:n.name, sub:b.name, nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+        idx.push({type:'NPC', name:n.name, sub:b.name, nav:{view:'system', bodyId:b.id}});
       });
     }
     if(b.checks && ref){
       const chkBaseKey = b.id+'-check-'; // matches the body-detail check key pattern... approximate, name itself is what's searched
       b.checks.forEach((c,i) => {
-        idx.push({type:'Skill Check', name:c.skill, sub:b.name, nav:{view:'system', bodyId:b.id, isPallor: b.id==='pallor'}});
+        idx.push({type:'Skill Check', name:c.skill, sub:b.name, nav:{view:'system', bodyId:b.id}});
       });
     }
   });
@@ -5554,12 +5905,19 @@ function navigateToSearchResult(nav){
       selArea(nav.areaId);
       if(nav.subId) setTimeout(() => selSub(nav.subId), 60);
     }, needsSwitch ? 220 : 0);
-  } else if(nav.view === 'aurelia'){
-    if(needsSwitch) goAurelia();
-    setTimeout(() => selectLoc(nav.locId), needsSwitch ? 220 : 0);
+  } else if(nav.view === 'body'){
+    // Locations now live in the generic body close-up. Switch to the body view
+    // (with a transition if we're elsewhere), then open the location if given.
+    if(currentView !== 'body'){
+      goBodyView(nav.bodyId);
+      if(nav.locId) setTimeout(() => selectBodyLocation(nav.locId), 220);
+    } else {
+      buildBodyView(nav.bodyId);
+      if(nav.locId) selectBodyLocation(nav.locId);
+    }
   } else if(nav.view === 'system'){
     if(needsSwitch) goSystem();
-    setTimeout(() => { nav.isPallor ? selectPallor() : selectBody(nav.bodyId); }, needsSwitch ? 220 : 0);
+    setTimeout(() => selectBody(nav.bodyId), needsSwitch ? 220 : 0);
   }
 }
 
@@ -5728,30 +6086,17 @@ function renderSettingsMenu(showArchon){
       </div>
     </div>`;
 
-  if(!showArchon){ html += kbdSettingsHTML(); card.innerHTML = html; return; }
+  // Settings is configuration-only now: Display + keyboard shortcuts for
+  // everyone. Referee tools (design mode), morality, and the animation /
+  // orbital-ring toggles live in the Referee menu; campaign-editing tools
+  // live in the Design menu. The showArchon arg is kept for back-compat.
+  html += kbdSettingsHTML();
+  card.innerHTML = html;
+}
 
-  // ── Referee Tools section ─────────────────────────────────────────────
-  const dmOn = designModeOn;
-  html += `
-    <div class="settings-section-lbl">Referee Tools</div>
-    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
-      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">
-        ✏ Design Mode${dmOn ? ' — ON' : ''}
-      </span>
-      <div class="theme-toggle" style="background:${dmOn ? '#2A1A3B' : 'var(--bg0)'};border-color:${dmOn ? '#9B59B6' : 'var(--bd0)'}">
-        <div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div>
-      </div>
-    </div>
-    ${dmOn ? `
-    <div class="settings-row" style="cursor:pointer;padding-top:4px" onclick="closeSettingsMenu();openRemovedItemsPanel()">
-      <span class="settings-row-label" style="color:var(--tx1);font-size:10px">🗑 Show Removed Items</span>
-      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
-    </div>` : ''}
-    <div class="settings-row" style="cursor:pointer;margin-top:4px" onclick="closeSettingsMenu();resetCampaign()">
-      <span class="settings-row-label" style="color:#d45050;font-size:10px">⟲ Reset Campaign</span>
-      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
-    </div>`;
-
+// Builds the Archon morality block (totals, axes, log, draft form). Extracted
+// so the Referee menu renders the same widget that used to live in Settings.
+function renderArchonSectionHTML(){
   // ── Archon Morality Tracker section ──
   const totals = archonAxisTotals();
   const grand  = archonGrandTotal(totals);
@@ -5806,7 +6151,7 @@ function renderSettingsMenu(showArchon){
   const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
   const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
 
-  html += `
+  return `
     <div class="settings-section-lbl">Archon Collective — Morality</div>
 
     <div class="archon-total-row">
@@ -5835,11 +6180,6 @@ function renderSettingsMenu(showArchon){
 
     <div class="archon-divider"></div>
     <div class="archon-log-section">${logHTML}</div>`;
-
-  // ── Keyboard shortcuts section ──
-  html += kbdSettingsHTML();
-
-  card.innerHTML = html;
 }
 
 function escArchon(s){
@@ -5880,7 +6220,7 @@ function archonStep(key, delta){
 
 function archonResetDraft(){
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
-  renderSettingsMenu(true);
+  renderRefereeMenu();
   // textarea is intentionally cleared on reset
 }
 
@@ -5898,18 +6238,264 @@ function submitArchonEntry(){
   archonLog.push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
   saveArchonLog();
   archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
-  renderSettingsMenu(true);
+  renderRefereeMenu();
   showToast('Morality action logged');
 }
 
 function deleteArchonEntry(id){
   archonLog = archonLog.filter(e => e.id !== id);
   saveArchonLog();
-  renderSettingsMenu(true);
+  renderRefereeMenu();
 }
 
 function closeSettingsMenu(){
   document.getElementById('settings-menu').classList.add('hidden');
+}
+
+// ── Referee menu (always available to referee) ────────────────────────────
+// Houses the Design-Mode toggle, ambient-animation + orbital-ring toggles,
+// and the Archon morality tracker — all moved out of Settings so Settings
+// stays configuration-only.
+function openRefereeMenu(){
+  if(!isReferee()) return;
+  renderRefereeMenu();
+  document.getElementById('referee-menu').classList.remove('hidden');
+}
+function closeRefereeMenu(){
+  document.getElementById('referee-menu').classList.add('hidden');
+}
+// Inline Design-Mode passcode state. We can't use prompt()/alert() — they're
+// silently suppressed inside sandboxed preview iframes — so the passcode is
+// entered through a field rendered inline in the Referee menu instead.
+let designPasscodePrompt = false, designPasscodeError = false;
+
+function renderRefereeMenu(){
+  const card = document.getElementById('referee-menu-card');
+  if(!card) return;
+  const dmOn = designModeOn;
+  const animOn = animationsOn();
+  const ringsShown = ringsOn();
+  const passField = (designPasscodePrompt && !dmOn) ? `
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;padding-top:0">
+      <input id="design-pass-input" type="password" placeholder="Design Mode passcode" autocomplete="off"
+        style="width:100%;font-size:12px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid ${designPasscodeError?'#d45050':'var(--bd0)'};border-radius:5px;padding:6px 9px;outline:none"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitDesignPasscode();}else if(event.key==='Escape'){cancelDesignPasscode();}">
+      ${designPasscodeError ? '<span style="font-size:10px;color:#d45050;font-family:monospace">Incorrect passcode.</span>' : ''}
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button onclick="cancelDesignPasscode()" style="font-size:10px;font-family:monospace;background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:4px 10px;color:var(--tx1);cursor:pointer">Cancel</button>
+        <button onclick="submitDesignPasscode()" style="font-size:10px;font-family:monospace;background:#9B59B6;border:none;border-radius:4px;padding:4px 10px;color:#fff;cursor:pointer">Unlock</button>
+      </div>
+    </div>` : '';
+  card.innerHTML = `
+    <div class="settings-section-lbl">Referee Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
+      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
+      <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
+    </div>
+    ${passField}
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${animOn}" style="cursor:pointer" onclick="toggleAnim()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnim();}">
+      <span class="settings-row-label">✨ Animations${animOn ? '' : ' — off'}</span>
+      <div class="theme-toggle ${animOn?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${ringsShown}" style="cursor:pointer" onclick="toggleRings()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRings();}">
+      <span class="settings-row-label">🪐 Orbital Rings${ringsShown ? '' : ' — hidden'}</span>
+      <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="archon-divider"></div>
+    ${renderArchonSectionHTML()}`;
+}
+
+// ── Design menu (shown only while Design Mode is ON) ───────────────────────
+// Campaign-editing tools: removed items, full reset, and the dynamic
+// referee-box manager.
+function openDesignMenu(){
+  if(!isReferee() || !designModeOn) return;
+  renderDesignMenu();
+  document.getElementById('design-menu').classList.remove('hidden');
+}
+function closeDesignMenu(){
+  document.getElementById('design-menu').classList.add('hidden');
+}
+function renderDesignMenu(){
+  const card = document.getElementById('design-menu-card');
+  if(!card) return;
+  card.innerHTML = `
+    <div class="settings-section-lbl">Design Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
+      <span class="settings-row-label">🗑 Show Removed Items</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();resetCampaign()">
+      <span class="settings-row-label" style="color:#d45050">⟲ Reset Campaign</span>
+      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
+    </div>
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Referee Boxes</div>
+    ${renderBoxManagerHTML()}`;
+}
+
+// Re-render whichever menus are open (after a state change that affects them).
+function refreshOpenMenus(){
+  if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
+  if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Ambient-animation + orbital-ring toggles ──────────────────────────────
+// Implemented as classes on #root so they apply to every existing AND future
+// element via CSS selectors (no per-node bookkeeping). Persisted per device.
+function animationsOn(){ return !rootEl.classList.contains('anim-off'); }
+function ringsOn(){ return !rootEl.classList.contains('rings-off'); }
+function toggleAnim(){
+  const turnOff = animationsOn();
+  rootEl.classList.toggle('anim-off', turnOff);
+  try{ localStorage.setItem('aurelia_anim_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function toggleRings(){
+  const turnOff = ringsOn();
+  rootEl.classList.toggle('rings-off', turnOff);
+  try{ localStorage.setItem('aurelia_rings_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function applyRefereePrefs(){
+  try{
+    if(localStorage.getItem('aurelia_anim_off') === '1') rootEl.classList.add('anim-off');
+    if(localStorage.getItem('aurelia_rings_off') === '1') rootEl.classList.add('rings-off');
+  }catch(e){}
+}
+applyRefereePrefs();
+
+// ── Dynamic referee-box registry (Task 4) ─────────────────────────────────
+// A box "type" (Read Aloud, Referee Note, or any custom box) renders across
+// every celestial body and station area. Built-ins keep their original
+// content keys (body-<id>-readAloud / -refNote) for back-compat; custom boxes
+// store per-object content under body-<id>-box-<key> via the same
+// resolveContent/contentOverrides layer. Removed types are kept (restorable)
+// and their content is preserved.
+const BOX_TYPES_LS = 'aurelia_box_types';
+const DEFAULT_BOX_TYPES = [
+  { key:'readAloud', label:'Read Aloud',   cls:'read', refOnly:false, builtin:true },
+  { key:'refNote',   label:'Referee Note', cls:'ref',  refOnly:true,  builtin:true }
+];
+let boxTypesStore = null;
+function loadBoxTypes(){
+  if(boxTypesStore) return boxTypesStore;
+  let stored = null;
+  try{ stored = JSON.parse(localStorage.getItem(BOX_TYPES_LS) || 'null'); }catch(e){}
+  if(stored && Array.isArray(stored.active) && Array.isArray(stored.removed)){
+    boxTypesStore = stored;
+  } else {
+    boxTypesStore = { active: DEFAULT_BOX_TYPES.map(b => ({...b})), removed: [] };
+  }
+  return boxTypesStore;
+}
+function saveBoxTypes(){
+  try{ localStorage.setItem(BOX_TYPES_LS, JSON.stringify(boxTypesStore)); }catch(e){}
+}
+function getBoxTypes(){ return loadBoxTypes().active; }
+function getRemovedBoxTypes(){ return loadBoxTypes().removed; }
+function slugifyBox(label){
+  const base = (label||'box').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'box';
+  const st = loadBoxTypes();
+  const taken = k => st.active.some(b=>b.key===k) || st.removed.some(b=>b.key===k) || k==='readAloud' || k==='refNote';
+  let s = base, n = 2;
+  while(taken(s)){ s = base + '-' + n; n++; }
+  return s;
+}
+function addBoxType(){
+  const label = (prompt('New box name (e.g. "Tactics", "Lore", "Hooks"):', 'Custom Box') || '').trim();
+  if(!label) return;
+  const refOnly = !confirm('Should players see this box?\n\nOK = visible to players.\nCancel = referee-only.');
+  const st = loadBoxTypes();
+  st.active.push({ key: slugifyBox(label), label, cls: refOnly ? 'ref' : 'read', refOnly, builtin:false });
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function renameBoxType(key, val){
+  const b = getBoxTypes().find(x => x.key === key);
+  if(!b) return;
+  b.label = (val||'').trim() || b.label;
+  saveBoxTypes();
+  rerenderCurrentDetail();
+}
+function deleteBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.active.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  if(!confirm('Remove this box from every location? You can restore it later from Removed Items — saved content is kept.')) return;
+  const [removed] = st.active.splice(idx, 1);
+  removed._removedAt = Date.now();
+  st.removed.push(removed);
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function restoreBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.removed.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  const [b] = st.removed.splice(idx, 1);
+  delete b._removedAt;
+  st.active.push(b);
+  saveBoxTypes();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+  // If the user restored from the Removed Items panel, refresh it in place.
+  const dep = document.getElementById('design-edit-panel');
+  if(dep && !dep.classList.contains('hidden') && document.getElementById('design-edit-title').textContent === 'REMOVED ITEMS'){
+    openRemovedItemsPanel();
+  }
+  rerenderCurrentDetail();
+}
+function rerenderCurrentDetail(){
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+}
+function renderBoxManagerHTML(){
+  const st = loadBoxTypes();
+  const rows = st.active.map(b => `
+    <div class="boxmgr-row">
+      <input class="boxmgr-name" value="${(b.label||'').replace(/"/g,'&quot;')}" onchange="renameBoxType('${b.key}',this.value)">
+      <span class="boxmgr-vis">${b.refOnly ? 'ref-only' : 'players'}</span>
+      <button class="boxmgr-del" onclick="deleteBoxType('${b.key}')" title="Remove box type">🗑</button>
+    </div>`).join('');
+  const removed = st.removed.length ? `
+    <div style="font-size:9px;color:var(--tx1);margin:10px 0 2px;font-family:monospace;letter-spacing:1px">REMOVED — TAP TO RESTORE</div>
+    ${st.removed.map(b => `<div class="boxmgr-row"><span style="flex:1;font-size:11px;color:var(--tx1)">${b.label||''}</span><button class="boxmgr-del" style="color:#4CAF50;border-color:#4CAF50" onclick="restoreBoxType('${b.key}')" title="Restore">↺</button></div>`).join('')}` : '';
+  return `
+    <div style="font-size:10px;color:var(--tx1);margin-bottom:6px;line-height:1.5">Boxes appear on every planet, moon, and station area. Rename inline; remove to hide everywhere (saved text is preserved).</div>
+    ${rows}
+    <button class="design-add-btn" style="width:100%;margin-top:8px" onclick="addBoxType()">+ Add Box Type</button>
+    ${removed}`;
+}
+
+// Renders the registry's box types for one object. `keyFor(box)` maps a box to
+// its content-override key; `builtinValue(boxKey)` returns the object's
+// hardcoded value for built-in boxes. When onlyCustom is true the built-in
+// Read Aloud / Referee Note are skipped (station + Aurelia panels render those
+// in their own bespoke layout and only want the custom boxes appended). In
+// design mode empty boxes still render (with a placeholder) so the referee can
+// fill them in; in play mode empty boxes are hidden.
+function renderBoxTypesHTML(keyFor, builtinValue, pm, onlyCustom){
+  let html = '';
+  getBoxTypes().forEach(bt => {
+    if(onlyCustom && bt.builtin) return;
+    if(bt.refOnly && pm) return; // ref-only boxes are hidden from players
+    const key = keyFor(bt);
+    const original = bt.builtin ? ((builtinValue ? builtinValue(bt.key) : '') || '') : '';
+    designOriginalRegistry[key] = original;
+    const text = resolveContent(key, original);
+    const hasContent = (text || '').trim() !== '';
+    if(!hasContent && !designModeOn) return;
+    const cls = bt.cls === 'ref' ? 's-blk ref ref-only' : 's-blk read';
+    const disp = hasContent
+      ? (text || '').replace(/\n/g, '<br>')
+      : '<span style="opacity:.45;font-style:italic">(empty — tap ✎ to add)</span>';
+    html += `<div class="${cls}"><div class="s-blk-lbl">${escHtml(bt.label)}</div>${designWrap(key, original, disp)}</div>`;
+  });
+  return html;
 }
 
 function toggleLightMode(){
@@ -6037,7 +6623,7 @@ async function saveCurrentSheet(){
 // are a deliberate later stage rather than part of this first pass.
 //
 // Mechanism: original campaign content stays exactly where it already is,
-// hardcoded in MAIN / AURELIA_LOCS. This system adds a lookup layer in
+// hardcoded in MAIN / BASE_LOCATIONS. This system adds a lookup layer in
 // front of it — contentOverrides holds any edited values, keyed by a
 // stable content key like "elevator-read" or "loc-capitol-desc". Anywhere
 // the app displays one of these fields, it checks contentOverrides first
@@ -6171,6 +6757,85 @@ function effectiveBodies(sysId){
 // hardcoded BODIES array.
 function getBodies(){ return effectiveBodies(currentSystemId); }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LOCATION STORES  (system-scoped, Supabase-synced) — Phase 2 + Phase 3
+// ═══════════════════════════════════════════════════════════════════════════
+// Locations are places on/around a body (cities, stations, bases, mines,
+// research posts). Mirrors the body stores exactly. Namespaced by system id and
+// keyed by body id so any world in any system can own locations.
+//   BASE_LOCATIONS:            {sysId: {bodyId: [locObj, ...]}} hardcoded
+//   locationAdditions:         {sysId: {bodyId: [locObj, ...]}} referee-created
+//   locationDeletions:         {sysId: {locId: {loc, t, bodyId, wasAddition}}} tombstones
+//   locationPropertyOverrides: {sysId: {locId: {field:val}}}     edits to base locations
+// This is the same three-store shape the body engine uses (effectiveBodies),
+// so a base location can be edited (override) and removed (tombstone, restorable)
+// without ever mutating BASE_LOCATIONS — see Phase 3.2 for Aurelia's data.
+let locationAdditions = {};
+let locationDeletions = {};
+let locationPropertyOverrides = {};
+
+function baseLocationsFor(sysId, bodyId){
+  return ((BASE_LOCATIONS[sysId] || {})[bodyId]) || [];
+}
+
+async function loadLocationStores(){
+  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r ? JSON.parse(r.value) : {}; }
+  catch(e){ locationAdditions = {}; }
+  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r ? JSON.parse(r.value) : {}; }
+  catch(e){ locationDeletions = {}; }
+  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  catch(e){ locationPropertyOverrides = {}; }
+}
+async function saveLocationAdditions(){
+  try { await supaStorage.set('location-additions', JSON.stringify(locationAdditions), true); }
+  catch(e){ console.error('Location additions save failed', e); }
+}
+async function saveLocationDeletions(){
+  try { await supaStorage.set('location-deletions', JSON.stringify(locationDeletions), true); }
+  catch(e){ console.error('Location deletions save failed', e); }
+}
+async function saveLocationPropertyOverrides(){
+  try { await supaStorage.set('location-prop-overrides', JSON.stringify(locationPropertyOverrides), true); }
+  catch(e){ console.error('Location property overrides save failed', e); }
+}
+
+// Computed location set for a body: base locations (minus tombstoned ones, with
+// any property overrides applied) followed by referee-added locations (minus
+// tombstoned). Exactly mirrors effectiveBodies so add / edit / remove apply
+// retroactively to the original Aurelia locations too.
+function effectiveLocations(sysId, bodyId){
+  sysId = sysId || currentSystemId;
+  const dels = locationDeletions[sysId] || {};
+  const props = locationPropertyOverrides[sysId] || {};
+  const out = [];
+  baseLocationsFor(sysId, bodyId).forEach(l => {
+    if(dels[l.id]) return;
+    const ov = props[l.id];
+    out.push(ov ? Object.assign({}, l, ov) : l);
+  });
+  const adds = (locationAdditions[sysId] || {})[bodyId] || [];
+  adds.forEach(l => { if(!dels[l.id]) out.push(l); });
+  return out;
+}
+function isAddedLocation(sysId, locId){
+  const byBody = locationAdditions[sysId] || {};
+  return Object.values(byBody).some(arr => arr.some(l => l.id === locId));
+}
+// Find a location (effective, override-applied) + its bodyId anywhere in the
+// current system, searching both base and referee-added locations.
+function findLocation(locId){
+  const sysId = currentSystemId;
+  const bodyIds = new Set([
+    ...Object.keys(BASE_LOCATIONS[sysId] || {}),
+    ...Object.keys(locationAdditions[sysId] || {})
+  ]);
+  for(const bId of bodyIds){
+    const hit = effectiveLocations(sysId, bId).find(l => l.id === locId);
+    if(hit) return { loc: hit, bodyId: bId };
+  }
+  return null;
+}
+
 // Combines hardcoded items + additions, with deleted ones filtered out,
 // and a per-item key attached to each so the caller can wire up edit/
 // delete pencils consistently regardless of whether the item is original
@@ -6199,10 +6864,8 @@ async function deleteContentItem(key, item){
   await saveContentDeletions();
   showToast('Item removed', 'info');
   if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-  if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
 // Adds a brand-new blank item to the given list, saves it, re-renders so
@@ -6250,10 +6913,8 @@ async function restoreDeletedItem(key){
   await saveContentDeletions();
   closeRemovedItemsPanel();
   if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-  if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
 function openRemovedItemsPanel(){
@@ -6265,16 +6926,38 @@ function openRemovedItemsPanel(){
       bodyEntries.push({ sysId, bid, entry: bodyDeletions[sysId][bid] });
     });
   });
+  const removedBoxes = getRemovedBoxTypes();
+  // Removed locations across all systems
+  const locEntries = [];
+  Object.keys(locationDeletions || {}).forEach(sysId => {
+    Object.keys(locationDeletions[sysId] || {}).forEach(lid => {
+      locEntries.push({ sysId, lid, entry: locationDeletions[sysId][lid] });
+    });
+  });
   let html = '';
-  if(!keys.length && !bodyEntries.length){
+  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
-    // Removed bodies first (more significant), then content items
+    // Removed box types first, then bodies, then content items
+    const boxHtml = removedBoxes.map(b => `
+      <div class="design-history-item" onclick="restoreBoxType('${b.key}')">
+        <div class="design-history-label">${b._removedAt ? new Date(b._removedAt).toLocaleString()+' — ' : ''}tap to restore box type</div>
+        <div class="design-history-snippet">🗂 ${b.label||b.key}${b.refOnly?' (referee-only)':''}</div>
+      </div>`).join('');
+    // Removed bodies (more significant), then content items
     const bodyHtml = bodyEntries.map(({sysId, bid, entry}) => {
       const b = entry.body || {};
       const snippet = `🪐 ${b.name || bid}${b.uwpString && b.uwpString!=='—' ? ' · '+b.uwpString : ''}`;
       return `<div class="design-history-item" onclick="restoreDeletedBody('${sysId.replace(/'/g,"\\'")}','${bid.replace(/'/g,"\\'")}')">
         <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore body</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
+    const locHtml = locEntries.map(({sysId, lid, entry}) => {
+      const l = entry.loc || {};
+      const snippet = `📍 ${l.name || lid}${l.type ? ' · '+l.type : ''}`;
+      return `<div class="design-history-item" onclick="restoreDeletedLocation('${sysId.replace(/'/g,"\\'")}','${lid.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore location</div>
         <div class="design-history-snippet">${snippet.slice(0,140)}</div>
       </div>`;
     }).join('');
@@ -6292,7 +6975,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
-    html = bodyHtml + itemHtml;
+    html = boxHtml + bodyHtml + locHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
@@ -6325,35 +7008,66 @@ const DESIGN_MODE_CODE = 'ilovetwix2012!';
 function forceDesignModeOff(){
   if(!designModeOn) return;
   designModeOn = false;
+  designPasscodePrompt = false; designPasscodeError = false;
   rootEl.classList.remove('design-active');
-  // Re-render settings menu if open so the Design Mode row reflects the new state
-  if(!document.getElementById('settings-menu').classList.contains('hidden')){
-    renderSettingsMenu(true);
-  }
+  // Design tools are no longer reachable — close that menu if it's open.
+  closeDesignMenu();
+  refreshOpenMenus();
+}
+
+// Re-render the views that show design-mode affordances (pencils, add/remove
+// controls). Called whenever Design Mode flips on or off.
+function refreshDesignAffordances(){
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
 function toggleDesignMode(){
   if(!isReferee()) return;
   if(!designModeOn){
-    // Turning ON — require the passcode. Turning off is always immediate.
-    const entered = prompt('Enter the Design Mode passcode:');
-    if(entered !== DESIGN_MODE_CODE){
-      if(entered !== null) alert('Incorrect passcode.');
-      return;
+    // Turning ON requires the passcode. prompt() is silently suppressed inside
+    // sandboxed preview iframes, so show an inline passcode field in the
+    // Referee menu instead and finish in submitDesignPasscode().
+    designPasscodePrompt = !designPasscodePrompt; // click again to dismiss
+    designPasscodeError = false;
+    renderRefereeMenu();
+    if(designPasscodePrompt){
+      setTimeout(() => { const i = document.getElementById('design-pass-input'); if(i) i.focus(); }, 0);
     }
+    return;
   }
-  designModeOn = !designModeOn;
-  rootEl.classList.toggle('design-active', designModeOn);
-  // Re-render settings menu if open so Design Mode row and Removed Items row update
-  if(!document.getElementById('settings-menu').classList.contains('hidden')){
-    renderSettingsMenu(true);
+  // Turning OFF is always immediate.
+  designModeOn = false;
+  designPasscodePrompt = false; designPasscodeError = false;
+  rootEl.classList.remove('design-active');
+  closeDesignMenu();
+  refreshOpenMenus();
+  refreshDesignAffordances();
+}
+
+// Validates the inline Design-Mode passcode and enables design mode on success.
+function submitDesignPasscode(){
+  const input = document.getElementById('design-pass-input');
+  const val = input ? input.value : '';
+  if(val !== DESIGN_MODE_CODE){
+    designPasscodeError = true;
+    renderRefereeMenu();
+    setTimeout(() => { const i = document.getElementById('design-pass-input'); if(i) i.focus(); }, 0);
+    return;
   }
-  // Re-render whatever's currently visible so pencil icons appear/disappear
-  if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-      if(currentView === 'aurelia' && pallorSelected) selectPallor();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  designModeOn = true;
+  designPasscodePrompt = false;
+  designPasscodeError = false;
+  rootEl.classList.add('design-active'); // reveals the ✎ Design header icon
+  refreshOpenMenus();
+  refreshDesignAffordances();
+}
+
+function cancelDesignPasscode(){
+  designPasscodePrompt = false;
+  designPasscodeError = false;
+  renderRefereeMenu();
 }
 
 // Wraps a piece of displayed text with a pencil-edit affordance when
@@ -6597,10 +7311,8 @@ async function saveDesignEdit(){
 
   // Re-render the underlying view so the change is visible immediately
   if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-  if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
 async function revertDesignEdit(){
@@ -6611,10 +7323,8 @@ async function revertDesignEdit(){
   await saveContentOverrides();
   renderDesignEditFormFromValue(designEditOriginalTextFor(key));
   if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'aurelia' && selectedLoc) selectLoc(selectedLoc);
-  if(currentView === 'aurelia' && pallorSelected) selectPallor();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
 function toggleDesignHistory(){
@@ -7056,14 +7766,12 @@ checkIdentity();
 renderWhoAmI();
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
-  if(currentView === 'aurelia'){ buildAureliaMap(); }
 });
 loadClockState().then(() => { renderClock(); });
 loadContentOverrides().then(() => {
   if(currentView === 'station' && cur){ renderDetail(); }
-  if(currentView === 'aurelia' && selectedLoc){ selectLoc(selectedLoc); }
-  if(currentView === 'aurelia' && pallorSelected){ selectPallor(); }
   if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 });
 loadBodyStores().then(() => {
   // Rebuild the system view so any added/removed/edited bodies appear
@@ -7077,6 +7785,19 @@ loadBodyStores().then(() => {
     if(getBodies().find(b => b.id === selectedBody)) buildBodyView(selectedBody);
     else goSystem();
   }
+});
+loadLocationStores().then(() => {
+  // Locations render inside the body view; refresh it if that's where we are.
+  if(currentView === 'body' && selectedBody){
+    if(selectedBodyLoc && findLocation(selectedBodyLoc)) selectBodyLocation(selectedBodyLoc);
+    else buildBodyView(selectedBody);
+  }
+});
+loadTextureCatalog().then(() => {
+  // Re-render any view that draws textures once the catalog (and thus auto-by-type
+  // defaults) is known — the body close-up and the orrery both use globe images.
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  if(typeof buildOrrery === 'function') buildOrrery();
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 
@@ -7936,6 +8657,27 @@ function bodyTagSelect(selected){
     BODY_TAG_OPTIONS.map(t => `<option value="${t}"${t===selected?' selected':''}>${t||'(none)'}</option>`).join('')
   }</select>`;
 }
+// Grouped picker of the hosted globe textures (value = exact filename, '' = auto
+// by type, '__none__' = forced procedural). Populated from the runtime catalog.
+function bodyTextureSelect(selected){
+  const groups = {};
+  textureCatalog.forEach(f => {
+    const g = (f.match(/^[A-Za-z]+/) || ['Other'])[0];
+    (groups[g] = groups[g] || []).push(f);
+  });
+  let opts = `<option value=""${!selected?' selected':''}>(Auto — match planet type)</option>`;
+  opts += `<option value="__none__"${selected==='__none__'?' selected':''}>(None — procedural disc)</option>`;
+  Object.keys(groups).forEach(g => {
+    opts += `<optgroup label="${escAttr(g)}">`;
+    groups[g].forEach(f => {
+      const label = f.replace(/_1920x1080/i,'').replace(/\.(png|jpe?g|webp)$/i,'').trim();
+      opts += `<option value="${escAttr(f)}"${f===selected?' selected':''}>${escHtml(label)}</option>`;
+    });
+    opts += `</optgroup>`;
+  });
+  if(!textureCatalog.length) opts += `<optgroup label="(texture list still loading — reopen this editor)"></optgroup>`;
+  return `<select class="body-select" id="body-f-texture">${opts}</select>`;
+}
 function bodyOrbitSelect(selected){
   let opts = '';
   for(let i=1;i<=12;i++) opts += `<option value="${i}"${i===selected?' selected':''}>Orbit slot ${i}</option>`;
@@ -8025,6 +8767,10 @@ function renderBodyManualForm(prefill){
       <label class="npc-form-lbl">Read aloud</label>
       <textarea class="npc-form-textarea" id="body-f-readaloud" style="min-height:50px">${escHtml(d.readAloud)}</textarea>
     </div>
+    <div class="npc-form-row">
+      <label class="npc-form-lbl">Surface texture — hosted globe (optional)</label>
+      ${bodyTextureSelect(d.texture||'')}
+    </div>
     <div class="npc-creator-footer">
       <button class="npc-creator-btn" onclick="closeBodyCreator()">Cancel</button>
       <button class="npc-creator-btn primary" onclick="saveBodyFromForm()">${bodyEditTargetId?'Save Changes':'Add Body'}</button>
@@ -8052,6 +8798,9 @@ function collectBodyForm(){
   const name = (g('body-f-name')||'').trim();
   let type = (g('body-f-type')||'').trim();
   if(cls === 'belt' && !/asteroid belt/i.test(type)) type = type ? (type + ' · Asteroid Belt') : 'Asteroid Belt';
+  // Switching a body AWAY from belt: strip the auto-added belt suffix so the
+  // type string can't keep classifying it as a belt (the Scoria flip).
+  if(cls !== 'belt') type = type.replace(/\s*·\s*Asteroid Belt\s*$/i, '').trim();
   if(cls === 'gasgiant' && !type) type = 'Gas Giant';
   if(cls === 'moon' && !type) type = 'Moon';
   if(cls === 'star' && !type) type = 'Star';
@@ -8070,6 +8819,7 @@ function collectBodyForm(){
     desc: g('body-f-desc') || '',
     refNote: (g('body-f-refnote')||'').trim() || null,
     readAloud: (g('body-f-readaloud')||'').trim() || null,
+    texture: g('body-f-texture') || null,
     npcs: [], checks: [], events: []
   };
   if(cls === 'moon'){
@@ -8083,6 +8833,11 @@ function collectBodyForm(){
   }
   // Sensible display radius defaults by class
   obj.displayRadius = cls==='star'?18 : cls==='gasgiant'?16 : cls==='moon'?4 : 8;
+  // Persist an explicit disc style for the unambiguous classes so the renderer
+  // never has to re-guess from the free-text type (and so a body keeps its
+  // class consistently across the orrery and close-up views). "planet" stays
+  // null so ocean / ice / rock can still be derived from the type label.
+  obj.discStyle = ({ belt:'belt', gasgiant:'gasgiant', star:'star', moon:'moon' })[cls] || null;
   return obj;
 }
 
@@ -8207,7 +8962,11 @@ function openBodyEditor(id){
   if(!b){ showToast('Body not found', 'error'); return; }
   bodyEditTargetId = id;
   bodyCreatorMode = 'manual';
-  const cls = b.isStar?'star' : b.isMoon?'moon' : /asteroid belt/i.test(b.type||'')?'belt' : /gas giant/i.test(b.type||'')?'gasgiant' : 'planet';
+  // Honour an explicit discStyle first (set by prior edits) so the editor opens
+  // on the class the body actually renders as, then fall back to the type text.
+  const cls = b.isStar?'star' : b.isMoon?'moon'
+    : (b.discStyle==='belt' || /asteroid belt/i.test(b.type||''))?'belt'
+    : (b.discStyle==='gasgiant' || /gas giant/i.test(b.type||''))?'gasgiant' : 'planet';
   bodyCreatorDraft = {
     name:b.name, type:b.type, tag:b.tag||'', color:b.color, orbitAU:b.orbitAU,
     uwpString:b.uwpString, diameter:b.diameter, period:b.period, hook:!!b.hook,
@@ -8237,7 +8996,7 @@ async function commitBodyEdit(id, obj){
     // Base body — store only the changed metadata fields as overrides so the
     // body's checks/events/npcs and identity stay anchored to the base data.
     const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
-    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar'];
+    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
     const ov = {};
     fields.forEach(f => {
       const nv = obj[f];
@@ -8253,7 +9012,10 @@ async function commitBodyEdit(id, obj){
   }
   buildOrrery();
   showToast('Body updated');
-  selectBody(id);
+  // Refresh whichever view is showing this body so edits (texture included)
+  // appear immediately instead of needing a back-and-forth navigation.
+  if(currentView === 'body' && selectedBody === id) buildBodyView(id);
+  else selectBody(id);
 }
 
 async function deleteBody(id){
