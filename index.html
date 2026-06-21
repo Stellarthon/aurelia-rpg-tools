@@ -933,6 +933,177 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
   .ait-noise{opacity:.1}
 }
 
+/* ── Imperial date chip (header) + Calendar/Timeline panel ── */
+#impdate-wrap{display:flex;align-items:center;flex-shrink:0}
+#impdate-display{
+  font-family:monospace;font-size:13px;font-weight:700;color:var(--accentGold);
+  letter-spacing:1.5px;cursor:pointer;user-select:none;padding:3px 9px;border-radius:5px;
+  border:.5px solid var(--bd0);background:var(--bg0);white-space:nowrap
+}
+#impdate-display:hover{border-color:var(--accentGold)}
+#root.pm-active #impdate-display{cursor:pointer}
+.impd-lbl{font-size:8px;color:var(--tx1);letter-spacing:1px;margin-right:6px}
+
+#cal-wrap{
+  position:fixed;top:54px;left:360px;width:340px;height:470px;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:280px;min-height:160px;max-width:90vw;max-height:85vh
+}
+#cal-wrap.hidden{display:none}
+#cal-wrap.panel-collapsed{height:auto!important;min-height:0}
+#cal-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#cal-header:active{cursor:grabbing}
+#cal-title{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#cal-toggle{font-size:10px;color:var(--tx1)}
+#cal-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+#cal-body.collapsed{display:none}
+.cal-now{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:10px 12px;text-align:center}
+.cal-now-date{font-family:monospace;font-size:24px;font-weight:800;color:var(--accentGold);letter-spacing:2px}
+.cal-now-sub{font-size:10px;color:var(--tx1);margin-top:3px;letter-spacing:1px;text-transform:uppercase}
+.cal-controls{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.cal-btn-ctl{font-size:11px;font-family:monospace;color:var(--tx0);background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;padding:5px 10px;cursor:pointer}
+.cal-btn-ctl:hover{background:var(--bd0)}
+.cal-btn-ctl.wk{color:var(--accentGold);border-color:var(--accentGold)}
+.cal-set-row{display:flex;gap:6px;align-items:center;justify-content:center;font-size:11px;color:var(--tx1);flex-wrap:wrap}
+.cal-set-row input{width:62px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:4px 6px;font-family:monospace}
+.cal-tl-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px}
+.cal-ev{display:flex;gap:9px;padding:6px 1px;border-bottom:.5px solid var(--bd0);align-items:flex-start}
+.cal-ev.past{opacity:.62}
+.cal-ev-date{font-family:monospace;font-size:10px;color:var(--accentGold);white-space:nowrap;flex-shrink:0;width:56px;letter-spacing:.5px;padding-top:1px}
+.cal-ev-body{flex:1;min-width:0}
+.cal-ev-title{font-size:12px;color:var(--tx0);font-weight:600;word-break:break-word}
+.cal-ev-note{font-size:10px;color:var(--tx1);line-height:1.4;margin-top:2px;white-space:pre-wrap}
+.cal-ev-vis{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:var(--bgS);color:var(--txS);cursor:pointer;flex-shrink:0}
+.cal-ev-del{cursor:pointer;color:var(--tx1);font-size:12px;flex-shrink:0;line-height:1}
+.cal-ev-del:hover{color:#d45050}
+.cal-today-marker{display:flex;align-items:center;gap:8px;color:var(--accentGold);font-family:monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 0}
+.cal-today-marker::before,.cal-today-marker::after{content:'';flex:1;height:.5px;background:var(--accentGold);opacity:.45}
+.cal-add{display:flex;flex-direction:column;gap:6px;border-top:.5px solid var(--bd0);padding-top:9px;margin-top:2px}
+.cal-add input,.cal-add textarea{background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit;width:100%;box-sizing:border-box}
+.cal-add textarea{resize:vertical}
+.cal-add-row{display:flex;gap:6px}
+.cal-add-row input{width:58px}
+.cal-add-row input:last-child{width:auto}
+.cal-add-btn{background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px;font-size:11px;font-family:monospace;cursor:pointer}
+.cal-add-btn:hover{background:var(--accentGoldBg)}
+.cal-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:14px 0}
+#cal-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#cal-btn:hover{background:var(--bd0);color:var(--tx0)}
+#cal-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){
+  #cal-wrap{left:0;top:54px;width:300px;height:400px}
+}
+
+/* ── Discovery Log / Codex panel ── */
+/* z-index 75: right-side panel that must clear the #sys-detail z:70 stacking
+   context (like #ship-wrap), or it renders behind the detail column. */
+#disc-wrap{position:fixed;top:54px;right:0;width:362px;height:480px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:290px;min-height:160px;max-width:92vw;max-height:86vh}
+#disc-wrap.hidden{display:none}
+#disc-wrap.panel-collapsed{height:auto!important;min-height:0}
+#disc-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#disc-header:active{cursor:grabbing}
+#disc-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px;display:flex;align-items:center;gap:8px}
+#disc-count{font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace}
+#disc-toggle{font-size:10px;color:var(--tx1)}
+#disc-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+#disc-body.collapsed{display:none}
+.disc-card{background:var(--bg0);border-radius:7px;border-left:3px solid var(--bd0);padding:8px 10px}
+.disc-card.state-known{border-left-color:var(--accentGold)}
+.disc-card.state-rumoured{border-left-color:#9B59B6}
+.disc-card.state-hidden{border-left-color:#555570;opacity:.82}
+.disc-card-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.disc-title{font-size:12px;font-weight:700;color:var(--tx0);flex:1;min-width:0;word-break:break-word}
+.disc-when{font-family:monospace;font-size:9px;color:var(--accentGold);letter-spacing:.5px;flex-shrink:0}
+.disc-cat{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.cat-lore{background:var(--accentGoldBg);color:var(--accentGold)}
+.cat-faction{background:#3a1010;color:#ff8a8a}
+.cat-location{background:#0e2238;color:#74b6ff}
+.cat-tech{background:#08302a;color:#54d6c0}
+.cat-person{background:#241038;color:#c89cff}
+.disc-body-txt{font-size:11px;line-height:1.5;color:var(--tx0);margin-top:5px;white-space:pre-wrap}
+.disc-redacted{font-family:monospace;font-size:10px;color:#8a7fa0;letter-spacing:1px}
+.disc-ctl{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.disc-mini{font-size:9px;font-family:monospace;color:var(--tx1);background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:3px 7px;cursor:pointer}
+.disc-mini:hover{background:var(--bd0);color:var(--tx0)}
+.disc-mini.state-known{color:var(--accentGold);border-color:var(--accentGold)}
+.disc-mini.state-rumoured{color:#c89cff;border-color:#7a4cc0}
+.disc-mini.del:hover{color:#d45050;border-color:#d45050}
+.disc-add{display:flex;flex-direction:column;gap:6px;border-top:.5px solid var(--bd0);padding-top:9px;margin-top:3px}
+.disc-add-ttl{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--accentGold)}
+.disc-add input,.disc-add textarea,.disc-add select{background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit;width:100%;box-sizing:border-box}
+.disc-add textarea{resize:vertical}
+.disc-add-row{display:flex;gap:6px}
+.disc-add-row select{flex:0 0 auto;width:auto}
+.disc-add-row #disc-f-vis{flex:1}
+#disc-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#disc-btn:hover{background:var(--bd0);color:var(--tx0)}
+#disc-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#disc-wrap{right:0;top:54px;width:312px;height:420px}}
+
+/* ── Reputation tracker panel ── */
+/* z-index 75: clears the #sys-detail z:70 stacking context (right-side panel). */
+#rep-wrap{position:fixed;top:54px;right:0;width:350px;height:480px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:290px;min-height:160px;max-width:92vw;max-height:86vh}
+#rep-wrap.hidden{display:none}
+#rep-wrap.panel-collapsed{height:auto!important;min-height:0}
+#rep-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#rep-header:active{cursor:grabbing}
+#rep-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#rep-toggle{font-size:10px;color:var(--tx1)}
+#rep-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+#rep-body.collapsed{display:none}
+.rep-tl-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px;margin-top:4px}
+.rep-fac{background:var(--bg0);border-radius:7px;padding:8px 10px}
+.rep-fac-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.rep-fac-name{font-size:12px;font-weight:700;color:var(--tx0);word-break:break-word}
+.rep-band{font-size:10px;font-family:monospace;font-weight:700;letter-spacing:.5px;white-space:nowrap;flex-shrink:0}
+.rep-val{opacity:.85}
+.rep-meter{position:relative;height:7px;border-radius:4px;background:var(--bgS);margin-top:7px;overflow:hidden}
+.rep-meter-fill{height:100%;border-radius:4px}
+.rep-meter-zero{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--tx1);opacity:.5}
+.rep-fac-ctl{display:flex;gap:5px;margin-top:7px}
+.rep-addfac{display:flex;gap:6px;align-items:center}
+.rep-addfac input{flex:1;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit}
+.rep-mile{display:flex;gap:9px;padding:6px 1px;border-bottom:.5px solid var(--bd0);align-items:flex-start}
+.rep-mile-meta{font-size:10px;color:var(--tx1);margin-top:2px}
+.rep-mile-delta{font-family:monospace;font-weight:700;margin-left:4px}
+.rep-mile-delta.pos{color:#7fd07f}
+.rep-mile-delta.neg{color:#e08040}
+#rep-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#rep-btn:hover{background:var(--bd0);color:var(--tx0)}
+#rep-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#rep-wrap{right:0;top:54px;width:312px;height:420px}}
+
+/* ── Oracle (rumour & encounter generators) panel ── */
+#gen-wrap{position:fixed;top:54px;right:0;width:344px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:280px;min-height:120px;max-width:92vw;max-height:86vh}
+#gen-wrap.hidden{display:none}
+#gen-wrap.panel-collapsed{height:auto!important;min-height:0}
+#gen-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#gen-header:active{cursor:grabbing}
+#gen-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#gen-toggle{font-size:10px;color:var(--tx1)}
+#gen-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
+#gen-body.collapsed{display:none}
+.gen-sec-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px;margin-top:5px}
+.gen-result{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:9px 11px}
+.gen-result-text{font-size:12px;color:var(--tx0);line-height:1.5}
+.gen-meta{display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap}
+.gen-tag{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:var(--bgS);color:var(--txS)}
+.gen-diff{font-family:monospace;font-weight:700;font-size:10px;padding:1px 7px;border-radius:3px;letter-spacing:.5px}
+.gen-diff-0{background:#0e2a1a;color:#6fd08f}.gen-diff-1{background:#10240e;color:#9ad060}.gen-diff-2{background:#2a2410;color:#e0c050}.gen-diff-3{background:#2a1808;color:#e08040}.gen-diff-4{background:#2a0c0c;color:#ff6a6a}
+.gen-row-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:.5px}
+.gen-opts{display:flex;gap:5px;flex-wrap:wrap}
+.gen-opt{font-size:10px;font-family:monospace;padding:4px 10px;border-radius:5px;border:.5px solid var(--bd0);background:var(--bg0);color:var(--tx1);cursor:pointer}
+.gen-opt:hover{background:var(--bd0)}
+.gen-opt.on{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.gen-hint{font-size:10px;color:#e08040;font-style:italic;line-height:1.4}
+.gen-go{width:100%;background:transparent;color:var(--accentGold);border:1px solid var(--accentGold);border-radius:6px;padding:8px;font-size:11px;font-family:monospace;cursor:pointer;margin-top:4px}
+.gen-go:hover{background:var(--accentGoldBg)}
+#gen-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#gen-btn:hover{background:var(--bd0);color:var(--tx0)}
+#gen-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#gen-wrap{right:0;top:54px;width:312px}}
+
 /* ── Quest editor modal ── */
 #quest-edit-modal{
   position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:220;
@@ -1971,6 +2142,10 @@ input#ui-scale-range{
       <div id="clock-sep" class="ref-only"></div>
       <button id="clock-reset" class="ref-only" onclick="resetClock()" title="Reset to 00:00">↺</button>
     </div>
+    <!-- ── Imperial date chip ── -->
+    <div id="impdate-wrap">
+      <div id="impdate-display" onclick="toggleCalendarPanel()" title="Imperial date — open calendar">001-1105</div>
+    </div>
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
@@ -1983,6 +2158,10 @@ input#ui-scale-range{
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
+    <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
+    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Discovery Log / Codex — revealed lore & intel">🗂 Codex</button>
+    <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
+    <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
@@ -2428,6 +2607,46 @@ input#ui-scale-range{
       <div class="ait-sub">⏻ MANUAL OVERRIDE LOCKED</div>
       <div class="ait-x" onclick="muteAlertLocal()" title="Disable this effect on your device">✕ disable effect on this device</div>
     </div>
+  </div>
+
+  <!-- ── Imperial Calendar / Campaign Timeline panel ── -->
+  <div id="cal-wrap" class="hidden">
+    <div id="cal-header" onclick="toggleCalCollapse()">
+      <span id="cal-title">📅 IMPERIAL CALENDAR</span>
+      <span id="cal-toggle">▼</span>
+    </div>
+    <div id="cal-body"></div>
+    <div class="panel-resize-handle" id="cal-resize"></div>
+  </div>
+
+  <!-- ── Discovery Log / Codex panel ── -->
+  <div id="disc-wrap" class="hidden">
+    <div id="disc-header" onclick="toggleDiscCollapse()">
+      <span id="disc-title-lbl">🗂 CODEX <span id="disc-count">0</span></span>
+      <span id="disc-toggle">▼</span>
+    </div>
+    <div id="disc-body"></div>
+    <div class="panel-resize-handle" id="disc-resize"></div>
+  </div>
+
+  <!-- ── Reputation tracker panel ── -->
+  <div id="rep-wrap" class="hidden">
+    <div id="rep-header" onclick="toggleRepCollapse()">
+      <span id="rep-title-lbl">⚖ REPUTATION</span>
+      <span id="rep-toggle">▼</span>
+    </div>
+    <div id="rep-body"></div>
+    <div class="panel-resize-handle" id="rep-resize"></div>
+  </div>
+
+  <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
+  <div id="gen-wrap" class="hidden ref-only">
+    <div id="gen-header" onclick="toggleGenCollapse()">
+      <span id="gen-title-lbl">🎲 ORACLE</span>
+      <span id="gen-toggle">▼</span>
+    </div>
+    <div id="gen-body"></div>
+    <div class="panel-resize-handle" id="gen-resize"></div>
   </div>
 
   <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
@@ -5620,6 +5839,51 @@ async function pollRevealState(){
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Imperial date — players see the referee advance the campaign date
+  try {
+    const resDate = await supaStorage.get('imperial-date', true);
+    if(resDate){
+      const fresh = JSON.parse(resDate.value);
+      if(fresh.day !== imperialDate.day || fresh.year !== imperialDate.year){
+        imperialDate = fresh;
+        renderImperialDate();
+        if(calPanelOpen) renderCalendarPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Campaign timeline — players see new/revealed dated events
+  try {
+    const resEv = await supaStorage.get('campaign-events', true);
+    const freshEv = resEv ? JSON.parse(resEv.value) || [] : [];
+    if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
+      campaignEvents = freshEv;
+      if(calPanelOpen) renderCalendarPanel();
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Discovery log — players see entries the referee reveals (rumoured/known)
+  try {
+    const resDisc = await supaStorage.get('discovery-log', true);
+    const freshDisc = resDisc ? JSON.parse(resDisc.value) || [] : [];
+    if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
+      discoveryLog = freshDisc;
+      if(discPanelOpen) renderDiscoveryPanel();
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Reputation — players see standing shifts and revealed milestones
+  try {
+    const resRep = await supaStorage.get('reputation', true);
+    if(resRep){
+      const freshRep = JSON.parse(resRep.value);
+      if(JSON.stringify(freshRep) !== JSON.stringify(reputation)){
+        reputation = freshRep;
+        if(repPanelOpen) renderReputationPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
 }
 
 function startPolling(){
@@ -8322,6 +8586,684 @@ async function pollAlertState(){
   } catch(e){ /* silent — next poll retries */ }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPERIAL CALENDAR  (V1 — the campaign-date spine)
+// ───────────────────────────────────────────────────────────────────────────
+// Distinct from the intra-day station clock (clockMinutes / HH:MM): this is the
+// campaign-scale Traveller Imperial date, written DDD-YYYY (e.g. 114-1105). It
+// is the *source of truth* other features timestamp against — reputation
+// milestones {day,year}, discovery reveals — so it ships with a small public
+// API (imperialNow / formatImperial / imperialOrdinal / addImperialDays) for
+// them to compare and sort dates. Shared state in aurelia_state:
+//   'imperial-date'    → {day, year}
+//   'campaign-events'  → [{id, day, year, title, note, visibleTo}]
+// Referee advances the date (a jump = +1 week); players read it and poll for
+// changes on the existing 4s loop. Event visibility is gated by canSee().
+// ═══════════════════════════════════════════════════════════════════════════
+
+const IMPERIAL_YEAR_DAYS = 365;
+const IMPERIAL_WEEKDAYS = ['Wonday','Tuday','Thirday','Forday','Fiveday','Sixday','Senday'];
+
+let imperialDate = { day: 1, year: 1105 };
+let campaignEvents = [];
+let calPanelOpen = false;
+let calCollapsed = false;
+
+// ── Public date API (used by other features) ──
+function imperialNow(){ return { day: imperialDate.day, year: imperialDate.year }; }
+function imperialOrdinal(d){ return (d.year * IMPERIAL_YEAR_DAYS) + (d.day - 1); } // absolute day index
+function ordinalToImperial(n){ return { year: Math.floor(n / IMPERIAL_YEAR_DAYS), day: (n % IMPERIAL_YEAR_DAYS) + 1 }; }
+function addImperialDays(d, n){ return ordinalToImperial(imperialOrdinal(d) + n); }
+function formatImperial(d){ return String(d.day).padStart(3,'0') + '-' + d.year; }
+function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[(d.day - 2) % 7]; }
+
+// ── Persistence + sync ──
+async function loadImperialDate(){
+  try { const r = await supaStorage.get('imperial-date', true);
+    if(r) imperialDate = Object.assign(imperialDate, JSON.parse(r.value)); } catch(e){}
+}
+async function saveImperialDate(){
+  try { await supaStorage.set('imperial-date', JSON.stringify(imperialDate), true); }
+  catch(e){ console.error('Imperial date save failed:', e); }
+}
+async function loadCampaignEvents(){
+  try { const r = await supaStorage.get('campaign-events', true);
+    if(r) campaignEvents = JSON.parse(r.value) || []; } catch(e){ campaignEvents = []; }
+}
+async function saveCampaignEvents(){
+  try { await supaStorage.set('campaign-events', JSON.stringify(campaignEvents), true); }
+  catch(e){ console.error('Campaign events save failed:', e); }
+}
+
+// ── Header date chip ──
+function renderImperialDate(){
+  const el = document.getElementById('impdate-display');
+  if(!el) return;
+  el.innerHTML = `<span class="impd-lbl">IMP</span>${formatImperial(imperialDate)}`;
+  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + ' Imperial';
+}
+
+// ── Date mutation (referee) ──
+function advanceImperial(days){
+  if(!isReferee()) return;
+  imperialDate = addImperialDays(imperialDate, days);
+  afterDateChange();
+}
+function setImperialFromInputs(){
+  if(!isReferee()) return;
+  const d = parseInt(document.getElementById('cal-set-day').value, 10) || 1;
+  const y = parseInt(document.getElementById('cal-set-year').value, 10) || imperialDate.year;
+  imperialDate = { day: Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, d)), year: y };
+  afterDateChange();
+}
+function afterDateChange(){
+  renderImperialDate();
+  if(calPanelOpen) renderCalendarPanel();
+  saveImperialDate();
+}
+
+// ── Panel toggle / collapse (cloned from the quest panel) ──
+function toggleCalendarPanel(){
+  calPanelOpen = !calPanelOpen;
+  const w = document.getElementById('cal-wrap'), b = document.getElementById('cal-btn');
+  w.classList.toggle('hidden', !calPanelOpen);
+  if(b) b.classList.toggle('panel-open', calPanelOpen);
+  if(calPanelOpen) renderCalendarPanel();
+}
+function toggleCalCollapse(){
+  if(document.getElementById('cal-header').dataset.suppressClick === '1') return;
+  calCollapsed = !calCollapsed;
+  document.getElementById('cal-toggle').textContent = calCollapsed ? '▲' : '▼';
+  document.getElementById('cal-body').classList.toggle('collapsed', calCollapsed);
+  document.getElementById('cal-wrap').classList.toggle('panel-collapsed', calCollapsed);
+}
+
+// ── Render ──
+function calVisLabel(v){
+  if(v === 'referee') return 'Ref';
+  if(Array.isArray(v)) return v.map(n => n.split(' ')[0]).join('/') || 'None';
+  return 'All';
+}
+function renderCalEvent(e, ref, nowOrd){
+  const past = imperialOrdinal(e) <= nowOrd;
+  const visTag = ref ? `<span class="cal-ev-vis" onclick="cycleCalEventVis('${e.id}')" title="Click to change who can see this">${calVisLabel(e.visibleTo)}</span>` : '';
+  const del = ref ? `<span class="cal-ev-del" onclick="deleteCalEvent('${e.id}')" title="Delete event">✕</span>` : '';
+  return `<div class="cal-ev${past ? ' past' : ''}">
+    <span class="cal-ev-date">${formatImperial(e)}</span>
+    <div class="cal-ev-body"><div class="cal-ev-title">${escQH(e.title)}</div>${e.note ? `<div class="cal-ev-note">${escQH(e.note)}</div>` : ''}</div>
+    ${visTag}${del}
+  </div>`;
+}
+function renderCalendarPanel(){
+  const body = document.getElementById('cal-body');
+  if(!body) return;
+  const ref = isReferee();
+  const now = imperialNow(), nowOrd = imperialOrdinal(now);
+
+  const controls = ref ? `
+    <div class="cal-controls">
+      <button class="cal-btn-ctl" onclick="advanceImperial(-1)">− 1 Day</button>
+      <button class="cal-btn-ctl" onclick="advanceImperial(1)">+ 1 Day</button>
+      <button class="cal-btn-ctl wk" onclick="advanceImperial(7)" title="One jump ≈ one week">+ 1 Week ⟫</button>
+    </div>
+    <div class="cal-set-row">Set <input id="cal-set-day" type="number" min="1" max="365" value="${now.day}"> - <input id="cal-set-year" type="number" value="${now.year}"> <button class="cal-btn-ctl" onclick="setImperialFromInputs()">Go</button></div>` : '';
+
+  const visible = campaignEvents.filter(e => ref || canSee(e.visibleTo))
+    .slice().sort((a, b) => imperialOrdinal(a) - imperialOrdinal(b));
+  let tl = '';
+  if(!visible.length){
+    tl = `<div class="cal-empty">${ref ? 'No campaign events yet. Add one below.' : 'No events recorded.'}</div>`;
+  } else {
+    let placedNow = false;
+    visible.forEach(e => {
+      if(!placedNow && imperialOrdinal(e) > nowOrd){
+        tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+        placedNow = true;
+      }
+      tl += renderCalEvent(e, ref, nowOrd);
+    });
+    if(!placedNow) tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+  }
+
+  const addForm = ref ? `
+    <div class="cal-add">
+      <input id="cal-new-title" placeholder="Event title…" maxlength="80">
+      <div class="cal-add-row">
+        <input id="cal-new-day" type="number" min="1" max="365" value="${now.day}" title="Day">
+        <input id="cal-new-year" type="number" value="${now.year}" title="Year">
+        <input id="cal-new-vis" placeholder="all / referee / Rhett Calder" title="Who can see it" style="flex:1">
+      </div>
+      <textarea id="cal-new-note" placeholder="Note (optional)…" rows="2"></textarea>
+      <button class="cal-add-btn" onclick="addCalEvent()">+ Add to timeline</button>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="cal-now">
+      <div class="cal-now-date">${formatImperial(now)}</div>
+      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year} Imperial</div>
+    </div>
+    ${controls}
+    <div class="cal-tl-title">Campaign Timeline</div>
+    ${tl}
+    ${addForm}`;
+}
+
+// ── Event CRUD (referee) ──
+function parseCalVis(s){
+  s = (s || '').trim();
+  if(!s || s.toLowerCase() === 'all') return 'all';
+  if(s.toLowerCase() === 'referee' || s.toLowerCase() === 'ref') return 'referee';
+  return s.split(',').map(x => x.trim()).filter(Boolean);
+}
+function addCalEvent(){
+  if(!isReferee()) return;
+  const title = document.getElementById('cal-new-title').value.trim();
+  if(!title) return;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('cal-new-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('cal-new-year').value, 10) || imperialDate.year;
+  const note = document.getElementById('cal-new-note').value.trim();
+  const visibleTo = parseCalVis(document.getElementById('cal-new-vis').value);
+  campaignEvents.push({ id: 'ce_' + Date.now().toString(36), day, year, title, note, visibleTo });
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function deleteCalEvent(id){
+  if(!isReferee()) return;
+  campaignEvents = campaignEvents.filter(e => e.id !== id);
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function cycleCalEventVis(id){
+  if(!isReferee()) return;
+  const e = campaignEvents.find(x => x.id === id);
+  if(!e) return;
+  // all → referee → nav crew (Rhett + Cass) → all
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function calVisRaw(v){ if(v === 'referee') return 'referee'; if(Array.isArray(v)) return v.join(', '); return 'all'; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DISCOVERY LOG / CODEX  (V1–V2 — "fog of knowledge")
+// ───────────────────────────────────────────────────────────────────────────
+// Generalises the reveal-status mechanic into three-stage fog on knowledge
+// records. Each entry has a state: hidden (referee only) → rumoured (players
+// see the title; the body is redacted) → known (players see the full body).
+// Audience within rumoured/known is gated by canSee(). When the referee first
+// lifts an entry out of hidden it is stamped revealedAt={day,year} from the
+// Imperial calendar, so reveals can plot on the same campaign timeline.
+// Shared state in aurelia_state key 'discovery-log'; players poll on the 4s loop.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DISC_CATEGORIES = [['lore','Lore'],['faction','Faction'],['location','Location'],['tech','Tech'],['person','Person']];
+
+let discoveryLog = [];
+let discPanelOpen = false;
+let discCollapsed = false;
+let discEditingId = null;
+
+async function loadDiscoveryLog(){
+  try { const r = await supaStorage.get('discovery-log', true); if(r) discoveryLog = JSON.parse(r.value) || []; }
+  catch(e){ discoveryLog = []; }
+}
+async function saveDiscoveryLog(){
+  try { await supaStorage.set('discovery-log', JSON.stringify(discoveryLog), true); }
+  catch(e){ console.error('Discovery log save failed:', e); }
+}
+
+// Which fog stage does the CURRENT viewer see for this entry? null = not visible.
+function discViewerStage(e){
+  if(isReferee()) return 'known';
+  if(e.state === 'hidden') return null;
+  if(!canSee(e.visibleTo)) return null;
+  return e.state; // 'rumoured' | 'known'
+}
+function discStateLabel(s){ return {hidden:'Hidden',rumoured:'Rumoured',known:'Known'}[s] || s; }
+
+function toggleDiscoveryPanel(){
+  discPanelOpen = !discPanelOpen;
+  const w = document.getElementById('disc-wrap'), b = document.getElementById('disc-btn');
+  w.classList.toggle('hidden', !discPanelOpen);
+  if(b) b.classList.toggle('panel-open', discPanelOpen);
+  if(discPanelOpen) renderDiscoveryPanel();
+}
+function toggleDiscCollapse(){
+  if(document.getElementById('disc-header').dataset.suppressClick === '1') return;
+  discCollapsed = !discCollapsed;
+  document.getElementById('disc-toggle').textContent = discCollapsed ? '▲' : '▼';
+  document.getElementById('disc-body').classList.toggle('collapsed', discCollapsed);
+  document.getElementById('disc-wrap').classList.toggle('panel-collapsed', discCollapsed);
+}
+
+function renderDiscCard(e, ref){
+  const stage = ref ? e.state : discViewerStage(e);
+  const cat = DISC_CATEGORIES.find(c => c[0] === e.category);
+  const catTag = `<span class="disc-cat cat-${e.category || 'lore'}">${cat ? cat[1] : (e.category || '')}</span>`;
+  let bodyHTML;
+  if(!ref && stage === 'rumoured'){
+    bodyHTML = `<span class="disc-redacted">▓▓▓ UNCONFIRMED — details unknown ▓▓▓</span>`;
+  } else {
+    bodyHTML = e.body ? escQH(e.body).replace(/\n/g,'<br>') : (ref ? '<span class="disc-redacted">(no body yet)</span>' : '');
+  }
+  const when = e.revealedAt ? `<span class="disc-when" title="Revealed">${formatImperial(e.revealedAt)}</span>` : '';
+  const refCtl = ref ? `
+    <div class="disc-ctl">
+      <button class="disc-mini state-${e.state}" onclick="cycleDiscState('${e.id}')" title="Hidden → Rumoured → Known">${discStateLabel(e.state)}</button>
+      <button class="disc-mini" onclick="cycleDiscVis('${e.id}')" title="Who can see it">${calVisLabel(e.visibleTo)}</button>
+      <button class="disc-mini" onclick="editDiscEntry('${e.id}')" title="Edit">✏</button>
+      <button class="disc-mini del" onclick="deleteDiscEntry('${e.id}')" title="Delete">✕</button>
+    </div>` : '';
+  return `<div class="disc-card state-${ref ? e.state : stage}">
+    <div class="disc-card-hd">${catTag}<span class="disc-title">${escQH(e.title)}</span>${when}</div>
+    ${bodyHTML ? `<div class="disc-body-txt">${bodyHTML}</div>` : ''}
+    ${refCtl}
+  </div>`;
+}
+
+function renderDiscForm(){
+  const editing = discEditingId ? discoveryLog.find(e => e.id === discEditingId) : null;
+  const catOpts = DISC_CATEGORIES.map(c => `<option value="${c[0]}"${editing && editing.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const stateOpts = ['hidden','rumoured','known'].map(s => {
+    const sel = editing ? (editing.state === s) : (s === 'hidden');
+    return `<option value="${s}"${sel ? ' selected' : ''}>${discStateLabel(s)}</option>`;
+  }).join('');
+  return `<div class="disc-add">
+    <div class="disc-add-ttl">${editing ? 'Edit entry' : 'New entry'}</div>
+    <input id="disc-f-title" placeholder="Title…" maxlength="100" value="${editing ? escAttr(editing.title) : ''}">
+    <div class="disc-add-row">
+      <select id="disc-f-cat">${catOpts}</select>
+      <select id="disc-f-state" title="Fog stage">${stateOpts}</select>
+      <input id="disc-f-vis" placeholder="all / referee / Rhett Calder" value="${editing ? escAttr(calVisRaw(editing.visibleTo)) : ''}">
+    </div>
+    <textarea id="disc-f-body" rows="3" placeholder="Body / clue text…">${editing ? escQH(editing.body || '') : ''}</textarea>
+    <div class="disc-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="saveDiscEntry()">${editing ? 'Save changes' : '+ Add entry'}</button>
+      ${editing ? `<button class="disc-mini" onclick="cancelDiscEdit()">Cancel</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderDiscoveryPanel(){
+  const body = document.getElementById('disc-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = discoveryLog.filter(e => ref || discViewerStage(e));
+  const countEl = document.getElementById('disc-count');
+  if(countEl) countEl.textContent = visible.length;
+  let list;
+  if(!visible.length){
+    list = `<div class="cal-empty">${ref ? 'No entries yet. Add lore, intel, or clues below.' : 'Nothing uncovered yet.'}</div>`;
+  } else {
+    // Order: known first, then rumoured, then hidden (referee view); within, keep insertion order.
+    const rank = s => (s === 'known' ? 0 : s === 'rumoured' ? 1 : 2);
+    const sorted = visible.slice().sort((a, b) => rank(ref ? a.state : discViewerStage(a)) - rank(ref ? b.state : discViewerStage(b)));
+    list = sorted.map(e => renderDiscCard(e, ref)).join('');
+  }
+  body.innerHTML = list + (ref ? renderDiscForm() : '');
+}
+
+function saveDiscEntry(){
+  if(!isReferee()) return;
+  const title = document.getElementById('disc-f-title').value.trim(); if(!title) return;
+  const category = document.getElementById('disc-f-cat').value;
+  const state = document.getElementById('disc-f-state').value;
+  const visibleTo = parseCalVis(document.getElementById('disc-f-vis').value);
+  const bodyTxt = document.getElementById('disc-f-body').value.trim();
+  if(discEditingId){
+    const e = discoveryLog.find(x => x.id === discEditingId);
+    if(e){
+      e.title = title; e.category = category; e.body = bodyTxt; e.visibleTo = visibleTo; e.state = state;
+      if(state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow();
+    }
+    discEditingId = null;
+  } else {
+    discoveryLog.push({
+      id: 'disc_' + Date.now().toString(36), title, category, body: bodyTxt, state, visibleTo,
+      createdAt: imperialNow(), revealedAt: state !== 'hidden' ? imperialNow() : null
+    });
+  }
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function editDiscEntry(id){ if(!isReferee()) return; discEditingId = id; renderDiscoveryPanel(); const f = document.getElementById('disc-f-title'); if(f) f.scrollIntoView({block:'nearest'}); }
+function cancelDiscEdit(){ discEditingId = null; renderDiscoveryPanel(); }
+function deleteDiscEntry(id){ if(!isReferee()) return; discoveryLog = discoveryLog.filter(e => e.id !== id); if(discEditingId === id) discEditingId = null; saveDiscoveryLog(); renderDiscoveryPanel(); }
+function cycleDiscState(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  e.state = {hidden:'rumoured', rumoured:'known', known:'hidden'}[e.state] || 'hidden';
+  if(e.state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow(); // stamp first reveal
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function cycleDiscVis(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REPUTATION TRACKER  (V2 — faction standing + dated milestones)
+// ───────────────────────────────────────────────────────────────────────────
+// Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
+// timeline of dated milestones stamped {day,year} from the Imperial calendar.
+// Logging a milestone applies its delta to that faction's standing. Standings
+// are party-wide (all players see them); milestone visibility is gated by
+// canSee(). Shared state in aurelia_state key 'reputation'; 4s poll. The
+// encounter generator (later) reads these standings to scale difficulty.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const REP_BANDS = [ // [minInclusive, label, colour]
+  [6,   'Ally',       '#54d6c0'],
+  [3,   'Helpful',    '#7fd07f'],
+  [1,   'Friendly',   '#a8d860'],
+  [0,   'Neutral',    '#c9c4b6'],
+  [-2,  'Unfriendly', '#e0b050'],
+  [-5,  'Hostile',    '#e08040'],
+  [-99, 'At War',     '#d45050']
+];
+function repBand(s){ for(const [min, label, color] of REP_BANDS){ if(s >= min) return {label, color}; } return {label:'At War', color:'#d45050'}; }
+
+let reputation = {
+  factions: [
+    {id:'hegemony',  name:'Hegemony',                standing:-1},
+    {id:'rsr',       name:'Reach Stars Resistance',  standing:2},
+    {id:'syndicate', name:"Traders' Syndicate",      standing:0}
+  ],
+  milestones: []
+};
+let repPanelOpen = false;
+let repCollapsed = false;
+
+async function loadReputation(){ try { const r = await supaStorage.get('reputation', true); if(r) reputation = Object.assign(reputation, JSON.parse(r.value)); } catch(e){} }
+async function saveReputation(){ try { await supaStorage.set('reputation', JSON.stringify(reputation), true); } catch(e){ console.error('Reputation save failed:', e); } }
+
+function toggleReputationPanel(){
+  repPanelOpen = !repPanelOpen;
+  const w = document.getElementById('rep-wrap'), b = document.getElementById('rep-btn');
+  w.classList.toggle('hidden', !repPanelOpen);
+  if(b) b.classList.toggle('panel-open', repPanelOpen);
+  if(repPanelOpen) renderReputationPanel();
+}
+function toggleRepCollapse(){
+  if(document.getElementById('rep-header').dataset.suppressClick === '1') return;
+  repCollapsed = !repCollapsed;
+  document.getElementById('rep-toggle').textContent = repCollapsed ? '▲' : '▼';
+  document.getElementById('rep-body').classList.toggle('collapsed', repCollapsed);
+  document.getElementById('rep-wrap').classList.toggle('panel-collapsed', repCollapsed);
+}
+
+function repFactionName(id){ const f = reputation.factions.find(x => x.id === id); return f ? f.name : id; }
+
+function renderReputationPanel(){
+  const body = document.getElementById('rep-body'); if(!body) return;
+  const ref = isReferee();
+
+  const facHTML = reputation.factions.map(f => {
+    const b = repBand(f.standing);
+    const pct = ((f.standing + 6) / 12) * 100;
+    const ctl = ref ? `<div class="rep-fac-ctl">
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',-1)">−</button>
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',1)">+</button>
+        <button class="disc-mini del" onclick="removeFaction('${f.id}')" title="Remove faction">✕</button>
+      </div>` : '';
+    return `<div class="rep-fac">
+      <div class="rep-fac-hd"><span class="rep-fac-name">${escQH(f.name)}</span>
+        <span class="rep-band" style="color:${b.color}">${b.label} <span class="rep-val">${f.standing > 0 ? '+' : ''}${f.standing}</span></span></div>
+      <div class="rep-meter"><div class="rep-meter-fill" style="width:${pct}%;background:${b.color}"></div><div class="rep-meter-zero"></div></div>
+      ${ctl}
+    </div>`;
+  }).join('');
+  const addFac = ref ? `<div class="rep-addfac"><input id="rep-newfac" placeholder="New faction…" maxlength="40"><button class="disc-mini" onclick="addFaction()">+ Faction</button></div>` : '';
+
+  const visM = reputation.milestones.filter(m => ref || canSee(m.visibleTo)).slice().sort((a, b) => imperialOrdinal(b) - imperialOrdinal(a));
+  let mHTML;
+  if(!visM.length){
+    mHTML = `<div class="cal-empty">${ref ? 'No milestones logged yet.' : 'No reputation events recorded.'}</div>`;
+  } else {
+    mHTML = visM.map(m => {
+      const dStr = (m.delta > 0 ? '+' : '') + m.delta;
+      const del = ref ? `<span class="cal-ev-del" onclick="deleteMilestone('${m.id}')" title="Delete">✕</span>` : '';
+      const vis = ref ? `<span class="cal-ev-vis" onclick="cycleMilestoneVis('${m.id}')" title="Who can see it">${calVisLabel(m.visibleTo)}</span>` : '';
+      return `<div class="rep-mile">
+        <span class="cal-ev-date">${formatImperial(m)}</span>
+        <div class="cal-ev-body"><div class="cal-ev-title">${escQH(m.title)}</div>
+          <div class="rep-mile-meta">${escQH(repFactionName(m.factionId))} <span class="rep-mile-delta ${m.delta >= 0 ? 'pos' : 'neg'}">${dStr}</span></div></div>
+        ${vis}${del}
+      </div>`;
+    }).join('');
+  }
+
+  const now = imperialNow();
+  const facOpts = reputation.factions.map(f => `<option value="${f.id}">${escQH(f.name)}</option>`).join('');
+  const addM = ref ? `<div class="disc-add">
+    <div class="disc-add-ttl">New milestone — applies delta to standing</div>
+    <input id="rep-m-title" placeholder="What happened…" maxlength="90">
+    <div class="disc-add-row">
+      <select id="rep-m-fac">${facOpts}</select>
+      <input id="rep-m-delta" type="number" value="-1" title="Standing change" style="width:56px">
+      <input id="rep-m-day" type="number" min="1" max="365" value="${now.day}" title="Day" style="width:52px">
+      <input id="rep-m-year" type="number" value="${now.year}" title="Year" style="width:62px">
+    </div>
+    <input id="rep-m-vis" placeholder="all / referee / Rhett Calder">
+    <button class="cal-add-btn" onclick="addMilestone()">+ Log milestone</button>
+  </div>` : '';
+
+  body.innerHTML = `<div class="rep-tl-title">Faction Standing</div>${facHTML}${addFac}<div class="rep-tl-title">Milestones</div>${mHTML}${addM}`;
+}
+
+function adjustStanding(id, delta){
+  if(!isReferee()) return;
+  const f = reputation.factions.find(x => x.id === id); if(!f) return;
+  f.standing = Math.max(-6, Math.min(6, f.standing + delta));
+  saveReputation(); renderReputationPanel();
+}
+function addFaction(){
+  if(!isReferee()) return;
+  const v = document.getElementById('rep-newfac').value.trim(); if(!v) return;
+  reputation.factions.push({ id:'fac_' + Date.now().toString(36), name:v, standing:0 });
+  saveReputation(); renderReputationPanel();
+}
+function removeFaction(id){
+  if(!isReferee()) return;
+  reputation.factions = reputation.factions.filter(f => f.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function addMilestone(){
+  if(!isReferee()) return;
+  const title = document.getElementById('rep-m-title').value.trim(); if(!title) return;
+  const factionId = document.getElementById('rep-m-fac').value;
+  const delta = parseInt(document.getElementById('rep-m-delta').value, 10) || 0;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('rep-m-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('rep-m-year').value, 10) || imperialDate.year;
+  const visibleTo = parseCalVis(document.getElementById('rep-m-vis').value);
+  reputation.milestones.push({ id:'rm_' + Date.now().toString(36), factionId, delta, day, year, title, visibleTo });
+  const f = reputation.factions.find(x => x.id === factionId);
+  if(f) f.standing = Math.max(-6, Math.min(6, f.standing + delta)); // milestone moves standing
+  saveReputation(); renderReputationPanel();
+}
+function deleteMilestone(id){
+  if(!isReferee()) return;
+  reputation.milestones = reputation.milestones.filter(m => m.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function cycleMilestoneVis(id){
+  if(!isReferee()) return;
+  const m = reputation.milestones.find(x => x.id === id); if(!m) return;
+  if(m.visibleTo === 'all') m.visibleTo = 'referee';
+  else if(m.visibleTo === 'referee') m.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else m.visibleTo = 'all';
+  saveReputation(); renderReputationPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORACLE  (V2 — rumour & random-encounter generators)
+// ───────────────────────────────────────────────────────────────────────────
+// Referee-only GM tools. Output is *seeded* from live state so it feels
+// diegetic, not random: rumours weight toward factions with extreme standing
+// and bend hostile/friendly to match; encounters scale difficulty off the
+// danger dial AND the party's worst faction standing (per the brief). Ship name
+// and current locale fill the templates. Results are ephemeral (not synced),
+// but a rumour can be pushed "→ Codex" as a rumoured discovery entry players see.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ORACLE_GOODS = ['refined fuel','medical supplies','luxury goods','machine parts','foodstuffs','small arms','data cores','rare ore'];
+const ORACLE_PLACES = ['Aurelia Station','the Aurelia approaches','Cairn Station','the outer berths','the concourse','the elevator gate'];
+const RUMOUR_TEMPLATES = {
+  generic: [
+    'A dock worker swears {ship} was flagged on a Hegemony watch advisory.',
+    'Someone is paying good credits to anyone who can place {ship} two weeks ago.',
+    'Prices on {good} are about to move — somebody knows something.',
+    'A broker on {place} is quietly buying {good} well above market.',
+    'Travellers are avoiding the {place} routes lately. Nobody will say why.'
+  ],
+  hostile: [
+    '{faction} has put a quiet bounty on whoever crewed {ship}.',
+    'They say {faction} enforcers were asking after {ship} at {place}.',
+    '{faction} is leaning on dockmasters to deny {ship} a berth.',
+    'A {faction} skiff has been shadowing arrivals at {place}.'
+  ],
+  friendly: [
+    '{faction} contacts hint there is clean work going, if you can be discreet.',
+    'Word from {faction}: a berth at {place} will be looked after, no questions.',
+    '{faction} remembers a favour your crew is owed — fondly.'
+  ],
+  neutral: [
+    '{faction} is moving more cargo than usual through {place}.',
+    '{faction} just lost a courier and wants it found before anyone else does.'
+  ]
+};
+const RUMOUR_RELIABILITY = ['Reliable','Likely true','Unconfirmed','Probably false'];
+
+const ENCOUNTER_TABLES = {
+  space: ['An unmarked ship matches your vector and holds at distance.','A distress beacon pulses nearby — genuine, or bait.','A customs interceptor orders you to cut thrust for inspection.','A debris field hides a salvageable, and probably claimed, wreck.','A free trader hails, offering an off-manifest cargo swap.'],
+  port:  ['A dockside argument escalates near your berth — one party is armed.','A fixer drops into the seat across from you with a job and a warning.','Port authority flags a discrepancy in your paperwork.','A face from a crew member’s past is three tables over.','Someone tries to fix a tracker to your hull during the night cycle.'],
+  surface:['A checkpoint ahead, and your transit codes are a day stale.','A local offers a shortcut around the patrols — for a price.','A crowd is gathering, and the mood could turn.','Weather closes in; shelter means trusting strangers.','You find something that was meant to stay buried.']
+};
+const ENCOUNTER_DIFF = ['Trivial','Routine','Tricky','Dangerous','Deadly'];
+const ORACLE_WHERE = [['space','Space'],['port','Port'],['surface','Surface']];
+const ORACLE_DANGER = [['0','Calm'],['1','Normal'],['2','Tense'],['3','Hostile']];
+
+let oracleWhere = 'space';
+let oracleDanger = 1;
+let oracleResult = null;   // {kind:'rumour'|'encounter', ...}
+let genPanelOpen = false;
+let genCollapsed = false;
+
+function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
+
+function generateRumour(){
+  const facs = reputation.factions || [];
+  let faction = null;
+  if(facs.length){ // weight by |standing| — louder factions when relations are extreme
+    const weighted = [];
+    facs.forEach(f => { const w = 1 + Math.abs(f.standing); for(let i = 0; i < w; i++) weighted.push(f); });
+    faction = pick(weighted);
+  }
+  let bucket = 'generic';
+  if(faction){ const s = faction.standing; bucket = s <= -3 ? 'hostile' : s >= 3 ? 'friendly' : (Math.random() < 0.5 ? 'neutral' : 'generic'); }
+  let line = pick(RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic);
+  line = line.replace(/{faction}/g, faction ? faction.name : 'Someone')
+             .replace(/{ship}/g, shipState.name || 'the ship')
+             .replace(/{place}/g, oraclePlace())
+             .replace(/{good}/g, pick(ORACLE_GOODS));
+  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
+  renderOraclePanel();
+}
+
+function generateEncounter(){
+  const base = pick(ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space);
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0); // most-negative standing
+  let diff = oracleDanger + Math.floor(Math.random() * 2);
+  if(worst <= -3) diff += 1;
+  if(worst <= -5) diff += 1;
+  diff = Math.max(0, Math.min(4, diff));
+  const hostile = (reputation.factions || []).filter(f => f.standing <= -3);
+  const tie = (hostile.length && Math.random() < 0.55) ? pick(hostile).name : null;
+  oracleResult = { kind:'encounter', text: base, difficulty: ENCOUNTER_DIFF[diff], diffIdx: diff, faction: tie };
+  renderOraclePanel();
+}
+
+function rumourToCodex(){
+  if(!isReferee() || !oracleResult || oracleResult.kind !== 'rumour') return;
+  discoveryLog.push({
+    id: 'disc_' + Date.now().toString(36),
+    title: oracleResult.text,
+    category: 'lore',
+    body: oracleResult.faction ? ('Attributed to ' + oracleResult.faction + ' · ' + oracleResult.reliability) : oracleResult.reliability,
+    state: 'rumoured',
+    visibleTo: 'all',
+    createdAt: imperialNow(),
+    revealedAt: imperialNow()
+  });
+  saveDiscoveryLog();
+  if(discPanelOpen) renderDiscoveryPanel();
+  const note = document.getElementById('gen-codex-note');
+  if(note){ note.textContent = '✓ Sent to Codex as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
+}
+
+function setOracleWhere(w){ oracleWhere = w; renderOraclePanel(); }
+function setOracleDanger(d){ oracleDanger = parseInt(d, 10) || 0; renderOraclePanel(); }
+
+function toggleOraclePanel(){
+  if(!isReferee()) return;
+  genPanelOpen = !genPanelOpen;
+  const w = document.getElementById('gen-wrap'), b = document.getElementById('gen-btn');
+  w.classList.toggle('hidden', !genPanelOpen);
+  if(b) b.classList.toggle('panel-open', genPanelOpen);
+  if(genPanelOpen) renderOraclePanel();
+}
+function toggleGenCollapse(){
+  if(document.getElementById('gen-header').dataset.suppressClick === '1') return;
+  genCollapsed = !genCollapsed;
+  document.getElementById('gen-toggle').textContent = genCollapsed ? '▲' : '▼';
+  document.getElementById('gen-body').classList.toggle('collapsed', genCollapsed);
+  document.getElementById('gen-wrap').classList.toggle('panel-collapsed', genCollapsed);
+}
+
+function renderOraclePanel(){
+  const body = document.getElementById('gen-body'); if(!body) return;
+  let resultHTML = '<div class="cal-empty">Generate a rumour or encounter.</div>';
+  if(oracleResult){
+    if(oracleResult.kind === 'rumour'){
+      const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
+        <div class="gen-meta">${fac}<span class="gen-tag">${oracleResult.reliability}</span>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to the Codex as a rumour players can see">→ Codex</button>
+          <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
+      </div>`;
+    } else {
+      const tie = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)} involved</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">${escQH(oracleResult.text)}</div>
+        <div class="gen-meta"><span class="gen-diff gen-diff-${oracleResult.diffIdx}">${oracleResult.difficulty}</span>${tie}</div>
+      </div>`;
+    }
+  }
+  const whereOpts = ORACLE_WHERE.map(([v, l]) => `<span class="gen-opt${oracleWhere === v ? ' on' : ''}" onclick="setOracleWhere('${v}')">${l}</span>`).join('');
+  const dangerOpts = ORACLE_DANGER.map(([v, l]) => `<span class="gen-opt${oracleDanger == v ? ' on' : ''}" onclick="setOracleDanger('${v}')">${l}</span>`).join('');
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0);
+  const repHint = worst <= -3 ? `<div class="gen-hint">⚠ Hostile standing (${worst}) is raising encounter danger.</div>` : '';
+
+  body.innerHTML = `
+    ${resultHTML}
+    <div class="gen-sec-title">Rumour</div>
+    <button class="gen-go" onclick="generateRumour()">🎲 Generate rumour</button>
+    <div class="gen-sec-title">Encounter</div>
+    <div class="gen-row-lbl">Where</div><div class="gen-opts">${whereOpts}</div>
+    <div class="gen-row-lbl">Danger</div><div class="gen-opts">${dangerOpts}</div>
+    ${repHint}
+    <button class="gen-go" onclick="generateEncounter()">🎲 Generate encounter</button>`;
+}
+
 function toggleQuestCard(id){
   const body = document.getElementById('qbody-'+id);
   if(body) body.classList.toggle('open');
@@ -8447,6 +9389,14 @@ makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
+makePanelDraggable('cal-wrap', 'cal-header');
+makePanelResizable('cal-wrap');
+makePanelDraggable('disc-wrap', 'disc-header');
+makePanelResizable('disc-wrap');
+makePanelDraggable('rep-wrap', 'rep-header');
+makePanelResizable('rep-wrap');
+makePanelDraggable('gen-wrap', 'gen-header');
+makePanelResizable('gen-wrap');
 
 buildOrrery();
 renderInit();
@@ -8491,6 +9441,11 @@ loadTextureCatalog().then(() => {
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
 loadAlertState().then(() => applyAlertState());
+renderImperialDate(); // show default immediately, then refresh once loaded
+loadImperialDate().then(() => renderImperialDate());
+loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
+loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
+loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
