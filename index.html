@@ -419,6 +419,20 @@ textarea{font-family:var(--font)}
 #gx-legend .leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
 #gx-legend .leg-row:last-child{margin-bottom:0}
 #gx-legend .leg-swatch{width:20px;height:9px;border-radius:2px;flex-shrink:0;opacity:0.7}
+/* Galaxy search overlay */
+#gx-search-wrap{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:min(340px,70vw);z-index:12}
+#gx-search-input{width:100%;box-sizing:border-box;background:rgba(14,18,30,.95);border:.5px solid var(--bd0);border-radius:8px;color:var(--tx0);font-size:12px;padding:8px 12px;font-family:inherit;outline:none}
+#gx-search-input:focus{border-color:var(--accentGold)}
+#gx-search-results{margin-top:5px;background:rgba(14,18,30,.97);border:.5px solid var(--bd0);border-radius:8px;max-height:50vh;overflow-y:auto;display:none;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+#gx-search-results.open{display:block}
+.gx-sr-group{font-size:8px;font-family:monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx1);padding:7px 12px 3px;position:sticky;top:0;background:rgba(14,18,30,.97)}
+.gx-sr-item{display:block;width:100%;text-align:left;background:none;border:none;border-top:.5px solid var(--bg2);color:var(--tx0);font-size:12px;padding:7px 12px;cursor:pointer;font-family:inherit}
+.gx-sr-item:hover{background:var(--bd0)}
+.gx-sr-sub{display:block;font-size:9px;font-family:monospace;color:var(--tx1);margin-top:2px}
+.gx-sr-redacted{color:#8a7fa0;font-style:italic}
+.gx-sr-empty{padding:10px 12px;font-size:11px;color:var(--tx1)}
+.gx-fac-hl{animation:gxFacPulse 2.4s ease-out forwards}
+@keyframes gxFacPulse{0%{opacity:.9}100%{opacity:0}}
 /* Galaxy detail panel reuses the system-detail content classes (.sg/.s-sec/.s-desc). */
 #galaxy-db .sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
 #galaxy-db .sg-l{color:var(--tx1)}#galaxy-db .sg-v{color:var(--tx0)}
@@ -2325,6 +2339,10 @@ input#ui-scale-range{
       <g id="gx-systems"></g>
     </svg>
         <div id="gx-title">The Orion Arm</div>
+        <div id="gx-search-wrap">
+          <input type="text" id="gx-search-input" placeholder="🔍 Search systems, factions, lore…" autocomplete="off" oninput="renderGxSearchResults()" onfocus="renderGxSearchResults()">
+          <div id="gx-search-results"></div>
+        </div>
         <div id="gx-zoom">
           <button class="zoom-btn" onclick="gxZoom(1.2)">+</button>
           <button class="zoom-btn" onclick="gxZoom(0.83)">−</button>
@@ -3564,7 +3582,7 @@ function gxAttachPanZoom(){
   if(gxPanZoomAttached) return;
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
   canvas.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
+    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')) return;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
@@ -3668,6 +3686,139 @@ function gxUpdateDetail(id){
   html += `</div>`;
   det.innerHTML = html;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GALAXY SEARCH  (V2 — fog-respecting map search overlay)
+// ───────────────────────────────────────────────────────────────────────────
+// Searches systems, factions, NPCs, Codex entries and wiki articles. The index
+// is a VIEW: it is rebuilt per query from the same fog-filtered data the panels
+// render, so it can never leak hidden content. Ruling:
+//   • hidden Codex / referee-only items  → not indexed (fully invisible)
+//   • rumoured Codex                     → title only, shown as a redacted stub
+//   • known / 'all'                      → fully searchable
+//   • NPCs                               → referee only (player NPC visibility
+//                                          isn't modelled, so we don't leak it)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildGalaxySearchIndex(){
+  const ref = isReferee();
+  const idx = [];
+
+  // Systems / worlds — always visible on the map.
+  GALAXY_NODES.forEach(n => {
+    const label = (n.label || n.name).replace(' ★','');
+    idx.push({ type:'System', name:label, sub:n.name, match:(label + ' ' + n.name).toLowerCase(),
+      nav:{ kind:'system', id:n.id } });
+  });
+
+  // Factions — jump to / highlight member systems.
+  Object.keys(GALAXY_FACTIONS).forEach(key => {
+    const f = GALAXY_FACTIONS[key];
+    const members = GALAXY_NODES.filter(n => n.faction === key).length;
+    if(!members) return;
+    idx.push({ type:'Faction', name:f.name, sub:members + ' systems', match:f.name.toLowerCase(),
+      nav:{ kind:'faction', key } });
+  });
+
+  // NPCs — referee only (player-side NPC visibility isn't modelled).
+  if(ref){
+    GALAXY_NODES.forEach(n => {
+      const sid = n.systemId || n.id;
+      (effectiveBodies(sid) || []).forEach(b => {
+        (b.npcs || []).forEach(npc => {
+          idx.push({ type:'NPC', name:npc.name, sub:(b.name || (n.label||n.name)),
+            match:(npc.name + ' ' + (npc.role||'')).toLowerCase(), nav:{ kind:'system', id:n.id } });
+        });
+      });
+    });
+  }
+
+  // Codex entries — fog-respecting.
+  discoveryLog.forEach(e => {
+    const stage = ref ? 'known' : discViewerStage(e);
+    if(!stage) return;                       // hidden / not visible → skip entirely
+    if(!ref && stage === 'rumoured'){
+      idx.push({ type:'Codex', name:e.title, sub:'Unconfirmed', redacted:true,
+        match:e.title.toLowerCase(), nav:{ kind:'codex' } });   // title only — body not indexed
+    } else {
+      idx.push({ type:'Codex', name:e.title, sub:discStateLabel(ref ? e.state : stage),
+        match:(e.title + ' ' + (e.body||'')).toLowerCase(), nav:{ kind:'codex' } });
+    }
+  });
+
+  // Wiki articles — readable ones only.
+  wikiArticles.filter(wikiCanRead).forEach(a => {
+    idx.push({ type:'Wiki', name:a.title, sub:'Encyclopedia',
+      match:(a.title + ' ' + (a.body||'')).toLowerCase(), nav:{ kind:'wiki', id:a.id } });
+  });
+
+  return idx;
+}
+
+function renderGxSearchResults(){
+  const input = document.getElementById('gx-search-input');
+  const box = document.getElementById('gx-search-results');
+  if(!input || !box) return;
+  const q = input.value.trim().toLowerCase();
+  if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  const matches = buildGalaxySearchIndex().filter(it => it.match.includes(q)).slice(0, 40);
+  if(!matches.length){
+    box.innerHTML = '<div class="gx-sr-empty">No matches.</div>';
+    box.classList.add('open');
+    return;
+  }
+  window._gxSearchNavs = matches.map(m => m.nav);
+  const groups = {};
+  matches.forEach((m, i) => { (groups[m.type] = groups[m.type] || []).push({ ...m, idx:i }); });
+  let html = '';
+  Object.keys(groups).forEach(type => {
+    html += `<div class="gx-sr-group">${escHtml(type)}</div>`;
+    html += groups[type].map(m =>
+      `<button class="gx-sr-item" onclick="navigateGxResult(window._gxSearchNavs[${m.idx}])">
+        <span class="${m.redacted ? 'gx-sr-redacted' : ''}">${escHtml(m.name)}</span>
+        <span class="gx-sr-sub">${escHtml(m.sub || '')}</span>
+      </button>`).join('');
+  });
+  box.innerHTML = html;
+  box.classList.add('open');
+}
+
+function navigateGxResult(nav){
+  const input = document.getElementById('gx-search-input');
+  const box = document.getElementById('gx-search-results');
+  if(input) input.value = '';
+  if(box){ box.classList.remove('open'); box.innerHTML = ''; }
+  if(!nav) return;
+  if(nav.kind === 'system'){ gxSelectSystem(nav.id); }
+  else if(nav.kind === 'faction'){ gxHighlightFaction(nav.key); }
+  else if(nav.kind === 'codex'){ if(!discPanelOpen) toggleDiscoveryPanel(); }
+  else if(nav.kind === 'wiki'){ if(!wikiPanelOpen) toggleWikiPanel(); viewWikiArticle(nav.id); }
+}
+
+// Briefly pulse every system belonging to a faction.
+function gxHighlightFaction(key){
+  const g = document.getElementById('gx-systems'); if(!g) return;
+  g.querySelectorAll('.gx-fac-hl').forEach(e => e.remove());
+  const f = GALAXY_FACTIONS[key] || { color:'#00e5ff' };
+  GALAXY_NODES.filter(n => n.faction === key).forEach(n => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', '12');
+    c.setAttribute('fill','none'); c.setAttribute('stroke', f.color);
+    c.setAttribute('stroke-width','2'); c.setAttribute('class','gx-fac-hl');
+    g.appendChild(c);
+  });
+  setTimeout(() => { g.querySelectorAll('.gx-fac-hl').forEach(e => e.remove()); }, 2400);
+}
+
+// Close galaxy search results on outside click.
+document.addEventListener('click', function(e){
+  const wrap = document.getElementById('gx-search-wrap');
+  if(wrap && !wrap.contains(e.target)){
+    const box = document.getElementById('gx-search-results');
+    if(box) box.classList.remove('open');
+  }
+});
 
 // ── Top-level galaxy view ──────────────────────────────────────────────────
 function goGalaxy(){
