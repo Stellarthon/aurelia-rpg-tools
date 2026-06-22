@@ -3581,13 +3581,22 @@ function gxResetView(){
 function gxAttachPanZoom(){
   if(gxPanZoomAttached) return;
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  let downX = 0, downY = 0, startedOnEmpty = false;
   canvas.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')) return;
+    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')){ startedOnEmpty = false; return; }
+    startedOnEmpty = true; downX = e.clientX; downY = e.clientY;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e=>{ if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT(); });
-  canvas.addEventListener('pointerup', ()=>{ gxDragging=false; canvas.classList.remove('panning'); });
+  canvas.addEventListener('pointerup', e=>{
+    gxDragging=false; canvas.classList.remove('panning');
+    // A click on empty space (negligible drag) deselects the current system,
+    // returning to the overview (where the route kill-switch lives).
+    const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+    if(startedOnEmpty && moved < 5 && gxSelectedId) gxDeselectSystem();
+    startedOnEmpty = false;
+  });
   canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
   let lastDist=null;
   canvas.addEventListener('touchmove', e=>{
@@ -3605,6 +3614,21 @@ function gxAttachPanZoom(){
 
 // ── Selection + detail panel ───────────────────────────────────────────────
 function gxOnNodeClick(id){ gxSelectSystem(id); }
+
+// Clear the current selection and restore the overview panel (clicking empty
+// space on the map, per playtest feedback — the overview holds the route
+// kill-switch, which is otherwise unreachable while a system is selected).
+function gxDeselectSystem(){
+  gxSelectedId = null;
+  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
+  const nameEl = document.getElementById('galaxy-dname');
+  if(nameEl){ nameEl.textContent = 'THE ORION ARM'; nameEl.style.color = ''; }
+  const typeEl = document.getElementById('galaxy-dtype');
+  if(typeEl) typeEl.textContent = 'Select a system to inspect';
+  const ov = document.getElementById('galaxy-overview'); if(ov) ov.style.display = '';
+  const det = document.getElementById('galaxy-sys-detail'); if(det) det.style.display = 'none';
+  gxRenderRouteControl(); // refresh the kill-switch now that the overview is back
+}
 
 function gxSelectSystem(id){
   const sys = GX_MAP[id]; if(!sys) return;
