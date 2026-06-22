@@ -1084,6 +1084,32 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .disc-add textarea{resize:vertical}
 .disc-add-row{display:flex;gap:6px}
 .disc-add-row select{flex:0 0 auto;width:auto}
+
+/* ── Encyclopedia / Wiki panel (clones the Codex chrome) ── */
+#wiki-wrap{position:fixed;top:54px;right:0;width:380px;height:500px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:160px;max-width:94vw;max-height:88vh}
+#wiki-wrap.hidden{display:none}
+#wiki-wrap.panel-collapsed{height:auto!important;min-height:0}
+#wiki-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#wiki-header:active{cursor:grabbing}
+#wiki-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px;display:flex;align-items:center;gap:8px}
+#wiki-count{font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace}
+#wiki-toggle{font-size:10px;color:var(--tx1)}
+#wiki-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+#wiki-body.collapsed{display:none}
+.wiki-item{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:8px 10px;cursor:pointer}
+.wiki-item:hover{background:var(--bd0)}
+.wiki-item-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.wiki-item-ttl{font-size:12px;font-weight:700;color:var(--tx0);flex:1;min-width:0;word-break:break-word}
+.wiki-item-snip{font-size:10px;color:var(--tx1);margin-top:4px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wiki-article-ttl{font-size:15px;font-weight:700;color:var(--accentGold);margin:2px 0 6px}
+.wiki-article-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap;word-break:break-word}
+.wiki-links{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.wiki-link-chip{font-size:10px;font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;padding:3px 8px;color:var(--tx0);cursor:pointer}
+.wiki-link-chip:hover{border-color:var(--accentGold);color:var(--accentGold)}
+.wiki-link-chip.codex:hover{border-color:#c89cff;color:#c89cff}
+.wiki-meta{font-size:9px;font-family:monospace;color:var(--tx1);margin-top:10px;border-top:.5px solid var(--bg2);padding-top:6px}
+.wiki-back{font-size:10px;font-family:monospace;color:var(--tx1);background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:4px 9px;cursor:pointer;align-self:flex-start}
+.wiki-back:hover{color:var(--tx0);background:var(--bd0)}
 .disc-add-row #disc-f-vis{flex:1}
 #disc-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
 #disc-btn:hover{background:var(--bd0);color:var(--tx0)}
@@ -2229,6 +2255,7 @@ input#ui-scale-range{
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Discovery Log / Codex — revealed lore & intel">🗂 Codex</button>
+    <button id="wiki-btn" onclick="toggleWikiPanel()" title="Encyclopedia — campaign lore & reference">📚 Wiki</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
@@ -2801,6 +2828,16 @@ input#ui-scale-range{
     </div>
     <div id="disc-body"></div>
     <div class="panel-resize-handle" id="disc-resize"></div>
+  </div>
+
+  <!-- ── Encyclopedia / Wiki panel ── -->
+  <div id="wiki-wrap" class="hidden">
+    <div id="wiki-header" onclick="toggleWikiCollapse()">
+      <span id="wiki-title-lbl">📚 ENCYCLOPEDIA <span id="wiki-count">0</span></span>
+      <span id="wiki-toggle">▼</span>
+    </div>
+    <div id="wiki-body"></div>
+    <div class="panel-resize-handle" id="wiki-resize"></div>
   </div>
 
   <!-- ── Reputation tracker panel ── -->
@@ -6989,6 +7026,16 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Encyclopedia — players see articles the referee publishes / edits / reveals
+  try {
+    const resWiki = await supaStorage.get('wiki', true);
+    const freshWiki = resWiki ? JSON.parse(resWiki.value) || [] : [];
+    if(JSON.stringify(freshWiki) !== JSON.stringify(wikiArticles)){
+      wikiArticles = freshWiki;
+      if(wikiPanelOpen) renderWikiPanel();
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Route blocks — nav crew see the referee arm/disarm lanes mid-session
   try {
     const resRB = await supaStorage.get('route-blocks', true);
@@ -10259,6 +10306,212 @@ function cycleDiscVis(id){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ENCYCLOPEDIA / WIKI  (V2 — referee-authored campaign reference)
+// ───────────────────────────────────────────────────────────────────────────
+// Shared campaign state in aurelia_state key 'wiki'. Editorial model for V2:
+// REFEREE-ONLY authoring (create / edit / delete); reading is gated per-article
+// by canSee(visibleTo) exactly like the Codex. Player editing is deferred to V3
+// (the schema already carries an `editable` field so it rides in additively).
+// Versioning is "versioned-lite": the body overwrites in place, but each save
+// appends a compact {at, by, summary} record to `history` for an audit trail.
+// Articles can link to galaxy systems (GALAXY_NODES ids) and Codex entries.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WIKI_CATEGORIES = DISC_CATEGORIES; // reuse Lore/Faction/Location/Tech/Person + cat-* styling
+
+let wikiArticles = [];
+let wikiPanelOpen = false;
+let wikiCollapsed = false;
+let wikiEditingId = null;
+let wikiAdding = false;
+let wikiViewingId = null;
+
+async function loadWiki(){
+  try { const r = await supaStorage.get('wiki', true); if(r) wikiArticles = JSON.parse(r.value) || []; }
+  catch(e){ wikiArticles = []; }
+}
+async function saveWiki(){
+  try { await supaStorage.set('wiki', JSON.stringify(wikiArticles), true); }
+  catch(e){ console.error('Wiki save failed:', e); }
+}
+
+function parseIdList(s){ return (s||'').split(',').map(x => x.trim()).filter(Boolean); }
+function wikiCanRead(a){ return isReferee() || canSee(a.visibleTo); }
+
+function toggleWikiPanel(){
+  wikiPanelOpen = !wikiPanelOpen;
+  const w = document.getElementById('wiki-wrap'), b = document.getElementById('wiki-btn');
+  w.classList.toggle('hidden', !wikiPanelOpen);
+  if(b) b.classList.toggle('panel-open', wikiPanelOpen);
+  if(wikiPanelOpen) renderWikiPanel();
+}
+function toggleWikiCollapse(){
+  if(document.getElementById('wiki-header').dataset.suppressClick === '1') return;
+  wikiCollapsed = !wikiCollapsed;
+  document.getElementById('wiki-toggle').textContent = wikiCollapsed ? '▲' : '▼';
+  document.getElementById('wiki-body').classList.toggle('collapsed', wikiCollapsed);
+  document.getElementById('wiki-wrap').classList.toggle('panel-collapsed', wikiCollapsed);
+}
+
+function renderWikiPanel(){
+  const body = document.getElementById('wiki-body'); if(!body) return;
+  const ref = isReferee();
+  const readable = wikiArticles.filter(wikiCanRead);
+  const countEl = document.getElementById('wiki-count');
+  if(countEl) countEl.textContent = readable.length;
+
+  // Drop a stale viewing target (e.g. referee hid it while a player was reading).
+  if(wikiViewingId){
+    const a = wikiArticles.find(x => x.id === wikiViewingId);
+    if(!a || !wikiCanRead(a)) wikiViewingId = null;
+  }
+
+  if(wikiEditingId || wikiAdding){ body.innerHTML = renderWikiForm(); return; }
+  if(wikiViewingId){ body.innerHTML = renderWikiArticle(wikiViewingId); return; }
+
+  let html = '';
+  if(!readable.length){
+    html = `<div class="cal-empty">${ref ? 'No articles yet. Document the setting below.' : 'No entries published yet.'}</div>`;
+  } else {
+    html = readable.map(a => {
+      const cat = WIKI_CATEGORIES.find(c => c[0] === a.category);
+      const snip = (a.body || '').replace(/\s+/g, ' ').trim();
+      return `<div class="wiki-item" onclick="viewWikiArticle('${a.id}')">
+        <div class="wiki-item-hd">
+          <span class="disc-cat cat-${a.category || 'lore'}">${cat ? cat[1] : (a.category || '')}</span>
+          <span class="wiki-item-ttl">${escQH(a.title)}</span>
+          ${ref && a.visibleTo !== 'all' ? `<span class="disc-when">${calVisLabel(a.visibleTo)}</span>` : ''}
+        </div>
+        ${snip ? `<div class="wiki-item-snip">${escQH(snip)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  if(ref) html += `<button class="cal-add-btn" style="width:100%;margin-top:6px" onclick="beginWikiAdd()">+ New article</button>`;
+  body.innerHTML = html;
+}
+
+function renderWikiArticle(id){
+  const a = wikiArticles.find(x => x.id === id);
+  if(!a) { wikiViewingId = null; return renderWikiListFallback(); }
+  const ref = isReferee();
+  const cat = WIKI_CATEGORIES.find(c => c[0] === a.category);
+  let html = `<button class="wiki-back" onclick="backToWikiList()">← All articles</button>`;
+  html += `<div><span class="disc-cat cat-${a.category || 'lore'}">${cat ? cat[1] : (a.category || '')}</span></div>`;
+  html += `<div class="wiki-article-ttl">${escQH(a.title)}</div>`;
+  html += `<div class="wiki-article-body">${a.body ? escQH(a.body) : '<span class="disc-redacted">(no content yet)</span>'}</div>`;
+
+  // Linked systems + codex entries.
+  const sysLinks = (a.links && a.links.systems || []).filter(sid => GX_MAP[sid]);
+  const codexLinks = (a.links && a.links.codex || []).map(cid => discoveryLog.find(e => e.id === cid))
+    .filter(e => e && (ref || discViewerStage(e))); // hide codex links the viewer can't see
+  if(sysLinks.length || codexLinks.length){
+    html += `<div class="wiki-links">`;
+    sysLinks.forEach(sid => {
+      const n = GX_MAP[sid];
+      html += `<span class="wiki-link-chip" onclick="wikiGotoSystem('${sid}')" title="Show on the Orion Arm map">🗺 ${escQH((n.label || n.name).replace(' ★',''))}</span>`;
+    });
+    codexLinks.forEach(e => {
+      const showTitle = ref || discViewerStage(e) === 'known';
+      html += `<span class="wiki-link-chip codex" onclick="wikiOpenCodex()" title="Open the Codex">🗂 ${escQH(showTitle ? e.title : 'Unconfirmed entry')}</span>`;
+    });
+    html += `</div>`;
+  }
+
+  if(ref){
+    const hist = a.history || [];
+    const last = hist.length ? hist[hist.length - 1] : null;
+    html += `<div class="wiki-meta">${calVisLabel(a.visibleTo)} · ${hist.length} edit${hist.length === 1 ? '' : 's'}${last ? ` · last ${formatImperial(last.at)}${last.summary ? ' — ' + escQH(last.summary) : ''}` : ''}</div>`;
+    html += `<div class="disc-ctl">
+      <button class="disc-mini" onclick="editWikiArticle('${a.id}')">✏ Edit</button>
+      <button class="disc-mini" onclick="cycleWikiVis('${a.id}')" title="Who can read it">${calVisLabel(a.visibleTo)}</button>
+      <button class="disc-mini del" onclick="deleteWikiArticle('${a.id}')">✕ Delete</button>
+    </div>`;
+  }
+  return html;
+}
+function renderWikiListFallback(){ wikiAdding = false; wikiEditingId = null; setTimeout(renderWikiPanel, 0); return ''; }
+
+function renderWikiForm(){
+  const ed = wikiEditingId ? wikiArticles.find(x => x.id === wikiEditingId) : null;
+  const catOpts = WIKI_CATEGORIES.map(c => `<option value="${c[0]}"${ed && ed.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const sysVal = ed && ed.links ? (ed.links.systems || []).join(', ') : '';
+  const codexVal = ed && ed.links ? (ed.links.codex || []).join(', ') : '';
+  return `<button class="wiki-back" onclick="cancelWikiEdit()">← Cancel</button>
+  <div class="disc-add" style="border-top:none;padding-top:4px">
+    <div class="disc-add-ttl">${ed ? 'Edit article' : 'New article'}</div>
+    <input id="wiki-f-title" placeholder="Title…" maxlength="120" value="${ed ? escAttr(ed.title) : ''}">
+    <div class="disc-add-row">
+      <select id="wiki-f-cat">${catOpts}</select>
+      <input id="wiki-f-vis" placeholder="all / referee / Rhett Calder" value="${ed ? escAttr(calVisRaw(ed.visibleTo)) : 'all'}">
+    </div>
+    <textarea id="wiki-f-body" rows="8" placeholder="Article body…">${ed ? escQH(ed.body || '') : ''}</textarea>
+    <input id="wiki-f-sys" placeholder="Linked system ids (e.g. aurelia, sol)" value="${escAttr(sysVal)}">
+    <input id="wiki-f-codex" placeholder="Linked codex entry ids (optional)" value="${escAttr(codexVal)}">
+    <input id="wiki-f-summary" placeholder="Change summary (for the edit log)…" maxlength="120">
+    <button class="cal-add-btn" onclick="saveWikiArticle()">${ed ? 'Save changes' : '+ Publish article'}</button>
+  </div>`;
+}
+
+function beginWikiAdd(){ if(!isReferee()) return; wikiAdding = true; wikiEditingId = null; wikiViewingId = null; renderWikiPanel(); }
+function editWikiArticle(id){ if(!isReferee()) return; wikiEditingId = id; wikiAdding = false; renderWikiPanel(); }
+function viewWikiArticle(id){ wikiViewingId = id; wikiEditingId = null; wikiAdding = false; renderWikiPanel(); }
+function backToWikiList(){ wikiViewingId = null; renderWikiPanel(); }
+function cancelWikiEdit(){ wikiEditingId = null; wikiAdding = false; renderWikiPanel(); }
+
+function saveWikiArticle(){
+  if(!isReferee()) return;
+  const title = document.getElementById('wiki-f-title').value.trim(); if(!title) return;
+  const category = document.getElementById('wiki-f-cat').value;
+  const visibleTo = parseCalVis(document.getElementById('wiki-f-vis').value);
+  const bodyTxt = document.getElementById('wiki-f-body').value.trim();
+  const links = { systems: parseIdList(document.getElementById('wiki-f-sys').value), codex: parseIdList(document.getElementById('wiki-f-codex').value) };
+  const summary = document.getElementById('wiki-f-summary').value.trim();
+  const stamp = imperialNow();
+  if(wikiEditingId){
+    const a = wikiArticles.find(x => x.id === wikiEditingId);
+    if(a){
+      a.title = title; a.category = category; a.body = bodyTxt; a.visibleTo = visibleTo; a.links = links;
+      a.history = a.history || []; a.history.push({ at: stamp, by: 'Referee', summary: summary || 'edited' });
+      a.updatedAt = stamp; a.updatedBy = 'Referee';
+    }
+    wikiViewingId = wikiEditingId; wikiEditingId = null;
+  } else {
+    const id = 'wiki_' + Date.now().toString(36);
+    wikiArticles.push({ id, title, category, body: bodyTxt, visibleTo, links, editable: 'referee',
+      history: [{ at: stamp, by: 'Referee', summary: summary || 'created' }], createdAt: stamp, updatedAt: stamp, updatedBy: 'Referee' });
+    wikiViewingId = id;
+  }
+  wikiAdding = false;
+  saveWiki();
+  renderWikiPanel();
+}
+function deleteWikiArticle(id){
+  if(!isReferee()) return;
+  wikiArticles = wikiArticles.filter(a => a.id !== id);
+  if(wikiViewingId === id) wikiViewingId = null;
+  if(wikiEditingId === id) wikiEditingId = null;
+  saveWiki();
+  renderWikiPanel();
+}
+function cycleWikiVis(id){
+  if(!isReferee()) return;
+  const a = wikiArticles.find(x => x.id === id); if(!a) return;
+  if(a.visibleTo === 'all') a.visibleTo = 'referee';
+  else if(a.visibleTo === 'referee') a.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else a.visibleTo = 'all';
+  saveWiki();
+  renderWikiPanel();
+}
+
+// Link navigation — jump to a linked system on the map, or open the Codex.
+function wikiGotoSystem(sid){
+  if(!GX_MAP[sid]) return;
+  if(currentView !== 'galaxy'){ goGalaxy(); setTimeout(() => gxSelectSystem(sid), 260); }
+  else gxSelectSystem(sid);
+}
+function wikiOpenCodex(){ if(!discPanelOpen) toggleDiscoveryPanel(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
 // REPUTATION TRACKER  (V2 — faction standing + dated milestones)
 // ───────────────────────────────────────────────────────────────────────────
 // Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
@@ -10703,6 +10956,8 @@ makePanelDraggable('cal-wrap', 'cal-header');
 makePanelResizable('cal-wrap');
 makePanelDraggable('disc-wrap', 'disc-header');
 makePanelResizable('disc-wrap');
+makePanelDraggable('wiki-wrap', 'wiki-header');
+makePanelResizable('wiki-wrap');
 makePanelDraggable('rep-wrap', 'rep-header');
 makePanelResizable('rep-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');
@@ -10770,6 +11025,7 @@ renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => renderImperialDate());
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
+loadWiki().then(() => { if(wikiPanelOpen) renderWikiPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
