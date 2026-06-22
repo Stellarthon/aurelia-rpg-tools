@@ -1123,6 +1123,16 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #rep-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#rep-wrap{right:0;top:54px;width:312px;height:420px}}
 
+/* ── Ship inventory (manifest rows inside the Ship panel) ── */
+.inv-group{margin-top:10px}
+.inv-group-lbl{font-size:9px;font-family:monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx1);margin-bottom:4px;border-bottom:.5px solid var(--bd2);padding-bottom:2px}
+.inv-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:.5px solid var(--bg2)}
+.inv-name{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--tx0)}
+.inv-meta{font-size:9px;font-family:monospace;color:var(--tx1);margin-top:1px}
+.inv-notes{font-size:10px;color:var(--tx1);margin-top:2px;font-style:italic}
+.inv-amt{font-size:11px;font-family:monospace;color:#9B59B6;white-space:nowrap}
+.inv-ctl{display:flex;gap:3px;flex-shrink:0}
+
 /* ── Oracle (rumour & encounter generators) panel ── */
 #gen-wrap{position:fixed;top:54px;right:0;width:344px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:280px;min-height:120px;max-width:92vw;max-height:86vh}
 #gen-wrap.hidden{display:none}
@@ -9179,6 +9189,8 @@ let shipState = {
   fuel: 24,            // current fuel (tons)
   fuelMax: 80,         // fuel tankage (tons)
   fuelProcessor: '',
+  // ── Cargo hold (drives the ship-inventory capacity check) ──
+  cargoCapacity: 40,   // cargo hold size (dtons) — manifest is checked against this
   // ── Costs ──
   purchaseCost: '',
   mortgage: '',
@@ -9202,6 +9214,184 @@ async function loadShipState(){
 async function saveShipState(){
   try { await supaStorage.set('ship-state', JSON.stringify(shipState), true); }
   catch(e){ console.error('Ship save failed:', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHIP INVENTORY  (V2 — cargo / equipment / consumables manifest)
+// ───────────────────────────────────────────────────────────────────────────
+// Distinct from PERSONAL inventory (which lives on each character sheet's
+// equipment/weapons fields). This is the SHIP's manifest, shared campaign state
+// in aurelia_state key 'ship-inventory'. Unlike most shared state it is
+// MULTI-WRITER: the referee AND the nav crew (Rhett + Cass) can edit it, so it
+// is polled by every role (see pollShipInventory) rather than only by players.
+// Viewing the manifest follows the same nav-crew audience.
+//
+// Cargo is measured in displacement tons (dtons) and checked against the ship's
+// cargo-hold capacity (shipState.cargoCapacity). Per Mongoose Traveller, jump
+// fuel is hull-based (10% × tonnage × parsecs) and is NOT affected by cargo
+// load, so the manifest reports hold usage + laden mass but never touches the
+// fuel/jump math. Each item carries a dormant `combat` slot reserved for the
+// future Space Combat branch (weapon mounts / ammo) so it need not be
+// rearchitected later.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SHIP_INV_CATEGORIES = [['cargo','Cargo'],['equipment','Equipment'],['consumable','Consumables']];
+
+let shipInventory = [];
+let invEditingId = null;
+let invAdding = false;
+
+async function loadShipInventory(){
+  try { const r = await supaStorage.get('ship-inventory', true); if(r) shipInventory = JSON.parse(r.value) || []; }
+  catch(e){ shipInventory = []; }
+}
+async function saveShipInventory(){
+  try { await supaStorage.set('ship-inventory', JSON.stringify(shipInventory), true); }
+  catch(e){ console.error('Ship inventory save failed:', e); }
+}
+
+// Edit rights: referee + nav crew (Rhett + Cass).
+function canEditShipInventory(){ return isReferee() || (!!myIdentity && SHIP_NAV_AUDIENCE.includes(myIdentity)); }
+
+// Cargo dtons currently loaded (sum of cargo-category items' qtyTons).
+function shipCargoUsed(){
+  return +shipInventory.filter(i => i.category === 'cargo')
+    .reduce((s,i) => s + (Number(i.qtyTons) || 0), 0).toFixed(2);
+}
+
+// Multi-writer poll — runs for EVERY role (referee included), unlike the
+// player-only pollRevealState. Skips the re-render while someone is typing in
+// the ship panel so an incoming sync doesn't wipe a half-entered row.
+let invPollId = null;
+function startInventoryPolling(){
+  if(invPollId) clearInterval(invPollId);
+  invPollId = setInterval(pollShipInventory, POLL_MS);
+}
+async function pollShipInventory(){
+  try {
+    const r = await supaStorage.get('ship-inventory', true);
+    const fresh = r ? JSON.parse(r.value) || [] : [];
+    if(JSON.stringify(fresh) === JSON.stringify(shipInventory)) return;
+    shipInventory = fresh;
+    const ae = document.activeElement;
+    const typingHere = ae && ae.closest && ae.closest('#ship-wrap');
+    if(shipPanelOpen && !typingHere) renderShipPanel();
+  } catch(e){ /* silent — next poll retries */ }
+}
+
+// Section HTML — only ever called for nav-crew viewers (gated in renderShipPanel).
+function shipInventorySectionHTML(){
+  const canEdit = canEditShipInventory();
+  const cap = Number(shipState.cargoCapacity) || 0;
+  const used = shipCargoUsed();
+  const free = +(cap - used).toFixed(2);
+  const over = cap > 0 && used > cap;
+  const pct = cap > 0 ? Math.max(0, Math.min(100, used / cap * 100)) : 0;
+
+  let html = `<div class="sf-sec"><div class="sf-tab">Ship Inventory</div><div class="sf-card">`;
+
+  // Cargo-hold readout (laden mass = cargo dtons in the hold).
+  html += `<div class="ship-readout">
+    <div class="ship-readout-lbl"><span>📦 Cargo Hold</span><span class="ship-readout-tag">Nav</span></div>
+    <div class="ship-readout-val">${used} <span style="font-size:11px;color:#5a5f6b">/ ${cap} t</span></div>
+    <div class="ship-fuel-bar"><div class="ship-fuel-bar-fill${over ? ' low' : ''}" style="width:${pct}%"></div></div>
+    <div class="ship-readout-sub${over ? ' ship-warn' : ''}">${over ? `OVER CAPACITY by ${(used - cap).toFixed(2)} t` : `${free} t free · laden mass ${used} t`}</div>
+  </div>`;
+
+  // Capacity is a ship stat → referee-set (players read). Reuse the sheet field helper.
+  html += `<div class="sf-row" style="margin-top:6px"><span class="sf-lbl">Hold capacity</span><span class="sf-fld">${sfNumField('cargoCapacity','tons')}</span></div>`;
+
+  // Items grouped by category.
+  SHIP_INV_CATEGORIES.forEach(([key,label]) => {
+    const items = shipInventory.filter(i => i.category === key);
+    if(!items.length) return;
+    html += `<div class="inv-group"><div class="inv-group-lbl">${label}</div>`;
+    html += items.map(i => renderInvRow(i, canEdit)).join('');
+    html += `</div>`;
+  });
+
+  if(!shipInventory.length){
+    html += `<div class="cal-empty" style="padding:8px 2px">${canEdit ? 'Empty hold. Add cargo, equipment, or consumables below.' : 'Nothing in the manifest.'}</div>`;
+  }
+
+  if(canEdit) html += renderInvForm();
+  html += `</div></div>`;
+  return html;
+}
+
+function renderInvRow(i, canEdit){
+  const isCargo = i.category === 'cargo';
+  const amt = isCargo ? `${Number(i.qtyTons) || 0} t` : `×${Number(i.qty) || 1}`;
+  const meta = [i.location, i.tl ? 'TL' + i.tl : ''].filter(Boolean).join(' · ');
+  const ctl = canEdit ? `<span class="inv-ctl">
+      <button class="disc-mini" onclick="editInvItem('${i.id}')" title="Edit">✏</button>
+      <button class="disc-mini del" onclick="deleteInvItem('${i.id}')" title="Remove">✕</button>
+    </span>` : '';
+  return `<div class="inv-row">
+    <span class="inv-name">${escQH(i.name)}${meta ? `<span class="inv-meta">${escQH(meta)}</span>` : ''}${i.notes ? `<span class="inv-notes">${escQH(i.notes)}</span>` : ''}</span>
+    <span class="inv-amt">${amt}</span>
+    ${ctl}
+  </div>`;
+}
+
+function renderInvForm(){
+  const ed = invEditingId ? shipInventory.find(x => x.id === invEditingId) : null;
+  if(!ed && !invAdding){
+    return `<button class="cal-add-btn" style="width:100%;margin-top:8px" onclick="beginInvAdd()">+ Add item</button>`;
+  }
+  const catOpts = SHIP_INV_CATEGORIES.map(c =>
+    `<option value="${c[0]}"${ed && ed.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const amtVal = ed ? (ed.category === 'cargo' ? (ed.qtyTons || '') : (ed.qty || '')) : '';
+  return `<div class="disc-add" style="margin-top:8px">
+    <div class="disc-add-ttl">${ed ? 'Edit item' : 'New item'}</div>
+    <input id="inv-f-name" placeholder="Name…" maxlength="80" value="${ed ? escAttr(ed.name) : ''}">
+    <div class="disc-add-row">
+      <select id="inv-f-cat">${catOpts}</select>
+      <input id="inv-f-amt" type="number" inputmode="decimal" step="any" placeholder="Qty / tons" value="${amtVal}" style="max-width:90px">
+      <input id="inv-f-tl" type="number" inputmode="numeric" placeholder="TL" value="${ed && ed.tl ? ed.tl : ''}" style="max-width:56px">
+    </div>
+    <div class="disc-add-row">
+      <input id="inv-f-loc" placeholder="Location (hold / locker…)" value="${ed ? escAttr(ed.location || '') : ''}">
+    </div>
+    <input id="inv-f-notes" placeholder="Notes…" value="${ed ? escAttr(ed.notes || '') : ''}">
+    <div class="disc-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="saveInvItem()">${ed ? 'Save changes' : '+ Add item'}</button>
+      <button class="disc-mini" onclick="cancelInvEdit()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function beginInvAdd(){ if(!canEditShipInventory()) return; invAdding = true; invEditingId = null; renderShipPanel(); }
+function editInvItem(id){ if(!canEditShipInventory()) return; invEditingId = id; invAdding = false; renderShipPanel(); }
+function cancelInvEdit(){ invEditingId = null; invAdding = false; renderShipPanel(); }
+function deleteInvItem(id){
+  if(!canEditShipInventory()) return;
+  shipInventory = shipInventory.filter(i => i.id !== id);
+  if(invEditingId === id){ invEditingId = null; invAdding = false; }
+  saveShipInventory();
+  renderShipPanel();
+}
+function saveInvItem(){
+  if(!canEditShipInventory()) return;
+  const name = document.getElementById('inv-f-name').value.trim(); if(!name) return;
+  const category = document.getElementById('inv-f-cat').value;
+  const amt = Number(document.getElementById('inv-f-amt').value) || 0;
+  const tl = document.getElementById('inv-f-tl').value.trim();
+  const location = document.getElementById('inv-f-loc').value.trim();
+  const notes = document.getElementById('inv-f-notes').value.trim();
+  const isCargo = category === 'cargo';
+  if(invEditingId){
+    const i = shipInventory.find(x => x.id === invEditingId);
+    if(i){ i.name = name; i.category = category; i.tl = tl; i.location = location; i.notes = notes;
+      i.qtyTons = isCargo ? amt : 0; i.qty = isCargo ? 0 : (amt || 1); }
+    invEditingId = null;
+  } else {
+    shipInventory.push({ id: 'inv_' + Date.now().toString(36), name, category, tl, location, notes,
+      qtyTons: isCargo ? amt : 0, qty: isCargo ? 0 : (amt || 1), combat: null });
+  }
+  invAdding = false;
+  saveShipInventory();
+  renderShipPanel();
 }
 
 // ── Traveller 2E math ──
@@ -9396,6 +9586,9 @@ function renderShipPanel(){
     ${costRow('runningCost','Running Cost')}
   </div>`);
 
+  // ── SHIP INVENTORY (nav crew + referee only) ──
+  if(canSee(SHIP_NAV_AUDIENCE)) sec.push(shipInventorySectionHTML());
+
   // ── CRITICAL HITS ──
   sec.push(`<div class="sf-sec">
     <div class="sf-tab">Critical Hits</div>
@@ -9409,7 +9602,7 @@ function renderShipPanel(){
 
 function updateShipField(field, value){
   if(!isReferee()) return;
-  const numeric = ['fuel','fuelMax','tonnage','jumpRating','hullPoints','hullPointsMax','jumpParsecs'];
+  const numeric = ['fuel','fuelMax','tonnage','jumpRating','hullPoints','hullPointsMax','jumpParsecs','cargoCapacity'];
   shipState[field] = numeric.includes(field) ? (Number(value) || 0) : value;
   saveShipState();
   renderShipPanel();
@@ -10403,6 +10596,8 @@ loadTextureCatalog().then(() => {
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
+loadShipInventory().then(() => { if(shipPanelOpen) renderShipPanel(); });
+startInventoryPolling(); // multi-writer (referee + nav crew) — polls for every role
 loadAlertState().then(() => applyAlertState());
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => renderImperialDate());
