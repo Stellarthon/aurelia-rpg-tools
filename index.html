@@ -419,20 +419,6 @@ textarea{font-family:var(--font)}
 #gx-legend .leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
 #gx-legend .leg-row:last-child{margin-bottom:0}
 #gx-legend .leg-swatch{width:20px;height:9px;border-radius:2px;flex-shrink:0;opacity:0.7}
-/* Galaxy search overlay */
-#gx-search-wrap{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:min(340px,70vw);z-index:12}
-#gx-search-input{width:100%;box-sizing:border-box;background:rgba(14,18,30,.95);border:.5px solid var(--bd0);border-radius:8px;color:var(--tx0);font-size:12px;padding:8px 12px;font-family:inherit;outline:none}
-#gx-search-input:focus{border-color:var(--accentGold)}
-#gx-search-results{margin-top:5px;background:rgba(14,18,30,.97);border:.5px solid var(--bd0);border-radius:8px;max-height:50vh;overflow-y:auto;display:none;box-shadow:0 4px 20px rgba(0,0,0,.5)}
-#gx-search-results.open{display:block}
-.gx-sr-group{font-size:8px;font-family:monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx1);padding:7px 12px 3px;position:sticky;top:0;background:rgba(14,18,30,.97)}
-.gx-sr-item{display:block;width:100%;text-align:left;background:none;border:none;border-top:.5px solid var(--bg2);color:var(--tx0);font-size:12px;padding:7px 12px;cursor:pointer;font-family:inherit}
-.gx-sr-item:hover{background:var(--bd0)}
-.gx-sr-sub{display:block;font-size:9px;font-family:monospace;color:var(--tx1);margin-top:2px}
-.gx-sr-redacted{color:#8a7fa0;font-style:italic}
-.gx-sr-empty{padding:10px 12px;font-size:11px;color:var(--tx1)}
-.gx-fac-hl{animation:gxFacPulse 2.4s ease-out forwards}
-@keyframes gxFacPulse{0%{opacity:.9}100%{opacity:0}}
 /* Galaxy detail panel reuses the system-detail content classes (.sg/.s-sec/.s-desc). */
 #galaxy-db .sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
 #galaxy-db .sg-l{color:var(--tx1)}#galaxy-db .sg-v{color:var(--tx0)}
@@ -1098,32 +1084,6 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .disc-add textarea{resize:vertical}
 .disc-add-row{display:flex;gap:6px}
 .disc-add-row select{flex:0 0 auto;width:auto}
-
-/* ── Encyclopedia / Wiki panel (clones the Codex chrome) ── */
-#wiki-wrap{position:fixed;top:54px;right:0;width:380px;height:500px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:160px;max-width:94vw;max-height:88vh}
-#wiki-wrap.hidden{display:none}
-#wiki-wrap.panel-collapsed{height:auto!important;min-height:0}
-#wiki-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
-#wiki-header:active{cursor:grabbing}
-#wiki-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px;display:flex;align-items:center;gap:8px}
-#wiki-count{font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace}
-#wiki-toggle{font-size:10px;color:var(--tx1)}
-#wiki-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
-#wiki-body.collapsed{display:none}
-.wiki-item{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:8px 10px;cursor:pointer}
-.wiki-item:hover{background:var(--bd0)}
-.wiki-item-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.wiki-item-ttl{font-size:12px;font-weight:700;color:var(--tx0);flex:1;min-width:0;word-break:break-word}
-.wiki-item-snip{font-size:10px;color:var(--tx1);margin-top:4px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.wiki-article-ttl{font-size:15px;font-weight:700;color:var(--accentGold);margin:2px 0 6px}
-.wiki-article-body{font-size:12px;line-height:1.65;color:var(--tx0);white-space:pre-wrap;word-break:break-word}
-.wiki-links{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
-.wiki-link-chip{font-size:10px;font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;padding:3px 8px;color:var(--tx0);cursor:pointer}
-.wiki-link-chip:hover{border-color:var(--accentGold);color:var(--accentGold)}
-.wiki-link-chip.codex:hover{border-color:#c89cff;color:#c89cff}
-.wiki-meta{font-size:9px;font-family:monospace;color:var(--tx1);margin-top:10px;border-top:.5px solid var(--bg2);padding-top:6px}
-.wiki-back{font-size:10px;font-family:monospace;color:var(--tx1);background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:4px 9px;cursor:pointer;align-self:flex-start}
-.wiki-back:hover{color:var(--tx0);background:var(--bd0)}
 .disc-add-row #disc-f-vis{flex:1}
 #disc-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
 #disc-btn:hover{background:var(--bd0);color:var(--tx0)}
@@ -1162,26 +1122,6 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #rep-btn:hover{background:var(--bd0);color:var(--tx0)}
 #rep-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#rep-wrap{right:0;top:54px;width:312px;height:420px}}
-
-/* ── Ship inventory (manifest rows inside the Ship panel) ── */
-.inv-group{margin-top:10px}
-.inv-group-lbl{font-size:9px;font-family:monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx1);margin-bottom:4px;border-bottom:.5px solid var(--bd2);padding-bottom:2px}
-.inv-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:.5px solid var(--bg2)}
-.inv-name{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--tx0)}
-.inv-meta{font-size:9px;font-family:monospace;color:var(--tx1);margin-top:1px}
-.inv-notes{font-size:10px;color:var(--tx1);margin-top:2px;font-style:italic}
-.inv-amt{font-size:11px;font-family:monospace;color:#9B59B6;white-space:nowrap}
-.inv-ctl{display:flex;gap:3px;flex-shrink:0}
-
-/* ── Route blocking (galaxy map) ── */
-.gx-route-ctl-box{background:var(--bg2);border:.5px solid var(--bd2);border-radius:6px;padding:8px 10px;margin-bottom:12px}
-.gx-route-ctl-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--tx0)}
-.gx-route-ctl-hint{font-size:9px;color:var(--tx1);font-family:monospace;margin-top:5px;line-height:1.5}
-.gx-conn-ctl{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:0 0 6px 15px;border-bottom:.5px solid var(--bg2)}
-.gx-conn-reason{flex:1;min-width:120px;font-size:10px;background:var(--bg1);border:.5px solid var(--bd2);border-radius:4px;color:var(--tx0);padding:3px 6px}
-.gx-conn-status{font-size:10px;padding:2px 0 6px 15px;border-bottom:.5px solid var(--bg2)}
-.gx-conn-status.blocked{color:#d45050}
-.gx-conn-status.adv{color:#e0a040}
 
 /* ── Oracle (rumour & encounter generators) panel ── */
 #gen-wrap{position:fixed;top:54px;right:0;width:344px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:280px;min-height:120px;max-width:92vw;max-height:86vh}
@@ -2030,6 +1970,24 @@ input#ui-scale-range{
 @keyframes refresh-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 #player-refresh-btn.just-updated{background:#2a4a1a;border-color:#8BC34A}
 
+/* ── Shared-sync connectivity pill (offline hardening) ──
+   Lives in the header (always present, both roles). Quiet when Live, prominent
+   when the connection to Supabase is degraded, so stale data is never mistaken
+   for live. Driven by updateConnPill(). */
+#conn-pill{
+  display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  background:#11151c;border:1px solid #2a3340;border-radius:20px;
+  padding:5px 10px;font-size:10px;font-family:monospace;font-weight:700;
+  letter-spacing:.5px;cursor:default;user-select:none;white-space:nowrap;
+  transition:color .2s,border-color .2s,opacity .2s;
+}
+#conn-pill .cp-dot{font-size:9px;line-height:1}
+#conn-pill.cp-live{color:#4CAF50;border-color:#2e5a38;opacity:.6}
+#conn-pill.cp-live:hover{opacity:1}
+#conn-pill.cp-reconnecting{color:#d4a017;border-color:#5a4a17;opacity:1;animation:cp-pulse 1.4s ease-in-out infinite}
+#conn-pill.cp-offline{color:#d45050;border-color:#5a2a2a;opacity:1}
+@keyframes cp-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
 /* ── View transition effect ── */
 #view-transition{
   position:fixed;inset:0;z-index:150;pointer-events:none;
@@ -2262,14 +2220,13 @@ input#ui-scale-range{
     <button id="design-menu-btn" class="ref-only" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
         <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
-      <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
+      <input type="text" id="search-input" placeholder="🔍 Find system, NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
     </div>
-    <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
+    <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
-    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Discovery Log / Codex — revealed lore & intel">🗂 Codex</button>
-    <button id="wiki-btn" onclick="toggleWikiPanel()" title="Encyclopedia — campaign lore & reference">📚 Wiki</button>
+    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
@@ -2282,8 +2239,10 @@ input#ui-scale-range{
     <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker" style="display:none"></button>
     <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly" style="display:none"></button>
     <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows" style="display:none"></button>
+    <!-- ── Shared-sync status pill (offline hardening) — updated by updateConnPill() ── -->
+    <div id="conn-pill" class="cp-live" title="Shared sync — Live"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
-      <span class="pm-label">Player Mode</span>
+      <span class="pm-label">Traveller View</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
     </div>
   </div>
@@ -2339,10 +2298,6 @@ input#ui-scale-range{
       <g id="gx-systems"></g>
     </svg>
         <div id="gx-title">The Orion Arm</div>
-        <div id="gx-search-wrap">
-          <input type="text" id="gx-search-input" placeholder="🔍 Search systems, factions, lore…" autocomplete="off" oninput="renderGxSearchResults()" onfocus="renderGxSearchResults()">
-          <div id="gx-search-results"></div>
-        </div>
         <div id="gx-zoom">
           <button class="zoom-btn" onclick="gxZoom(1.2)">+</button>
           <button class="zoom-btn" onclick="gxZoom(0.83)">−</button>
@@ -2366,7 +2321,6 @@ input#ui-scale-range{
         </div>
         <div id="galaxy-db">
           <div id="galaxy-overview">
-            <div id="gx-route-ctl"></div>
             <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:14px">
               The Orion Arm spans hundreds of inhabited systems across six major faction territories.
               The Archon Collective observes from beyond the charted boundaries.<br><br>
@@ -2702,7 +2656,7 @@ input#ui-scale-range{
 
   <div id="health-wrap" class="ref-only">
     <div id="health-header" onclick="toggleHealthPanel()">
-      <span id="health-title">♥ NPC HEALTH</span>
+      <span id="health-title">♥ NPC STATUS</span>
       <span id="health-count">0</span>
       <span id="health-toggle">▼</span>
     </div>
@@ -2783,14 +2737,14 @@ input#ui-scale-range{
   <div id="quest-wrap" class="hidden">
     <div id="quest-header" onclick="toggleQuestCollapse()">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 QUEST LOG</span>
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 MISSION LOG</span>
         <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
       </div>
       <span id="quest-toggle">▼</span>
     </div>
     <div id="quest-body"></div>
     <div id="quest-foot" class="ref-only">
-      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Quest</button>
+      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Mission</button>
     </div>
     <div class="panel-resize-handle" id="quest-resize"></div>
   </div>
@@ -2841,21 +2795,11 @@ input#ui-scale-range{
   <!-- ── Discovery Log / Codex panel ── -->
   <div id="disc-wrap" class="hidden">
     <div id="disc-header" onclick="toggleDiscCollapse()">
-      <span id="disc-title-lbl">🗂 CODEX <span id="disc-count">0</span></span>
+      <span id="disc-title-lbl">🗂 LIBRARY DATA <span id="disc-count">0</span></span>
       <span id="disc-toggle">▼</span>
     </div>
     <div id="disc-body"></div>
     <div class="panel-resize-handle" id="disc-resize"></div>
-  </div>
-
-  <!-- ── Encyclopedia / Wiki panel ── -->
-  <div id="wiki-wrap" class="hidden">
-    <div id="wiki-header" onclick="toggleWikiCollapse()">
-      <span id="wiki-title-lbl">📚 ENCYCLOPEDIA <span id="wiki-count">0</span></span>
-      <span id="wiki-toggle">▼</span>
-    </div>
-    <div id="wiki-body"></div>
-    <div class="panel-resize-handle" id="wiki-resize"></div>
   </div>
 
   <!-- ── Reputation tracker panel ── -->
@@ -2881,12 +2825,12 @@ input#ui-scale-range{
   <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
     <div id="quest-edit-card">
       <div id="quest-edit-header">
-        <span id="quest-edit-title">NEW QUEST</span>
+        <span id="quest-edit-title">NEW MISSION</span>
         <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
       </div>
       <div id="quest-edit-body">
         <div class="design-field-group">
-          <div class="design-field-label">Quest Title</div>
+          <div class="design-field-label">Mission Title</div>
           <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
         </div>
         <div class="design-field-group">
@@ -2899,7 +2843,7 @@ input#ui-scale-range{
         </div>
         <div class="design-field-group">
           <div class="design-field-label">Player Description (visible to players)</div>
-          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this quest..."></textarea>
+          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this mission..."></textarea>
         </div>
         <div class="design-field-group">
           <div class="design-field-label">Referee Notes (private)</div>
@@ -3327,103 +3271,6 @@ GALAXY_NODES.forEach(s => (s.connections||[]).forEach(cid => {
 }));
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ROUTE BLOCKING  (V2 — referee-controlled jump-lane closures + auto advisory)
-// ───────────────────────────────────────────────────────────────────────────
-// Shared campaign state in aurelia_state key 'route-blocks'. Two layers:
-//   • Manual blocks — hard, story-truth closures the referee sets per lane
-//     (red). Each carries an optional reason and an `explain` flag (default
-//     true) controlling whether nav crew see the reason or just "unavailable".
-//   • Auto advisory — soft, derived from ship state (amber). Treated globally:
-//     a jump lane is a single jump in this map's model, so if the ship cannot
-//     currently make ANY jump (no J-drive, or fuel below one jump's worth) the
-//     whole network is flagged out-of-range. We deliberately do NOT invent
-//     per-lane parsec distances the data model doesn't carry.
-// `enabled` is the kill-switch: flipping it off makes every manual block inert
-// instantly. Block/advisory styling is shown only to the nav crew (Rhett +
-// Cass) and the referee; other players see ordinary lanes.
-// ═══════════════════════════════════════════════════════════════════════════
-
-let routeBlocks = { enabled: true, blocks: {} };
-
-async function loadRouteBlocks(){
-  try { const r = await supaStorage.get('route-blocks', true); if(r){ const v = JSON.parse(r.value); routeBlocks = { enabled: v.enabled !== false, blocks: v.blocks || {} }; } }
-  catch(e){ routeBlocks = { enabled: true, blocks: {} }; }
-}
-async function saveRouteBlocks(){
-  try { await supaStorage.set('route-blocks', JSON.stringify(routeBlocks), true); }
-  catch(e){ console.error('Route blocks save failed:', e); }
-}
-
-// The active manual block for a lane (null when none or kill-switch off).
-function gxRouteBlock(a, b){
-  if(!routeBlocks.enabled) return null;
-  return routeBlocks.blocks[gxLaneKey(a, b)] || null;
-}
-// Can the ship currently make a single jump? (J-drive present + fuel for 1 jump.)
-function gxShipCanJump(){
-  const r = Number(shipState.jumpRating) || 0;
-  if(r < 1) return false;
-  const need = +(0.1 * (Number(shipState.tonnage) || 0)).toFixed(1); // one J-1 jump's fuel
-  return (Number(shipState.fuel) || 0) >= need;
-}
-// Is the soft out-of-range advisory currently in force? (global, ship-derived)
-function gxAdvisoryActive(){ return !gxShipCanJump(); }
-// Does the current viewer see route restrictions? Nav crew + referee only.
-function gxSeesRoutes(){ return canSee(SHIP_NAV_AUDIENCE); }
-
-function toggleRouteKillSwitch(){
-  if(!isReferee()) return;
-  routeBlocks.enabled = !routeBlocks.enabled;
-  saveRouteBlocks();
-  gxRenderLanes();
-  gxRenderRouteControl();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-// Toggle a manual block on the lane between the selected system and a neighbour.
-function toggleRouteBlock(a, b){
-  if(!isReferee()) return;
-  const k = gxLaneKey(a, b);
-  if(routeBlocks.blocks[k]) delete routeBlocks.blocks[k];
-  else routeBlocks.blocks[k] = { reason: '', explain: true };
-  saveRouteBlocks();
-  gxRenderLanes();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-function setRouteBlockReason(a, b, reason){
-  if(!isReferee()) return;
-  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
-  blk.reason = reason;
-  saveRouteBlocks();
-  gxRenderLanes();
-}
-function toggleRouteBlockExplain(a, b){
-  if(!isReferee()) return;
-  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
-  blk.explain = !blk.explain;
-  saveRouteBlocks();
-  gxRenderLanes();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-
-// Referee kill-switch + status, injected into the galaxy overview panel.
-function gxRenderRouteControl(){
-  const el = document.getElementById('gx-route-ctl'); if(!el) return;
-  if(!isReferee()){ el.innerHTML = ''; return; }
-  const on = routeBlocks.enabled;
-  const n = Object.keys(routeBlocks.blocks).length;
-  el.innerHTML = `<div class="gx-route-ctl-box">
-    <div class="gx-route-ctl-row">
-      <span>🚧 Route blocking — ${on ? '<b style="color:#d45050">ARMED</b>' : '<b style="color:var(--tx1)">off</b>'}</span>
-      <div class="theme-toggle ${on?'on':''}" role="switch" tabindex="0" aria-checked="${on}"
-           title="${on ? 'Blocks active — tap to disarm all' : 'Blocks inert — tap to arm'}"
-           onclick="toggleRouteKillSwitch()"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRouteKillSwitch();}"><div class="theme-toggle-knob"></div></div>
-    </div>
-    <div class="gx-route-ctl-hint">${n} lane${n===1?'':'s'} blocked. Select a system to set blocks on its jump connections.${gxAdvisoryActive()?' <span style="color:#e0a040">Ship cannot currently jump — all lanes show out-of-range (amber).</span>':''}</div>
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // GALAXY MAP — ENGINE  (ported from orion_arm_map_v4, namespaced gx*)
 // ═══════════════════════════════════════════════════════════════════════════
 // The Orion Arm starmap is the app's landing view. Nodes are star systems;
@@ -3495,28 +3342,12 @@ function gxSeedStars(){
 // ── Render jump lanes + nodes ──────────────────────────────────────────────
 function gxRenderLanes(){
   const g = document.getElementById('gx-lanes'); if(!g) return;
-  const seesRoutes = gxSeesRoutes();
-  const advisory = seesRoutes && gxAdvisoryActive();
   let h = '';
   GX_LANES.forEach(k => {
     const [a,b] = k.split('|');
     const sa = GX_MAP[a], sb = GX_MAP[b];
     if(!sa || !sb) return;
-    const blk = seesRoutes ? gxRouteBlock(a,b) : null;
-    let stroke = '#1d4a66', w = '0.7', op = '0.55', dash = '', title = '';
-    if(blk){
-      stroke = '#d45050'; w = '1.3'; op = '0.9'; dash = ' stroke-dasharray="4,3"';
-      const showReason = isReferee() || blk.explain;
-      title = (showReason && blk.reason) ? blk.reason : 'Route unavailable';
-    } else if(advisory){
-      stroke = '#e0a040'; w = '0.9'; op = '0.7'; dash = ' stroke-dasharray="2,3"';
-      title = 'Out of range — ship cannot currently jump';
-    }
-    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="${stroke}" stroke-width="${w}" opacity="${op}"${dash}>${title?`<title>${escHtml(title)}</title>`:''}</line>`;
-    if(blk){
-      const mx = (sa.x+sb.x)/2, my = (sa.y+sb.y)/2;
-      h += `<g pointer-events="none"><circle cx="${mx}" cy="${my}" r="3.4" fill="#1a0808" stroke="#d45050" stroke-width="0.8"/><text x="${mx}" y="${my+2.1}" font-size="5" fill="#d45050" text-anchor="middle" font-family="monospace">✕</text></g>`;
-    }
+    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="#1d4a66" stroke-width="0.7" opacity="0.55"/>`;
   });
   g.innerHTML = h;
 }
@@ -3582,7 +3413,7 @@ function gxAttachPanZoom(){
   if(gxPanZoomAttached) return;
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
   canvas.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')) return;
+    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
@@ -3652,33 +3483,16 @@ function gxUpdateDetail(id){
     <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
   </div>`;
 
-  const seesRoutes = gxSeesRoutes(), ref = isReferee(), advisory = seesRoutes && gxAdvisoryActive();
   html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
-  if(ref) html += `<div style="font-size:9px;color:var(--tx1);font-family:monospace;margin:-2px 0 6px">Referee: block / unblock a lane below. ${routeBlocks.enabled ? 'Blocking ARMED.' : 'Blocking is OFF (kill-switch).'}</div>`;
   if((sys.connections||[]).length){
     sys.connections.forEach(cid => {
       const c = GX_MAP[cid]; if(!c) return;
       const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
-      const blk = seesRoutes ? gxRouteBlock(id, cid) : null;
       html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
         <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
-        <span style="font-size:12px;color:${blk?'#d45050':'var(--tx0)'}">${blk?'⛔ ':''}${escHtml((c.label||c.name).replace(' ★',''))}</span>
+        <span style="font-size:12px;color:var(--tx0)">${escHtml((c.label||c.name).replace(' ★',''))}</span>
         <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>
       </div>`;
-      if(ref){
-        html += `<div class="gx-conn-ctl">
-          <button class="disc-mini${blk?' del':''}" onclick="toggleRouteBlock('${id}','${cid}')">${blk?'Unblock':'Block'}</button>`;
-        if(blk){
-          html += `<input class="gx-conn-reason" placeholder="Reason (e.g. Hegemony interdiction)" value="${escAttr(blk.reason||'')}" onchange="setRouteBlockReason('${id}','${cid}',this.value)">
-            <button class="disc-mini" title="Toggle whether nav crew see the reason" onclick="toggleRouteBlockExplain('${id}','${cid}')">${blk.explain?'👁 reason shown':'🚫 reason hidden'}</button>`;
-        }
-        html += `</div>`;
-      } else if(blk){
-        const showReason = blk.explain && blk.reason;
-        html += `<div class="gx-conn-status blocked">⛔ ${showReason ? escHtml(blk.reason) : 'Route unavailable'}</div>`;
-      } else if(advisory){
-        html += `<div class="gx-conn-status adv">⚠ Out of range — insufficient fuel/jump</div>`;
-      }
     });
   } else {
     html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
@@ -3686,139 +3500,6 @@ function gxUpdateDetail(id){
   html += `</div>`;
   det.innerHTML = html;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// GALAXY SEARCH  (V2 — fog-respecting map search overlay)
-// ───────────────────────────────────────────────────────────────────────────
-// Searches systems, factions, NPCs, Codex entries and wiki articles. The index
-// is a VIEW: it is rebuilt per query from the same fog-filtered data the panels
-// render, so it can never leak hidden content. Ruling:
-//   • hidden Codex / referee-only items  → not indexed (fully invisible)
-//   • rumoured Codex                     → title only, shown as a redacted stub
-//   • known / 'all'                      → fully searchable
-//   • NPCs                               → referee only (player NPC visibility
-//                                          isn't modelled, so we don't leak it)
-// ═══════════════════════════════════════════════════════════════════════════
-
-function buildGalaxySearchIndex(){
-  const ref = isReferee();
-  const idx = [];
-
-  // Systems / worlds — always visible on the map.
-  GALAXY_NODES.forEach(n => {
-    const label = (n.label || n.name).replace(' ★','');
-    idx.push({ type:'System', name:label, sub:n.name, match:(label + ' ' + n.name).toLowerCase(),
-      nav:{ kind:'system', id:n.id } });
-  });
-
-  // Factions — jump to / highlight member systems.
-  Object.keys(GALAXY_FACTIONS).forEach(key => {
-    const f = GALAXY_FACTIONS[key];
-    const members = GALAXY_NODES.filter(n => n.faction === key).length;
-    if(!members) return;
-    idx.push({ type:'Faction', name:f.name, sub:members + ' systems', match:f.name.toLowerCase(),
-      nav:{ kind:'faction', key } });
-  });
-
-  // NPCs — referee only (player-side NPC visibility isn't modelled).
-  if(ref){
-    GALAXY_NODES.forEach(n => {
-      const sid = n.systemId || n.id;
-      (effectiveBodies(sid) || []).forEach(b => {
-        (b.npcs || []).forEach(npc => {
-          idx.push({ type:'NPC', name:npc.name, sub:(b.name || (n.label||n.name)),
-            match:(npc.name + ' ' + (npc.role||'')).toLowerCase(), nav:{ kind:'system', id:n.id } });
-        });
-      });
-    });
-  }
-
-  // Codex entries — fog-respecting.
-  discoveryLog.forEach(e => {
-    const stage = ref ? 'known' : discViewerStage(e);
-    if(!stage) return;                       // hidden / not visible → skip entirely
-    if(!ref && stage === 'rumoured'){
-      idx.push({ type:'Codex', name:e.title, sub:'Unconfirmed', redacted:true,
-        match:e.title.toLowerCase(), nav:{ kind:'codex' } });   // title only — body not indexed
-    } else {
-      idx.push({ type:'Codex', name:e.title, sub:discStateLabel(ref ? e.state : stage),
-        match:(e.title + ' ' + (e.body||'')).toLowerCase(), nav:{ kind:'codex' } });
-    }
-  });
-
-  // Wiki articles — readable ones only.
-  wikiArticles.filter(wikiCanRead).forEach(a => {
-    idx.push({ type:'Wiki', name:a.title, sub:'Encyclopedia',
-      match:(a.title + ' ' + (a.body||'')).toLowerCase(), nav:{ kind:'wiki', id:a.id } });
-  });
-
-  return idx;
-}
-
-function renderGxSearchResults(){
-  const input = document.getElementById('gx-search-input');
-  const box = document.getElementById('gx-search-results');
-  if(!input || !box) return;
-  const q = input.value.trim().toLowerCase();
-  if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
-
-  const matches = buildGalaxySearchIndex().filter(it => it.match.includes(q)).slice(0, 40);
-  if(!matches.length){
-    box.innerHTML = '<div class="gx-sr-empty">No matches.</div>';
-    box.classList.add('open');
-    return;
-  }
-  window._gxSearchNavs = matches.map(m => m.nav);
-  const groups = {};
-  matches.forEach((m, i) => { (groups[m.type] = groups[m.type] || []).push({ ...m, idx:i }); });
-  let html = '';
-  Object.keys(groups).forEach(type => {
-    html += `<div class="gx-sr-group">${escHtml(type)}</div>`;
-    html += groups[type].map(m =>
-      `<button class="gx-sr-item" onclick="navigateGxResult(window._gxSearchNavs[${m.idx}])">
-        <span class="${m.redacted ? 'gx-sr-redacted' : ''}">${escHtml(m.name)}</span>
-        <span class="gx-sr-sub">${escHtml(m.sub || '')}</span>
-      </button>`).join('');
-  });
-  box.innerHTML = html;
-  box.classList.add('open');
-}
-
-function navigateGxResult(nav){
-  const input = document.getElementById('gx-search-input');
-  const box = document.getElementById('gx-search-results');
-  if(input) input.value = '';
-  if(box){ box.classList.remove('open'); box.innerHTML = ''; }
-  if(!nav) return;
-  if(nav.kind === 'system'){ gxSelectSystem(nav.id); }
-  else if(nav.kind === 'faction'){ gxHighlightFaction(nav.key); }
-  else if(nav.kind === 'codex'){ if(!discPanelOpen) toggleDiscoveryPanel(); }
-  else if(nav.kind === 'wiki'){ if(!wikiPanelOpen) toggleWikiPanel(); viewWikiArticle(nav.id); }
-}
-
-// Briefly pulse every system belonging to a faction.
-function gxHighlightFaction(key){
-  const g = document.getElementById('gx-systems'); if(!g) return;
-  g.querySelectorAll('.gx-fac-hl').forEach(e => e.remove());
-  const f = GALAXY_FACTIONS[key] || { color:'#00e5ff' };
-  GALAXY_NODES.filter(n => n.faction === key).forEach(n => {
-    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', '12');
-    c.setAttribute('fill','none'); c.setAttribute('stroke', f.color);
-    c.setAttribute('stroke-width','2'); c.setAttribute('class','gx-fac-hl');
-    g.appendChild(c);
-  });
-  setTimeout(() => { g.querySelectorAll('.gx-fac-hl').forEach(e => e.remove()); }, 2400);
-}
-
-// Close galaxy search results on outside click.
-document.addEventListener('click', function(e){
-  const wrap = document.getElementById('gx-search-wrap');
-  if(wrap && !wrap.contains(e.target)){
-    const box = document.getElementById('gx-search-results');
-    if(box) box.classList.remove('open');
-  }
-});
 
 // ── Top-level galaxy view ──────────────────────────────────────────────────
 function goGalaxy(){
@@ -3834,8 +3515,6 @@ function goGalaxy(){
     updateBackBtn();
     gxEnsureRendered();
     gxRenderSystems(); // refresh surveyed dots
-    gxRenderLanes();   // refresh route-block / advisory styling for this viewer
-    gxRenderRouteControl();
     requestAnimationFrame(() => { if(!gxViewReady) gxResetView(); });
   });
 }
@@ -4368,7 +4047,6 @@ function togglePM(){
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
-  applyIdentityClass(); // refresh galaxy route styling + ship inventory gating for the new role
   if(pmCheck.checked){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
   applyAlertState(); // refresh the alert puck / overlay for the new role
 }
@@ -6689,12 +6367,12 @@ function renderInit(){
     let healthHTML = '';
     if(c.healthMode === 'simple'){
       healthHTML = `<div class="hp-block">
-        ${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+        ${healthBarHTML('Hits', c.hp, c.maxHp, '#4CAF50')}
         <div class="hp-adjust-row">
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max hits">
         </div>
       </div>`;
     } else if(c.healthMode === 'detailed'){
@@ -6729,7 +6407,7 @@ function renderInit(){
         <button class="init-btn" onclick="moveCombatant(${c.id},1)" title="Move down">▼</button>
         <button class="init-btn ${c.ambush==='atk'?'danger':''}" onclick="toggleAmbush(${c.id},'atk')" title="Ambushing (+6)">AMB+</button>
         <button class="init-btn ${c.ambush==='def'?'danger':''}" onclick="toggleAmbush(${c.id},'def')" title="Ambushed (−6)">AMB−</button>
-        <button class="init-btn" onclick="cycleHealthMode(${c.id})" title="Cycle health tracking: off → simple → detailed">${c.healthMode==='none'?'+ HP':c.healthMode==='simple'?'HP: Simple':'HP: Detailed'}</button>
+        <button class="init-btn" onclick="cycleHealthMode(${c.id})" title="Cycle damage tracking: off → simple → detailed">${c.healthMode==='none'?'+ Damage':c.healthMode==='simple'?'Dmg: Simple':'Dmg: Detailed'}</button>
         <button class="init-btn" onclick="toggleDown(${c.id})" title="Toggle down/out">${c.down?'Revive':'Down'}</button>
         <button class="init-btn danger" onclick="removeCombatant(${c.id})" title="Remove">✕</button>
       </div>
@@ -6765,19 +6443,19 @@ function renderHealthPanel(){
   count.textContent = tracked.length;
 
   if(!tracked.length){
-    body.innerHTML = '<div class="init-empty">No NPCs being tracked yet. Use the "+ HP" button on a combatant in the Initiative panel to start tracking them here.</div>';
+    body.innerHTML = '<div class="init-empty">No NPCs being tracked yet. Use the "+ Damage" button on a combatant in the Initiative panel to start tracking them here.</div>';
     return;
   }
 
   body.innerHTML = tracked.map(c => {
     let healthHTML = '';
     if(c.healthMode === 'simple'){
-      healthHTML = `${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+      healthHTML = `${healthBarHTML('Hits', c.hp, c.maxHp, '#4CAF50')}
         <div class="hp-adjust-row">
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max hits">
         </div>`;
     } else {
       healthHTML = `<div style="position:relative">
@@ -6905,7 +6583,43 @@ function textureUrlFor(body){
   return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
+// ───────────────────────────────────────────────────────────────────────────
+// Shared state lives in Supabase, but the network isn't guaranteed at the table
+// (a player on a phone, a referee on hotel wifi). Three layers keep the app
+// usable through a drop:
+//   1. write-through CACHE — every successful read is mirrored to localStorage,
+//      and every write is cached *before* it's sent, so a reload while offline
+//      still renders last-known shared state instead of blank defaults.
+//   2. outbound QUEUE — a write that can't reach Supabase is parked in
+//      localStorage (last-write-wins per key) and flushed on reconnect, so a
+//      referee can keep revealing / advancing the clock through an outage.
+//   3. CONNECTIVITY signal — get/set outcomes plus the browser online/offline
+//      events drive the status pill (#conn-pill) and the player poll's backoff.
+// IMPORTANT for callers: supaStorage.get now returns { ok, value }.
+//   ok:false  → the request FAILED (value may be a cached fallback, or null).
+//   ok:true, value===null → the row genuinely doesn't exist.
+// Startup loaders read res.value (so the cache fills them in offline); pollers
+// must gate on res.ok (so a failed fetch is a no-op, never an empty-state wipe).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CACHE_PREFIX = 'aurelia_cache_';
+const SYNC_QUEUE_KEY = 'aurelia_sync_queue';
+
+// 'live' = last network op succeeded · 'reconnecting' = online but Supabase
+// unreachable · 'offline' = browser reports no connection.
+let connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'live';
+let lastSyncTs = null;
+
 const supaStorage = {
+  cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
+  cacheSet(key, value){
+    try {
+      if(value == null) localStorage.removeItem(CACHE_PREFIX + key);
+      else localStorage.setItem(CACHE_PREFIX + key, value);
+    } catch(e){ /* quota / disabled — non-fatal, sync still works in-memory */ }
+  },
   async get(key, shared){
     try {
       const res = await fetch(`${SUPABASE_REST}?key=eq.${encodeURIComponent(key)}&select=value`, {
@@ -6914,35 +6628,124 @@ const supaStorage = {
           'Authorization': 'Bearer ' + SUPABASE_KEY
         }
       });
-      if(!res.ok) return null;
+      if(!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
-      if(!rows.length) return null;
-      return { key, value: rows[0].value, shared };
+      const value = rows.length ? rows[0].value : null;
+      this.cacheSet(key, value);            // mirror authoritative server state
+      markOnline();
+      return { ok: true, value, fromCache: false };
     } catch(e){
-      console.error('Supabase get failed', e);
-      return null;
+      markOffline();
+      return { ok: false, value: this.cacheGet(key), fromCache: true };
     }
   },
+  // Raw upsert — throws on any failure. Used by both set() and the queue flush.
+  async _post(key, value){
+    const res = await fetch(SUPABASE_REST, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({ key, value: String(value) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    return true;
+  },
   async set(key, value, shared){
+    const str = String(value);
+    this.cacheSet(key, str);               // optimistic: survives a reload even if the POST never lands
     try {
-      const res = await fetch(SUPABASE_REST, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ key, value: String(value) })
-      });
-      if(!res.ok) { console.error('Supabase set failed', await res.text()); return null; }
-      return { key, value, shared };
+      await this._post(key, str);
+      markOnline();
+      flushQueue();                        // we're online — drain any backlog behind this write
+      return { ok: true };
     } catch(e){
-      console.error('Supabase set failed', e);
-      return null;
+      markOffline();
+      queueWrite(key, str);                // park it; reconnect (or the heartbeat) retries
+      return { ok: false };
     }
   }
 };
+
+// ── Outbound write queue (last-write-wins per key) ───────────────────────────
+function loadQueue(){ try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function saveQueue(q){ try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
+function queueLength(){ return Object.keys(loadQueue()).length; }
+function queueWrite(key, value){
+  const q = loadQueue();
+  q[key] = { value, ts: Date.now() };      // a newer write for a key supersedes the older one
+  saveQueue(q);
+  updateConnPill();
+}
+let flushing = false;
+async function flushQueue(){
+  if(flushing) return;
+  const keys = Object.keys(loadQueue());
+  if(!keys.length) return;
+  flushing = true;
+  try {
+    for(const key of keys){
+      const entry = loadQueue()[key];
+      if(!entry) continue;
+      try {
+        await supaStorage._post(key, entry.value);
+        const cur = loadQueue();           // re-read: the key may have been re-queued while awaiting
+        if(cur[key] && cur[key].ts === entry.ts){ delete cur[key]; saveQueue(cur); }
+        markOnline();
+      } catch(e){
+        markOffline();
+        break;                             // still down — stop; the next trigger retries
+      }
+    }
+  } finally {
+    flushing = false;
+    updateConnPill();
+  }
+}
+
+// ── Connectivity state → status pill + poll backoff ──────────────────────────
+function markOnline(){
+  const recovered = connState !== 'live';
+  connState = 'live';
+  lastSyncTs = Date.now();
+  pollBackoff = POLL_MS;                    // recovered — snap polling back to the fast cadence
+  if(recovered && queueLength()) flushQueue();
+  updateConnPill();
+}
+function markOffline(){
+  connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'reconnecting';
+  updateConnPill();
+}
+function syncAgoLabel(){
+  if(!lastSyncTs) return 'not yet';
+  const s = Math.round((Date.now() - lastSyncTs) / 1000);
+  if(s < 60) return s + 's ago';
+  const m = Math.round(s / 60);
+  if(m < 60) return m + 'm ago';
+  return Math.round(m / 60) + 'h ago';
+}
+function updateConnPill(){
+  const pill = document.getElementById('conn-pill');
+  if(!pill) return;
+  const q = queueLength();
+  pill.classList.remove('cp-live','cp-reconnecting','cp-offline');
+  let icon, text;
+  if(connState === 'live'){
+    pill.classList.add('cp-live');
+    icon = '●'; text = q ? `Syncing ${q}…` : 'Live';
+  } else if(connState === 'reconnecting'){
+    pill.classList.add('cp-reconnecting');
+    icon = '◐'; text = 'Reconnecting';
+  } else {
+    pill.classList.add('cp-offline');
+    icon = '○'; text = 'Offline';
+  }
+  pill.innerHTML = `<span class="cp-dot">${icon}</span><span class="cp-txt">${text}</span>`;
+  pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACCESS GATE
@@ -7018,25 +6821,16 @@ function canSee(audience){
 function applyIdentityClass(){
   if(!rootEl) return;
   rootEl.classList.remove('as-rhett','as-cass','as-other');
-  if(isReferee()){ refreshRoleGatedViews(); return; }
+  if(isReferee()) return;
   if(myIdentity === 'Rhett Calder')      rootEl.classList.add('as-rhett');
   else if(myIdentity === 'Cassia Velen') rootEl.classList.add('as-cass');
   else if(myIdentity)                    rootEl.classList.add('as-other');
-  refreshRoleGatedViews();
-}
-// Re-render the surfaces whose content depends on role/identity (galaxy route
-// styling, ship inventory gating) when the viewer's role or identity changes.
-function refreshRoleGatedViews(){
-  if(currentView === 'galaxy' && typeof gxRenderLanes === 'function'){
-    gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-  }
-  if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
 }
 
 async function loadRevealState(){
   try {
     const res = await supaStorage.get('reveal-status', true);
-    revealedAreas = res ? JSON.parse(res.value) : {};
+    revealedAreas = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ revealedAreas = {}; }
 }
 
@@ -7048,7 +6842,7 @@ async function loadRevealState(){
 async function loadClockState(){
   try {
     const res = await supaStorage.get('station-clock', true);
-    if(res){ clockMinutes = JSON.parse(res.value).minutes || 0; }
+    if(res.value != null){ clockMinutes = JSON.parse(res.value).minutes || 0; }
   } catch(e){ /* keep whatever's already in memory */ }
 }
 
@@ -7062,16 +6856,19 @@ async function saveClockState(){
 // optimistically). Players poll every few seconds so reveals/hides show
 // up without a manual refresh.
 let pollIntervalId = null;
-const POLL_MS = 4000;
+const POLL_MS = 4000;          // fast cadence while connected
+const POLL_MAX_MS = 30000;     // ceiling once we back off during an outage
+let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps back on markOnline()
 
 async function pollRevealState(){
   if(isReferee()) return; // referee never polls — would be pointless and noisy
+  // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
+  // state intact), never an overwrite-with-empty-defaults that wipes the screen.
   try {
     const res = await supaStorage.get('reveal-status', true);
-    if(res){
-      const fresh = JSON.parse(res.value);
-      const changed = JSON.stringify(fresh) !== JSON.stringify(revealedAreas);
-      if(changed){
+    if(res.ok){
+      const fresh = res.value != null ? JSON.parse(res.value) : {};
+      if(JSON.stringify(fresh) !== JSON.stringify(revealedAreas)){
         revealedAreas = fresh;
         if(currentView === 'station') { renderDetail(); updateStationLocks(); }
         if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
@@ -7082,7 +6879,7 @@ async function pollRevealState(){
   // Pick up the referee's station clock changes
   try {
     const resClock = await supaStorage.get('station-clock', true);
-    if(resClock){
+    if(resClock.ok && resClock.value != null){
       const freshMinutes = JSON.parse(resClock.value).minutes || 0;
       if(freshMinutes !== clockMinutes){
         clockMinutes = freshMinutes;
@@ -7094,10 +6891,9 @@ async function pollRevealState(){
   // Also pick up any Design Mode content edits the referee has made
   try {
     const res2 = await supaStorage.get('content-overrides', true);
-    if(res2){
-      const freshOverrides = JSON.parse(res2.value);
-      const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
-      if(overridesChanged){
+    if(res2.ok){
+      const freshOverrides = res2.value != null ? JSON.parse(res2.value) : {};
+      if(JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides)){
         contentOverrides = freshOverrides;
         if(currentView === 'station' && cur) renderDetail();
         if(currentView === 'system' && selectedBody) selectBody(selectedBody);
@@ -7109,18 +6905,19 @@ async function pollRevealState(){
   // And any added/removed checks, events, or NPC rows
   try {
     const res3 = await supaStorage.get('content-additions', true);
-    // null = fetch failed or key never saved → keep current value (don't clobber).
-    const freshAdditions = res3 ? JSON.parse(res3.value) : contentAdditions;
     const res4 = await supaStorage.get('content-deletions', true);
-    const freshDeletions = res4 ? JSON.parse(res4.value) : contentDeletions;
-    const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
-      || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
-    if(addDelChanged){
-      contentAdditions = freshAdditions;
-      contentDeletions = freshDeletions;
-      if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res3.ok && res4.ok){
+      const freshAdditions = res3.value != null ? JSON.parse(res3.value) : {};
+      const freshDeletions = res4.value != null ? JSON.parse(res4.value) : {};
+      const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
+        || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
+      if(addDelChanged){
+        contentAdditions = freshAdditions;
+        contentDeletions = freshDeletions;
+        if(currentView === 'station' && cur) renderDetail();
+        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -7128,8 +6925,8 @@ async function pollRevealState(){
   // adds objectives, or marks things done during a session
   try {
     const resQ = await supaStorage.get('quest-log', true);
-    if(resQ){
-      const freshQuests = JSON.parse(resQ.value) || [];
+    if(resQ.ok){
+      const freshQuests = resQ.value != null ? JSON.parse(resQ.value) || [] : [];
       if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
         questLog = freshQuests;
         if(questPanelOpen) renderQuestPanel();
@@ -7140,13 +6937,11 @@ async function pollRevealState(){
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);
-    if(resShip){
+    if(resShip.ok && resShip.value != null){
       const freshShip = Object.assign({}, shipState, JSON.parse(resShip.value));
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
-        // Fuel/jump changes can flip the out-of-range advisory — refresh lanes.
-        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -7154,7 +6949,7 @@ async function pollRevealState(){
   // Imperial date — players see the referee advance the campaign date
   try {
     const resDate = await supaStorage.get('imperial-date', true);
-    if(resDate){
+    if(resDate.ok && resDate.value != null){
       const fresh = JSON.parse(resDate.value);
       if(fresh.day !== imperialDate.day || fresh.year !== imperialDate.year){
         imperialDate = fresh;
@@ -7167,8 +6962,8 @@ async function pollRevealState(){
   // Campaign timeline — players see new/revealed dated events
   try {
     const resEv = await supaStorage.get('campaign-events', true);
-    if(resEv){
-      const freshEv = JSON.parse(resEv.value) || [];
+    if(resEv.ok){
+      const freshEv = resEv.value != null ? JSON.parse(resEv.value) || [] : [];
       if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
         campaignEvents = freshEv;
         if(calPanelOpen) renderCalendarPanel();
@@ -7179,8 +6974,8 @@ async function pollRevealState(){
   // Discovery log — players see entries the referee reveals (rumoured/known)
   try {
     const resDisc = await supaStorage.get('discovery-log', true);
-    if(resDisc){
-      const freshDisc = JSON.parse(resDisc.value) || [];
+    if(resDisc.ok){
+      const freshDisc = resDisc.value != null ? JSON.parse(resDisc.value) || [] : [];
       if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
         discoveryLog = freshDisc;
         if(discPanelOpen) renderDiscoveryPanel();
@@ -7188,35 +6983,10 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
-  // Encyclopedia — players see articles the referee publishes / edits / reveals
-  try {
-    const resWiki = await supaStorage.get('wiki', true);
-    if(resWiki){
-      const freshWiki = JSON.parse(resWiki.value) || [];
-      if(JSON.stringify(freshWiki) !== JSON.stringify(wikiArticles)){
-        wikiArticles = freshWiki;
-        if(wikiPanelOpen) renderWikiPanel();
-      }
-    }
-  } catch(e){ /* silent — next poll will retry */ }
-
-  // Route blocks — nav crew see the referee arm/disarm lanes mid-session
-  try {
-    const resRB = await supaStorage.get('route-blocks', true);
-    if(resRB){
-      const freshRB = JSON.parse(resRB.value);
-      const normRB = { enabled: freshRB.enabled !== false, blocks: freshRB.blocks || {} };
-      if(JSON.stringify(normRB) !== JSON.stringify(routeBlocks)){
-        routeBlocks = normRB;
-        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
-      }
-    }
-  } catch(e){ /* silent — next poll will retry */ }
-
   // Reputation — players see standing shifts and revealed milestones
   try {
     const resRep = await supaStorage.get('reputation', true);
-    if(resRep){
+    if(resRep.ok && resRep.value != null){
       const freshRep = JSON.parse(resRep.value);
       if(JSON.stringify(freshRep) !== JSON.stringify(reputation)){
         reputation = freshRep;
@@ -7226,15 +6996,25 @@ async function pollRevealState(){
   } catch(e){ /* silent — next poll will retry */ }
 }
 
+// Self-scheduling poll (setTimeout, not setInterval) so the interval can grow
+// during an outage — markOnline() resets pollBackoff to POLL_MS the moment a
+// fetch succeeds, so recovery is immediate while a dead connection isn't
+// hammered every 4s.
 function startPolling(){
   stopPolling();
   if(isReferee()) return;
-  pollIntervalId = setInterval(pollRevealState, POLL_MS);
+  pollBackoff = POLL_MS;
+  const tick = async () => {
+    await pollRevealState();
+    pollBackoff = (connState === 'live') ? POLL_MS : Math.min(Math.round(pollBackoff * 1.5), POLL_MAX_MS);
+    pollIntervalId = setTimeout(tick, pollBackoff);
+  };
+  pollIntervalId = setTimeout(tick, pollBackoff);
 }
 
-// iOS suspends setInterval timers for backgrounded/home-screen apps, but
-// visibilitychange/focus events reliably fire when the app comes back —
-// so this catches the gap even without the player tapping Refresh.
+// iOS suspends timers for backgrounded/home-screen apps, but visibilitychange/
+// focus events reliably fire when the app comes back — so this catches the gap
+// even without the player tapping Refresh.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && !isReferee()) pollRevealState();
 });
@@ -7242,8 +7022,22 @@ window.addEventListener('focus', () => {
   if(!isReferee()) pollRevealState();
 });
 
+// Reconnect plumbing (referee included — the referee never polls, so this is
+// their only path back). The browser 'online' event and an 8s heartbeat both
+// drain the outbound queue; the heartbeat also keeps the pill's clock honest.
+window.addEventListener('online', () => {
+  markOnline();
+  flushQueue();
+  if(!isReferee()) pollRevealState();
+});
+window.addEventListener('offline', () => { markOffline(); });
+setInterval(() => {
+  if(queueLength()) flushQueue();
+  updateConnPill(); // refresh the "last synced … ago" label
+}, 8000);
+
 function stopPolling(){
-  if(pollIntervalId){ clearInterval(pollIntervalId); pollIntervalId = null; }
+  if(pollIntervalId){ clearTimeout(pollIntervalId); pollIntervalId = null; }
 }
 
 // ── Manual refresh — for iOS home-screen apps, which suspend setInterval
@@ -7254,24 +7048,21 @@ async function manualRefresh(){
   if(!btn) return;
   btn.classList.add('spinning');
   btn.disabled = true;
-  try {
-    const res = await supaStorage.get('reveal-status', true);
-    if(!res) throw new Error('fetch failed'); // null = failed → show Retry, don't wipe reveals
-    revealedAreas = JSON.parse(res.value);
-    if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-    if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  await pollRevealState();                 // pull the full shared state, not just reveals
+  // Honest feedback: only claim "Updated" when the fetch actually reached the
+  // server — connState is 'live' iff the last network op succeeded.
+  if(connState === 'live'){
     btn.classList.add('just-updated');
     btn.innerHTML = '<span class="refresh-icon">✓</span> Updated';
-    setTimeout(() => {
-      btn.classList.remove('just-updated');
-      btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
-    }, 1500);
-  } catch(e){
-    btn.innerHTML = '<span class="refresh-icon">⚠</span> Retry';
-  } finally {
-    btn.classList.remove('spinning');
-    btn.disabled = false;
+  } else {
+    btn.innerHTML = '<span class="refresh-icon">⚠</span> Offline';
   }
+  setTimeout(() => {
+    btn.classList.remove('just-updated');
+    btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
+  }, 1500);
+  btn.classList.remove('spinning');
+  btn.disabled = false;
 }
 
 async function saveRevealState(){
@@ -7492,7 +7283,7 @@ async function loadPrivateNote(key){
   if(!myIdentity) return '';
   try {
     const res = await supaStorage.get(`note-private-${myIdentity}-${key}`, false);
-    return res ? res.value : '';
+    return res.value != null ? res.value : '';
   } catch(e){ return ''; }
 }
 
@@ -7505,7 +7296,7 @@ async function savePrivateNote(key, text){
 async function loadPartyNotes(key){
   try {
     const res = await supaStorage.get(`note-party-${key}`, true);
-    return res ? JSON.parse(res.value) : [];
+    return res.value != null ? JSON.parse(res.value) : [];
   } catch(e){ return []; }
 }
 
@@ -7558,7 +7349,7 @@ function charDM(score){
 async function loadSheet(characterName){
   try {
     const res = await supaStorage.get(`sheet-${characterName}`, true);
-    if(!res) return emptySheet();
+    if(res.value == null) return emptySheet();
     return Object.assign(emptySheet(), JSON.parse(res.value));
   } catch(e){ return emptySheet(); }
 }
@@ -7770,6 +7561,19 @@ function buildSearchIndex(){
     }
   });
 
+  // ── Galaxy systems (Orion Arm starmap) — public to everyone, referee or
+  // player, since the map itself is the app's landing view. Matchable by the
+  // in-world label, the real star designation (alt), and the faction name. A
+  // hit jumps to the galaxy view and selects that node's detail panel. ──
+  GALAXY_NODES.forEach(sys => {
+    const label = (sys.label || sys.name).replace(' ★','').trim();
+    const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent'};
+    idx.push({
+      type:'System', name:label, alt:sys.name, sub:sys.name + ' · ' + f.name,
+      nav:{view:'galaxy', galaxyId:sys.id}
+    });
+  });
+
   return idx;
 }
 
@@ -7802,6 +7606,10 @@ function navigateToSearchResult(nav){
   } else if(nav.view === 'system'){
     if(needsSwitch) goSystem();
     setTimeout(() => selectBody(nav.bodyId), needsSwitch ? 220 : 0);
+  } else if(nav.view === 'galaxy'){
+    // Jump to the Orion Arm starmap and open the matched system's detail panel.
+    if(needsSwitch) goGalaxy();
+    setTimeout(() => { gxEnsureRendered(); gxSelectSystem(nav.galaxyId); }, needsSwitch ? 240 : 0);
   }
 }
 
@@ -7811,7 +7619,10 @@ function renderSearchResults(){
   if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
 
   const idx = buildSearchIndex();
-  const matches = idx.filter(item => item.name.toLowerCase().includes(q)).slice(0, 30);
+  const matches = idx.filter(item =>
+    item.name.toLowerCase().includes(q) ||
+    (item.alt && item.alt.toLowerCase().includes(q))
+  ).slice(0, 30);
 
   if(!matches.length){
     box.innerHTML = '<div class="search-empty">No matches.</div>';
@@ -8549,19 +8360,19 @@ let contentDeletions = {};
 async function loadContentOverrides(){
   try {
     const res = await supaStorage.get('content-overrides', true);
-    contentOverrides = res ? JSON.parse(res.value) : {};
+    contentOverrides = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ contentOverrides = {}; }
   try {
     const res2 = await supaStorage.get('content-history', true);
-    contentHistory = res2 ? JSON.parse(res2.value) : {};
+    contentHistory = res2.value != null ? JSON.parse(res2.value) : {};
   } catch(e){ contentHistory = {}; }
   try {
     const res3 = await supaStorage.get('content-additions', true);
-    contentAdditions = res3 ? JSON.parse(res3.value) : {};
+    contentAdditions = res3.value != null ? JSON.parse(res3.value) : {};
   } catch(e){ contentAdditions = {}; }
   try {
     const res4 = await supaStorage.get('content-deletions', true);
-    contentDeletions = res4 ? JSON.parse(res4.value) : {};
+    contentDeletions = res4.value != null ? JSON.parse(res4.value) : {};
   } catch(e){ contentDeletions = {}; }
 }
 
@@ -8600,11 +8411,11 @@ let bodyDeletions = {};
 let bodyPropertyOverrides = {};
 
 async function loadBodyStores(){
-  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyAdditions = {}; }
-  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyDeletions = {}; }
-  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyPropertyOverrides = {}; }
 }
 async function saveBodyAdditions(){
@@ -8663,11 +8474,11 @@ function baseLocationsFor(sysId, bodyId){
 }
 
 async function loadLocationStores(){
-  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationAdditions = {}; }
-  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationDeletions = {}; }
-  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationPropertyOverrides = {}; }
 }
 async function saveLocationAdditions(){
@@ -9422,7 +9233,7 @@ let questEditingId = null; // id of quest being edited, or null for new
 async function loadQuestLog(){
   try {
     const res = await supaStorage.get('quest-log', true);
-    if(res) questLog = JSON.parse(res.value) || [];
+    if(res.value != null) questLog = JSON.parse(res.value) || [];
   } catch(e){ questLog = []; }
 }
 
@@ -9468,7 +9279,7 @@ function renderQuestPanel(){
   if(countEl) countEl.textContent = activeCount;
 
   if(!visible.length){
-    body.innerHTML = `<div class="quest-empty">${ref ? 'No quests yet. Add one below.' : 'No active quests.'}</div>`;
+    body.innerHTML = `<div class="quest-empty">${ref ? 'No missions yet. Add one below.' : 'No active missions.'}</div>`;
     return;
   }
 
@@ -9498,7 +9309,7 @@ function renderQuestCard(q, ref){
       ${escQH(q.refNote).replace(/\n/g,'<br>')}
     </div>` : '';
 
-  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Quest</button>` : '';
+  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Mission</button>` : '';
 
   return `
     <div class="quest-card status-${q.status}" id="qcard-${q.id}">
@@ -9568,8 +9379,6 @@ let shipState = {
   fuel: 24,            // current fuel (tons)
   fuelMax: 80,         // fuel tankage (tons)
   fuelProcessor: '',
-  // ── Cargo hold (drives the ship-inventory capacity check) ──
-  cargoCapacity: 40,   // cargo hold size (dtons) — manifest is checked against this
   // ── Costs ──
   purchaseCost: '',
   mortgage: '',
@@ -9586,192 +9395,13 @@ let shipState = {
 async function loadShipState(){
   try {
     const res = await supaStorage.get('ship-state', true);
-    if(res) shipState = Object.assign(shipState, JSON.parse(res.value));
+    if(res.value != null) shipState = Object.assign(shipState, JSON.parse(res.value));
   } catch(e){ /* keep defaults */ }
 }
 
 async function saveShipState(){
   try { await supaStorage.set('ship-state', JSON.stringify(shipState), true); }
   catch(e){ console.error('Ship save failed:', e); }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SHIP INVENTORY  (V2 — cargo / equipment / consumables manifest)
-// ───────────────────────────────────────────────────────────────────────────
-// Distinct from PERSONAL inventory (which lives on each character sheet's
-// equipment/weapons fields). This is the SHIP's manifest, shared campaign state
-// in aurelia_state key 'ship-inventory'. Unlike most shared state it is
-// MULTI-WRITER: the referee AND the nav crew (Rhett + Cass) can edit it, so it
-// is polled by every role (see pollShipInventory) rather than only by players.
-// Viewing the manifest follows the same nav-crew audience.
-//
-// Cargo is measured in displacement tons (dtons) and checked against the ship's
-// cargo-hold capacity (shipState.cargoCapacity). Per Mongoose Traveller, jump
-// fuel is hull-based (10% × tonnage × parsecs) and is NOT affected by cargo
-// load, so the manifest reports hold usage + laden mass but never touches the
-// fuel/jump math. Each item carries a dormant `combat` slot reserved for the
-// future Space Combat branch (weapon mounts / ammo) so it need not be
-// rearchitected later.
-// ═══════════════════════════════════════════════════════════════════════════
-
-const SHIP_INV_CATEGORIES = [['cargo','Cargo'],['equipment','Equipment'],['consumable','Consumables']];
-
-let shipInventory = [];
-let invEditingId = null;
-let invAdding = false;
-
-async function loadShipInventory(){
-  try { const r = await supaStorage.get('ship-inventory', true); if(r) shipInventory = JSON.parse(r.value) || []; }
-  catch(e){ shipInventory = []; }
-}
-async function saveShipInventory(){
-  try { await supaStorage.set('ship-inventory', JSON.stringify(shipInventory), true); }
-  catch(e){ console.error('Ship inventory save failed:', e); }
-}
-
-// Edit rights: referee + nav crew (Rhett + Cass).
-function canEditShipInventory(){ return isReferee() || (!!myIdentity && SHIP_NAV_AUDIENCE.includes(myIdentity)); }
-
-// Cargo dtons currently loaded (sum of cargo-category items' qtyTons).
-function shipCargoUsed(){
-  return +shipInventory.filter(i => i.category === 'cargo')
-    .reduce((s,i) => s + (Number(i.qtyTons) || 0), 0).toFixed(2);
-}
-
-// Multi-writer poll — runs for EVERY role (referee included), unlike the
-// player-only pollRevealState. Skips the re-render while someone is typing in
-// the ship panel so an incoming sync doesn't wipe a half-entered row.
-let invPollId = null;
-function startInventoryPolling(){
-  if(invPollId) clearInterval(invPollId);
-  invPollId = setInterval(pollShipInventory, POLL_MS);
-}
-async function pollShipInventory(){
-  try {
-    const r = await supaStorage.get('ship-inventory', true);
-    if(!r) return; // null = fetch failed or never saved → don't clobber local edits
-    const fresh = JSON.parse(r.value) || [];
-    if(JSON.stringify(fresh) === JSON.stringify(shipInventory)) return;
-    shipInventory = fresh;
-    const ae = document.activeElement;
-    const typingHere = ae && ae.closest && ae.closest('#ship-wrap');
-    if(shipPanelOpen && !typingHere) renderShipPanel();
-  } catch(e){ /* silent — next poll retries */ }
-}
-
-// Section HTML — only ever called for nav-crew viewers (gated in renderShipPanel).
-function shipInventorySectionHTML(){
-  const canEdit = canEditShipInventory();
-  const cap = Number(shipState.cargoCapacity) || 0;
-  const used = shipCargoUsed();
-  const free = +(cap - used).toFixed(2);
-  const over = cap > 0 && used > cap;
-  const pct = cap > 0 ? Math.max(0, Math.min(100, used / cap * 100)) : 0;
-
-  let html = `<div class="sf-sec"><div class="sf-tab">Ship Inventory</div><div class="sf-card">`;
-
-  // Cargo-hold readout (laden mass = cargo dtons in the hold).
-  html += `<div class="ship-readout">
-    <div class="ship-readout-lbl"><span>📦 Cargo Hold</span><span class="ship-readout-tag">Nav</span></div>
-    <div class="ship-readout-val">${used} <span style="font-size:11px;color:#5a5f6b">/ ${cap} t</span></div>
-    <div class="ship-fuel-bar"><div class="ship-fuel-bar-fill${over ? ' low' : ''}" style="width:${pct}%"></div></div>
-    <div class="ship-readout-sub${over ? ' ship-warn' : ''}">${over ? `OVER CAPACITY by ${(used - cap).toFixed(2)} t` : `${free} t free · laden mass ${used} t`}</div>
-  </div>`;
-
-  // Capacity is a ship stat → referee-set (players read). Reuse the sheet field helper.
-  html += `<div class="sf-row" style="margin-top:6px"><span class="sf-lbl">Hold capacity</span><span class="sf-fld">${sfNumField('cargoCapacity','tons')}</span></div>`;
-
-  // Items grouped by category.
-  SHIP_INV_CATEGORIES.forEach(([key,label]) => {
-    const items = shipInventory.filter(i => i.category === key);
-    if(!items.length) return;
-    html += `<div class="inv-group"><div class="inv-group-lbl">${label}</div>`;
-    html += items.map(i => renderInvRow(i, canEdit)).join('');
-    html += `</div>`;
-  });
-
-  if(!shipInventory.length){
-    html += `<div class="cal-empty" style="padding:8px 2px">${canEdit ? 'Empty hold. Add cargo, equipment, or consumables below.' : 'Nothing in the manifest.'}</div>`;
-  }
-
-  if(canEdit) html += renderInvForm();
-  html += `</div></div>`;
-  return html;
-}
-
-function renderInvRow(i, canEdit){
-  const isCargo = i.category === 'cargo';
-  const amt = isCargo ? `${Number(i.qtyTons) || 0} t` : `×${Number(i.qty) || 1}`;
-  const meta = [i.location, i.tl ? 'TL' + i.tl : ''].filter(Boolean).join(' · ');
-  const ctl = canEdit ? `<span class="inv-ctl">
-      <button class="disc-mini" onclick="editInvItem('${i.id}')" title="Edit">✏</button>
-      <button class="disc-mini del" onclick="deleteInvItem('${i.id}')" title="Remove">✕</button>
-    </span>` : '';
-  return `<div class="inv-row">
-    <span class="inv-name">${escQH(i.name)}${meta ? `<span class="inv-meta">${escQH(meta)}</span>` : ''}${i.notes ? `<span class="inv-notes">${escQH(i.notes)}</span>` : ''}</span>
-    <span class="inv-amt">${amt}</span>
-    ${ctl}
-  </div>`;
-}
-
-function renderInvForm(){
-  const ed = invEditingId ? shipInventory.find(x => x.id === invEditingId) : null;
-  if(!ed && !invAdding){
-    return `<button class="cal-add-btn" style="width:100%;margin-top:8px" onclick="beginInvAdd()">+ Add item</button>`;
-  }
-  const catOpts = SHIP_INV_CATEGORIES.map(c =>
-    `<option value="${c[0]}"${ed && ed.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
-  const amtVal = ed ? (ed.category === 'cargo' ? (ed.qtyTons || '') : (ed.qty || '')) : '';
-  return `<div class="disc-add" style="margin-top:8px">
-    <div class="disc-add-ttl">${ed ? 'Edit item' : 'New item'}</div>
-    <input id="inv-f-name" placeholder="Name…" maxlength="80" value="${ed ? escAttr(ed.name) : ''}">
-    <div class="disc-add-row">
-      <select id="inv-f-cat">${catOpts}</select>
-      <input id="inv-f-amt" type="number" inputmode="decimal" step="any" placeholder="Qty / tons" value="${amtVal}" style="max-width:90px">
-      <input id="inv-f-tl" type="number" inputmode="numeric" placeholder="TL" value="${ed && ed.tl ? ed.tl : ''}" style="max-width:56px">
-    </div>
-    <div class="disc-add-row">
-      <input id="inv-f-loc" placeholder="Location (hold / locker…)" value="${ed ? escAttr(ed.location || '') : ''}">
-    </div>
-    <input id="inv-f-notes" placeholder="Notes…" value="${ed ? escAttr(ed.notes || '') : ''}">
-    <div class="disc-add-row">
-      <button class="cal-add-btn" style="flex:1" onclick="saveInvItem()">${ed ? 'Save changes' : '+ Add item'}</button>
-      <button class="disc-mini" onclick="cancelInvEdit()">Cancel</button>
-    </div>
-  </div>`;
-}
-
-function beginInvAdd(){ if(!canEditShipInventory()) return; invAdding = true; invEditingId = null; renderShipPanel(); }
-function editInvItem(id){ if(!canEditShipInventory()) return; invEditingId = id; invAdding = false; renderShipPanel(); }
-function cancelInvEdit(){ invEditingId = null; invAdding = false; renderShipPanel(); }
-function deleteInvItem(id){
-  if(!canEditShipInventory()) return;
-  shipInventory = shipInventory.filter(i => i.id !== id);
-  if(invEditingId === id){ invEditingId = null; invAdding = false; }
-  saveShipInventory();
-  renderShipPanel();
-}
-function saveInvItem(){
-  if(!canEditShipInventory()) return;
-  const name = document.getElementById('inv-f-name').value.trim(); if(!name) return;
-  const category = document.getElementById('inv-f-cat').value;
-  const amt = Number(document.getElementById('inv-f-amt').value) || 0;
-  const tl = document.getElementById('inv-f-tl').value.trim();
-  const location = document.getElementById('inv-f-loc').value.trim();
-  const notes = document.getElementById('inv-f-notes').value.trim();
-  const isCargo = category === 'cargo';
-  if(invEditingId){
-    const i = shipInventory.find(x => x.id === invEditingId);
-    if(i){ i.name = name; i.category = category; i.tl = tl; i.location = location; i.notes = notes;
-      i.qtyTons = isCargo ? amt : 0; i.qty = isCargo ? 0 : (amt || 1); }
-    invEditingId = null;
-  } else {
-    shipInventory.push({ id: 'inv_' + Date.now().toString(36), name, category, tl, location, notes,
-      qtyTons: isCargo ? amt : 0, qty: isCargo ? 0 : (amt || 1), combat: null });
-  }
-  invAdding = false;
-  saveShipInventory();
-  renderShipPanel();
 }
 
 // ── Traveller 2E math ──
@@ -9966,9 +9596,6 @@ function renderShipPanel(){
     ${costRow('runningCost','Running Cost')}
   </div>`);
 
-  // ── SHIP INVENTORY (nav crew + referee only) ──
-  if(canSee(SHIP_NAV_AUDIENCE)) sec.push(shipInventorySectionHTML());
-
   // ── CRITICAL HITS ──
   sec.push(`<div class="sf-sec">
     <div class="sf-tab">Critical Hits</div>
@@ -9982,7 +9609,7 @@ function renderShipPanel(){
 
 function updateShipField(field, value){
   if(!isReferee()) return;
-  const numeric = ['fuel','fuelMax','tonnage','jumpRating','hullPoints','hullPointsMax','jumpParsecs','cargoCapacity'];
+  const numeric = ['fuel','fuelMax','tonnage','jumpRating','hullPoints','hullPointsMax','jumpParsecs'];
   shipState[field] = numeric.includes(field) ? (Number(value) || 0) : value;
   saveShipState();
   renderShipPanel();
@@ -10024,7 +9651,7 @@ const ALERT_POLL_MS = 1500;
 async function loadAlertState(){
   try {
     const res = await supaStorage.get('ship-alert-state', true);
-    if(res) alertState = Object.assign(alertState, JSON.parse(res.value));
+    if(res.value != null) alertState = Object.assign(alertState, JSON.parse(res.value));
   } catch(e){ /* keep default normal */ }
 }
 async function saveAlertState(){
@@ -10102,10 +9729,12 @@ function stopAlertPolling(){ if(alertPollId){ clearInterval(alertPollId); alertP
 async function pollAlertState(){
   try {
     const res = await supaStorage.get('ship-alert-state', true);
-    const fresh = res ? JSON.parse(res.value) : { mode:'normal', message:'', since:0 };
-    if(JSON.stringify(fresh) !== JSON.stringify(alertState)){
-      alertState = fresh;
-      applyAlertState();
+    if(res.ok){
+      const fresh = res.value != null ? JSON.parse(res.value) : { mode:'normal', message:'', since:0 };
+      if(JSON.stringify(fresh) !== JSON.stringify(alertState)){
+        alertState = fresh;
+        applyAlertState();
+      }
     }
   } catch(e){ /* silent — next poll retries */ }
 }
@@ -10144,7 +9773,7 @@ function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[
 // ── Persistence + sync ──
 async function loadImperialDate(){
   try { const r = await supaStorage.get('imperial-date', true);
-    if(r) imperialDate = Object.assign(imperialDate, JSON.parse(r.value)); } catch(e){}
+    if(r.value != null) imperialDate = Object.assign(imperialDate, JSON.parse(r.value)); } catch(e){}
 }
 async function saveImperialDate(){
   try { await supaStorage.set('imperial-date', JSON.stringify(imperialDate), true); }
@@ -10152,7 +9781,7 @@ async function saveImperialDate(){
 }
 async function loadCampaignEvents(){
   try { const r = await supaStorage.get('campaign-events', true);
-    if(r) campaignEvents = JSON.parse(r.value) || []; } catch(e){ campaignEvents = []; }
+    if(r.value != null) campaignEvents = JSON.parse(r.value) || []; } catch(e){ campaignEvents = []; }
 }
 async function saveCampaignEvents(){
   try { await supaStorage.set('campaign-events', JSON.stringify(campaignEvents), true); }
@@ -10330,7 +9959,7 @@ let discCollapsed = false;
 let discEditingId = null;
 
 async function loadDiscoveryLog(){
-  try { const r = await supaStorage.get('discovery-log', true); if(r) discoveryLog = JSON.parse(r.value) || []; }
+  try { const r = await supaStorage.get('discovery-log', true); if(r.value != null) discoveryLog = JSON.parse(r.value) || []; }
   catch(e){ discoveryLog = []; }
 }
 async function saveDiscoveryLog(){
@@ -10473,212 +10102,6 @@ function cycleDiscVis(id){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ENCYCLOPEDIA / WIKI  (V2 — referee-authored campaign reference)
-// ───────────────────────────────────────────────────────────────────────────
-// Shared campaign state in aurelia_state key 'wiki'. Editorial model for V2:
-// REFEREE-ONLY authoring (create / edit / delete); reading is gated per-article
-// by canSee(visibleTo) exactly like the Codex. Player editing is deferred to V3
-// (the schema already carries an `editable` field so it rides in additively).
-// Versioning is "versioned-lite": the body overwrites in place, but each save
-// appends a compact {at, by, summary} record to `history` for an audit trail.
-// Articles can link to galaxy systems (GALAXY_NODES ids) and Codex entries.
-// ═══════════════════════════════════════════════════════════════════════════
-
-const WIKI_CATEGORIES = DISC_CATEGORIES; // reuse Lore/Faction/Location/Tech/Person + cat-* styling
-
-let wikiArticles = [];
-let wikiPanelOpen = false;
-let wikiCollapsed = false;
-let wikiEditingId = null;
-let wikiAdding = false;
-let wikiViewingId = null;
-
-async function loadWiki(){
-  try { const r = await supaStorage.get('wiki', true); if(r) wikiArticles = JSON.parse(r.value) || []; }
-  catch(e){ wikiArticles = []; }
-}
-async function saveWiki(){
-  try { await supaStorage.set('wiki', JSON.stringify(wikiArticles), true); }
-  catch(e){ console.error('Wiki save failed:', e); }
-}
-
-function parseIdList(s){ return (s||'').split(',').map(x => x.trim()).filter(Boolean); }
-function wikiCanRead(a){ return isReferee() || canSee(a.visibleTo); }
-
-function toggleWikiPanel(){
-  wikiPanelOpen = !wikiPanelOpen;
-  const w = document.getElementById('wiki-wrap'), b = document.getElementById('wiki-btn');
-  w.classList.toggle('hidden', !wikiPanelOpen);
-  if(b) b.classList.toggle('panel-open', wikiPanelOpen);
-  if(wikiPanelOpen) renderWikiPanel();
-}
-function toggleWikiCollapse(){
-  if(document.getElementById('wiki-header').dataset.suppressClick === '1') return;
-  wikiCollapsed = !wikiCollapsed;
-  document.getElementById('wiki-toggle').textContent = wikiCollapsed ? '▲' : '▼';
-  document.getElementById('wiki-body').classList.toggle('collapsed', wikiCollapsed);
-  document.getElementById('wiki-wrap').classList.toggle('panel-collapsed', wikiCollapsed);
-}
-
-function renderWikiPanel(){
-  const body = document.getElementById('wiki-body'); if(!body) return;
-  const ref = isReferee();
-  const readable = wikiArticles.filter(wikiCanRead);
-  const countEl = document.getElementById('wiki-count');
-  if(countEl) countEl.textContent = readable.length;
-
-  // Drop a stale viewing target (e.g. referee hid it while a player was reading).
-  if(wikiViewingId){
-    const a = wikiArticles.find(x => x.id === wikiViewingId);
-    if(!a || !wikiCanRead(a)) wikiViewingId = null;
-  }
-
-  if(wikiEditingId || wikiAdding){ body.innerHTML = renderWikiForm(); return; }
-  if(wikiViewingId){ body.innerHTML = renderWikiArticle(wikiViewingId); return; }
-
-  let html = '';
-  if(!readable.length){
-    html = `<div class="cal-empty">${ref ? 'No articles yet. Document the setting below.' : 'No entries published yet.'}</div>`;
-  } else {
-    html = readable.map(a => {
-      const cat = WIKI_CATEGORIES.find(c => c[0] === a.category);
-      const snip = (a.body || '').replace(/\s+/g, ' ').trim();
-      return `<div class="wiki-item" onclick="viewWikiArticle('${a.id}')">
-        <div class="wiki-item-hd">
-          <span class="disc-cat cat-${a.category || 'lore'}">${cat ? cat[1] : (a.category || '')}</span>
-          <span class="wiki-item-ttl">${escQH(a.title)}</span>
-          ${ref && a.visibleTo !== 'all' ? `<span class="disc-when">${calVisLabel(a.visibleTo)}</span>` : ''}
-        </div>
-        ${snip ? `<div class="wiki-item-snip">${escQH(snip)}</div>` : ''}
-      </div>`;
-    }).join('');
-  }
-  if(ref) html += `<button class="cal-add-btn" style="width:100%;margin-top:6px" onclick="beginWikiAdd()">+ New article</button>`;
-  body.innerHTML = html;
-}
-
-function renderWikiArticle(id){
-  const a = wikiArticles.find(x => x.id === id);
-  if(!a) { wikiViewingId = null; return renderWikiListFallback(); }
-  const ref = isReferee();
-  const cat = WIKI_CATEGORIES.find(c => c[0] === a.category);
-  let html = `<button class="wiki-back" onclick="backToWikiList()">← All articles</button>`;
-  html += `<div><span class="disc-cat cat-${a.category || 'lore'}">${cat ? cat[1] : (a.category || '')}</span></div>`;
-  html += `<div class="wiki-article-ttl">${escQH(a.title)}</div>`;
-  html += `<div class="wiki-article-body">${a.body ? escQH(a.body) : '<span class="disc-redacted">(no content yet)</span>'}</div>`;
-
-  // Linked systems + codex entries.
-  const sysLinks = (a.links && a.links.systems || []).filter(sid => GX_MAP[sid]);
-  const codexLinks = (a.links && a.links.codex || []).map(cid => discoveryLog.find(e => e.id === cid))
-    .filter(e => e && (ref || discViewerStage(e))); // hide codex links the viewer can't see
-  if(sysLinks.length || codexLinks.length){
-    html += `<div class="wiki-links">`;
-    sysLinks.forEach(sid => {
-      const n = GX_MAP[sid];
-      html += `<span class="wiki-link-chip" onclick="wikiGotoSystem('${sid}')" title="Show on the Orion Arm map">🗺 ${escQH((n.label || n.name).replace(' ★',''))}</span>`;
-    });
-    codexLinks.forEach(e => {
-      const showTitle = ref || discViewerStage(e) === 'known';
-      html += `<span class="wiki-link-chip codex" onclick="wikiOpenCodex()" title="Open the Codex">🗂 ${escQH(showTitle ? e.title : 'Unconfirmed entry')}</span>`;
-    });
-    html += `</div>`;
-  }
-
-  if(ref){
-    const hist = a.history || [];
-    const last = hist.length ? hist[hist.length - 1] : null;
-    html += `<div class="wiki-meta">${calVisLabel(a.visibleTo)} · ${hist.length} edit${hist.length === 1 ? '' : 's'}${last ? ` · last ${formatImperial(last.at)}${last.summary ? ' — ' + escQH(last.summary) : ''}` : ''}</div>`;
-    html += `<div class="disc-ctl">
-      <button class="disc-mini" onclick="editWikiArticle('${a.id}')">✏ Edit</button>
-      <button class="disc-mini" onclick="cycleWikiVis('${a.id}')" title="Who can read it">${calVisLabel(a.visibleTo)}</button>
-      <button class="disc-mini del" onclick="deleteWikiArticle('${a.id}')">✕ Delete</button>
-    </div>`;
-  }
-  return html;
-}
-function renderWikiListFallback(){ wikiAdding = false; wikiEditingId = null; setTimeout(renderWikiPanel, 0); return ''; }
-
-function renderWikiForm(){
-  const ed = wikiEditingId ? wikiArticles.find(x => x.id === wikiEditingId) : null;
-  const catOpts = WIKI_CATEGORIES.map(c => `<option value="${c[0]}"${ed && ed.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
-  const sysVal = ed && ed.links ? (ed.links.systems || []).join(', ') : '';
-  const codexVal = ed && ed.links ? (ed.links.codex || []).join(', ') : '';
-  return `<button class="wiki-back" onclick="cancelWikiEdit()">← Cancel</button>
-  <div class="disc-add" style="border-top:none;padding-top:4px">
-    <div class="disc-add-ttl">${ed ? 'Edit article' : 'New article'}</div>
-    <input id="wiki-f-title" placeholder="Title…" maxlength="120" value="${ed ? escAttr(ed.title) : ''}">
-    <div class="disc-add-row">
-      <select id="wiki-f-cat">${catOpts}</select>
-      <input id="wiki-f-vis" placeholder="all / referee / Rhett Calder" value="${ed ? escAttr(calVisRaw(ed.visibleTo)) : 'all'}">
-    </div>
-    <textarea id="wiki-f-body" rows="8" placeholder="Article body…">${ed ? escQH(ed.body || '') : ''}</textarea>
-    <input id="wiki-f-sys" placeholder="Linked system ids (e.g. aurelia, sol)" value="${escAttr(sysVal)}">
-    <input id="wiki-f-codex" placeholder="Linked codex entry ids (optional)" value="${escAttr(codexVal)}">
-    <input id="wiki-f-summary" placeholder="Change summary (for the edit log)…" maxlength="120">
-    <button class="cal-add-btn" onclick="saveWikiArticle()">${ed ? 'Save changes' : '+ Publish article'}</button>
-  </div>`;
-}
-
-function beginWikiAdd(){ if(!isReferee()) return; wikiAdding = true; wikiEditingId = null; wikiViewingId = null; renderWikiPanel(); }
-function editWikiArticle(id){ if(!isReferee()) return; wikiEditingId = id; wikiAdding = false; renderWikiPanel(); }
-function viewWikiArticle(id){ wikiViewingId = id; wikiEditingId = null; wikiAdding = false; renderWikiPanel(); }
-function backToWikiList(){ wikiViewingId = null; renderWikiPanel(); }
-function cancelWikiEdit(){ wikiEditingId = null; wikiAdding = false; renderWikiPanel(); }
-
-function saveWikiArticle(){
-  if(!isReferee()) return;
-  const title = document.getElementById('wiki-f-title').value.trim(); if(!title) return;
-  const category = document.getElementById('wiki-f-cat').value;
-  const visibleTo = parseCalVis(document.getElementById('wiki-f-vis').value);
-  const bodyTxt = document.getElementById('wiki-f-body').value.trim();
-  const links = { systems: parseIdList(document.getElementById('wiki-f-sys').value), codex: parseIdList(document.getElementById('wiki-f-codex').value) };
-  const summary = document.getElementById('wiki-f-summary').value.trim();
-  const stamp = imperialNow();
-  if(wikiEditingId){
-    const a = wikiArticles.find(x => x.id === wikiEditingId);
-    if(a){
-      a.title = title; a.category = category; a.body = bodyTxt; a.visibleTo = visibleTo; a.links = links;
-      a.history = a.history || []; a.history.push({ at: stamp, by: 'Referee', summary: summary || 'edited' });
-      a.updatedAt = stamp; a.updatedBy = 'Referee';
-    }
-    wikiViewingId = wikiEditingId; wikiEditingId = null;
-  } else {
-    const id = 'wiki_' + Date.now().toString(36);
-    wikiArticles.push({ id, title, category, body: bodyTxt, visibleTo, links, editable: 'referee',
-      history: [{ at: stamp, by: 'Referee', summary: summary || 'created' }], createdAt: stamp, updatedAt: stamp, updatedBy: 'Referee' });
-    wikiViewingId = id;
-  }
-  wikiAdding = false;
-  saveWiki();
-  renderWikiPanel();
-}
-function deleteWikiArticle(id){
-  if(!isReferee()) return;
-  wikiArticles = wikiArticles.filter(a => a.id !== id);
-  if(wikiViewingId === id) wikiViewingId = null;
-  if(wikiEditingId === id) wikiEditingId = null;
-  saveWiki();
-  renderWikiPanel();
-}
-function cycleWikiVis(id){
-  if(!isReferee()) return;
-  const a = wikiArticles.find(x => x.id === id); if(!a) return;
-  if(a.visibleTo === 'all') a.visibleTo = 'referee';
-  else if(a.visibleTo === 'referee') a.visibleTo = ['Rhett Calder', 'Cassia Velen'];
-  else a.visibleTo = 'all';
-  saveWiki();
-  renderWikiPanel();
-}
-
-// Link navigation — jump to a linked system on the map, or open the Codex.
-function wikiGotoSystem(sid){
-  if(!GX_MAP[sid]) return;
-  if(currentView !== 'galaxy'){ goGalaxy(); setTimeout(() => gxSelectSystem(sid), 260); }
-  else gxSelectSystem(sid);
-}
-function wikiOpenCodex(){ if(!discPanelOpen) toggleDiscoveryPanel(); }
-
-// ═══════════════════════════════════════════════════════════════════════════
 // REPUTATION TRACKER  (V2 — faction standing + dated milestones)
 // ───────────────────────────────────────────────────────────────────────────
 // Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
@@ -10711,7 +10134,7 @@ let reputation = {
 let repPanelOpen = false;
 let repCollapsed = false;
 
-async function loadReputation(){ try { const r = await supaStorage.get('reputation', true); if(r) reputation = Object.assign(reputation, JSON.parse(r.value)); } catch(e){} }
+async function loadReputation(){ try { const r = await supaStorage.get('reputation', true); if(r.value != null) reputation = Object.assign(reputation, JSON.parse(r.value)); } catch(e){} }
 async function saveReputation(){ try { await supaStorage.set('reputation', JSON.stringify(reputation), true); } catch(e){ console.error('Reputation save failed:', e); } }
 
 function toggleReputationPanel(){
@@ -10936,7 +10359,7 @@ function rumourToCodex(){
   saveDiscoveryLog();
   if(discPanelOpen) renderDiscoveryPanel();
   const note = document.getElementById('gen-codex-note');
-  if(note){ note.textContent = '✓ Sent to Codex as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
+  if(note){ note.textContent = '✓ Sent to Library Data as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
 }
 
 function setOracleWhere(w){ oracleWhere = w; renderOraclePanel(); }
@@ -10967,7 +10390,7 @@ function renderOraclePanel(){
       resultHTML = `<div class="gen-result">
         <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
         <div class="gen-meta">${fac}<span class="gen-tag">${oracleResult.reliability}</span>
-          <button class="disc-mini" onclick="rumourToCodex()" title="Push to the Codex as a rumour players can see">→ Codex</button>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>
           <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
       </div>`;
     } else {
@@ -11014,7 +10437,7 @@ function openQuestEditor(id){
   const isNew = !id;
   const q = isNew ? null : questLog.find(x => x.id === id);
 
-  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW QUEST' : 'EDIT QUEST';
+  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW MISSION' : 'EDIT MISSION';
   document.getElementById('qe-title').value = q ? q.title : '';
   document.getElementById('qe-status').value = q ? q.status : 'active';
   document.getElementById('qe-player-desc').value = q ? q.playerDesc||'' : '';
@@ -11071,7 +10494,7 @@ function readObjectiveRows(){
 
 async function saveQuestEdit(){
   const title = document.getElementById('qe-title').value.trim();
-  if(!title){ alert('A quest title is required.'); return; }
+  if(!title){ alert('A mission title is required.'); return; }
 
   const questData = {
     id: questEditingId || ('q-' + Date.now()),
@@ -11098,7 +10521,7 @@ async function saveQuestEdit(){
 
 async function deleteQuest(){
   if(!questEditingId) return;
-  if(!confirm('Delete this quest? This cannot be undone.')) return;
+  if(!confirm('Delete this mission? This cannot be undone.')) return;
   questLog = questLog.filter(x => x.id !== questEditingId);
   await saveQuestLog();
   closeQuestEditor();
@@ -11123,8 +10546,6 @@ makePanelDraggable('cal-wrap', 'cal-header');
 makePanelResizable('cal-wrap');
 makePanelDraggable('disc-wrap', 'disc-header');
 makePanelResizable('disc-wrap');
-makePanelDraggable('wiki-wrap', 'wiki-header');
-makePanelResizable('wiki-wrap');
 makePanelDraggable('rep-wrap', 'rep-header');
 makePanelResizable('rep-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');
@@ -11135,6 +10556,8 @@ renderInit();
 buildQuickAddList();
 checkIdentity();
 renderWhoAmI();
+updateConnPill();             // paint initial sync status; markOnline/Offline keep it current
+if(queueLength()) flushQueue(); // push anything parked from a previous offline session
 
 // ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
 if(typeof gxEnsureRendered === 'function'){
@@ -11184,15 +10607,11 @@ loadTextureCatalog().then(() => {
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
-loadShipInventory().then(() => { if(shipPanelOpen) renderShipPanel(); });
-startInventoryPolling(); // multi-writer (referee + nav crew) — polls for every role
-loadRouteBlocks().then(() => { if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); } });
 loadAlertState().then(() => applyAlertState());
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => renderImperialDate());
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
-loadWiki().then(() => { if(wikiPanelOpen) renderWikiPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -11399,7 +10818,7 @@ function renderSessionStats(){
     '<div class="session-stat-row"><span>Station time</span><span>' + clockDisplay(clockMinutes) + '</span></div>' +
     '<div class="session-stat-row"><span>Events logged</span><span>' + eventLog.length + '</span></div>' +
     '<div class="session-stat-row"><span>Areas revealed</span><span>' + revealedCount + '</span></div>' +
-    '<div class="session-stat-row"><span>Quests active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
+    '<div class="session-stat-row"><span>Missions active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
     '<div class="session-stat-row"><span>NPCs placed on station</span><span>' + npcsPlaced + '</span></div>';
 }
 
@@ -12760,10 +12179,10 @@ npcLocLoad();
 
 const KBD_DEFAULTS = [
   { id:'qref',      label:'Open / close Quick Reference', defaultKey:'r' },
-  { id:'quests',    label:'Open / close Quest Log',       defaultKey:'q' },
+  { id:'quests',    label:'Open / close Mission Log',     defaultKey:'q' },
   { id:'settings',  label:'Open Settings',                defaultKey:',' },
   { id:'search',    label:'Focus search bar',             defaultKey:'/' },
-  { id:'player',    label:'Toggle Player Mode',           defaultKey:'p' },
+  { id:'player',    label:'Toggle Traveller View',        defaultKey:'p' },
   { id:'clock1',    label:'Advance clock +1 min',         defaultKey:'1' },
   { id:'clock5',    label:'Advance clock +5 min',         defaultKey:'2' },
   { id:'clock15',   label:'Advance clock +15 min',        defaultKey:'3' },
