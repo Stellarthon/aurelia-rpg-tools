@@ -393,8 +393,57 @@ textarea{font-family:var(--font)}
 #root.pm-active .top-bar-sub{display:none}
 
 /* ── Views ── */
-#view-system,#view-station{display:flex;flex:1;overflow:hidden;min-height:0}
+#view-system,#view-station,#view-galaxy{display:flex;flex:1;overflow:hidden;min-height:0}
 .v-hidden{display:none!important}
+
+/* ═══════════════════════════════════════════
+   GALAXY MAP VIEW (Orion Arm) — landing view.
+   Canvas pinned dark in both themes (a star field on white reads wrong),
+   exactly like the orrery/station panels. Mirrors orion_arm_map_v4 styling.
+═══════════════════════════════════════════ */
+#galaxy-wrap{display:flex;width:100%;height:100%;overflow:hidden;min-height:0}
+#galaxy-canvas{flex:1;min-width:0;background:#04060e;overflow:hidden;position:relative;cursor:grab;user-select:none;-webkit-user-select:none}
+#galaxy-canvas.panning{cursor:grabbing}
+#gx-svg{position:absolute;top:0;left:0;width:1800px;height:1060px;transform-origin:0 0}
+#galaxy-detail{width:360px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);display:flex;flex-direction:column;overflow:hidden}
+#galaxy-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
+#galaxy-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
+#galaxy-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
+#galaxy-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
+.gx-node text{pointer-events:none}
+#gx-title{position:absolute;bottom:14px;left:14px;font-size:17px;font-weight:700;letter-spacing:5px;color:var(--tx0);text-transform:uppercase;pointer-events:none;opacity:0.6;font-family:monospace}
+#gx-zoom{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:10}
+#gx-zoom .zoom-btn{width:34px;height:34px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0);border-radius:6px;color:var(--tx1);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#gx-zoom .zoom-btn:hover{color:var(--accentGold);border-color:var(--accentGold)}
+#gx-legend{position:absolute;top:10px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
+#gx-legend .leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
+#gx-legend .leg-row:last-child{margin-bottom:0}
+#gx-legend .leg-swatch{width:20px;height:9px;border-radius:2px;flex-shrink:0;opacity:0.7}
+/* Galaxy detail panel reuses the system-detail content classes (.sg/.s-sec/.s-desc). */
+#galaxy-db .sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
+#galaxy-db .sg-l{color:var(--tx1)}#galaxy-db .sg-v{color:var(--tx0)}
+#galaxy-db .s-sec{margin-top:14px}
+#galaxy-db .s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
+#galaxy-db .s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
+/* Blank-system prompt (shown in #sys-overview for unsurveyed systems). */
+.blank-sys-card{border:1px dashed var(--bd0);border-radius:8px;padding:16px 14px;text-align:center;margin-top:6px}
+.blank-sys-icon{font-size:26px;margin-bottom:6px}
+.blank-sys-title{font-size:13px;font-weight:700;color:var(--tx0);margin-bottom:4px}
+.blank-sys-sub{font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:12px}
+.blank-sys-actions{display:flex;flex-direction:column;gap:8px}
+.blank-sys-btn{font-size:12px;font-family:inherit;padding:10px;border-radius:6px;cursor:pointer;border:1px solid var(--bd0);background:var(--bg1);color:var(--tx0)}
+.blank-sys-btn.gen{border-color:#9B59B6;color:#C98BE8;background:rgba(155,89,182,.10)}
+.blank-sys-btn.gen:hover{background:rgba(155,89,182,.20)}
+.blank-sys-btn.man:hover{background:var(--bg2)}
+.blank-sys-note{font-size:9px;color:var(--tx1);line-height:1.45;margin-top:10px;font-family:monospace}
+@media(max-width:640px){
+  #galaxy-wrap{flex-direction:column}
+  #galaxy-canvas{flex:none;height:42vh}
+  #galaxy-detail{width:100%;border-left:none;border-top:.5px solid var(--bd2);flex:1;min-height:0}
+}
+
+/* The galaxy canvas stays dark in light mode too (see orrery/station note above). */
+#root.light-mode #view-galaxy #galaxy-canvas{background:#04060e}
 
 /* ═══════════════════════════════════════════
    SYSTEM MAP
@@ -932,6 +981,177 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
   #ai-takeover-overlay,.ait-noise,.ait-scan,.ait-msg{animation:none}
   .ait-noise{opacity:.1}
 }
+
+/* ── Imperial date chip (header) + Calendar/Timeline panel ── */
+#impdate-wrap{display:flex;align-items:center;flex-shrink:0}
+#impdate-display{
+  font-family:monospace;font-size:13px;font-weight:700;color:var(--accentGold);
+  letter-spacing:1.5px;cursor:pointer;user-select:none;padding:3px 9px;border-radius:5px;
+  border:.5px solid var(--bd0);background:var(--bg0);white-space:nowrap
+}
+#impdate-display:hover{border-color:var(--accentGold)}
+#root.pm-active #impdate-display{cursor:pointer}
+.impd-lbl{font-size:8px;color:var(--tx1);letter-spacing:1px;margin-right:6px}
+
+#cal-wrap{
+  position:fixed;top:54px;left:360px;width:340px;height:470px;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;
+  display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:280px;min-height:160px;max-width:90vw;max-height:85vh
+}
+#cal-wrap.hidden{display:none}
+#cal-wrap.panel-collapsed{height:auto!important;min-height:0}
+#cal-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#cal-header:active{cursor:grabbing}
+#cal-title{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#cal-toggle{font-size:10px;color:var(--tx1)}
+#cal-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+#cal-body.collapsed{display:none}
+.cal-now{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:10px 12px;text-align:center}
+.cal-now-date{font-family:monospace;font-size:24px;font-weight:800;color:var(--accentGold);letter-spacing:2px}
+.cal-now-sub{font-size:10px;color:var(--tx1);margin-top:3px;letter-spacing:1px;text-transform:uppercase}
+.cal-controls{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.cal-btn-ctl{font-size:11px;font-family:monospace;color:var(--tx0);background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;padding:5px 10px;cursor:pointer}
+.cal-btn-ctl:hover{background:var(--bd0)}
+.cal-btn-ctl.wk{color:var(--accentGold);border-color:var(--accentGold)}
+.cal-set-row{display:flex;gap:6px;align-items:center;justify-content:center;font-size:11px;color:var(--tx1);flex-wrap:wrap}
+.cal-set-row input{width:62px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:4px 6px;font-family:monospace}
+.cal-tl-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px}
+.cal-ev{display:flex;gap:9px;padding:6px 1px;border-bottom:.5px solid var(--bd0);align-items:flex-start}
+.cal-ev.past{opacity:.62}
+.cal-ev-date{font-family:monospace;font-size:10px;color:var(--accentGold);white-space:nowrap;flex-shrink:0;width:56px;letter-spacing:.5px;padding-top:1px}
+.cal-ev-body{flex:1;min-width:0}
+.cal-ev-title{font-size:12px;color:var(--tx0);font-weight:600;word-break:break-word}
+.cal-ev-note{font-size:10px;color:var(--tx1);line-height:1.4;margin-top:2px;white-space:pre-wrap}
+.cal-ev-vis{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:var(--bgS);color:var(--txS);cursor:pointer;flex-shrink:0}
+.cal-ev-del{cursor:pointer;color:var(--tx1);font-size:12px;flex-shrink:0;line-height:1}
+.cal-ev-del:hover{color:#d45050}
+.cal-today-marker{display:flex;align-items:center;gap:8px;color:var(--accentGold);font-family:monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 0}
+.cal-today-marker::before,.cal-today-marker::after{content:'';flex:1;height:.5px;background:var(--accentGold);opacity:.45}
+.cal-add{display:flex;flex-direction:column;gap:6px;border-top:.5px solid var(--bd0);padding-top:9px;margin-top:2px}
+.cal-add input,.cal-add textarea{background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit;width:100%;box-sizing:border-box}
+.cal-add textarea{resize:vertical}
+.cal-add-row{display:flex;gap:6px}
+.cal-add-row input{width:58px}
+.cal-add-row input:last-child{width:auto}
+.cal-add-btn{background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px;font-size:11px;font-family:monospace;cursor:pointer}
+.cal-add-btn:hover{background:var(--accentGoldBg)}
+.cal-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:14px 0}
+#cal-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#cal-btn:hover{background:var(--bd0);color:var(--tx0)}
+#cal-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){
+  #cal-wrap{left:0;top:54px;width:300px;height:400px}
+}
+
+/* ── Discovery Log / Codex panel ── */
+/* z-index 75: right-side panel that must clear the #sys-detail z:70 stacking
+   context (like #ship-wrap), or it renders behind the detail column. */
+#disc-wrap{position:fixed;top:54px;right:0;width:362px;height:480px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:290px;min-height:160px;max-width:92vw;max-height:86vh}
+#disc-wrap.hidden{display:none}
+#disc-wrap.panel-collapsed{height:auto!important;min-height:0}
+#disc-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#disc-header:active{cursor:grabbing}
+#disc-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px;display:flex;align-items:center;gap:8px}
+#disc-count{font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace}
+#disc-toggle{font-size:10px;color:var(--tx1)}
+#disc-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+#disc-body.collapsed{display:none}
+.disc-card{background:var(--bg0);border-radius:7px;border-left:3px solid var(--bd0);padding:8px 10px}
+.disc-card.state-known{border-left-color:var(--accentGold)}
+.disc-card.state-rumoured{border-left-color:#9B59B6}
+.disc-card.state-hidden{border-left-color:#555570;opacity:.82}
+.disc-card-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.disc-title{font-size:12px;font-weight:700;color:var(--tx0);flex:1;min-width:0;word-break:break-word}
+.disc-when{font-family:monospace;font-size:9px;color:var(--accentGold);letter-spacing:.5px;flex-shrink:0}
+.disc-cat{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.cat-lore{background:var(--accentGoldBg);color:var(--accentGold)}
+.cat-faction{background:#3a1010;color:#ff8a8a}
+.cat-location{background:#0e2238;color:#74b6ff}
+.cat-tech{background:#08302a;color:#54d6c0}
+.cat-person{background:#241038;color:#c89cff}
+.disc-body-txt{font-size:11px;line-height:1.5;color:var(--tx0);margin-top:5px;white-space:pre-wrap}
+.disc-redacted{font-family:monospace;font-size:10px;color:#8a7fa0;letter-spacing:1px}
+.disc-ctl{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.disc-mini{font-size:9px;font-family:monospace;color:var(--tx1);background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:3px 7px;cursor:pointer}
+.disc-mini:hover{background:var(--bd0);color:var(--tx0)}
+.disc-mini.state-known{color:var(--accentGold);border-color:var(--accentGold)}
+.disc-mini.state-rumoured{color:#c89cff;border-color:#7a4cc0}
+.disc-mini.del:hover{color:#d45050;border-color:#d45050}
+.disc-add{display:flex;flex-direction:column;gap:6px;border-top:.5px solid var(--bd0);padding-top:9px;margin-top:3px}
+.disc-add-ttl{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--accentGold)}
+.disc-add input,.disc-add textarea,.disc-add select{background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit;width:100%;box-sizing:border-box}
+.disc-add textarea{resize:vertical}
+.disc-add-row{display:flex;gap:6px}
+.disc-add-row select{flex:0 0 auto;width:auto}
+.disc-add-row #disc-f-vis{flex:1}
+#disc-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#disc-btn:hover{background:var(--bd0);color:var(--tx0)}
+#disc-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#disc-wrap{right:0;top:54px;width:312px;height:420px}}
+
+/* ── Reputation tracker panel ── */
+/* z-index 75: clears the #sys-detail z:70 stacking context (right-side panel). */
+#rep-wrap{position:fixed;top:54px;right:0;width:350px;height:480px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:290px;min-height:160px;max-width:92vw;max-height:86vh}
+#rep-wrap.hidden{display:none}
+#rep-wrap.panel-collapsed{height:auto!important;min-height:0}
+#rep-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#rep-header:active{cursor:grabbing}
+#rep-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#rep-toggle{font-size:10px;color:var(--tx1)}
+#rep-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+#rep-body.collapsed{display:none}
+.rep-tl-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px;margin-top:4px}
+.rep-fac{background:var(--bg0);border-radius:7px;padding:8px 10px}
+.rep-fac-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.rep-fac-name{font-size:12px;font-weight:700;color:var(--tx0);word-break:break-word}
+.rep-band{font-size:10px;font-family:monospace;font-weight:700;letter-spacing:.5px;white-space:nowrap;flex-shrink:0}
+.rep-val{opacity:.85}
+.rep-meter{position:relative;height:7px;border-radius:4px;background:var(--bgS);margin-top:7px;overflow:hidden}
+.rep-meter-fill{height:100%;border-radius:4px}
+.rep-meter-zero{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--tx1);opacity:.5}
+.rep-fac-ctl{display:flex;gap:5px;margin-top:7px}
+.rep-addfac{display:flex;gap:6px;align-items:center}
+.rep-addfac input{flex:1;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;color:var(--tx0);font-size:11px;padding:5px 7px;font-family:inherit}
+.rep-mile{display:flex;gap:9px;padding:6px 1px;border-bottom:.5px solid var(--bd0);align-items:flex-start}
+.rep-mile-meta{font-size:10px;color:var(--tx1);margin-top:2px}
+.rep-mile-delta{font-family:monospace;font-weight:700;margin-left:4px}
+.rep-mile-delta.pos{color:#7fd07f}
+.rep-mile-delta.neg{color:#e08040}
+#rep-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#rep-btn:hover{background:var(--bd0);color:var(--tx0)}
+#rep-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#rep-wrap{right:0;top:54px;width:312px;height:420px}}
+
+/* ── Oracle (rumour & encounter generators) panel ── */
+#gen-wrap{position:fixed;top:54px;right:0;width:344px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:280px;min-height:120px;max-width:92vw;max-height:86vh}
+#gen-wrap.hidden{display:none}
+#gen-wrap.panel-collapsed{height:auto!important;min-height:0}
+#gen-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#gen-header:active{cursor:grabbing}
+#gen-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#gen-toggle{font-size:10px;color:var(--tx1)}
+#gen-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
+#gen-body.collapsed{display:none}
+.gen-sec-title{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);border-bottom:.5px solid var(--bd0);padding-bottom:4px;margin-top:5px}
+.gen-result{background:var(--bg0);border-radius:7px;border-left:3px solid var(--accentGold);padding:9px 11px}
+.gen-result-text{font-size:12px;color:var(--tx0);line-height:1.5}
+.gen-meta{display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap}
+.gen-tag{font-size:8px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:var(--bgS);color:var(--txS)}
+.gen-diff{font-family:monospace;font-weight:700;font-size:10px;padding:1px 7px;border-radius:3px;letter-spacing:.5px}
+.gen-diff-0{background:#0e2a1a;color:#6fd08f}.gen-diff-1{background:#10240e;color:#9ad060}.gen-diff-2{background:#2a2410;color:#e0c050}.gen-diff-3{background:#2a1808;color:#e08040}.gen-diff-4{background:#2a0c0c;color:#ff6a6a}
+.gen-row-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:.5px}
+.gen-opts{display:flex;gap:5px;flex-wrap:wrap}
+.gen-opt{font-size:10px;font-family:monospace;padding:4px 10px;border-radius:5px;border:.5px solid var(--bd0);background:var(--bg0);color:var(--tx1);cursor:pointer}
+.gen-opt:hover{background:var(--bd0)}
+.gen-opt.on{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.gen-hint{font-size:10px;color:#e08040;font-style:italic;line-height:1.4}
+.gen-go{width:100%;background:transparent;color:var(--accentGold);border:1px solid var(--accentGold);border-radius:6px;padding:8px;font-size:11px;font-family:monospace;cursor:pointer;margin-top:4px}
+.gen-go:hover{background:var(--accentGoldBg)}
+#gen-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#gen-btn:hover{background:var(--bd0);color:var(--tx0)}
+#gen-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#gen-wrap{right:0;top:54px;width:312px}}
 
 /* ── Quest editor modal ── */
 #quest-edit-modal{
@@ -1750,6 +1970,24 @@ input#ui-scale-range{
 @keyframes refresh-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 #player-refresh-btn.just-updated{background:#2a4a1a;border-color:#8BC34A}
 
+/* ── Shared-sync connectivity pill (offline hardening) ──
+   Lives in the header (always present, both roles). Quiet when Live, prominent
+   when the connection to Supabase is degraded, so stale data is never mistaken
+   for live. Driven by updateConnPill(). */
+#conn-pill{
+  display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  background:#11151c;border:1px solid #2a3340;border-radius:20px;
+  padding:5px 10px;font-size:10px;font-family:monospace;font-weight:700;
+  letter-spacing:.5px;cursor:default;user-select:none;white-space:nowrap;
+  transition:color .2s,border-color .2s,opacity .2s;
+}
+#conn-pill .cp-dot{font-size:9px;line-height:1}
+#conn-pill.cp-live{color:#4CAF50;border-color:#2e5a38;opacity:.6}
+#conn-pill.cp-live:hover{opacity:1}
+#conn-pill.cp-reconnecting{color:#d4a017;border-color:#5a4a17;opacity:1;animation:cp-pulse 1.4s ease-in-out infinite}
+#conn-pill.cp-offline{color:#d45050;border-color:#5a2a2a;opacity:1}
+@keyframes cp-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
 /* ── View transition effect ── */
 #view-transition{
   position:fixed;inset:0;z-index:150;pointer-events:none;
@@ -1971,6 +2209,10 @@ input#ui-scale-range{
       <div id="clock-sep" class="ref-only"></div>
       <button id="clock-reset" class="ref-only" onclick="resetClock()" title="Reset to 00:00">↺</button>
     </div>
+    <!-- ── Imperial date chip ── -->
+    <div id="impdate-wrap">
+      <div id="impdate-display" onclick="toggleCalendarPanel()" title="Imperial date — open calendar">001-1105</div>
+    </div>
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
@@ -1978,11 +2220,15 @@ input#ui-scale-range{
     <button id="design-menu-btn" class="ref-only" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
         <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
-      <input type="text" id="search-input" placeholder="🔍 Find NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
+      <input type="text" id="search-input" placeholder="🔍 Find system, NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
+    <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
+    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Discovery Log / Codex — revealed lore & intel">🗂 Codex</button>
+    <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
+    <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
@@ -1993,6 +2239,8 @@ input#ui-scale-range{
     <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker" style="display:none"></button>
     <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly" style="display:none"></button>
     <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows" style="display:none"></button>
+    <!-- ── Shared-sync status pill (offline hardening) — updated by updateConnPill() ── -->
+    <div id="conn-pill" class="cp-live" title="Shared sync — Live"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
       <span class="pm-label">Player Mode</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
@@ -2002,7 +2250,102 @@ input#ui-scale-range{
   <!-- ══════════════════════════════════════
        SYSTEM MAP VIEW
   ══════════════════════════════════════ -->
-  <div id="view-system" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+
+  <!-- ══════════════════════════════════════
+       GALAXY MAP VIEW (Orion Arm) — landing view
+  ══════════════════════════════════════ -->
+  <div id="view-galaxy" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="galaxy-wrap">
+      <div id="galaxy-canvas">
+    <svg id="gx-svg" viewBox="0 0 1800 1060" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="gx-node-glow">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <rect width="1800" height="1060" fill="#04060e"/>
+      <g id="gx-bg-stars"></g>
+
+      <!-- Faction territory blobs -->
+      <path d="M 230,60 C 290,40 380,55 400,100 C 420,145 410,175 380,200 C 360,215 370,250 340,275 C 310,300 270,310 250,290 C 220,265 195,245 190,210 C 185,175 195,150 210,125 C 220,105 215,75 230,60 Z" fill="#6a0a0a" opacity="0.52"/>
+      <path d="M 380,60 C 440,35 560,45 620,80 C 680,115 695,155 670,190 C 650,218 620,230 590,240 C 555,252 520,265 480,258 C 440,250 400,235 375,210 C 350,185 345,155 355,125 C 362,100 360,78 380,60 Z" fill="#520a78" opacity="0.55"/>
+      <path d="M 290,490 C 330,455 390,445 440,460 C 490,475 530,505 545,545 C 560,585 550,625 520,648 C 495,668 460,672 425,660 C 395,648 370,640 350,618 C 325,592 310,565 300,540 C 290,515 278,510 290,490 Z" fill="#8a0808" opacity="0.52"/>
+      <path d="M 580,360 C 620,335 680,330 730,345 C 780,360 820,385 835,425 C 850,462 845,505 820,535 C 800,560 775,575 745,582 C 710,590 670,588 638,572 C 605,555 578,528 562,495 C 545,460 545,425 558,395 C 566,378 573,370 580,360 Z" fill="#600808" opacity="0.48"/>
+      <path d="M 980,130 C 1030,100 1130,110 1200,150 C 1265,185 1290,235 1280,290 C 1270,340 1240,370 1200,390 C 1165,408 1120,415 1080,408 C 1040,400 1005,380 980,350 C 955,320 940,280 942,240 C 944,200 955,158 980,130 Z" fill="#08105a" opacity="0.58"/>
+      <path d="M 885,508 C 930,488 1000,495 1060,515 C 1120,535 1165,558 1180,605 C 1195,650 1185,700 1150,725 C 1120,748 1070,750 1035,748 C 1005,746 975,740 952,725 C 928,710 910,688 895,665 C 878,640 872,612 875,582 C 878,552 870,520 885,508 Z" fill="#3a3808" opacity="0.52"/>
+
+      <!-- Faction labels -->
+      <text x="245" y="130" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,245,130)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
+      <text x="218" y="158" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,218,158)" stroke="#04060e" stroke-width="3" paint-order="stroke">FRONTIER</text>
+      <text x="440" y="120" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,440,120)" stroke="#04060e" stroke-width="3" paint-order="stroke">SANHEDRIN</text>
+      <text x="460" y="148" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,460,148)" stroke="#04060e" stroke-width="3" paint-order="stroke">CULT</text>
+      <text x="330" y="520" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,330,520)" stroke="#04060e" stroke-width="3" paint-order="stroke">RED STAR</text>
+      <text x="318" y="554" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,318,554)" stroke="#04060e" stroke-width="3" paint-order="stroke">COLLECTIVE</text>
+      <text x="608" y="400" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,608,400)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
+      <text x="588" y="436" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,588,436)" stroke="#04060e" stroke-width="3" paint-order="stroke">HEGEMONY</text>
+      <text x="985" y="190" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,985,190)" stroke="#04060e" stroke-width="3" paint-order="stroke">OMNISYNTH</text>
+      <text x="975" y="228" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,975,228)" stroke="#04060e" stroke-width="3" paint-order="stroke">INDUSTRIES</text>
+      <text x="952" y="580" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,952,580)" stroke="#04060e" stroke-width="3" paint-order="stroke">VESTALIAN</text>
+      <text x="942" y="608" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,942,608)" stroke="#04060e" stroke-width="3" paint-order="stroke">CONTINUITY</text>
+      <text x="948" y="636" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,948,636)" stroke="#04060e" stroke-width="3" paint-order="stroke">GOVERNMENT</text>
+      <text x="95" y="520" font-size="14" font-weight="700" fill="#557788" opacity="0.4" font-family="monospace" letter-spacing="2" transform="rotate(90,95,520)">THE GHOST REEF</text>
+
+      <!-- Jump lanes — rendered by JS from the connections data (single source of truth) -->
+      <g id="gx-lanes"></g>
+
+      <!-- Systems rendered by JS -->
+      <g id="gx-systems"></g>
+    </svg>
+        <div id="gx-title">The Orion Arm</div>
+        <div id="gx-zoom">
+          <button class="zoom-btn" onclick="gxZoom(1.2)">+</button>
+          <button class="zoom-btn" onclick="gxZoom(0.83)">−</button>
+          <button class="zoom-btn" onclick="gxResetView()" style="font-size:11px">⌂</button>
+        </div>
+        <div id="gx-legend">
+          <div class="leg-row"><div class="leg-swatch" style="background:#6a0a0a"></div>Terran Frontier</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#520a78"></div>Sanhedrin Cult</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#8a0808"></div>Red Star Collective</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#600808"></div>Terran Hegemony</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#08105a"></div>OmniSynth Industries</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#3a3808"></div>Vestalian Continuity Gov.</div>
+          <div class="leg-row"><div class="leg-swatch" style="background:#1a2030;border:1px solid #334"></div>Independent</div>
+        </div>
+      </div><!-- end galaxy-canvas -->
+
+      <div id="galaxy-detail">
+        <div id="galaxy-dh">
+          <div id="galaxy-dname">THE ORION ARM</div>
+          <div id="galaxy-dtype">Select a system to inspect</div>
+        </div>
+        <div id="galaxy-db">
+          <div id="galaxy-overview">
+            <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:14px">
+              The Orion Arm spans hundreds of inhabited systems across six major faction territories.
+              The Archon Collective observes from beyond the charted boundaries.<br><br>
+              <span style="color:var(--accentGold)">Tap any system</span> to inspect it, then
+              <span style="color:var(--accentGold)">View close up</span> to drill into its worlds.
+              A <span style="color:#4caf82">green dot</span> marks a surveyed system.
+            </div>
+            <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">Faction Territories</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6a0a0a;border:.5px solid #ff8888;margin-right:8px;vertical-align:middle"></span>Terran Frontier</td></tr>
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#520a78;border:.5px solid #cc88ff;margin-right:8px;vertical-align:middle"></span>Sanhedrin Cult</td></tr>
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8a0808;border:.5px solid #ff6666;margin-right:8px;vertical-align:middle"></span>Red Star Collective</td></tr>
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#600808;border:.5px solid #00e5ff;margin-right:8px;vertical-align:middle"></span>Terran Hegemony</td></tr>
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#08105a;border:.5px solid #6699ff;margin-right:8px;vertical-align:middle"></span>OmniSynth Industries</td></tr>
+              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a3808;border:.5px solid #aadd44;margin-right:8px;vertical-align:middle"></span>Vestalian Continuity Gov.</td></tr>
+              <tr><td style="padding:5px 0;color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a2030;border:.5px solid #668899;margin-right:8px;vertical-align:middle"></span>Independent / Ghost Reef</td></tr>
+            </table>
+          </div>
+          <div id="galaxy-sys-detail" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-system" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
     <div id="sys-wrap">
       <div id="orrery-panel">
         <svg id="orrery-svg" viewBox="0 0 800 500"></svg>
@@ -2014,13 +2357,22 @@ input#ui-scale-range{
         </div>
         <div id="sys-db">
           <div id="sys-overview">
-            <div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">
-              Star type: <span style="color:#E8A020;font-weight:700">Auros — K3 V Orange Dwarf</span><br>
-              Mass: 0.78 M☉ · Luminosity: 0.42 L☉ · Age: 5.2 Gyr<br>
-              Habitable zone: 0.55–0.85 AU
+            <!-- Star-info header — filled per-system by renderSystemOverview().
+                 Defaults to the authored Auros copy below for first paint. -->
+            <div id="sys-star-info">
+              <div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">
+                Star type: <span style="color:#E8A020;font-weight:700">Auros — K3 V Orange Dwarf</span><br>
+                Mass: 0.78 M☉ · Luminosity: 0.42 L☉ · Age: 5.2 Gyr<br>
+                Habitable zone: 0.55–0.85 AU
+              </div>
             </div>
-            <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">System Bodies</div>
-            <table class="btbl" id="body-list-table"></table>
+            <div id="sys-bodies-section">
+              <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">System Bodies</div>
+              <table class="btbl" id="body-list-table"></table>
+            </div>
+            <!-- Shown instead of the body list when a system has no charted
+                 bodies — offers manual entry / random UWP generation. -->
+            <div id="sys-blank-prompt" class="v-hidden"></div>
           </div>
           <div id="sys-body-detail" class="v-hidden"></div>
           <button id="btn-view-station" class="view-close-btn v-hidden" onclick="enterStation()">⬡ View Aurelia up close</button>
@@ -2430,6 +2782,46 @@ input#ui-scale-range{
     </div>
   </div>
 
+  <!-- ── Imperial Calendar / Campaign Timeline panel ── -->
+  <div id="cal-wrap" class="hidden">
+    <div id="cal-header" onclick="toggleCalCollapse()">
+      <span id="cal-title">📅 IMPERIAL CALENDAR</span>
+      <span id="cal-toggle">▼</span>
+    </div>
+    <div id="cal-body"></div>
+    <div class="panel-resize-handle" id="cal-resize"></div>
+  </div>
+
+  <!-- ── Discovery Log / Codex panel ── -->
+  <div id="disc-wrap" class="hidden">
+    <div id="disc-header" onclick="toggleDiscCollapse()">
+      <span id="disc-title-lbl">🗂 CODEX <span id="disc-count">0</span></span>
+      <span id="disc-toggle">▼</span>
+    </div>
+    <div id="disc-body"></div>
+    <div class="panel-resize-handle" id="disc-resize"></div>
+  </div>
+
+  <!-- ── Reputation tracker panel ── -->
+  <div id="rep-wrap" class="hidden">
+    <div id="rep-header" onclick="toggleRepCollapse()">
+      <span id="rep-title-lbl">⚖ REPUTATION</span>
+      <span id="rep-toggle">▼</span>
+    </div>
+    <div id="rep-body"></div>
+    <div class="panel-resize-handle" id="rep-resize"></div>
+  </div>
+
+  <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
+  <div id="gen-wrap" class="hidden ref-only">
+    <div id="gen-header" onclick="toggleGenCollapse()">
+      <span id="gen-title-lbl">🎲 ORACLE</span>
+      <span id="gen-toggle">▼</span>
+    </div>
+    <div id="gen-body"></div>
+    <div class="panel-resize-handle" id="gen-resize"></div>
+  </div>
+
   <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
     <div id="quest-edit-card">
       <div id="quest-edit-header">
@@ -2550,6 +2942,803 @@ const SYSTEMS = {
   auros: { id:'auros', name:'Auros', base: BASE_BODIES_AUROS }
 };
 let currentSystemId = 'auros';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GALAXY MAP — DATA + REGISTRY  (Orion Arm; ported from orion_arm_map_v4)
+// ═══════════════════════════════════════════════════════════════════════════
+const GALAXY_FACTIONS = {
+  hegemony:   { name:'Terran Hegemony',                      color:'#00e5ff' },
+  uhc:        { name:'Vestalian Continuity Government',                         color:'#aadd44' },
+  sanhedrin:  { name:'Congregation of the Second Fall',      color:'#cc88ff' },
+  rsc:        { name:'Red Star Collective',                  color:'#ff6666' },
+  omnisynth:  { name:'OmniSynth Industries',                 color:'#6699ff' },
+  archon:     { name:'Archon Collective',                    color:'#aabbcc' },
+  vast:       { name:'The Vast',                             color:'#8855cc' },
+  independent:{ name:'Independent',                         color:'#66bbaa' },
+  contested:  { name:'Independent (Contested)',              color:'#ddaa44' },
+};
+
+const NODE_COLOR = '#00e5ff';
+
+const GALAXY_NODES = [
+  // ──  ── The Vast / Ghost Reef (left fringe) ──────────────────────────────
+  { id:'silent-witness',   name:'Gliese 526',          x:90,  y:350, faction:'archon',
+    label:'Silent Night',
+    connections:['whisper'],
+    desc:'Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains.' },
+
+  { id:'whisper',          name:'Gliese 667 Cc',       x:112, y:462, faction:'vast',
+    label:'Whisper',
+    connections:['silent-witness','the-mausoleum','threshold'],
+    desc:'Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all.' },
+
+  { id:'the-mausoleum',    name:'Hyades Cluster',      x:172, y:490, faction:'archon',
+    label:'The Mausoleum',
+    connections:['whisper','threshold','the-fade'],
+    desc:'The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active.' },
+
+  { id:'threshold',        name:'Gliese 229',          x:88,  y:562, faction:'vast',
+    label:'Threshold',
+    connections:['whisper','the-mausoleum','the-fade','echo'],
+    desc:'Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through.' },
+
+  { id:'the-fade',         name:'Gliese 581 D',        x:162, y:548, faction:'vast',
+    label:'The Fade',
+    connections:['the-mausoleum','threshold'],
+    desc:'The Fade — A region of space slowly "unmaking." Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back.' },
+
+  { id:'echo',             name:'Uncharted Nebula',    x:85,  y:648, faction:'vast',
+    label:'Echo',
+    connections:['threshold'],
+    desc:'Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within.' },
+
+  { id:'the-reach',        name:"Kapteyn's Star",     x:218, y:745, faction:'independent',
+    label:'The Reach',
+    connections:['meridian'],
+    desc:"The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight." },
+
+  // ── Congregation of the Second Fall ───────────────────────────────── ──
+  { id:'ironhold',         name:'Gliese 806',          x:295, y:108, faction:'sanhedrin',
+    label:'Redemption',
+    connections:['penitence','redemption'],
+    desc:'Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer.' },
+
+  { id:'penitence',        name:'Gliese 563',          x:298, y:200, faction:'sanhedrin',
+    label:'Penitence',
+    connections:['ironhold','the-garden','sanhedrin-prime'],
+    desc:"Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet." },
+
+  { id:'the-garden',       name:'Gliese 706',          x:290, y:318, faction:'sanhedrin',
+    label:'The Garden',
+    connections:['penitence','sanhedrin-prime','the-hammer'],
+    desc:'The Garden — An agricultural commune run by the Congregation, producing "faithfully grown" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent.' },
+
+  { id:'redemption',       name:'Gliese 505',          x:540, y:145, faction:'sanhedrin',
+    label:'New Jerusalem',
+    connections:['ironhold','new-jerusalem','new-canaan'],
+    desc:"New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work." },
+
+  { id:'new-jerusalem',    name:'Beta Comae',          x:570, y:185, faction:'sanhedrin',
+    label:'New Canaan',
+    connections:['redemption','new-canaan'],
+    desc:'New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit.' },
+
+  { id:'new-canaan',       name:'Ursae Majoris',       x:428, y:175, faction:'sanhedrin',
+    label:'Sanhedrin Prime',
+    connections:['redemption','new-jerusalem','sanhedrin-prime'],
+    desc:"Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades." },
+
+  { id:'sanhedrin-prime',  name:'Gliese 710',          x:428, y:248, faction:'archon',
+    label:'The Echo',
+    connections:['new-canaan','the-garden','graveyard'],
+    desc:'The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols.' },
+
+  { id:'graveyard',        name:'61 Cygni',            x:518, y:248, faction:'contested',
+    label:'Graveyard',
+    connections:['sanhedrin-prime','watchtower'],
+    desc:"Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly." },
+
+  // ── Red Star Collective ────────────────────────────────────────────── ──
+  { id:'the-hammer',       name:'Deep Space (Mobile)', x:418, y:485, faction:'rsc',
+    label:'The Hammer',
+    connections:['the-forge','october-yards','aurelia','watchtower','the-garden'],
+    desc:'The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years.' },
+
+  { id:'the-forge',        name:'Deep Space (Mobile)', x:388, y:558, faction:'rsc',
+    label:'The Forge',
+    connections:['the-hammer','october-yards'],
+    desc:"The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective." },
+
+  { id:'october-yards',    name:'Gliese 406',          x:478, y:592, faction:'rsc',
+    label:'Red Sunrise',
+    connections:['the-forge','the-hammer','red-sunrise','aurelia'],
+    desc:'Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning.' },
+
+  { id:'red-sunrise',      name:'Gliese 445',          x:463, y:645, faction:'rsc',
+    label:'New Hope',
+    connections:['october-yards','meridian'],
+    desc:'New Hope — A secret Vanguard training world, home to "Liberation University." A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed.' },
+
+  // ── Terran Hegemony ────────────────────────────────────────────────── ──
+  { id:'watchtower',       name:'Procyon',             x:602, y:378, faction:'hegemony',
+    label:'Watchtower',
+    connections:['graveyard','vega','aurelia','the-hammer'],
+    desc:'Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told.' },
+
+  { id:'vega',             name:'Vega',                x:700, y:360, faction:'hegemony',
+    label:'Vega',
+    connections:['watchtower','castor'],
+    desc:"Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command." },
+
+  { id:'aurelia', systemId:'auros',          name:'Epsilon Indi',        x:602, y:478, faction:'hegemony',
+    label:'Aurelia ★',
+    connections:['watchtower','the-hammer','october-yards','sol'],
+    desc:"Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C." },
+
+  { id:'sol',              name:'Sol',                 x:660, y:445, faction:'hegemony',
+    label:'Sol',
+    connections:['castor','pollux','new-horizon'],
+    desc:'Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age.' },
+
+  { id:'castor',           name:'Castor',              x:748, y:385, faction:'hegemony',
+    label:'Castor',
+    connections:['vega','sol','pollux','warehouse'],
+    desc:"Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm." },
+
+  { id:'pollux',           name:'Alpha Centauri',      x:700, y:448, faction:'hegemony',
+    label:'Alpha Centauri',
+    connections:['castor','sol','new-horizon','the-archive','kronos'],
+    desc:'Alpha Centauri — Home to New Horizon, the "First Colony" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim.' },
+
+  { id:'new-horizon',      name:'Groombridge 34',      x:655, y:525, faction:'hegemony',
+    label:'Ironhold',
+    connections:['aurelia','sol','pollux','ophion-prime','the-archive'],
+    desc:"Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense." },
+
+  // ── OmniSynth Industries ──────────────────────────────────────────── ──
+  { id:'warehouse',        name:'Gliese 693',          x:938, y:255, faction:'omnisynth',
+    label:'Warehouse',
+    connections:['castor','profit-margin','kronos'],
+    desc:"Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias." },
+
+  { id:'profit-margin',    name:'Gliese 777',          x:1028,y:205, faction:'omnisynth',
+    label:'Profit Margin',
+    connections:['warehouse','the-anvil','kronos'],
+    desc:'Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service.' },
+
+  { id:'the-anvil',        name:'Gliese 674',          x:1168,y:252, faction:'omnisynth',
+    label:'The Anvil',
+    connections:['profit-margin','terminus'],
+    desc:"The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer." },
+
+  { id:'kronos',           name:'Gliese 667',          x:1042,y:305, faction:'omnisynth',
+    label:'Kronos Prime',
+    connections:['warehouse','profit-margin','terminus','pollux'],
+    desc:'Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security.' },
+
+  { id:'terminus',         name:'Wolf 359',            x:1118,y:342, faction:'independent',
+    label:'Terminus',
+    connections:['the-anvil','kronos','erebus'],
+    desc:'Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through.' },
+
+  { id:'erebus',           name:'TRAPPIST-1',          x:1188,y:408, faction:'independent',
+    label:'Erebus',
+    connections:['terminus','the-museum'],
+    desc:'Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation.' },
+
+  // ── UHC Loyalist ──────────────────────────────────────────────────── ──
+  { id:'the-archive',      name:'Gliese 555',          x:928, y:548, faction:'uhc',
+    label:'The Archive',
+    connections:['pollux','new-horizon','the-museum','vesta','old-earth'],
+    desc:"The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose." },
+
+  { id:'the-museum',       name:'Gliese 754',          x:1028,y:535, faction:'uhc',
+    label:'The Museum',
+    connections:['the-archive','pollux','cypress','erebus'],
+    desc:'The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution.' },
+
+  { id:'vesta',            name:'Eta Cassiopeiae',     x:918, y:618, faction:'uhc',
+    label:'Vestalia',
+    connections:['the-archive','memory','avalon'],
+    desc:'Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space.' },
+
+  { id:'old-earth',        name:'Gliese 667 C',        x:918, y:642, faction:'uhc',
+    label:'Old Earth',
+    connections:['the-archive','memory'],
+    desc:'Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how.' },
+
+  { id:'memory',           name:'Gliese 682',          x:948, y:655, faction:'uhc',
+    label:'Memory',
+    connections:['vesta','old-earth','avalon','zephyria-prime'],
+    desc:'Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world.' },
+
+  { id:'avalon',           name:'Tau Ceti',            x:938, y:715, faction:'contested',
+    label:'Avalon',
+    connections:['vesta','memory','solidarity','zephyria-prime'],
+    desc:"Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly." },
+
+  { id:'zephyria-prime',   name:'Gliese 581',          x:1015,y:732, faction:'contested',
+    label:'Zephyria Prime',
+    connections:['memory','avalon'],
+    desc:'Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything.' },
+
+  { id:'solidarity',       name:'Gliese 293',          x:878, y:760, faction:'rsc',
+    label:'Solidarity',
+    connections:['avalon','dust'],
+    desc:'Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition.' },
+
+  { id:'dust',             name:'Ross 154',            x:888, y:820, faction:'independent',
+    label:'Dust',
+    connections:['solidarity'],
+    desc:'Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered.' },
+
+  { id:'cypress',          name:'36 Ophiuchi A',       x:1108,y:580, faction:'hegemony',
+    label:'Cypress',
+    connections:['the-museum','bastion'],
+    desc:'Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails.' },
+
+  { id:'bastion',          name:'Epsilon Eridani',     x:1238,y:595, faction:'contested',
+    label:'Elysium Prime / Elysium Secundus',
+    connections:['cypress','vanguards-end','elysium-prime'],
+    desc:'Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law.' },
+
+  { id:'vanguards-end',    name:'Wolf 294',            x:1315,y:595, faction:'hegemony',
+    label:"Bastion",
+    connections:['bastion'],
+    desc:"Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence." },
+
+  { id:'elysium-prime',    name:'Luyten 726-8',        x:1205,y:665, faction:'hegemony',
+    label:"Vanguard's End",
+    connections:['bastion','elysium-secundus'],
+    desc:"Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point." },
+
+  { id:'elysium-secundus', name:'Gliese 892',          x:1270,y:678, faction:'archon',
+    label:"The Watch",
+    connections:['elysium-prime'],
+    desc:"The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed." },
+
+  // ──  ── Independent / Neutral systems ────────────────────────────────────
+  { id:'meridian',         name:'82 Eridani',          x:488, y:698, faction:'independent',
+    label:'Meridian / Meridian Prime',
+    connections:['the-reach','solitude','red-sunrise','haven'],
+    desc:"Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate." },
+
+  { id:'solitude',         name:"Luyten's Star",      x:568, y:748, faction:'independent',
+    label:'Solitude',
+    connections:['meridian','haven','ophion-prime'],
+    desc:'Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this.' },
+
+  { id:'haven',            name:'Lacaille 9352',       x:542, y:805, faction:'independent',
+    label:'Haven',
+    connections:['meridian','solitude','meridian-secundus'],
+    desc:"Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous." },
+
+  { id:'ophion-prime',     name:'HD 219134',           x:708, y:698, faction:'independent',
+    label:'Ophion Prime',
+    connections:['solitude','new-horizon','freeside'],
+    desc:"Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly." },
+
+  { id:'freeside',         name:"Barnard's Star",     x:645, y:758, faction:'independent',
+    label:'Freeside',
+    connections:['ophion-prime','meridian-secundus','havens-gate'],
+    desc:'Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort.' },
+
+  { id:'meridian-secundus',name:'Gliese 876',          x:645, y:828, faction:'independent',
+    label:'Freeport Omega',
+    connections:['haven','freeside','havens-gate'],
+    desc:'Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people.' },
+
+  { id:'havens-gate',      name:'Gliese 832',          x:708, y:868, faction:'independent',
+    label:"Haven's Gate",
+    connections:['freeside','meridian-secundus'],
+    desc:"Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from." },
+];
+
+// Lookup map by galaxy-node id.
+const GX_MAP = {};
+GALAXY_NODES.forEach(s => GX_MAP[s.id] = s);
+
+// Register every galaxy node as a drillable system in the multi-system SYSTEMS
+// registry. The authored Auros/Aurelia system already exists; all others start
+// with an empty `base` (unsurveyed → blank-system prompt on entry). Referee-
+// generated/added bodies live in bodyAdditions[systemId] (Supabase-synced),
+// exactly like Auros, so a populated system survives reloads for everyone.
+GALAXY_NODES.forEach(n => {
+  const sid = n.systemId || n.id;
+  if(!SYSTEMS[sid]){
+    SYSTEMS[sid] = {
+      id: sid,
+      name: (n.label || n.name).replace(' ★','').trim(),
+      starName: n.name,
+      faction: n.faction,
+      galaxyId: n.id,
+      base: []
+    };
+  } else {
+    // Backfill galaxy linkage onto the pre-authored system (Auros).
+    SYSTEMS[sid].galaxyId = SYSTEMS[sid].galaxyId || n.id;
+    SYSTEMS[sid].faction  = SYSTEMS[sid].faction  || n.faction;
+    SYSTEMS[sid].starName = SYSTEMS[sid].starName || n.name;
+  }
+});
+
+// Undirected jump-lane set built from base connections (single source of truth
+// for the rendered lines and the detail-panel connection list).
+const GX_LANES = new Set();
+function gxLaneKey(a,b){ return a < b ? a+'|'+b : b+'|'+a; }
+GALAXY_NODES.forEach(s => (s.connections||[]).forEach(cid => {
+  if(GX_MAP[cid] && cid !== s.id) GX_LANES.add(gxLaneKey(s.id, cid));
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GALAXY MAP — ENGINE  (ported from orion_arm_map_v4, namespaced gx*)
+// ═══════════════════════════════════════════════════════════════════════════
+// The Orion Arm starmap is the app's landing view. Nodes are star systems;
+// "View Close Up" drills into the generic per-system orrery (enterSystem),
+// which reads effectiveBodies(systemId) exactly like Auros. Unsurveyed systems
+// (empty base + no additions) show a blank-system prompt offering manual entry
+// or random UWP generation. Lanes/connections are read-only here (V1) — the
+// orion file's lane/flag/design-editing layer is intentionally not ported.
+
+let gxInited = false;       // star field + nodes rendered once
+let gxViewReady = false;    // initial zoom-to-fit done
+let gxSelectedId = null;    // currently selected galaxy node
+
+// ── Star field (seeded, reproducible) ──────────────────────────────────────
+function gxSeedStars(){
+  const g = document.getElementById('gx-bg-stars'); if(!g) return;
+  let h = '';
+  let seed = 42;
+  function rng(){ seed = (seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/0xffffffff; }
+  const bands = [
+    {cx:200,cy:900,rx:650,ry:220,rot:-28,fill:'#112244',op:0.28},
+    {cx:600,cy:650,rx:700,ry:180,rot:-28,fill:'#0d1a33',op:0.32},
+    {cx:950,cy:420,rx:700,ry:200,rot:-28,fill:'#0d1a33',op:0.30},
+    {cx:1350,cy:180,rx:650,ry:190,rot:-28,fill:'#112244',op:0.26},
+    {cx:300,cy:600,rx:500,ry:120,rot:-18,fill:'#192840',op:0.16},
+    {cx:900,cy:280,rx:500,ry:110,rot:-18,fill:'#192840',op:0.15},
+    {cx:780,cy:530,rx:280,ry:100,rot:-28,fill:'#1a2a50',op:0.22},
+    {cx:780,cy:530,rx:130,ry:50,rot:-28,fill:'#2a3a60',op:0.20},
+  ];
+  bands.forEach(b => h += `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" fill="${b.fill}" opacity="${b.op}" transform="rotate(${b.rot},${b.cx},${b.cy})"/>`);
+  const nebulae = [
+    {cx:150,cy:780,rx:220,ry:110,rot:-15,fill:'#2233aa',op:0.05},
+    {cx:1150,cy:140,rx:260,ry:100,rot:20,fill:'#553399',op:0.06},
+    {cx:600,cy:200,rx:180,ry:80,rot:8,fill:'#aa4422',op:0.04},
+    {cx:1400,cy:700,rx:200,ry:90,rot:-10,fill:'#225533',op:0.05},
+    {cx:450,cy:500,rx:300,ry:80,rot:-25,fill:'#112255',op:0.07},
+    {cx:1050,cy:850,rx:220,ry:100,rot:5,fill:'#331155',op:0.05},
+  ];
+  nebulae.forEach(n => h += `<ellipse cx="${n.cx}" cy="${n.cy}" rx="${n.rx}" ry="${n.ry}" fill="${n.fill}" opacity="${n.op}" transform="rotate(${n.rot},${n.cx},${n.cy})"/>`);
+  h += `<ellipse cx="750" cy="520" rx="500" ry="55" fill="#050810" opacity="0.18" transform="rotate(-28,750,520)"/>`;
+  h += `<ellipse cx="400" cy="730" rx="350" ry="40" fill="#050810" opacity="0.12" transform="rotate(-22,400,730)"/>`;
+  for(let i=0;i<3000;i++){
+    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
+    h += `<circle cx="${x}" cy="${y}" r="0.35" fill="#ccd8ee" opacity="${(0.10+rng()*0.25).toFixed(2)}"/>`;
+  }
+  for(let i=0;i<2200;i++){
+    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
+    const sz=rng(); const r=sz<0.7?0.45:sz<0.92?0.7:0.95;
+    const cr=rng();
+    const fill=cr<0.08?'#ffddbb':cr<0.15?'#ffeedd':cr<0.22?'#bbddff':cr<0.28?'#ddeeff':'#ffffff';
+    h += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${(0.25+rng()*0.65).toFixed(2)}"/>`;
+  }
+  for(let i=0;i<2500;i++){
+    const t=rng(); const bx=t*1900-50; const by=1060-t*820+(rng()-0.5)*320;
+    if(bx<0||bx>1800||by<0||by>1060) continue;
+    const r=rng()<0.06?0.7:0.3;
+    const fill=rng()<0.2?'#aaccff':'#e8eeff';
+    h += `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${r}" fill="${fill}" opacity="${(0.12+rng()*0.50).toFixed(2)}"/>`;
+  }
+  const clusters=[{cx:320,cy:820,spread:90,count:140,col:'#ddeeff'},{cx:1250,cy:300,spread:110,count:160,col:'#eeeeff'},{cx:680,cy:180,spread:75,count:100,col:'#ffeedd'}];
+  clusters.forEach(cl=>{ for(let i=0;i<cl.count;i++){
+    const angle=rng()*Math.PI*2, dist=rng()*rng()*cl.spread;
+    const x=(cl.cx+Math.cos(angle)*dist).toFixed(1), y=(cl.cy+Math.sin(angle)*dist).toFixed(1);
+    h += `<circle cx="${x}" cy="${y}" r="${rng()<0.1?0.8:0.4}" fill="${cl.col}" opacity="${(0.30+rng()*0.60).toFixed(2)}"/>`;
+  }});
+  g.innerHTML = h;
+}
+
+// ── Render jump lanes + nodes ──────────────────────────────────────────────
+function gxRenderLanes(){
+  const g = document.getElementById('gx-lanes'); if(!g) return;
+  let h = '';
+  GX_LANES.forEach(k => {
+    const [a,b] = k.split('|');
+    const sa = GX_MAP[a], sb = GX_MAP[b];
+    if(!sa || !sb) return;
+    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="#1d4a66" stroke-width="0.7" opacity="0.55"/>`;
+  });
+  g.innerHTML = h;
+}
+
+function gxIsHub(sys){ return (sys.systemId === 'auros') || (sys.id === 'aurelia'); }
+
+function gxRenderSystems(){
+  const g = document.getElementById('gx-systems'); if(!g) return;
+  let h = '';
+  GALAXY_NODES.forEach(sys => {
+    const hub = gxIsHub(sys), r = hub?7:5;
+    const lbl = escHtml((sys.label||sys.name).replace(' ★',''));
+    // Surveyed = the linked system has at least one body (authored or generated).
+    const sid = sys.systemId || sys.id;
+    const surveyed = effectiveBodies(sid).length > 0;
+    h += `<g class="gx-node" data-id="${sys.id}" onclick="gxOnNodeClick('${sys.id}')" style="cursor:pointer">
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r+9}" fill="transparent"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r+4}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.7" opacity="0.3"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${r}" fill="#050810" stroke="${NODE_COLOR}" stroke-width="1.1" filter="url(#gx-node-glow)"/>
+      <circle cx="${sys.x}" cy="${sys.y}" r="${hub?3.5:2}" fill="${NODE_COLOR}" opacity="0.95"/>
+      ${hub?`<circle cx="${sys.x}" cy="${sys.y}" r="${r+7}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.6" opacity="0.4" stroke-dasharray="3,3"/>`:''}
+      ${surveyed?`<circle cx="${sys.x+r+1}" cy="${sys.y-r-1}" r="1.8" fill="#4caf82"/>`:''}
+      <text x="${sys.x+r+5}" y="${sys.y+3}" font-size="${hub?9:7.5}" fill="${NODE_COLOR}"
+            font-family="'Courier New',monospace" letter-spacing="0.3" opacity="0.9"
+            stroke="#04060e" stroke-width="2" paint-order="stroke">${lbl}</text>
+    </g>`;
+  });
+  g.innerHTML = h;
+}
+
+function gxEnsureRendered(){
+  if(gxInited) return;
+  gxSeedStars();
+  gxRenderLanes();
+  gxRenderSystems();
+  gxAttachPanZoom();
+  gxInited = true;
+}
+
+// ── Pan & zoom ─────────────────────────────────────────────────────────────
+let gxScale=1, gxTx=0, gxTy=0, gxDragging=false, gxLastX=0, gxLastY=0, gxPanZoomAttached=false;
+function gxApplyT(){
+  const svg = document.getElementById('gx-svg');
+  if(svg) svg.style.transform = `translate(${gxTx}px,${gxTy}px) scale(${gxScale})`;
+}
+function gxZoom(f,cx,cy){
+  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  const r = canvas.getBoundingClientRect();
+  const px = (cx==null?r.width/2:cx-r.left), py = (cy==null?r.height/2:cy-r.top);
+  const ns = Math.max(0.25, Math.min(4, gxScale*f));
+  const ratio = ns/gxScale;
+  gxTx = px-ratio*(px-gxTx); gxTy = py-ratio*(py-gxTy); gxScale = ns; gxApplyT();
+}
+function gxResetView(){
+  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  const r = canvas.getBoundingClientRect();
+  if(!r.width || !r.height) return;
+  gxScale = Math.min(r.width/1800, r.height/1060)*0.92;
+  gxTx = (r.width-1800*gxScale)/2; gxTy = (r.height-1060*gxScale)/2; gxApplyT();
+  gxViewReady = true;
+}
+function gxAttachPanZoom(){
+  if(gxPanZoomAttached) return;
+  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  canvas.addEventListener('pointerdown', e=>{
+    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
+    gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
+    canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e=>{ if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT(); });
+  canvas.addEventListener('pointerup', ()=>{ gxDragging=false; canvas.classList.remove('panning'); });
+  canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
+  let lastDist=null;
+  canvas.addEventListener('touchmove', e=>{
+    if(e.touches.length===2){
+      e.preventDefault();
+      const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(lastDist) gxZoom(d/lastDist,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);
+      lastDist=d;
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchend', ()=>lastDist=null);
+  gxPanZoomAttached = true;
+}
+
+// ── Selection + detail panel ───────────────────────────────────────────────
+function gxOnNodeClick(id){ gxSelectSystem(id); }
+
+function gxSelectSystem(id){
+  const sys = GX_MAP[id]; if(!sys) return;
+  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
+  gxSelectedId = id;
+  const node = document.querySelector(`#gx-systems [data-id="${id}"]`);
+  if(node){
+    const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
+    ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
+    ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
+    ring.setAttribute('class','gx-sel-ring');
+    node.appendChild(ring);
+  }
+  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
+  const nameEl = document.getElementById('galaxy-dname');
+  nameEl.textContent = (sys.label||sys.name).replace(' ★','').toUpperCase();
+  nameEl.style.color = f.color;
+  document.getElementById('galaxy-dtype').textContent = sys.name + ' · ' + f.name;
+  document.getElementById('galaxy-overview').style.display='none';
+  document.getElementById('galaxy-sys-detail').style.display='block';
+  gxUpdateDetail(id);
+}
+
+function gxUpdateDetail(id){
+  const sys = GX_MAP[id]; if(!sys) return;
+  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
+  const sid = sys.systemId || sys.id;
+  const bodyCount = effectiveBodies(sid).length;
+  const det = document.getElementById('galaxy-sys-detail');
+  let html = '';
+
+  // Primary action — drill into the system close-up (the orrery).
+  html += `<button class="view-close-btn" onclick="enterSystem('${sid}')">⊙ View close up of ${escHtml((sys.label||sys.name).replace(' ★',''))}</button>`;
+  html += `<div style="font-size:10px;color:${bodyCount?'#4caf82':'var(--txW)'};font-family:monospace;margin:-4px 0 10px">${bodyCount? '✓ Surveyed — '+bodyCount+' bodies charted' : '○ Unsurveyed — no system data yet'}</div>`;
+
+  html += `<div class="sg">
+    <div class="sg-l">Faction</div><div class="sg-v" style="color:${f.color}">${escHtml(f.name)}</div>
+    <div class="sg-l">Star designation</div><div class="sg-v">${escHtml(sys.name)}</div>
+    <div class="sg-l">Jump connections</div><div class="sg-v">${(sys.connections||[]).length}</div>
+  </div>`;
+
+  html += `<div class="s-sec">
+    <div class="s-sec-lbl">Overview</div>
+    <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
+  </div>`;
+
+  html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
+  if((sys.connections||[]).length){
+    sys.connections.forEach(cid => {
+      const c = GX_MAP[cid]; if(!c) return;
+      const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
+      html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+        <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
+        <span style="font-size:12px;color:var(--tx0)">${escHtml((c.label||c.name).replace(' ★',''))}</span>
+        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>
+      </div>`;
+    });
+  } else {
+    html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
+  }
+  html += `</div>`;
+  det.innerHTML = html;
+}
+
+// ── Top-level galaxy view ──────────────────────────────────────────────────
+function goGalaxy(){
+  playViewTransition(() => {
+    currentView = 'galaxy';
+    ['view-system','view-body','view-station'].forEach(v => {
+      const el = document.getElementById(v); if(el) el.classList.add('v-hidden');
+    });
+    const gv = document.getElementById('view-galaxy');
+    gv.classList.remove('v-hidden'); gv.style.display = 'flex';
+    document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+    document.getElementById('breadcrumb').innerHTML = '';
+    updateBackBtn();
+    gxEnsureRendered();
+    gxRenderSystems(); // refresh surveyed dots
+    requestAnimationFrame(() => { if(!gxViewReady) gxResetView(); });
+  });
+}
+
+// ── Drill into a system's close-up (the orrery) ────────────────────────────
+function currentSystemName(){
+  if(currentSystemId === 'auros') return 'Aurelian'; // campaign flavour name (after Aurelia)
+  const s = SYSTEMS[currentSystemId];
+  return s ? (s.name || s.id) : 'System';
+}
+
+function enterSystem(systemId){
+  if(!SYSTEMS[systemId]) return;
+  playViewTransition(() => {
+    currentSystemId = systemId;
+    selectedBody = null;
+    currentView = 'system';
+    ['view-galaxy','view-body','view-station'].forEach(v => {
+      const el = document.getElementById(v); if(el) el.classList.add('v-hidden');
+    });
+    const vs = document.getElementById('view-system');
+    vs.classList.remove('v-hidden'); vs.style.display = 'flex';
+    // Reset overview ↔ body-detail visibility (a body may have been selected in
+    // a previously-visited system).
+    const det = document.getElementById('sys-body-detail');
+    if(det){ det.classList.add('v-hidden'); det.innerHTML = ''; }
+    const ov = document.getElementById('sys-overview');
+    if(ov) ov.classList.remove('v-hidden');
+    const stBtn = document.getElementById('btn-view-station');
+    if(stBtn) stBtn.classList.add('v-hidden');
+    document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' SYSTEM';
+    setBreadcrumb([{label:'The Orion Arm', fn:'goGalaxy'}], currentSystemName());
+    renderSystemOverview();
+    buildOrrery();
+    updateBackBtn();
+  });
+}
+
+// Star-info header for the system overview (per system).
+const AUROS_OVERVIEW_HTML = `<div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">
+  Star type: <span style="color:#E8A020;font-weight:700">Auros — K3 V Orange Dwarf</span><br>
+  Mass: 0.78 M☉ · Luminosity: 0.42 L☉ · Age: 5.2 Gyr<br>
+  Habitable zone: 0.55–0.85 AU
+</div>`;
+function gxStarInfoHTML(sysId){
+  if(sysId === 'auros') return AUROS_OVERVIEW_HTML;
+  const sys = SYSTEMS[sysId] || {};
+  const node = GX_MAP[sys.galaxyId] || {};
+  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--tx1)'};
+  const star = effectiveBodies(sysId).find(b => b.isStar);
+  let lines = `Star designation: <span style="color:#E8A020;font-weight:700">${escHtml(sys.starName||sys.name)}</span><br>`;
+  if(star) lines += `Primary: ${escHtml((star.type||'').split('·')[0].trim())}<br>`;
+  lines += `Faction: <span style="color:${f.color}">${escHtml(f.name)}</span>`;
+  const desc = node.desc ? `<div class="s-desc" style="margin-top:10px;color:var(--tx1)">${escHtml(node.desc)}</div>` : '';
+  return `<div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">${lines}</div>${desc}`;
+}
+
+// Build the system-overview panel: star info, then either the body list or the
+// blank-system prompt depending on whether the system has been surveyed.
+function renderSystemOverview(){
+  const sysId = currentSystemId;
+  const nm = document.getElementById('sys-dname');
+  if(nm){ nm.textContent = currentSystemName().toUpperCase() + ' SYSTEM'; nm.style.color = ''; }
+  const dt = document.getElementById('sys-dtype');
+  if(dt) dt.textContent = 'SELECT A BODY TO INSPECT';
+  const star = document.getElementById('sys-star-info');
+  if(star) star.innerHTML = gxStarInfoHTML(sysId);
+
+  const bodies = effectiveBodies(sysId);
+  const bodiesSec = document.getElementById('sys-bodies-section');
+  const prompt = document.getElementById('sys-blank-prompt');
+  if(bodies.length === 0){
+    if(bodiesSec) bodiesSec.classList.add('v-hidden');
+    if(prompt){ prompt.classList.remove('v-hidden'); prompt.innerHTML = renderBlankPrompt(sysId); }
+  } else {
+    if(bodiesSec) bodiesSec.classList.remove('v-hidden');
+    if(prompt){ prompt.classList.add('v-hidden'); prompt.innerHTML = ''; }
+  }
+}
+
+function renderBlankPrompt(sysId){
+  const sys = SYSTEMS[sysId] || {};
+  if(!isReferee()){
+    return `<div class="blank-sys-card">
+      <div class="blank-sys-icon">🛰</div>
+      <div class="blank-sys-title">Unsurveyed system</div>
+      <div class="blank-sys-sub">${escHtml(sys.name||'This system')} has not been charted by your referee yet.</div>
+    </div>`;
+  }
+  return `<div class="blank-sys-card">
+    <div class="blank-sys-icon">🪐</div>
+    <div class="blank-sys-title">Unsurveyed system</div>
+    <div class="blank-sys-sub">No bodies charted in <b style="color:var(--tx0)">${escHtml(sys.name||'this system')}</b> yet. Populate it:</div>
+    <div class="blank-sys-actions">
+      <button class="blank-sys-btn gen" onclick="generateSystem('${sysId}')">🎲 Generate system (UWP)</button>
+      <button class="blank-sys-btn man" onclick="openBodyCreator(true)">✍️ Add a body manually</button>
+    </div>
+    <div class="blank-sys-note">Generation rolls a primary star and 3–7 worlds per Traveller 2e world-profile rules. Everything is saved to the shared campaign and can be edited or removed afterwards.</div>
+  </div>`;
+}
+
+// ── Full-system random generator ───────────────────────────────────────────
+const GX_STAR_TYPES = [
+  {cls:'M', label:'M5 V Red Dwarf',            color:'#E0623A', r:14, w:5},
+  {cls:'K', label:'K3 V Orange Dwarf',         color:'#E07030', r:16, w:4},
+  {cls:'G', label:'G2 V Yellow Main Sequence', color:'#F4D06A', r:18, w:3},
+  {cls:'F', label:'F5 V White',                color:'#FBF4D6', r:20, w:2},
+  {cls:'A', label:'A2 V Blue-White',           color:'#CFE0FF', r:22, w:1},
+];
+function gxPickStar(){
+  const total = GX_STAR_TYPES.reduce((a,s)=>a+s.w,0);
+  let n = Math.random()*total;
+  for(const s of GX_STAR_TYPES){ if((n-=s.w) < 0) return s; }
+  return GX_STAR_TYPES[1];
+}
+function gxName(){
+  const a=['Hal','Vor','Cae','Ny','Tor','Lys','Mer','Ash','Kael','Dra','Sel','Ves','Cor','Ith','Bel','Ona','Pyr','Zan','Qel','Rho','Mar','Tyl'];
+  const b=['ion','dara','lis','mar','this','ora','enn','aris','elle','oth','une','ix','ara','os','yn','eia','ade','orn','ix','eus'];
+  return a[Math.floor(Math.random()*a.length)] + b[Math.floor(Math.random()*b.length)];
+}
+function gxTerrColor(u){
+  if(u.hydro >= 7) return '#3E78C8';        // ocean world
+  if(u.hydro >= 3) return '#4A90D9';        // temperate
+  if(u.atm >= 10)  return '#9AA86A';        // exotic/dense
+  if(u.atm <= 1)   return '#9A8C7A';        // rock/airless
+  return '#B98E5A';                          // dry/desert
+}
+function gxTerrType(u){
+  if(u.atm === 0 || u.size === 0) return 'Terrestrial · Airless Rock';
+  if(u.hydro >= 7) return 'Terrestrial · Ocean World';
+  if(u.hydro <= 1) return 'Terrestrial · Desert World';
+  if(u.atm >= 10)  return 'Terrestrial · Exotic Atmosphere';
+  return 'Terrestrial · Rocky World';
+}
+async function generateSystem(sysId){
+  if(!isReferee()){ showToast('Referee only', 'error'); return; }
+  if(!SYSTEMS[sysId]){ showToast('Unknown system', 'error'); return; }
+  const sys = SYSTEMS[sysId];
+  const stamp = Date.now();
+  const mk = (n) => `gen-${sysId}-${stamp}-${n}-${Math.floor(Math.random()*1000)}`;
+  const out = [];
+
+  // Primary star (orbitPos null = at the centre).
+  const st = gxPickStar();
+  out.push({
+    id: mk('star'), name: sys.starName || (sys.name+' Primary'),
+    type: st.label + ' · Primary Star', tag:null, color: st.color,
+    orbitAU:'—', uwpString:'—', diameter:'—', period:'—',
+    isMoon:false, isStar:true, hook:false, displayRadius: st.r, orbitPos:null,
+    desc:'Auto-generated primary star.', refNote:null, readAloud:null, npcs:[], checks:[], events:[]
+  });
+
+  const count = 3 + Math.floor(Math.random()*5); // 3..7 orbital slots
+  let beltPlaced = false, mainWorld = null, mainScore = -1;
+  let gasGiantId = null;
+  const auBase = [0.3,0.6,1.0,1.6,2.8,5.2,9.4,14.0,19.0];
+
+  for(let p=1; p<=count; p++){
+    const u = genUWP();
+    const id = mk('p'+p);
+    const au = (auBase[p-1] || (auBase[auBase.length-1] + (p-auBase.length)*6)) * (0.85 + Math.random()*0.3);
+    const auStr = au.toFixed(au<10?2:1) + ' AU';
+    const outer = p >= count-1;
+
+    if(u.size === 0 && !beltPlaced){
+      // Asteroid belt
+      beltPlaced = true;
+      out.push({
+        id, name: gxName()+' Belt', type:'Asteroid Belt', tag:null, color:'#8B7355',
+        orbitAU: auStr, uwpString: uwpToString(u, u.starport), diameter:'Diffuse belt',
+        period:'—', isMoon:false, isStar:false, hook:false, beltDensity: 120+Math.floor(Math.random()*260),
+        orbitPos:p, desc:'Auto-generated asteroid belt.', refNote:null, readAloud:null, npcs:[], checks:[], events:[]
+      });
+      continue;
+    }
+    if(outer && Math.random() < 0.55){
+      // Gas giant
+      const gg = Math.random()<0.5;
+      gasGiantId = gasGiantId || id;
+      out.push({
+        id, name: gxName(), type: gg?'Gas Giant · Major':'Ice Giant · Outer System', tag:null,
+        color: gg?'#C87941':'#2AABB8', orbitAU: auStr, uwpString:'—',
+        diameter:'~'+(40+Math.floor(Math.random()*120))+',000 km', period:'—',
+        isMoon:false, isStar:false, hook:false, displayRadius: gg?18:13,
+        ringStyle: Math.random()<0.5 ? (gg?'major':'subtle') : null,
+        orbitPos:p, desc:'Auto-generated '+(gg?'gas':'ice')+' giant.', refNote:null, readAloud:null, npcs:[], checks:[], events:[]
+      });
+      continue;
+    }
+    // Terrestrial world
+    const size = Math.max(0, u.size);
+    out.push({
+      id, name: gxName(), type: gxTerrType(u), tag:null, color: gxTerrColor(u),
+      orbitAU: auStr, uwpString: uwpToString(u, u.starport),
+      diameter: '~'+((size*1600)||800).toLocaleString()+' km', period:'—',
+      isMoon:false, isStar:false, hook:false, displayRadius: Math.max(6, Math.min(12, 5+Math.round(size/2))),
+      orbitPos:p, desc:'Auto-generated world. UWP '+uwpToString(u,u.starport)+'.', refNote:null, readAloud:null, npcs:[], checks:[], events:[]
+    });
+    // Track the most developed world as the system's main world / hook.
+    const score = u.pop*2 + (u.atm>=4&&u.atm<=9?3:0) + (u.hydro>=1&&u.hydro<=9?2:0);
+    if(score > mainScore){ mainScore = score; mainWorld = out[out.length-1]; }
+  }
+
+  // Optional moon on a gas giant.
+  if(gasGiantId && Math.random() < 0.6){
+    const u = genUWP();
+    out.push({
+      id: mk('moon'), name: gxName(), type:'Moon · Satellite', tag:null, color:'#B0B0B0',
+      orbitAU:'(moon)', uwpString: uwpToString(u, u.starport), diameter:'~'+(1+Math.floor(Math.random()*4))+',000 km',
+      period:'—', isMoon:true, parentId: gasGiantId, isStar:false, hook:false,
+      desc:'Auto-generated moon.', refNote:null, readAloud:null, npcs:[], checks:[], events:[]
+    });
+  }
+
+  // Flag the main world.
+  if(mainWorld && mainScore >= 12){ mainWorld.hook = true; mainWorld.tag = 'ADVENTURE HOOK'; }
+
+  if(!bodyAdditions[sysId]) bodyAdditions[sysId] = [];
+  out.forEach(b => bodyAdditions[sysId].push(b));
+  await saveBodyAdditions();
+  showToast('Generated ' + out.length + ' bodies for ' + (sys.name||sysId));
+  renderSystemOverview();
+  buildOrrery();
+}
 
 function currentSystem(){ return SYSTEMS[currentSystemId]; }
 function baseBodiesFor(sysId){ return (SYSTEMS[sysId] ? SYSTEMS[sysId].base : []); }
@@ -2839,7 +4028,7 @@ refnotes:"This is Riley's place. If she comes here, let her have time with Teva 
 // ═══════════════════════════════════════════════════════════════════════════
 // SHARED STATE & PLAYER MODE
 // ═══════════════════════════════════════════════════════════════════════════
-let currentView = "system";
+let currentView = "galaxy"; // landing view is the Orion Arm starmap
 const pmCheck = document.getElementById("pm-check");
 const rootEl = document.getElementById("root");
 
@@ -3292,7 +4481,7 @@ function selectBody(id){
   }
 
   det.innerHTML = html;
-  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}], body.name);
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
 }
 
 // Returns to the system body-list overview (used after deleting the body
@@ -3303,13 +4492,10 @@ function goSystemOverview(){
   if(det){ det.classList.add("v-hidden"); det.innerHTML = ""; }
   const ov = document.getElementById("sys-overview");
   if(ov) ov.classList.remove("v-hidden");
-  const nm = document.getElementById("sys-dname");
-  if(nm){ nm.textContent = "AURELIAN SYSTEM"; nm.style.color = ""; }
-  const dt = document.getElementById("sys-dtype");
-  if(dt) dt.textContent = "SELECT A BODY TO INSPECT";
   const stBtn = document.getElementById("btn-view-station");
   if(stBtn) stBtn.classList.add("v-hidden");
-  document.getElementById("breadcrumb").innerHTML = "";
+  renderSystemOverview(); // sets name/star-info, swaps body-list vs blank prompt
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
   updateBackBtn();
   buildOrrery();
 }
@@ -3621,13 +4807,14 @@ function buildBodyView(id){
   const db = document.getElementById('bv-db');
   if(db) db.innerHTML = html;
 
-  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"System",fn:"goSystem"}], body.name);
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
 }
 
 function goBodyView(id){
   playViewTransition(() => {
     currentView = "body";
+    document.getElementById("view-galaxy").classList.add("v-hidden");
     document.getElementById("view-system").classList.add("v-hidden");
     document.getElementById("view-station").classList.add("v-hidden");
     document.getElementById("view-body").classList.remove("v-hidden");
@@ -4148,7 +5335,7 @@ function selectBodyLocation(locId){
       <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
       <div style="font-size:12px;max-width:220px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
     const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
-    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
     return;
   }
 
@@ -4196,7 +5383,7 @@ function selectBodyLocation(locId){
   }
 
   const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
-  setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){
   if(selectedBody) buildBodyView(selectedBody);
@@ -4235,12 +5422,13 @@ function playViewTransition(switchFn){
 function enterStation(){
   playViewTransition(() => {
     currentView = "station";
+    document.getElementById("view-galaxy").classList.add("v-hidden");
     document.getElementById("view-system").classList.add("v-hidden");
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-station").classList.remove("v-hidden");
     document.getElementById("view-station").style.display="flex";
     document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
-    setBreadcrumb([{label:"Aurelian System",fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
     updateStationLocks();
   });
 }
@@ -4248,16 +5436,17 @@ function enterStation(){
 function goSystem(){
   playViewTransition(() => {
     currentView = "system";
+    document.getElementById("view-galaxy").classList.add("v-hidden");
     document.getElementById("view-station").classList.add("v-hidden");
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-system").classList.remove("v-hidden");
     document.getElementById("view-system").style.display="flex";
-    document.getElementById("hdr-title").textContent = "AURELIAN SYSTEM";
+    document.getElementById("hdr-title").textContent = currentSystemName().toUpperCase()+" SYSTEM";
     if(selectedBody){
       const b=getBodies().find(x=>x.id===selectedBody);
-      setBreadcrumb([{label:"Aurelian System",fn:"goSystem"}],b?b.name:"");
+      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");
     } else {
-      document.getElementById("breadcrumb").innerHTML="";
+      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
     }
     updateBackBtn();
   });
@@ -4273,15 +5462,16 @@ function setBreadcrumb(crumbs,current){
 // Hierarchical back-arrow (kept alongside the breadcrumb). Steps one level up
 // from the current view; hidden at the root (system view, no body selected).
 function navBack(){
+  if(currentView === 'galaxy'){ return; }                 // top of the stack
   if(currentView === 'station'){ goAurelia(); return; }
   if(currentView === 'body'){ goSystem(); return; }
   if(currentView === 'system' && selectedBody){ goSystemOverview(); return; }
-  // system root — nothing above it
+  if(currentView === 'system'){ goGalaxy(); return; }      // system root → back to the galaxy
 }
 function updateBackBtn(){
   const btn = document.getElementById('back-btn');
   if(!btn) return;
-  const atRoot = (currentView === 'system' && !selectedBody);
+  const atRoot = (currentView === 'galaxy'); // only the galaxy map is the true root now
   btn.classList.toggle('hidden', atRoot);
 }
 
@@ -5393,7 +6583,43 @@ function textureUrlFor(body){
   return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
+// ───────────────────────────────────────────────────────────────────────────
+// Shared state lives in Supabase, but the network isn't guaranteed at the table
+// (a player on a phone, a referee on hotel wifi). Three layers keep the app
+// usable through a drop:
+//   1. write-through CACHE — every successful read is mirrored to localStorage,
+//      and every write is cached *before* it's sent, so a reload while offline
+//      still renders last-known shared state instead of blank defaults.
+//   2. outbound QUEUE — a write that can't reach Supabase is parked in
+//      localStorage (last-write-wins per key) and flushed on reconnect, so a
+//      referee can keep revealing / advancing the clock through an outage.
+//   3. CONNECTIVITY signal — get/set outcomes plus the browser online/offline
+//      events drive the status pill (#conn-pill) and the player poll's backoff.
+// IMPORTANT for callers: supaStorage.get now returns { ok, value }.
+//   ok:false  → the request FAILED (value may be a cached fallback, or null).
+//   ok:true, value===null → the row genuinely doesn't exist.
+// Startup loaders read res.value (so the cache fills them in offline); pollers
+// must gate on res.ok (so a failed fetch is a no-op, never an empty-state wipe).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CACHE_PREFIX = 'aurelia_cache_';
+const SYNC_QUEUE_KEY = 'aurelia_sync_queue';
+
+// 'live' = last network op succeeded · 'reconnecting' = online but Supabase
+// unreachable · 'offline' = browser reports no connection.
+let connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'live';
+let lastSyncTs = null;
+
 const supaStorage = {
+  cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
+  cacheSet(key, value){
+    try {
+      if(value == null) localStorage.removeItem(CACHE_PREFIX + key);
+      else localStorage.setItem(CACHE_PREFIX + key, value);
+    } catch(e){ /* quota / disabled — non-fatal, sync still works in-memory */ }
+  },
   async get(key, shared){
     try {
       const res = await fetch(`${SUPABASE_REST}?key=eq.${encodeURIComponent(key)}&select=value`, {
@@ -5402,35 +6628,124 @@ const supaStorage = {
           'Authorization': 'Bearer ' + SUPABASE_KEY
         }
       });
-      if(!res.ok) return null;
+      if(!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
-      if(!rows.length) return null;
-      return { key, value: rows[0].value, shared };
+      const value = rows.length ? rows[0].value : null;
+      this.cacheSet(key, value);            // mirror authoritative server state
+      markOnline();
+      return { ok: true, value, fromCache: false };
     } catch(e){
-      console.error('Supabase get failed', e);
-      return null;
+      markOffline();
+      return { ok: false, value: this.cacheGet(key), fromCache: true };
     }
   },
+  // Raw upsert — throws on any failure. Used by both set() and the queue flush.
+  async _post(key, value){
+    const res = await fetch(SUPABASE_REST, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({ key, value: String(value) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    return true;
+  },
   async set(key, value, shared){
+    const str = String(value);
+    this.cacheSet(key, str);               // optimistic: survives a reload even if the POST never lands
     try {
-      const res = await fetch(SUPABASE_REST, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ key, value: String(value) })
-      });
-      if(!res.ok) { console.error('Supabase set failed', await res.text()); return null; }
-      return { key, value, shared };
+      await this._post(key, str);
+      markOnline();
+      flushQueue();                        // we're online — drain any backlog behind this write
+      return { ok: true };
     } catch(e){
-      console.error('Supabase set failed', e);
-      return null;
+      markOffline();
+      queueWrite(key, str);                // park it; reconnect (or the heartbeat) retries
+      return { ok: false };
     }
   }
 };
+
+// ── Outbound write queue (last-write-wins per key) ───────────────────────────
+function loadQueue(){ try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function saveQueue(q){ try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
+function queueLength(){ return Object.keys(loadQueue()).length; }
+function queueWrite(key, value){
+  const q = loadQueue();
+  q[key] = { value, ts: Date.now() };      // a newer write for a key supersedes the older one
+  saveQueue(q);
+  updateConnPill();
+}
+let flushing = false;
+async function flushQueue(){
+  if(flushing) return;
+  const keys = Object.keys(loadQueue());
+  if(!keys.length) return;
+  flushing = true;
+  try {
+    for(const key of keys){
+      const entry = loadQueue()[key];
+      if(!entry) continue;
+      try {
+        await supaStorage._post(key, entry.value);
+        const cur = loadQueue();           // re-read: the key may have been re-queued while awaiting
+        if(cur[key] && cur[key].ts === entry.ts){ delete cur[key]; saveQueue(cur); }
+        markOnline();
+      } catch(e){
+        markOffline();
+        break;                             // still down — stop; the next trigger retries
+      }
+    }
+  } finally {
+    flushing = false;
+    updateConnPill();
+  }
+}
+
+// ── Connectivity state → status pill + poll backoff ──────────────────────────
+function markOnline(){
+  const recovered = connState !== 'live';
+  connState = 'live';
+  lastSyncTs = Date.now();
+  pollBackoff = POLL_MS;                    // recovered — snap polling back to the fast cadence
+  if(recovered && queueLength()) flushQueue();
+  updateConnPill();
+}
+function markOffline(){
+  connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'reconnecting';
+  updateConnPill();
+}
+function syncAgoLabel(){
+  if(!lastSyncTs) return 'not yet';
+  const s = Math.round((Date.now() - lastSyncTs) / 1000);
+  if(s < 60) return s + 's ago';
+  const m = Math.round(s / 60);
+  if(m < 60) return m + 'm ago';
+  return Math.round(m / 60) + 'h ago';
+}
+function updateConnPill(){
+  const pill = document.getElementById('conn-pill');
+  if(!pill) return;
+  const q = queueLength();
+  pill.classList.remove('cp-live','cp-reconnecting','cp-offline');
+  let icon, text;
+  if(connState === 'live'){
+    pill.classList.add('cp-live');
+    icon = '●'; text = q ? `Syncing ${q}…` : 'Live';
+  } else if(connState === 'reconnecting'){
+    pill.classList.add('cp-reconnecting');
+    icon = '◐'; text = 'Reconnecting';
+  } else {
+    pill.classList.add('cp-offline');
+    icon = '○'; text = 'Offline';
+  }
+  pill.innerHTML = `<span class="cp-dot">${icon}</span><span class="cp-txt">${text}</span>`;
+  pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACCESS GATE
@@ -5515,7 +6830,7 @@ function applyIdentityClass(){
 async function loadRevealState(){
   try {
     const res = await supaStorage.get('reveal-status', true);
-    revealedAreas = res ? JSON.parse(res.value) : {};
+    revealedAreas = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ revealedAreas = {}; }
 }
 
@@ -5527,7 +6842,7 @@ async function loadRevealState(){
 async function loadClockState(){
   try {
     const res = await supaStorage.get('station-clock', true);
-    if(res){ clockMinutes = JSON.parse(res.value).minutes || 0; }
+    if(res.value != null){ clockMinutes = JSON.parse(res.value).minutes || 0; }
   } catch(e){ /* keep whatever's already in memory */ }
 }
 
@@ -5541,25 +6856,30 @@ async function saveClockState(){
 // optimistically). Players poll every few seconds so reveals/hides show
 // up without a manual refresh.
 let pollIntervalId = null;
-const POLL_MS = 4000;
+const POLL_MS = 4000;          // fast cadence while connected
+const POLL_MAX_MS = 30000;     // ceiling once we back off during an outage
+let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps back on markOnline()
 
 async function pollRevealState(){
   if(isReferee()) return; // referee never polls — would be pointless and noisy
+  // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
+  // state intact), never an overwrite-with-empty-defaults that wipes the screen.
   try {
     const res = await supaStorage.get('reveal-status', true);
-    const fresh = res ? JSON.parse(res.value) : {};
-    const changed = JSON.stringify(fresh) !== JSON.stringify(revealedAreas);
-    if(changed){
-      revealedAreas = fresh;
-      if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res.ok){
+      const fresh = res.value != null ? JSON.parse(res.value) : {};
+      if(JSON.stringify(fresh) !== JSON.stringify(revealedAreas)){
+        revealedAreas = fresh;
+        if(currentView === 'station') { renderDetail(); updateStationLocks(); }
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Pick up the referee's station clock changes
   try {
     const resClock = await supaStorage.get('station-clock', true);
-    if(resClock){
+    if(resClock.ok && resClock.value != null){
       const freshMinutes = JSON.parse(resClock.value).minutes || 0;
       if(freshMinutes !== clockMinutes){
         clockMinutes = freshMinutes;
@@ -5571,30 +6891,33 @@ async function pollRevealState(){
   // Also pick up any Design Mode content edits the referee has made
   try {
     const res2 = await supaStorage.get('content-overrides', true);
-    const freshOverrides = res2 ? JSON.parse(res2.value) : {};
-    const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
-    if(overridesChanged){
-      contentOverrides = freshOverrides;
-      if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res2.ok){
+      const freshOverrides = res2.value != null ? JSON.parse(res2.value) : {};
+      if(JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides)){
+        contentOverrides = freshOverrides;
+        if(currentView === 'station' && cur) renderDetail();
+        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // And any added/removed checks, events, or NPC rows
   try {
     const res3 = await supaStorage.get('content-additions', true);
-    const freshAdditions = res3 ? JSON.parse(res3.value) : {};
     const res4 = await supaStorage.get('content-deletions', true);
-    const freshDeletions = res4 ? JSON.parse(res4.value) : {};
-    const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
-      || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
-    if(addDelChanged){
-      contentAdditions = freshAdditions;
-      contentDeletions = freshDeletions;
-      if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res3.ok && res4.ok){
+      const freshAdditions = res3.value != null ? JSON.parse(res3.value) : {};
+      const freshDeletions = res4.value != null ? JSON.parse(res4.value) : {};
+      const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
+        || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
+      if(addDelChanged){
+        contentAdditions = freshAdditions;
+        contentDeletions = freshDeletions;
+        if(currentView === 'station' && cur) renderDetail();
+        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -5602,17 +6925,19 @@ async function pollRevealState(){
   // adds objectives, or marks things done during a session
   try {
     const resQ = await supaStorage.get('quest-log', true);
-    const freshQuests = resQ ? JSON.parse(resQ.value) || [] : [];
-    if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
-      questLog = freshQuests;
-      if(questPanelOpen) renderQuestPanel();
+    if(resQ.ok){
+      const freshQuests = resQ.value != null ? JSON.parse(resQ.value) || [] : [];
+      if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
+        questLog = freshQuests;
+        if(questPanelOpen) renderQuestPanel();
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);
-    if(resShip){
+    if(resShip.ok && resShip.value != null){
       const freshShip = Object.assign({}, shipState, JSON.parse(resShip.value));
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
@@ -5620,17 +6945,76 @@ async function pollRevealState(){
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Imperial date — players see the referee advance the campaign date
+  try {
+    const resDate = await supaStorage.get('imperial-date', true);
+    if(resDate.ok && resDate.value != null){
+      const fresh = JSON.parse(resDate.value);
+      if(fresh.day !== imperialDate.day || fresh.year !== imperialDate.year){
+        imperialDate = fresh;
+        renderImperialDate();
+        if(calPanelOpen) renderCalendarPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Campaign timeline — players see new/revealed dated events
+  try {
+    const resEv = await supaStorage.get('campaign-events', true);
+    if(resEv.ok){
+      const freshEv = resEv.value != null ? JSON.parse(resEv.value) || [] : [];
+      if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
+        campaignEvents = freshEv;
+        if(calPanelOpen) renderCalendarPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Discovery log — players see entries the referee reveals (rumoured/known)
+  try {
+    const resDisc = await supaStorage.get('discovery-log', true);
+    if(resDisc.ok){
+      const freshDisc = resDisc.value != null ? JSON.parse(resDisc.value) || [] : [];
+      if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
+        discoveryLog = freshDisc;
+        if(discPanelOpen) renderDiscoveryPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Reputation — players see standing shifts and revealed milestones
+  try {
+    const resRep = await supaStorage.get('reputation', true);
+    if(resRep.ok && resRep.value != null){
+      const freshRep = JSON.parse(resRep.value);
+      if(JSON.stringify(freshRep) !== JSON.stringify(reputation)){
+        reputation = freshRep;
+        if(repPanelOpen) renderReputationPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
 }
 
+// Self-scheduling poll (setTimeout, not setInterval) so the interval can grow
+// during an outage — markOnline() resets pollBackoff to POLL_MS the moment a
+// fetch succeeds, so recovery is immediate while a dead connection isn't
+// hammered every 4s.
 function startPolling(){
   stopPolling();
   if(isReferee()) return;
-  pollIntervalId = setInterval(pollRevealState, POLL_MS);
+  pollBackoff = POLL_MS;
+  const tick = async () => {
+    await pollRevealState();
+    pollBackoff = (connState === 'live') ? POLL_MS : Math.min(Math.round(pollBackoff * 1.5), POLL_MAX_MS);
+    pollIntervalId = setTimeout(tick, pollBackoff);
+  };
+  pollIntervalId = setTimeout(tick, pollBackoff);
 }
 
-// iOS suspends setInterval timers for backgrounded/home-screen apps, but
-// visibilitychange/focus events reliably fire when the app comes back —
-// so this catches the gap even without the player tapping Refresh.
+// iOS suspends timers for backgrounded/home-screen apps, but visibilitychange/
+// focus events reliably fire when the app comes back — so this catches the gap
+// even without the player tapping Refresh.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && !isReferee()) pollRevealState();
 });
@@ -5638,8 +7022,22 @@ window.addEventListener('focus', () => {
   if(!isReferee()) pollRevealState();
 });
 
+// Reconnect plumbing (referee included — the referee never polls, so this is
+// their only path back). The browser 'online' event and an 8s heartbeat both
+// drain the outbound queue; the heartbeat also keeps the pill's clock honest.
+window.addEventListener('online', () => {
+  markOnline();
+  flushQueue();
+  if(!isReferee()) pollRevealState();
+});
+window.addEventListener('offline', () => { markOffline(); });
+setInterval(() => {
+  if(queueLength()) flushQueue();
+  updateConnPill(); // refresh the "last synced … ago" label
+}, 8000);
+
 function stopPolling(){
-  if(pollIntervalId){ clearInterval(pollIntervalId); pollIntervalId = null; }
+  if(pollIntervalId){ clearTimeout(pollIntervalId); pollIntervalId = null; }
 }
 
 // ── Manual refresh — for iOS home-screen apps, which suspend setInterval
@@ -5650,24 +7048,21 @@ async function manualRefresh(){
   if(!btn) return;
   btn.classList.add('spinning');
   btn.disabled = true;
-  try {
-    const res = await supaStorage.get('reveal-status', true);
-    const fresh = res ? JSON.parse(res.value) : {};
-    revealedAreas = fresh;
-    if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-    if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  await pollRevealState();                 // pull the full shared state, not just reveals
+  // Honest feedback: only claim "Updated" when the fetch actually reached the
+  // server — connState is 'live' iff the last network op succeeded.
+  if(connState === 'live'){
     btn.classList.add('just-updated');
     btn.innerHTML = '<span class="refresh-icon">✓</span> Updated';
-    setTimeout(() => {
-      btn.classList.remove('just-updated');
-      btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
-    }, 1500);
-  } catch(e){
-    btn.innerHTML = '<span class="refresh-icon">⚠</span> Retry';
-  } finally {
-    btn.classList.remove('spinning');
-    btn.disabled = false;
+  } else {
+    btn.innerHTML = '<span class="refresh-icon">⚠</span> Offline';
   }
+  setTimeout(() => {
+    btn.classList.remove('just-updated');
+    btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
+  }, 1500);
+  btn.classList.remove('spinning');
+  btn.disabled = false;
 }
 
 async function saveRevealState(){
@@ -5888,7 +7283,7 @@ async function loadPrivateNote(key){
   if(!myIdentity) return '';
   try {
     const res = await supaStorage.get(`note-private-${myIdentity}-${key}`, false);
-    return res ? res.value : '';
+    return res.value != null ? res.value : '';
   } catch(e){ return ''; }
 }
 
@@ -5901,7 +7296,7 @@ async function savePrivateNote(key, text){
 async function loadPartyNotes(key){
   try {
     const res = await supaStorage.get(`note-party-${key}`, true);
-    return res ? JSON.parse(res.value) : [];
+    return res.value != null ? JSON.parse(res.value) : [];
   } catch(e){ return []; }
 }
 
@@ -5954,7 +7349,7 @@ function charDM(score){
 async function loadSheet(characterName){
   try {
     const res = await supaStorage.get(`sheet-${characterName}`, true);
-    if(!res) return emptySheet();
+    if(res.value == null) return emptySheet();
     return Object.assign(emptySheet(), JSON.parse(res.value));
   } catch(e){ return emptySheet(); }
 }
@@ -6166,6 +7561,19 @@ function buildSearchIndex(){
     }
   });
 
+  // ── Galaxy systems (Orion Arm starmap) — public to everyone, referee or
+  // player, since the map itself is the app's landing view. Matchable by the
+  // in-world label, the real star designation (alt), and the faction name. A
+  // hit jumps to the galaxy view and selects that node's detail panel. ──
+  GALAXY_NODES.forEach(sys => {
+    const label = (sys.label || sys.name).replace(' ★','').trim();
+    const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent'};
+    idx.push({
+      type:'System', name:label, alt:sys.name, sub:sys.name + ' · ' + f.name,
+      nav:{view:'galaxy', galaxyId:sys.id}
+    });
+  });
+
   return idx;
 }
 
@@ -6198,6 +7606,10 @@ function navigateToSearchResult(nav){
   } else if(nav.view === 'system'){
     if(needsSwitch) goSystem();
     setTimeout(() => selectBody(nav.bodyId), needsSwitch ? 220 : 0);
+  } else if(nav.view === 'galaxy'){
+    // Jump to the Orion Arm starmap and open the matched system's detail panel.
+    if(needsSwitch) goGalaxy();
+    setTimeout(() => { gxEnsureRendered(); gxSelectSystem(nav.galaxyId); }, needsSwitch ? 240 : 0);
   }
 }
 
@@ -6207,7 +7619,10 @@ function renderSearchResults(){
   if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
 
   const idx = buildSearchIndex();
-  const matches = idx.filter(item => item.name.toLowerCase().includes(q)).slice(0, 30);
+  const matches = idx.filter(item =>
+    item.name.toLowerCase().includes(q) ||
+    (item.alt && item.alt.toLowerCase().includes(q))
+  ).slice(0, 30);
 
   if(!matches.length){
     box.innerHTML = '<div class="search-empty">No matches.</div>';
@@ -6945,19 +8360,19 @@ let contentDeletions = {};
 async function loadContentOverrides(){
   try {
     const res = await supaStorage.get('content-overrides', true);
-    contentOverrides = res ? JSON.parse(res.value) : {};
+    contentOverrides = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ contentOverrides = {}; }
   try {
     const res2 = await supaStorage.get('content-history', true);
-    contentHistory = res2 ? JSON.parse(res2.value) : {};
+    contentHistory = res2.value != null ? JSON.parse(res2.value) : {};
   } catch(e){ contentHistory = {}; }
   try {
     const res3 = await supaStorage.get('content-additions', true);
-    contentAdditions = res3 ? JSON.parse(res3.value) : {};
+    contentAdditions = res3.value != null ? JSON.parse(res3.value) : {};
   } catch(e){ contentAdditions = {}; }
   try {
     const res4 = await supaStorage.get('content-deletions', true);
-    contentDeletions = res4 ? JSON.parse(res4.value) : {};
+    contentDeletions = res4.value != null ? JSON.parse(res4.value) : {};
   } catch(e){ contentDeletions = {}; }
 }
 
@@ -6996,11 +8411,11 @@ let bodyDeletions = {};
 let bodyPropertyOverrides = {};
 
 async function loadBodyStores(){
-  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyAdditions = {}; }
-  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyDeletions = {}; }
-  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyPropertyOverrides = {}; }
 }
 async function saveBodyAdditions(){
@@ -7059,11 +8474,11 @@ function baseLocationsFor(sysId, bodyId){
 }
 
 async function loadLocationStores(){
-  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationAdditions = {}; }
-  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationDeletions = {}; }
-  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r ? JSON.parse(r.value) : {}; }
+  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationPropertyOverrides = {}; }
 }
 async function saveLocationAdditions(){
@@ -7818,7 +9233,7 @@ let questEditingId = null; // id of quest being edited, or null for new
 async function loadQuestLog(){
   try {
     const res = await supaStorage.get('quest-log', true);
-    if(res) questLog = JSON.parse(res.value) || [];
+    if(res.value != null) questLog = JSON.parse(res.value) || [];
   } catch(e){ questLog = []; }
 }
 
@@ -7980,7 +9395,7 @@ let shipState = {
 async function loadShipState(){
   try {
     const res = await supaStorage.get('ship-state', true);
-    if(res) shipState = Object.assign(shipState, JSON.parse(res.value));
+    if(res.value != null) shipState = Object.assign(shipState, JSON.parse(res.value));
   } catch(e){ /* keep defaults */ }
 }
 
@@ -8236,7 +9651,7 @@ const ALERT_POLL_MS = 1500;
 async function loadAlertState(){
   try {
     const res = await supaStorage.get('ship-alert-state', true);
-    if(res) alertState = Object.assign(alertState, JSON.parse(res.value));
+    if(res.value != null) alertState = Object.assign(alertState, JSON.parse(res.value));
   } catch(e){ /* keep default normal */ }
 }
 async function saveAlertState(){
@@ -8314,12 +9729,692 @@ function stopAlertPolling(){ if(alertPollId){ clearInterval(alertPollId); alertP
 async function pollAlertState(){
   try {
     const res = await supaStorage.get('ship-alert-state', true);
-    const fresh = res ? JSON.parse(res.value) : { mode:'normal', message:'', since:0 };
-    if(JSON.stringify(fresh) !== JSON.stringify(alertState)){
-      alertState = fresh;
-      applyAlertState();
+    if(res.ok){
+      const fresh = res.value != null ? JSON.parse(res.value) : { mode:'normal', message:'', since:0 };
+      if(JSON.stringify(fresh) !== JSON.stringify(alertState)){
+        alertState = fresh;
+        applyAlertState();
+      }
     }
   } catch(e){ /* silent — next poll retries */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPERIAL CALENDAR  (V1 — the campaign-date spine)
+// ───────────────────────────────────────────────────────────────────────────
+// Distinct from the intra-day station clock (clockMinutes / HH:MM): this is the
+// campaign-scale Traveller Imperial date, written DDD-YYYY (e.g. 114-1105). It
+// is the *source of truth* other features timestamp against — reputation
+// milestones {day,year}, discovery reveals — so it ships with a small public
+// API (imperialNow / formatImperial / imperialOrdinal / addImperialDays) for
+// them to compare and sort dates. Shared state in aurelia_state:
+//   'imperial-date'    → {day, year}
+//   'campaign-events'  → [{id, day, year, title, note, visibleTo}]
+// Referee advances the date (a jump = +1 week); players read it and poll for
+// changes on the existing 4s loop. Event visibility is gated by canSee().
+// ═══════════════════════════════════════════════════════════════════════════
+
+const IMPERIAL_YEAR_DAYS = 365;
+const IMPERIAL_WEEKDAYS = ['Wonday','Tuday','Thirday','Forday','Fiveday','Sixday','Senday'];
+
+let imperialDate = { day: 1, year: 1105 };
+let campaignEvents = [];
+let calPanelOpen = false;
+let calCollapsed = false;
+
+// ── Public date API (used by other features) ──
+function imperialNow(){ return { day: imperialDate.day, year: imperialDate.year }; }
+function imperialOrdinal(d){ return (d.year * IMPERIAL_YEAR_DAYS) + (d.day - 1); } // absolute day index
+function ordinalToImperial(n){ return { year: Math.floor(n / IMPERIAL_YEAR_DAYS), day: (n % IMPERIAL_YEAR_DAYS) + 1 }; }
+function addImperialDays(d, n){ return ordinalToImperial(imperialOrdinal(d) + n); }
+function formatImperial(d){ return String(d.day).padStart(3,'0') + '-' + d.year; }
+function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[(d.day - 2) % 7]; }
+
+// ── Persistence + sync ──
+async function loadImperialDate(){
+  try { const r = await supaStorage.get('imperial-date', true);
+    if(r.value != null) imperialDate = Object.assign(imperialDate, JSON.parse(r.value)); } catch(e){}
+}
+async function saveImperialDate(){
+  try { await supaStorage.set('imperial-date', JSON.stringify(imperialDate), true); }
+  catch(e){ console.error('Imperial date save failed:', e); }
+}
+async function loadCampaignEvents(){
+  try { const r = await supaStorage.get('campaign-events', true);
+    if(r.value != null) campaignEvents = JSON.parse(r.value) || []; } catch(e){ campaignEvents = []; }
+}
+async function saveCampaignEvents(){
+  try { await supaStorage.set('campaign-events', JSON.stringify(campaignEvents), true); }
+  catch(e){ console.error('Campaign events save failed:', e); }
+}
+
+// ── Header date chip ──
+function renderImperialDate(){
+  const el = document.getElementById('impdate-display');
+  if(!el) return;
+  el.innerHTML = `<span class="impd-lbl">IMP</span>${formatImperial(imperialDate)}`;
+  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + ' Imperial';
+}
+
+// ── Date mutation (referee) ──
+function advanceImperial(days){
+  if(!isReferee()) return;
+  imperialDate = addImperialDays(imperialDate, days);
+  afterDateChange();
+}
+function setImperialFromInputs(){
+  if(!isReferee()) return;
+  const d = parseInt(document.getElementById('cal-set-day').value, 10) || 1;
+  const y = parseInt(document.getElementById('cal-set-year').value, 10) || imperialDate.year;
+  imperialDate = { day: Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, d)), year: y };
+  afterDateChange();
+}
+function afterDateChange(){
+  renderImperialDate();
+  if(calPanelOpen) renderCalendarPanel();
+  saveImperialDate();
+}
+
+// ── Panel toggle / collapse (cloned from the quest panel) ──
+function toggleCalendarPanel(){
+  calPanelOpen = !calPanelOpen;
+  const w = document.getElementById('cal-wrap'), b = document.getElementById('cal-btn');
+  w.classList.toggle('hidden', !calPanelOpen);
+  if(b) b.classList.toggle('panel-open', calPanelOpen);
+  if(calPanelOpen) renderCalendarPanel();
+}
+function toggleCalCollapse(){
+  if(document.getElementById('cal-header').dataset.suppressClick === '1') return;
+  calCollapsed = !calCollapsed;
+  document.getElementById('cal-toggle').textContent = calCollapsed ? '▲' : '▼';
+  document.getElementById('cal-body').classList.toggle('collapsed', calCollapsed);
+  document.getElementById('cal-wrap').classList.toggle('panel-collapsed', calCollapsed);
+}
+
+// ── Render ──
+function calVisLabel(v){
+  if(v === 'referee') return 'Ref';
+  if(Array.isArray(v)) return v.map(n => n.split(' ')[0]).join('/') || 'None';
+  return 'All';
+}
+function renderCalEvent(e, ref, nowOrd){
+  const past = imperialOrdinal(e) <= nowOrd;
+  const visTag = ref ? `<span class="cal-ev-vis" onclick="cycleCalEventVis('${e.id}')" title="Click to change who can see this">${calVisLabel(e.visibleTo)}</span>` : '';
+  const del = ref ? `<span class="cal-ev-del" onclick="deleteCalEvent('${e.id}')" title="Delete event">✕</span>` : '';
+  return `<div class="cal-ev${past ? ' past' : ''}">
+    <span class="cal-ev-date">${formatImperial(e)}</span>
+    <div class="cal-ev-body"><div class="cal-ev-title">${escQH(e.title)}</div>${e.note ? `<div class="cal-ev-note">${escQH(e.note)}</div>` : ''}</div>
+    ${visTag}${del}
+  </div>`;
+}
+function renderCalendarPanel(){
+  const body = document.getElementById('cal-body');
+  if(!body) return;
+  const ref = isReferee();
+  const now = imperialNow(), nowOrd = imperialOrdinal(now);
+
+  const controls = ref ? `
+    <div class="cal-controls">
+      <button class="cal-btn-ctl" onclick="advanceImperial(-1)">− 1 Day</button>
+      <button class="cal-btn-ctl" onclick="advanceImperial(1)">+ 1 Day</button>
+      <button class="cal-btn-ctl wk" onclick="advanceImperial(7)" title="One jump ≈ one week">+ 1 Week ⟫</button>
+    </div>
+    <div class="cal-set-row">Set <input id="cal-set-day" type="number" min="1" max="365" value="${now.day}"> - <input id="cal-set-year" type="number" value="${now.year}"> <button class="cal-btn-ctl" onclick="setImperialFromInputs()">Go</button></div>` : '';
+
+  const visible = campaignEvents.filter(e => ref || canSee(e.visibleTo))
+    .slice().sort((a, b) => imperialOrdinal(a) - imperialOrdinal(b));
+  let tl = '';
+  if(!visible.length){
+    tl = `<div class="cal-empty">${ref ? 'No campaign events yet. Add one below.' : 'No events recorded.'}</div>`;
+  } else {
+    let placedNow = false;
+    visible.forEach(e => {
+      if(!placedNow && imperialOrdinal(e) > nowOrd){
+        tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+        placedNow = true;
+      }
+      tl += renderCalEvent(e, ref, nowOrd);
+    });
+    if(!placedNow) tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+  }
+
+  const addForm = ref ? `
+    <div class="cal-add">
+      <input id="cal-new-title" placeholder="Event title…" maxlength="80">
+      <div class="cal-add-row">
+        <input id="cal-new-day" type="number" min="1" max="365" value="${now.day}" title="Day">
+        <input id="cal-new-year" type="number" value="${now.year}" title="Year">
+        <input id="cal-new-vis" placeholder="all / referee / Rhett Calder" title="Who can see it" style="flex:1">
+      </div>
+      <textarea id="cal-new-note" placeholder="Note (optional)…" rows="2"></textarea>
+      <button class="cal-add-btn" onclick="addCalEvent()">+ Add to timeline</button>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="cal-now">
+      <div class="cal-now-date">${formatImperial(now)}</div>
+      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year} Imperial</div>
+    </div>
+    ${controls}
+    <div class="cal-tl-title">Campaign Timeline</div>
+    ${tl}
+    ${addForm}`;
+}
+
+// ── Event CRUD (referee) ──
+function parseCalVis(s){
+  s = (s || '').trim();
+  if(!s || s.toLowerCase() === 'all') return 'all';
+  if(s.toLowerCase() === 'referee' || s.toLowerCase() === 'ref') return 'referee';
+  return s.split(',').map(x => x.trim()).filter(Boolean);
+}
+function addCalEvent(){
+  if(!isReferee()) return;
+  const title = document.getElementById('cal-new-title').value.trim();
+  if(!title) return;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('cal-new-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('cal-new-year').value, 10) || imperialDate.year;
+  const note = document.getElementById('cal-new-note').value.trim();
+  const visibleTo = parseCalVis(document.getElementById('cal-new-vis').value);
+  campaignEvents.push({ id: 'ce_' + Date.now().toString(36), day, year, title, note, visibleTo });
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function deleteCalEvent(id){
+  if(!isReferee()) return;
+  campaignEvents = campaignEvents.filter(e => e.id !== id);
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function cycleCalEventVis(id){
+  if(!isReferee()) return;
+  const e = campaignEvents.find(x => x.id === id);
+  if(!e) return;
+  // all → referee → nav crew (Rhett + Cass) → all
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function calVisRaw(v){ if(v === 'referee') return 'referee'; if(Array.isArray(v)) return v.join(', '); return 'all'; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DISCOVERY LOG / CODEX  (V1–V2 — "fog of knowledge")
+// ───────────────────────────────────────────────────────────────────────────
+// Generalises the reveal-status mechanic into three-stage fog on knowledge
+// records. Each entry has a state: hidden (referee only) → rumoured (players
+// see the title; the body is redacted) → known (players see the full body).
+// Audience within rumoured/known is gated by canSee(). When the referee first
+// lifts an entry out of hidden it is stamped revealedAt={day,year} from the
+// Imperial calendar, so reveals can plot on the same campaign timeline.
+// Shared state in aurelia_state key 'discovery-log'; players poll on the 4s loop.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DISC_CATEGORIES = [['lore','Lore'],['faction','Faction'],['location','Location'],['tech','Tech'],['person','Person']];
+
+let discoveryLog = [];
+let discPanelOpen = false;
+let discCollapsed = false;
+let discEditingId = null;
+
+async function loadDiscoveryLog(){
+  try { const r = await supaStorage.get('discovery-log', true); if(r.value != null) discoveryLog = JSON.parse(r.value) || []; }
+  catch(e){ discoveryLog = []; }
+}
+async function saveDiscoveryLog(){
+  try { await supaStorage.set('discovery-log', JSON.stringify(discoveryLog), true); }
+  catch(e){ console.error('Discovery log save failed:', e); }
+}
+
+// Which fog stage does the CURRENT viewer see for this entry? null = not visible.
+function discViewerStage(e){
+  if(isReferee()) return 'known';
+  if(e.state === 'hidden') return null;
+  if(!canSee(e.visibleTo)) return null;
+  return e.state; // 'rumoured' | 'known'
+}
+function discStateLabel(s){ return {hidden:'Hidden',rumoured:'Rumoured',known:'Known'}[s] || s; }
+
+function toggleDiscoveryPanel(){
+  discPanelOpen = !discPanelOpen;
+  const w = document.getElementById('disc-wrap'), b = document.getElementById('disc-btn');
+  w.classList.toggle('hidden', !discPanelOpen);
+  if(b) b.classList.toggle('panel-open', discPanelOpen);
+  if(discPanelOpen) renderDiscoveryPanel();
+}
+function toggleDiscCollapse(){
+  if(document.getElementById('disc-header').dataset.suppressClick === '1') return;
+  discCollapsed = !discCollapsed;
+  document.getElementById('disc-toggle').textContent = discCollapsed ? '▲' : '▼';
+  document.getElementById('disc-body').classList.toggle('collapsed', discCollapsed);
+  document.getElementById('disc-wrap').classList.toggle('panel-collapsed', discCollapsed);
+}
+
+function renderDiscCard(e, ref){
+  const stage = ref ? e.state : discViewerStage(e);
+  const cat = DISC_CATEGORIES.find(c => c[0] === e.category);
+  const catTag = `<span class="disc-cat cat-${e.category || 'lore'}">${cat ? cat[1] : (e.category || '')}</span>`;
+  let bodyHTML;
+  if(!ref && stage === 'rumoured'){
+    bodyHTML = `<span class="disc-redacted">▓▓▓ UNCONFIRMED — details unknown ▓▓▓</span>`;
+  } else {
+    bodyHTML = e.body ? escQH(e.body).replace(/\n/g,'<br>') : (ref ? '<span class="disc-redacted">(no body yet)</span>' : '');
+  }
+  const when = e.revealedAt ? `<span class="disc-when" title="Revealed">${formatImperial(e.revealedAt)}</span>` : '';
+  const refCtl = ref ? `
+    <div class="disc-ctl">
+      <button class="disc-mini state-${e.state}" onclick="cycleDiscState('${e.id}')" title="Hidden → Rumoured → Known">${discStateLabel(e.state)}</button>
+      <button class="disc-mini" onclick="cycleDiscVis('${e.id}')" title="Who can see it">${calVisLabel(e.visibleTo)}</button>
+      <button class="disc-mini" onclick="editDiscEntry('${e.id}')" title="Edit">✏</button>
+      <button class="disc-mini del" onclick="deleteDiscEntry('${e.id}')" title="Delete">✕</button>
+    </div>` : '';
+  return `<div class="disc-card state-${ref ? e.state : stage}">
+    <div class="disc-card-hd">${catTag}<span class="disc-title">${escQH(e.title)}</span>${when}</div>
+    ${bodyHTML ? `<div class="disc-body-txt">${bodyHTML}</div>` : ''}
+    ${refCtl}
+  </div>`;
+}
+
+function renderDiscForm(){
+  const editing = discEditingId ? discoveryLog.find(e => e.id === discEditingId) : null;
+  const catOpts = DISC_CATEGORIES.map(c => `<option value="${c[0]}"${editing && editing.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const stateOpts = ['hidden','rumoured','known'].map(s => {
+    const sel = editing ? (editing.state === s) : (s === 'hidden');
+    return `<option value="${s}"${sel ? ' selected' : ''}>${discStateLabel(s)}</option>`;
+  }).join('');
+  return `<div class="disc-add">
+    <div class="disc-add-ttl">${editing ? 'Edit entry' : 'New entry'}</div>
+    <input id="disc-f-title" placeholder="Title…" maxlength="100" value="${editing ? escAttr(editing.title) : ''}">
+    <div class="disc-add-row">
+      <select id="disc-f-cat">${catOpts}</select>
+      <select id="disc-f-state" title="Fog stage">${stateOpts}</select>
+      <input id="disc-f-vis" placeholder="all / referee / Rhett Calder" value="${editing ? escAttr(calVisRaw(editing.visibleTo)) : ''}">
+    </div>
+    <textarea id="disc-f-body" rows="3" placeholder="Body / clue text…">${editing ? escQH(editing.body || '') : ''}</textarea>
+    <div class="disc-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="saveDiscEntry()">${editing ? 'Save changes' : '+ Add entry'}</button>
+      ${editing ? `<button class="disc-mini" onclick="cancelDiscEdit()">Cancel</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderDiscoveryPanel(){
+  const body = document.getElementById('disc-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = discoveryLog.filter(e => ref || discViewerStage(e));
+  const countEl = document.getElementById('disc-count');
+  if(countEl) countEl.textContent = visible.length;
+  let list;
+  if(!visible.length){
+    list = `<div class="cal-empty">${ref ? 'No entries yet. Add lore, intel, or clues below.' : 'Nothing uncovered yet.'}</div>`;
+  } else {
+    // Order: known first, then rumoured, then hidden (referee view); within, keep insertion order.
+    const rank = s => (s === 'known' ? 0 : s === 'rumoured' ? 1 : 2);
+    const sorted = visible.slice().sort((a, b) => rank(ref ? a.state : discViewerStage(a)) - rank(ref ? b.state : discViewerStage(b)));
+    list = sorted.map(e => renderDiscCard(e, ref)).join('');
+  }
+  body.innerHTML = list + (ref ? renderDiscForm() : '');
+}
+
+function saveDiscEntry(){
+  if(!isReferee()) return;
+  const title = document.getElementById('disc-f-title').value.trim(); if(!title) return;
+  const category = document.getElementById('disc-f-cat').value;
+  const state = document.getElementById('disc-f-state').value;
+  const visibleTo = parseCalVis(document.getElementById('disc-f-vis').value);
+  const bodyTxt = document.getElementById('disc-f-body').value.trim();
+  if(discEditingId){
+    const e = discoveryLog.find(x => x.id === discEditingId);
+    if(e){
+      e.title = title; e.category = category; e.body = bodyTxt; e.visibleTo = visibleTo; e.state = state;
+      if(state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow();
+    }
+    discEditingId = null;
+  } else {
+    discoveryLog.push({
+      id: 'disc_' + Date.now().toString(36), title, category, body: bodyTxt, state, visibleTo,
+      createdAt: imperialNow(), revealedAt: state !== 'hidden' ? imperialNow() : null
+    });
+  }
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function editDiscEntry(id){ if(!isReferee()) return; discEditingId = id; renderDiscoveryPanel(); const f = document.getElementById('disc-f-title'); if(f) f.scrollIntoView({block:'nearest'}); }
+function cancelDiscEdit(){ discEditingId = null; renderDiscoveryPanel(); }
+function deleteDiscEntry(id){ if(!isReferee()) return; discoveryLog = discoveryLog.filter(e => e.id !== id); if(discEditingId === id) discEditingId = null; saveDiscoveryLog(); renderDiscoveryPanel(); }
+function cycleDiscState(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  e.state = {hidden:'rumoured', rumoured:'known', known:'hidden'}[e.state] || 'hidden';
+  if(e.state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow(); // stamp first reveal
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function cycleDiscVis(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REPUTATION TRACKER  (V2 — faction standing + dated milestones)
+// ───────────────────────────────────────────────────────────────────────────
+// Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
+// timeline of dated milestones stamped {day,year} from the Imperial calendar.
+// Logging a milestone applies its delta to that faction's standing. Standings
+// are party-wide (all players see them); milestone visibility is gated by
+// canSee(). Shared state in aurelia_state key 'reputation'; 4s poll. The
+// encounter generator (later) reads these standings to scale difficulty.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const REP_BANDS = [ // [minInclusive, label, colour]
+  [6,   'Ally',       '#54d6c0'],
+  [3,   'Helpful',    '#7fd07f'],
+  [1,   'Friendly',   '#a8d860'],
+  [0,   'Neutral',    '#c9c4b6'],
+  [-2,  'Unfriendly', '#e0b050'],
+  [-5,  'Hostile',    '#e08040'],
+  [-99, 'At War',     '#d45050']
+];
+function repBand(s){ for(const [min, label, color] of REP_BANDS){ if(s >= min) return {label, color}; } return {label:'At War', color:'#d45050'}; }
+
+let reputation = {
+  factions: [
+    {id:'hegemony',  name:'Hegemony',                standing:-1},
+    {id:'rsr',       name:'Reach Stars Resistance',  standing:2},
+    {id:'syndicate', name:"Traders' Syndicate",      standing:0}
+  ],
+  milestones: []
+};
+let repPanelOpen = false;
+let repCollapsed = false;
+
+async function loadReputation(){ try { const r = await supaStorage.get('reputation', true); if(r.value != null) reputation = Object.assign(reputation, JSON.parse(r.value)); } catch(e){} }
+async function saveReputation(){ try { await supaStorage.set('reputation', JSON.stringify(reputation), true); } catch(e){ console.error('Reputation save failed:', e); } }
+
+function toggleReputationPanel(){
+  repPanelOpen = !repPanelOpen;
+  const w = document.getElementById('rep-wrap'), b = document.getElementById('rep-btn');
+  w.classList.toggle('hidden', !repPanelOpen);
+  if(b) b.classList.toggle('panel-open', repPanelOpen);
+  if(repPanelOpen) renderReputationPanel();
+}
+function toggleRepCollapse(){
+  if(document.getElementById('rep-header').dataset.suppressClick === '1') return;
+  repCollapsed = !repCollapsed;
+  document.getElementById('rep-toggle').textContent = repCollapsed ? '▲' : '▼';
+  document.getElementById('rep-body').classList.toggle('collapsed', repCollapsed);
+  document.getElementById('rep-wrap').classList.toggle('panel-collapsed', repCollapsed);
+}
+
+function repFactionName(id){ const f = reputation.factions.find(x => x.id === id); return f ? f.name : id; }
+
+function renderReputationPanel(){
+  const body = document.getElementById('rep-body'); if(!body) return;
+  const ref = isReferee();
+
+  const facHTML = reputation.factions.map(f => {
+    const b = repBand(f.standing);
+    const pct = ((f.standing + 6) / 12) * 100;
+    const ctl = ref ? `<div class="rep-fac-ctl">
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',-1)">−</button>
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',1)">+</button>
+        <button class="disc-mini del" onclick="removeFaction('${f.id}')" title="Remove faction">✕</button>
+      </div>` : '';
+    return `<div class="rep-fac">
+      <div class="rep-fac-hd"><span class="rep-fac-name">${escQH(f.name)}</span>
+        <span class="rep-band" style="color:${b.color}">${b.label} <span class="rep-val">${f.standing > 0 ? '+' : ''}${f.standing}</span></span></div>
+      <div class="rep-meter"><div class="rep-meter-fill" style="width:${pct}%;background:${b.color}"></div><div class="rep-meter-zero"></div></div>
+      ${ctl}
+    </div>`;
+  }).join('');
+  const addFac = ref ? `<div class="rep-addfac"><input id="rep-newfac" placeholder="New faction…" maxlength="40"><button class="disc-mini" onclick="addFaction()">+ Faction</button></div>` : '';
+
+  const visM = reputation.milestones.filter(m => ref || canSee(m.visibleTo)).slice().sort((a, b) => imperialOrdinal(b) - imperialOrdinal(a));
+  let mHTML;
+  if(!visM.length){
+    mHTML = `<div class="cal-empty">${ref ? 'No milestones logged yet.' : 'No reputation events recorded.'}</div>`;
+  } else {
+    mHTML = visM.map(m => {
+      const dStr = (m.delta > 0 ? '+' : '') + m.delta;
+      const del = ref ? `<span class="cal-ev-del" onclick="deleteMilestone('${m.id}')" title="Delete">✕</span>` : '';
+      const vis = ref ? `<span class="cal-ev-vis" onclick="cycleMilestoneVis('${m.id}')" title="Who can see it">${calVisLabel(m.visibleTo)}</span>` : '';
+      return `<div class="rep-mile">
+        <span class="cal-ev-date">${formatImperial(m)}</span>
+        <div class="cal-ev-body"><div class="cal-ev-title">${escQH(m.title)}</div>
+          <div class="rep-mile-meta">${escQH(repFactionName(m.factionId))} <span class="rep-mile-delta ${m.delta >= 0 ? 'pos' : 'neg'}">${dStr}</span></div></div>
+        ${vis}${del}
+      </div>`;
+    }).join('');
+  }
+
+  const now = imperialNow();
+  const facOpts = reputation.factions.map(f => `<option value="${f.id}">${escQH(f.name)}</option>`).join('');
+  const addM = ref ? `<div class="disc-add">
+    <div class="disc-add-ttl">New milestone — applies delta to standing</div>
+    <input id="rep-m-title" placeholder="What happened…" maxlength="90">
+    <div class="disc-add-row">
+      <select id="rep-m-fac">${facOpts}</select>
+      <input id="rep-m-delta" type="number" value="-1" title="Standing change" style="width:56px">
+      <input id="rep-m-day" type="number" min="1" max="365" value="${now.day}" title="Day" style="width:52px">
+      <input id="rep-m-year" type="number" value="${now.year}" title="Year" style="width:62px">
+    </div>
+    <input id="rep-m-vis" placeholder="all / referee / Rhett Calder">
+    <button class="cal-add-btn" onclick="addMilestone()">+ Log milestone</button>
+  </div>` : '';
+
+  body.innerHTML = `<div class="rep-tl-title">Faction Standing</div>${facHTML}${addFac}<div class="rep-tl-title">Milestones</div>${mHTML}${addM}`;
+}
+
+function adjustStanding(id, delta){
+  if(!isReferee()) return;
+  const f = reputation.factions.find(x => x.id === id); if(!f) return;
+  f.standing = Math.max(-6, Math.min(6, f.standing + delta));
+  saveReputation(); renderReputationPanel();
+}
+function addFaction(){
+  if(!isReferee()) return;
+  const v = document.getElementById('rep-newfac').value.trim(); if(!v) return;
+  reputation.factions.push({ id:'fac_' + Date.now().toString(36), name:v, standing:0 });
+  saveReputation(); renderReputationPanel();
+}
+function removeFaction(id){
+  if(!isReferee()) return;
+  reputation.factions = reputation.factions.filter(f => f.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function addMilestone(){
+  if(!isReferee()) return;
+  const title = document.getElementById('rep-m-title').value.trim(); if(!title) return;
+  const factionId = document.getElementById('rep-m-fac').value;
+  const delta = parseInt(document.getElementById('rep-m-delta').value, 10) || 0;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('rep-m-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('rep-m-year').value, 10) || imperialDate.year;
+  const visibleTo = parseCalVis(document.getElementById('rep-m-vis').value);
+  reputation.milestones.push({ id:'rm_' + Date.now().toString(36), factionId, delta, day, year, title, visibleTo });
+  const f = reputation.factions.find(x => x.id === factionId);
+  if(f) f.standing = Math.max(-6, Math.min(6, f.standing + delta)); // milestone moves standing
+  saveReputation(); renderReputationPanel();
+}
+function deleteMilestone(id){
+  if(!isReferee()) return;
+  reputation.milestones = reputation.milestones.filter(m => m.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function cycleMilestoneVis(id){
+  if(!isReferee()) return;
+  const m = reputation.milestones.find(x => x.id === id); if(!m) return;
+  if(m.visibleTo === 'all') m.visibleTo = 'referee';
+  else if(m.visibleTo === 'referee') m.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else m.visibleTo = 'all';
+  saveReputation(); renderReputationPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORACLE  (V2 — rumour & random-encounter generators)
+// ───────────────────────────────────────────────────────────────────────────
+// Referee-only GM tools. Output is *seeded* from live state so it feels
+// diegetic, not random: rumours weight toward factions with extreme standing
+// and bend hostile/friendly to match; encounters scale difficulty off the
+// danger dial AND the party's worst faction standing (per the brief). Ship name
+// and current locale fill the templates. Results are ephemeral (not synced),
+// but a rumour can be pushed "→ Codex" as a rumoured discovery entry players see.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ORACLE_GOODS = ['refined fuel','medical supplies','luxury goods','machine parts','foodstuffs','small arms','data cores','rare ore'];
+const ORACLE_PLACES = ['Aurelia Station','the Aurelia approaches','Cairn Station','the outer berths','the concourse','the elevator gate'];
+const RUMOUR_TEMPLATES = {
+  generic: [
+    'A dock worker swears {ship} was flagged on a Hegemony watch advisory.',
+    'Someone is paying good credits to anyone who can place {ship} two weeks ago.',
+    'Prices on {good} are about to move — somebody knows something.',
+    'A broker on {place} is quietly buying {good} well above market.',
+    'Travellers are avoiding the {place} routes lately. Nobody will say why.'
+  ],
+  hostile: [
+    '{faction} has put a quiet bounty on whoever crewed {ship}.',
+    'They say {faction} enforcers were asking after {ship} at {place}.',
+    '{faction} is leaning on dockmasters to deny {ship} a berth.',
+    'A {faction} skiff has been shadowing arrivals at {place}.'
+  ],
+  friendly: [
+    '{faction} contacts hint there is clean work going, if you can be discreet.',
+    'Word from {faction}: a berth at {place} will be looked after, no questions.',
+    '{faction} remembers a favour your crew is owed — fondly.'
+  ],
+  neutral: [
+    '{faction} is moving more cargo than usual through {place}.',
+    '{faction} just lost a courier and wants it found before anyone else does.'
+  ]
+};
+const RUMOUR_RELIABILITY = ['Reliable','Likely true','Unconfirmed','Probably false'];
+
+const ENCOUNTER_TABLES = {
+  space: ['An unmarked ship matches your vector and holds at distance.','A distress beacon pulses nearby — genuine, or bait.','A customs interceptor orders you to cut thrust for inspection.','A debris field hides a salvageable, and probably claimed, wreck.','A free trader hails, offering an off-manifest cargo swap.'],
+  port:  ['A dockside argument escalates near your berth — one party is armed.','A fixer drops into the seat across from you with a job and a warning.','Port authority flags a discrepancy in your paperwork.','A face from a crew member’s past is three tables over.','Someone tries to fix a tracker to your hull during the night cycle.'],
+  surface:['A checkpoint ahead, and your transit codes are a day stale.','A local offers a shortcut around the patrols — for a price.','A crowd is gathering, and the mood could turn.','Weather closes in; shelter means trusting strangers.','You find something that was meant to stay buried.']
+};
+const ENCOUNTER_DIFF = ['Trivial','Routine','Tricky','Dangerous','Deadly'];
+const ORACLE_WHERE = [['space','Space'],['port','Port'],['surface','Surface']];
+const ORACLE_DANGER = [['0','Calm'],['1','Normal'],['2','Tense'],['3','Hostile']];
+
+let oracleWhere = 'space';
+let oracleDanger = 1;
+let oracleResult = null;   // {kind:'rumour'|'encounter', ...}
+let genPanelOpen = false;
+let genCollapsed = false;
+
+function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
+
+function generateRumour(){
+  const facs = reputation.factions || [];
+  let faction = null;
+  if(facs.length){ // weight by |standing| — louder factions when relations are extreme
+    const weighted = [];
+    facs.forEach(f => { const w = 1 + Math.abs(f.standing); for(let i = 0; i < w; i++) weighted.push(f); });
+    faction = pick(weighted);
+  }
+  let bucket = 'generic';
+  if(faction){ const s = faction.standing; bucket = s <= -3 ? 'hostile' : s >= 3 ? 'friendly' : (Math.random() < 0.5 ? 'neutral' : 'generic'); }
+  let line = pick(RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic);
+  line = line.replace(/{faction}/g, faction ? faction.name : 'Someone')
+             .replace(/{ship}/g, shipState.name || 'the ship')
+             .replace(/{place}/g, oraclePlace())
+             .replace(/{good}/g, pick(ORACLE_GOODS));
+  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
+  renderOraclePanel();
+}
+
+function generateEncounter(){
+  const base = pick(ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space);
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0); // most-negative standing
+  let diff = oracleDanger + Math.floor(Math.random() * 2);
+  if(worst <= -3) diff += 1;
+  if(worst <= -5) diff += 1;
+  diff = Math.max(0, Math.min(4, diff));
+  const hostile = (reputation.factions || []).filter(f => f.standing <= -3);
+  const tie = (hostile.length && Math.random() < 0.55) ? pick(hostile).name : null;
+  oracleResult = { kind:'encounter', text: base, difficulty: ENCOUNTER_DIFF[diff], diffIdx: diff, faction: tie };
+  renderOraclePanel();
+}
+
+function rumourToCodex(){
+  if(!isReferee() || !oracleResult || oracleResult.kind !== 'rumour') return;
+  discoveryLog.push({
+    id: 'disc_' + Date.now().toString(36),
+    title: oracleResult.text,
+    category: 'lore',
+    body: oracleResult.faction ? ('Attributed to ' + oracleResult.faction + ' · ' + oracleResult.reliability) : oracleResult.reliability,
+    state: 'rumoured',
+    visibleTo: 'all',
+    createdAt: imperialNow(),
+    revealedAt: imperialNow()
+  });
+  saveDiscoveryLog();
+  if(discPanelOpen) renderDiscoveryPanel();
+  const note = document.getElementById('gen-codex-note');
+  if(note){ note.textContent = '✓ Sent to Codex as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
+}
+
+function setOracleWhere(w){ oracleWhere = w; renderOraclePanel(); }
+function setOracleDanger(d){ oracleDanger = parseInt(d, 10) || 0; renderOraclePanel(); }
+
+function toggleOraclePanel(){
+  if(!isReferee()) return;
+  genPanelOpen = !genPanelOpen;
+  const w = document.getElementById('gen-wrap'), b = document.getElementById('gen-btn');
+  w.classList.toggle('hidden', !genPanelOpen);
+  if(b) b.classList.toggle('panel-open', genPanelOpen);
+  if(genPanelOpen) renderOraclePanel();
+}
+function toggleGenCollapse(){
+  if(document.getElementById('gen-header').dataset.suppressClick === '1') return;
+  genCollapsed = !genCollapsed;
+  document.getElementById('gen-toggle').textContent = genCollapsed ? '▲' : '▼';
+  document.getElementById('gen-body').classList.toggle('collapsed', genCollapsed);
+  document.getElementById('gen-wrap').classList.toggle('panel-collapsed', genCollapsed);
+}
+
+function renderOraclePanel(){
+  const body = document.getElementById('gen-body'); if(!body) return;
+  let resultHTML = '<div class="cal-empty">Generate a rumour or encounter.</div>';
+  if(oracleResult){
+    if(oracleResult.kind === 'rumour'){
+      const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
+        <div class="gen-meta">${fac}<span class="gen-tag">${oracleResult.reliability}</span>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to the Codex as a rumour players can see">→ Codex</button>
+          <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
+      </div>`;
+    } else {
+      const tie = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)} involved</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">${escQH(oracleResult.text)}</div>
+        <div class="gen-meta"><span class="gen-diff gen-diff-${oracleResult.diffIdx}">${oracleResult.difficulty}</span>${tie}</div>
+      </div>`;
+    }
+  }
+  const whereOpts = ORACLE_WHERE.map(([v, l]) => `<span class="gen-opt${oracleWhere === v ? ' on' : ''}" onclick="setOracleWhere('${v}')">${l}</span>`).join('');
+  const dangerOpts = ORACLE_DANGER.map(([v, l]) => `<span class="gen-opt${oracleDanger == v ? ' on' : ''}" onclick="setOracleDanger('${v}')">${l}</span>`).join('');
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0);
+  const repHint = worst <= -3 ? `<div class="gen-hint">⚠ Hostile standing (${worst}) is raising encounter danger.</div>` : '';
+
+  body.innerHTML = `
+    ${resultHTML}
+    <div class="gen-sec-title">Rumour</div>
+    <button class="gen-go" onclick="generateRumour()">🎲 Generate rumour</button>
+    <div class="gen-sec-title">Encounter</div>
+    <div class="gen-row-lbl">Where</div><div class="gen-opts">${whereOpts}</div>
+    <div class="gen-row-lbl">Danger</div><div class="gen-opts">${dangerOpts}</div>
+    ${repHint}
+    <button class="gen-go" onclick="generateEncounter()">🎲 Generate encounter</button>`;
 }
 
 function toggleQuestCard(id){
@@ -8447,12 +10542,32 @@ makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
+makePanelDraggable('cal-wrap', 'cal-header');
+makePanelResizable('cal-wrap');
+makePanelDraggable('disc-wrap', 'disc-header');
+makePanelResizable('disc-wrap');
+makePanelDraggable('rep-wrap', 'rep-header');
+makePanelResizable('rep-wrap');
+makePanelDraggable('gen-wrap', 'gen-header');
+makePanelResizable('gen-wrap');
 
 buildOrrery();
 renderInit();
 buildQuickAddList();
 checkIdentity();
 renderWhoAmI();
+updateConnPill();             // paint initial sync status; markOnline/Offline keep it current
+if(queueLength()) flushQueue(); // push anything parked from a previous offline session
+
+// ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
+if(typeof gxEnsureRendered === 'function'){
+  gxEnsureRendered();
+  gxRenderSystems();
+  document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+  document.getElementById('breadcrumb').innerHTML = '';
+  updateBackBtn();
+  requestAnimationFrame(() => requestAnimationFrame(gxResetView));
+}
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
 });
@@ -8465,6 +10580,8 @@ loadContentOverrides().then(() => {
 loadBodyStores().then(() => {
   // Rebuild the system view so any added/removed/edited bodies appear
   if(typeof buildOrrery === 'function') buildOrrery();
+  // Refresh galaxy "surveyed" markers once shared body data has loaded.
+  if(currentView === 'galaxy' && typeof gxRenderSystems === 'function') gxRenderSystems();
   if(currentView === 'system' && selectedBody){
     // If the selected body was deleted while away, fall back to overview
     if(getBodies().find(b => b.id === selectedBody)) selectBody(selectedBody);
@@ -8491,6 +10608,11 @@ loadTextureCatalog().then(() => {
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
 loadAlertState().then(() => applyAlertState());
+renderImperialDate(); // show default immediately, then refresh once loaded
+loadImperialDate().then(() => renderImperialDate());
+loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
+loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
+loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
@@ -9303,8 +11425,11 @@ function decodeUWP(u){
 }
 
 // ── Open / close / mode ────────────────────────────────────────────────────
-function openBodyCreator(){
-  if(!isReferee() || !designModeOn) return;
+function openBodyCreator(force){
+  // `force` lets the blank-system prompt open the creator without first toggling
+  // design mode; the design-mode "+ Add Body" button still calls it bare.
+  if(!isReferee()) return;
+  if(!force && !designModeOn) return;
   bodyCreatorMode = 'manual';
   bodyCreatorDraft = null;
   bodyEditTargetId = null;
