@@ -3583,8 +3583,7 @@ function gxAttachPanZoom(){
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
   let downX = 0, downY = 0, startedOnEmpty = false;
   canvas.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')){ startedOnEmpty = false; return; }
-    startedOnEmpty = true; downX = e.clientX; downY = e.clientY;
+    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||e.target.closest('#gx-search-wrap')) return;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
