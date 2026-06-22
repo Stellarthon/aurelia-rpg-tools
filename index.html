@@ -7068,12 +7068,14 @@ async function pollRevealState(){
   if(isReferee()) return; // referee never polls — would be pointless and noisy
   try {
     const res = await supaStorage.get('reveal-status', true);
-    const fresh = res ? JSON.parse(res.value) : {};
-    const changed = JSON.stringify(fresh) !== JSON.stringify(revealedAreas);
-    if(changed){
-      revealedAreas = fresh;
-      if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res){
+      const fresh = JSON.parse(res.value);
+      const changed = JSON.stringify(fresh) !== JSON.stringify(revealedAreas);
+      if(changed){
+        revealedAreas = fresh;
+        if(currentView === 'station') { renderDetail(); updateStationLocks(); }
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -7092,22 +7094,25 @@ async function pollRevealState(){
   // Also pick up any Design Mode content edits the referee has made
   try {
     const res2 = await supaStorage.get('content-overrides', true);
-    const freshOverrides = res2 ? JSON.parse(res2.value) : {};
-    const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
-    if(overridesChanged){
-      contentOverrides = freshOverrides;
-      if(currentView === 'station' && cur) renderDetail();
-      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    if(res2){
+      const freshOverrides = JSON.parse(res2.value);
+      const overridesChanged = JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides);
+      if(overridesChanged){
+        contentOverrides = freshOverrides;
+        if(currentView === 'station' && cur) renderDetail();
+        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // And any added/removed checks, events, or NPC rows
   try {
     const res3 = await supaStorage.get('content-additions', true);
-    const freshAdditions = res3 ? JSON.parse(res3.value) : {};
+    // null = fetch failed or key never saved → keep current value (don't clobber).
+    const freshAdditions = res3 ? JSON.parse(res3.value) : contentAdditions;
     const res4 = await supaStorage.get('content-deletions', true);
-    const freshDeletions = res4 ? JSON.parse(res4.value) : {};
+    const freshDeletions = res4 ? JSON.parse(res4.value) : contentDeletions;
     const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
       || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
     if(addDelChanged){
@@ -7123,10 +7128,12 @@ async function pollRevealState(){
   // adds objectives, or marks things done during a session
   try {
     const resQ = await supaStorage.get('quest-log', true);
-    const freshQuests = resQ ? JSON.parse(resQ.value) || [] : [];
-    if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
-      questLog = freshQuests;
-      if(questPanelOpen) renderQuestPanel();
+    if(resQ){
+      const freshQuests = JSON.parse(resQ.value) || [];
+      if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
+        questLog = freshQuests;
+        if(questPanelOpen) renderQuestPanel();
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -7160,20 +7167,24 @@ async function pollRevealState(){
   // Campaign timeline — players see new/revealed dated events
   try {
     const resEv = await supaStorage.get('campaign-events', true);
-    const freshEv = resEv ? JSON.parse(resEv.value) || [] : [];
-    if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
-      campaignEvents = freshEv;
-      if(calPanelOpen) renderCalendarPanel();
+    if(resEv){
+      const freshEv = JSON.parse(resEv.value) || [];
+      if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
+        campaignEvents = freshEv;
+        if(calPanelOpen) renderCalendarPanel();
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Discovery log — players see entries the referee reveals (rumoured/known)
   try {
     const resDisc = await supaStorage.get('discovery-log', true);
-    const freshDisc = resDisc ? JSON.parse(resDisc.value) || [] : [];
-    if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
-      discoveryLog = freshDisc;
-      if(discPanelOpen) renderDiscoveryPanel();
+    if(resDisc){
+      const freshDisc = JSON.parse(resDisc.value) || [];
+      if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
+        discoveryLog = freshDisc;
+        if(discPanelOpen) renderDiscoveryPanel();
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -7245,8 +7256,8 @@ async function manualRefresh(){
   btn.disabled = true;
   try {
     const res = await supaStorage.get('reveal-status', true);
-    const fresh = res ? JSON.parse(res.value) : {};
-    revealedAreas = fresh;
+    if(!res) throw new Error('fetch failed'); // null = failed → show Retry, don't wipe reveals
+    revealedAreas = JSON.parse(res.value);
     if(currentView === 'station') { renderDetail(); updateStationLocks(); }
     if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     btn.classList.add('just-updated');
