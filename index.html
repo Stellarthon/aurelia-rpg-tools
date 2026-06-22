@@ -7180,21 +7180,25 @@ async function pollRevealState(){
   // Encyclopedia — players see articles the referee publishes / edits / reveals
   try {
     const resWiki = await supaStorage.get('wiki', true);
-    const freshWiki = resWiki ? JSON.parse(resWiki.value) || [] : [];
-    if(JSON.stringify(freshWiki) !== JSON.stringify(wikiArticles)){
-      wikiArticles = freshWiki;
-      if(wikiPanelOpen) renderWikiPanel();
+    if(resWiki){
+      const freshWiki = JSON.parse(resWiki.value) || [];
+      if(JSON.stringify(freshWiki) !== JSON.stringify(wikiArticles)){
+        wikiArticles = freshWiki;
+        if(wikiPanelOpen) renderWikiPanel();
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Route blocks — nav crew see the referee arm/disarm lanes mid-session
   try {
     const resRB = await supaStorage.get('route-blocks', true);
-    const freshRB = resRB ? JSON.parse(resRB.value) : { enabled:true, blocks:{} };
-    const normRB = { enabled: freshRB.enabled !== false, blocks: freshRB.blocks || {} };
-    if(JSON.stringify(normRB) !== JSON.stringify(routeBlocks)){
-      routeBlocks = normRB;
-      if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
+    if(resRB){
+      const freshRB = JSON.parse(resRB.value);
+      const normRB = { enabled: freshRB.enabled !== false, blocks: freshRB.blocks || {} };
+      if(JSON.stringify(normRB) !== JSON.stringify(routeBlocks)){
+        routeBlocks = normRB;
+        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
+      }
     }
   } catch(e){ /* silent — next poll will retry */ }
 
@@ -9634,7 +9638,8 @@ function startInventoryPolling(){
 async function pollShipInventory(){
   try {
     const r = await supaStorage.get('ship-inventory', true);
-    const fresh = r ? JSON.parse(r.value) || [] : [];
+    if(!r) return; // null = fetch failed or never saved → don't clobber local edits
+    const fresh = JSON.parse(r.value) || [];
     if(JSON.stringify(fresh) === JSON.stringify(shipInventory)) return;
     shipInventory = fresh;
     const ae = document.activeElement;
