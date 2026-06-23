@@ -959,6 +959,42 @@ textarea{font-family:var(--font)}
 .cbt-range-grid{display:flex;flex-direction:column;gap:3px}
 .cbt-range-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;font-family:monospace;color:var(--tx1);background:var(--bg0);border-radius:4px;padding:3px 7px}
 .cbt-range-band{color:var(--accentGold)}
+/* ── Radar scope (80s CRT tactical display) ─────────────────────────────────
+   Player-centric PPI: concentric rings = range bands (Adjacent centre →
+   Distant edge), blips plotted by range-to-player at a stable per-ship bearing.
+   Green-phosphor CRT look — scanlines, vignette glow, rotating sweep. The sweep
+   is the only motion and is disabled under prefers-reduced-motion. */
+.cbt-radar-wrap{display:flex;justify-content:center;padding:4px 0}
+.cbt-radar{position:relative;width:230px;height:230px;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, #04240f 0%, #03190b 60%, #020d06 100%);
+  border:2px solid #0c5a2c;box-shadow:0 0 0 3px #061a0e, 0 0 22px rgba(20,200,90,.35), inset 0 0 38px rgba(10,120,50,.45);
+  overflow:hidden;color:#37ff86;font-family:'Courier New',monospace}
+.cbt-radar::after{ /* scanlines + faint vignette */
+  content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.6)}
+.cbt-radar-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  border:1px solid rgba(55,255,134,.28);border-radius:50%}
+.cbt-radar-cross{position:absolute;background:rgba(55,255,134,.18)}
+.cbt-radar-cross.h{left:0;right:0;top:50%;height:1px}
+.cbt-radar-cross.v{top:0;bottom:0;left:50%;width:1px}
+.cbt-radar-sweep{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 0deg, rgba(55,255,134,.0) 0deg, rgba(55,255,134,.0) 300deg, rgba(55,255,134,.10) 340deg, rgba(80,255,150,.45) 359deg, rgba(55,255,134,0) 360deg);
+  animation:radarSweep 4s linear infinite}
+@keyframes radarSweep{to{transform:rotate(360deg)}}
+.cbt-radar-lbl{position:absolute;transform:translate(-50%,-50%);font-size:7px;letter-spacing:.5px;
+  color:rgba(55,255,134,.5);text-shadow:0 0 3px rgba(55,255,134,.6);white-space:nowrap}
+.cbt-blip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+  font-size:13px;line-height:1;cursor:default;text-shadow:0 0 6px currentColor;z-index:3}
+.cbt-blip .cbt-blip-lbl{font-size:7px;margin-top:1px;letter-spacing:.3px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbt-blip.player{color:#9bffd0;cursor:default}
+.cbt-blip.hostile{color:#ff5a5a;cursor:pointer}
+.cbt-blip.allied{color:#5ad1ff;cursor:pointer}
+.cbt-blip.destroyed{color:#5a5f6b;opacity:.6}
+.cbt-blip.active{animation:blipPulse 1.2s ease-in-out infinite}
+.cbt-blip.sel{outline:1px dashed currentColor;outline-offset:2px;border-radius:3px}
+@keyframes blipPulse{0%,100%{filter:drop-shadow(0 0 1px currentColor)}50%{filter:drop-shadow(0 0 7px currentColor)}}
+@media(prefers-reduced-motion:reduce){.cbt-radar-sweep{animation:none;opacity:.25}.cbt-blip.active{animation:none}}
 /* Controls */
 .cbt-controls{display:flex;flex-direction:column;gap:6px;background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:8px}
 .cbt-ctl-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -10525,6 +10561,7 @@ function pointDefence(defenderId, weaponId){
 // ═══════════════════════════════════════════════════════════════════════════
 
 let combatPanelOpen = false;
+let combatSelTarget = null; // radar/blip-selected target id, prefills the action selects
 let combatCollapsed = false;
 
 function toggleCombatPanel(){
@@ -10584,6 +10621,9 @@ function renderCombat(){
       <span class="cbt-chip">Active <b>${act ? escQH(redactedShipName(act)) : '—'}</b></span>
     </div>`);
   }
+
+  // Tactical radar scope (player-centric)
+  out.push(renderCombatRadar(ref));
 
   // Ships
   out.push(`<div class="cbt-sec-tab">Ships</div>`);
@@ -10667,6 +10707,51 @@ function combatRangePairs(){
   return out;
 }
 
+// ── Tactical radar scope (CRT, player-centric) ──────────────────────────────
+// Concentric rings are the range bands (Adjacent ~centre → Distant ~edge);
+// each non-player ship is a blip at its range-to-player, on a stable bearing
+// derived from its id so it doesn't jump around between renders. Hostile blips
+// are clickable to pick the action target. Fog-safe: players only ever hold
+// revealed ships, so only those reach this render.
+function combatBearingDeg(id){ let h = 2166136261; for(let i = 0; i < id.length; i++){ h ^= id.charCodeAt(i); h = (h * 16777619) >>> 0; } return h % 360; }
+function combatBandRadiusFrac(idx){ return 0.16 + (Math.max(0, idx) / (COMBAT_RANGE_BANDS.length - 1)) * 0.80; } // 0.16 (Adjacent) → 0.96 (Distant)
+
+function renderCombatRadar(ref){
+  if(!combatEncounter) return '';
+  const player = combatEncounter.ships.find(s => s.ref === 'player');
+  const others = combatEncounter.ships.filter(s => s.ref !== 'player');
+  if(!player || !others.length) return ''; // nothing to plot yet
+
+  // Range rings + their labels (skip Adjacent's ring to keep the centre clean).
+  let rings = '<div class="cbt-radar-cross h"></div><div class="cbt-radar-cross v"></div>';
+  COMBAT_RANGE_BANDS.forEach((band, i) => {
+    const f = combatBandRadiusFrac(i);
+    rings += `<div class="cbt-radar-ring" style="width:${(f * 100).toFixed(1)}%;height:${(f * 100).toFixed(1)}%"></div>`;
+    rings += `<div class="cbt-radar-lbl" style="left:50%;top:${(50 - f * 50).toFixed(1)}%">${escQH(band)}</div>`;
+  });
+
+  // Blips
+  let blips = `<div class="cbt-blip player" style="left:50%;top:50%" title="${escQH(redactedShipName(player))}">◊<span class="cbt-blip-lbl">${escQH(redactedShipName(player))}</span></div>`;
+  others.forEach(s => {
+    const idx = combatEncounter.ranges[combatPairKey(player.id, s.id)];
+    const f = combatBandRadiusFrac(idx == null ? COMBAT_RANGE_BANDS.length - 1 : idx);
+    const ang = combatBearingDeg(s.id) * Math.PI / 180;
+    const x = 50 + f * 50 * Math.cos(ang), y = 50 + f * 50 * Math.sin(ang);
+    const destroyed = s.status === 'destroyed';
+    const cls = [ 'cbt-blip', s.side === 'hostile' ? 'hostile' : 'allied',
+      destroyed ? 'destroyed' : '', (combatEncounter.activeShipId === s.id && !destroyed) ? 'active' : '',
+      combatSelTarget === s.id ? 'sel' : '' ].filter(Boolean).join(' ');
+    const glyph = destroyed ? '✕' : (s.side === 'hostile' ? '▲' : '◆');
+    const click = (ref && !destroyed) ? ` onclick="uiSelectTarget('${s.id}')"` : '';
+    blips += `<div class="${cls}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"${click} title="${escQH(redactedShipName(s))} — ${escQH(COMBAT_RANGE_BANDS[idx] || '?')}">${glyph}<span class="cbt-blip-lbl">${escQH(redactedShipName(s))}</span></div>`;
+  });
+
+  return `<div class="cbt-radar-wrap"><div class="cbt-radar">
+    ${rings}<div class="cbt-radar-sweep"></div>${blips}
+  </div></div>`;
+}
+function uiSelectTarget(id){ combatSelTarget = (combatSelTarget === id) ? null : id; renderCombat(); }
+
 // ── Referee action controls (phase-appropriate) ─────────────────────────────
 function renderCombatControls(enc){
   if(enc.status === 'setup'){
@@ -10690,7 +10775,7 @@ function renderCombatControls(enc){
   const act = combatActiveShip();
   const others = combatLiveShips().filter(s => act && s.id !== act.id);
   const shipOpts = (sel) => combatLiveShips().map(s => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${escQH(redactedShipName(s))}</option>`).join('');
-  const targetOpts = others.map(s => `<option value="${s.id}">${escQH(redactedShipName(s))}</option>`).join('');
+  const targetOpts = others.map(s => `<option value="${s.id}"${s.id === combatSelTarget ? ' selected' : ''}>${escQH(redactedShipName(s))}</option>`).join('');
   let phaseCtl = '';
 
   if(enc.phase === 'manoeuvre'){

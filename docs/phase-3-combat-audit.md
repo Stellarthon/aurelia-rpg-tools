@@ -139,6 +139,12 @@ range/initiative/hazard referencing them.
   motion honours prefers-reduced-motion (falls back to opacity flashes). Audio is
   a tiny WebAudio synth (no asset files) behind a per-device 🔊/🔇 mute. 7 FX
   tests pass.
+  - **Radar scope (CRT flair):** a green-phosphor, player-centric PPI at the top
+    of the console — concentric rings = range bands (Adjacent centre → Distant
+    edge), ship blips plotted by range-to-player on stable per-ship bearings,
+    rotating sweep + scanlines (sweep disabled under reduced-motion). Hostile
+    blips are click-to-target (prefills the action selects); fog-safe (players
+    only ever plot revealed ships). 10 radar tests pass.
 
 ## 6. Open questions (non-blocking for Phase 1/2)
 
