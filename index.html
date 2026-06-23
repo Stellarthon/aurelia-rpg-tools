@@ -902,6 +902,99 @@ textarea{font-family:var(--font)}
   .sf-crit-grid{grid-template-columns:1fr}
 }
 
+/* ── Space Combat console (Phase 3) ─────────────────────────────────────────
+   Tactical console, not a paper sheet — uses the dark chrome palette like the
+   initiative/quest panels (var tokens), so it sits visually with the rest of
+   the app. Floating/draggable/resizable/collapsible, cloned from #quest-wrap.
+   Referee sees action controls; players get a read-only, fog-redacted view. */
+#combat-wrap{
+  position:fixed;top:54px;left:360px;width:420px;height:560px;z-index:76;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 6px 26px rgba(0,0,0,.5);
+  min-width:300px;min-height:160px;max-width:96vw;max-height:90vh
+}
+#combat-wrap.hidden{display:none}
+#combat-wrap.panel-collapsed{height:auto!important;min-height:0}
+#combat-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;border-bottom:.5px solid var(--bd0);flex-shrink:0;
+  cursor:grab;touch-action:none;user-select:none
+}
+#combat-header:active{cursor:grabbing}
+#combat-title{font-size:11px;font-family:monospace;color:#C0392B;letter-spacing:1px}
+#combat-phase-badge{font-size:9px;font-family:monospace;background:#3B1A1A;color:#d45050;border-radius:10px;padding:2px 8px}
+#combat-toggle{font-size:10px;color:var(--tx1)}
+#combat-body{flex:1;overflow-y:auto;padding:10px 11px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+#combat-body.collapsed{display:none}
+.cbt-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:24px 8px;line-height:1.6}
+.cbt-statusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:monospace;font-size:10px;color:var(--tx1)}
+.cbt-statusbar b{color:var(--tx0)}
+.cbt-chip{background:var(--bg2);border:.5px solid var(--bd0);border-radius:10px;padding:2px 8px}
+.cbt-chip.live{background:#3B1A1A;color:#d45050;border-color:#5a2222}
+.cbt-sec-tab{font-size:8px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase;margin:2px 0}
+/* Ship card */
+.cbt-ship{background:var(--bg0);border-radius:6px;border-left:3px solid var(--bd0);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.cbt-ship.side-allied{border-left-color:var(--txI)}
+.cbt-ship.side-hostile{border-left-color:#d45050}
+.cbt-ship.is-active{box-shadow:0 0 0 1px var(--accentGold) inset}
+.cbt-ship.is-destroyed{opacity:.45}
+.cbt-ship-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cbt-ship-name{font-size:12px;font-weight:700;font-family:monospace;color:var(--tx0);min-width:0}
+.cbt-ship-tags{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.cbt-tag{font-size:8px;font-family:monospace;letter-spacing:.5px;padding:2px 6px;border-radius:3px;text-transform:uppercase;font-weight:700}
+.cbt-tag.allied{background:var(--bgI);color:var(--txI)}
+.cbt-tag.hostile{background:var(--bgD);color:var(--txD)}
+.cbt-tag.hidden{background:#2A1A3B;color:#9B59B6}
+.cbt-tag.destroyed{background:var(--bgD);color:var(--txD)}
+.cbt-bar-row{display:flex;align-items:center;gap:6px;font-size:9px;font-family:monospace;color:var(--tx1)}
+.cbt-bar-row .lbl{width:36px;flex-shrink:0}
+.cbt-bar{flex:1;height:7px;background:var(--bg2);border-radius:4px;overflow:hidden}
+.cbt-bar-fill{height:100%;background:var(--txS)}
+.cbt-bar-fill.hull{background:var(--txS)}
+.cbt-bar-fill.struct{background:var(--txW)}
+.cbt-bar-fill.low{background:var(--txD)}
+.cbt-crits{display:flex;flex-wrap:wrap;gap:3px}
+.cbt-crit{font-size:8px;font-family:monospace;padding:1px 5px;border-radius:3px;background:var(--bgD);color:var(--txD)}
+.cbt-range-grid{display:flex;flex-direction:column;gap:3px}
+.cbt-range-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;font-family:monospace;color:var(--tx1);background:var(--bg0);border-radius:4px;padding:3px 7px}
+.cbt-range-band{color:var(--accentGold)}
+/* Controls */
+.cbt-controls{display:flex;flex-direction:column;gap:6px;background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:8px}
+.cbt-ctl-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.cbt-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg1);border:.5px solid var(--bd0);border-radius:5px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.cbt-btn:hover{background:var(--bd0);color:var(--tx0)}
+.cbt-btn.primary{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.cbt-btn.danger{background:var(--bgD);color:var(--txD);border-color:#5a2222}
+.cbt-btn.fire{background:#3B1A1A;color:#ff6b6b;border-color:#5a2222}
+.cbt-sel,.cbt-num{font-size:10px;font-family:monospace;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 6px}
+.cbt-num{width:52px}
+/* Battle log */
+.cbt-log{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;background:var(--bg0);border-radius:6px;padding:7px 8px}
+.cbt-log-entry{font-size:10px;line-height:1.5;color:var(--tx0);font-family:monospace;border-left:2px solid var(--bd0);padding:2px 7px}
+.cbt-log-entry.kind-attack{border-left-color:#ff6b6b}
+.cbt-log-entry.kind-critical{border-left-color:var(--txD);color:var(--txD)}
+.cbt-log-entry.kind-system{border-left-color:var(--accentGold);color:var(--tx1)}
+.cbt-log-entry.kind-manoeuvre{border-left-color:var(--txI)}
+.cbt-log-entry.kind-initiative,.cbt-log-entry.kind-action{border-left-color:var(--txS)}
+.cbt-log-time{color:var(--tx1);font-size:8px}
+.cbt-dm-toggle{color:var(--accentGold);cursor:pointer;font-size:9px;margin-left:4px}
+.cbt-dm-break{margin:3px 0 2px 9px;padding:5px 8px;background:var(--bg2);border-radius:4px;font-size:9px;color:var(--tx1);display:none}
+.cbt-dm-break.open{display:block}
+.cbt-dm-break .pos{color:var(--txS)}
+.cbt-dm-break .neg{color:var(--txD)}
+#combat-btn{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);
+  border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap
+}
+#combat-btn:hover{background:var(--bd0);color:var(--tx0)}
+#combat-btn.panel-open{background:#3B1A1A;color:#d45050;border-color:#5a2222}
+#combat-btn.engaged{border-color:#5a2222;color:#d45050}
+@media(max-width:640px){
+  #combat-wrap{width:300px;height:60vh;top:54px;left:0}
+}
+
 /* ── Red Alert dramatic ship state ──────────────────────────────────────
    Non-blocking full-screen tint + edge pulse (pointer-events:none so the UI
    stays usable), a top banner, and a referee-only control puck. Respects
@@ -2225,6 +2318,7 @@ input#ui-scale-range{
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
+    <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
@@ -2759,6 +2853,19 @@ input#ui-scale-range{
     </div>
     <div id="ship-body"></div>
     <div class="panel-resize-handle" id="ship-resize"></div>
+  </div>
+
+  <!-- ── Space Combat console (Phase 3) ── -->
+  <div id="combat-wrap" class="hidden">
+    <div id="combat-header" onclick="toggleCombatCollapse()">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span id="combat-title">⚔ SPACE COMBAT</span>
+        <span id="combat-phase-badge"></span>
+      </div>
+      <span id="combat-toggle">▼</span>
+    </div>
+    <div id="combat-body"></div>
+    <div class="panel-resize-handle" id="combat-resize"></div>
   </div>
 
   <!-- ── Red Alert dramatic ship state ── -->
@@ -9900,6 +10007,19 @@ function redactEncounterForPlayer(enc){
   copy.ranges = prunedRanges;
   copy.initiative = (copy.initiative || []).filter(id => visibleIds.has(id));
   copy.hazards = (copy.hazards || []).filter(h => h.active);
+  // Battle log: drop any entry that references a ship the player can't see —
+  // by meta id OR by the hidden ship's NAME appearing in the free text — so the
+  // log itself never betrays an unrevealed contact's existence.
+  const hiddenNames = (enc.ships || [])
+    .filter(s => !visibleIds.has(s.id) && s.name)
+    .map(s => s.name);
+  copy.log = (copy.log || []).filter(e => {
+    const m = e.meta || {};
+    const refs = [m.shipId, m.targetId, m.attackerId, m.operatorId, m.defenderId, m.aId, m.bId].filter(Boolean);
+    if(!refs.every(id => visibleIds.has(id))) return false;
+    const text = e.text || '';
+    return !hiddenNames.some(n => text.indexOf(n) !== -1);
+  });
   return copy;
 }
 
@@ -10307,6 +10427,284 @@ function pointDefence(defenderId, weaponId){
   saveCombatEncounter();
   return { ok, total, penalty };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 3: player & combat UI
+// ───────────────────────────────────────────────────────────────────────────
+// The combat console. Referee gets the full board + phase-appropriate action
+// controls (wired to the Phase-2 engine); players get a read-only, fog-redacted
+// view of the same shared state. Reuses the app's dark panel chrome and the
+// crit/hull readout idioms. Every attack carries an inspectable DM breakdown.
+// Re-renders are driven by referee actions and by the player poll.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let combatPanelOpen = false;
+let combatCollapsed = false;
+
+function toggleCombatPanel(){
+  combatPanelOpen = !combatPanelOpen;
+  const wrap = document.getElementById('combat-wrap');
+  const btn = document.getElementById('combat-btn');
+  wrap.classList.toggle('hidden', !combatPanelOpen);
+  if(btn) btn.classList.toggle('panel-open', combatPanelOpen);
+  if(combatPanelOpen) renderCombat();
+}
+function toggleCombatCollapse(){
+  if(document.getElementById('combat-header').dataset.suppressClick === '1') return;
+  combatCollapsed = !combatCollapsed;
+  document.getElementById('combat-toggle').textContent = combatCollapsed ? '▲' : '▼';
+  document.getElementById('combat-body').classList.toggle('collapsed', combatCollapsed);
+  document.getElementById('combat-wrap').classList.toggle('panel-collapsed', combatCollapsed);
+}
+
+// Keep the launcher button reflecting "engagement in progress" even when closed.
+function updateCombatBtn(){
+  const btn = document.getElementById('combat-btn');
+  if(!btn) return;
+  btn.classList.toggle('engaged', !!(combatEncounter && combatEncounter.status === 'active'));
+}
+
+function combatActiveShip(){ return combatEncounter ? combatShipById(combatEncounter.activeShipId) : null; }
+function combatLiveShips(){ return combatEncounter ? combatEncounter.ships.filter(s => s.status !== 'destroyed') : []; }
+
+// ── Main render ─────────────────────────────────────────────────────────────
+function renderCombat(){
+  updateCombatBtn();
+  const body = document.getElementById('combat-body');
+  const badge = document.getElementById('combat-phase-badge');
+  if(!body) return;
+  const ref = isReferee();
+
+  if(!combatEncounter){
+    if(badge) badge.textContent = '';
+    body.innerHTML = ref
+      ? `<div class="cbt-empty">No active engagement.<br><br><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ Begin Encounter</button></div>`
+      : `<div class="cbt-empty">No active engagement.<br>The referee will start combat when it begins.</div>`;
+    return;
+  }
+
+  const enc = combatEncounter;
+  if(badge) badge.textContent = enc.status === 'active'
+    ? `R${enc.round} · ${enc.phase.toUpperCase()}` : enc.status.toUpperCase();
+
+  const out = [];
+
+  // Status bar
+  if(enc.status === 'active'){
+    const act = combatActiveShip();
+    out.push(`<div class="cbt-statusbar">
+      <span class="cbt-chip live">Round <b>${enc.round}</b></span>
+      <span class="cbt-chip">Phase <b>${escQH(enc.phase)}</b></span>
+      <span class="cbt-chip">Active <b>${act ? escQH(redactedShipName(act)) : '—'}</b></span>
+    </div>`);
+  }
+
+  // Ships
+  out.push(`<div class="cbt-sec-tab">Ships</div>`);
+  out.push(enc.ships.map(s => renderCombatShip(s, ref)).join(''));
+
+  // Range grid
+  const pairs = combatRangePairs();
+  if(pairs.length){
+    out.push(`<div class="cbt-sec-tab">Range</div>`);
+    out.push(`<div class="cbt-range-grid">${pairs.map(p => `
+      <div class="cbt-range-row"><span>${escQH(p.a)} ↔ ${escQH(p.b)}</span><span class="cbt-range-band">${escQH(p.band)}</span></div>
+    `).join('')}</div>`);
+  }
+
+  // Referee controls
+  if(ref) out.push(renderCombatControls(enc));
+
+  // Battle log
+  out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
+  out.push(renderCombatLog(enc));
+
+  body.innerHTML = out.join('');
+}
+
+// Players never hold an unrevealed enemy, but guard the name anyway.
+function redactedShipName(s){ return s.name || (s.ref === 'player' ? 'Our ship' : 'Contact'); }
+
+function renderCombatShip(s, ref){
+  const st = combatStatsOf(s);
+  const destroyed = s.status === 'destroyed';
+  const hull = st ? (Number(st.hullPoints) || 0) : 0, hullMax = st ? (Number(st.hullPointsMax) || 0) : 0;
+  const str = st ? (Number(st.structurePoints) || 0) : 0, strMax = st ? (Number(st.structurePointsMax) || 0) : 0;
+  const hullPct = hullMax > 0 ? Math.max(0, Math.min(100, hull / hullMax * 100)) : 0;
+  const strPct = strMax > 0 ? Math.max(0, Math.min(100, str / strMax * 100)) : 0;
+  const crits = st && st.crits ? Object.entries(st.crits).filter(([k, v]) => Number(v) > 0) : [];
+  const tags = [];
+  tags.push(`<span class="cbt-tag ${s.side === 'hostile' ? 'hostile' : 'allied'}">${s.side === 'hostile' ? 'Hostile' : 'Allied'}</span>`);
+  if(ref && s.ref !== 'player' && !s.revealed) tags.push(`<span class="cbt-tag hidden">Hidden</span>`);
+  if(destroyed) tags.push(`<span class="cbt-tag destroyed">Destroyed</span>`);
+  const refCtl = (ref && s.ref !== 'player') ? `
+    <div class="cbt-ctl-row" style="margin-top:2px">
+      <button class="cbt-btn" onclick="uiToggleReveal('${s.id}')">${s.revealed ? '🙈 Hide from players' : '👁 Reveal to players'}</button>
+      <button class="cbt-btn danger" onclick="uiRemoveShip('${s.id}')">Remove</button>
+    </div>` : '';
+  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}">
+    <div class="cbt-ship-top">
+      <span class="cbt-ship-name">${escQH(redactedShipName(s))}</span>
+      <span class="cbt-ship-tags">${tags.join('')}</span>
+    </div>
+    <div class="cbt-bar-row"><span class="lbl">Hull</span><div class="cbt-bar"><div class="cbt-bar-fill hull${hullPct < 34 ? ' low' : ''}" style="width:${hullPct}%"></div></div><span>${hull}/${hullMax}</span></div>
+    <div class="cbt-bar-row"><span class="lbl">Struct</span><div class="cbt-bar"><div class="cbt-bar-fill struct${strPct < 34 ? ' low' : ''}" style="width:${strPct}%"></div></div><span>${str}/${strMax}</span></div>
+    ${crits.length ? `<div class="cbt-crits">${crits.map(([k, v]) => `<span class="cbt-crit">${escQH(k)} ${v}</span>`).join('')}</div>` : ''}
+    ${refCtl}
+  </div>`;
+}
+
+// Range pairs to display (names already fog-safe — redacted encounter is pruned).
+function combatRangePairs(){
+  if(!combatEncounter) return [];
+  const out = [];
+  Object.keys(combatEncounter.ranges).forEach(k => {
+    const [a, b] = k.split('|');
+    const sa = combatShipById(a), sb = combatShipById(b);
+    if(!sa || !sb) return;
+    out.push({ a: redactedShipName(sa), b: redactedShipName(sb), band: COMBAT_RANGE_BANDS[combatEncounter.ranges[k]] || '—' });
+  });
+  return out;
+}
+
+// ── Referee action controls (phase-appropriate) ─────────────────────────────
+function renderCombatControls(enc){
+  if(enc.status === 'setup'){
+    return `<div class="cbt-sec-tab">Setup</div>
+      <div class="cbt-controls">
+        <div class="cbt-ctl-row">
+          <input class="cbt-sel" id="cbt-new-name" placeholder="Enemy ship name" style="flex:1;min-width:120px">
+          <button class="cbt-btn" onclick="uiAddEnemy()">+ Add ship</button>
+        </div>
+        <div class="cbt-ctl-row">
+          <button class="cbt-btn primary" onclick="uiRollInit()" ${enc.ships.length < 2 ? 'disabled title="Add at least one enemy"' : ''}>🎲 Roll Initiative &amp; Begin</button>
+          <button class="cbt-btn danger" onclick="uiEndEncounter()">End</button>
+        </div>
+        <div style="font-size:9px;color:var(--tx1)">Tip: add ships, then edit their full stats in the Ship panel flow (Phase 4). Enemies start at Long range, hidden until revealed.</div>
+      </div>`;
+  }
+  if(enc.status !== 'active') {
+    return `<div class="cbt-controls"><div class="cbt-ctl-row"><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ New Encounter</button></div></div>`;
+  }
+
+  const act = combatActiveShip();
+  const others = combatLiveShips().filter(s => act && s.id !== act.id);
+  const shipOpts = (sel) => combatLiveShips().map(s => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${escQH(redactedShipName(s))}</option>`).join('');
+  const targetOpts = others.map(s => `<option value="${s.id}">${escQH(redactedShipName(s))}</option>`).join('');
+  let phaseCtl = '';
+
+  if(enc.phase === 'manoeuvre'){
+    const st = act ? combatStatsOf(act) : null;
+    const maxThrust = st ? (Number(st.thrust) || 0) : 0;
+    phaseCtl = `
+      <div class="cbt-ctl-row">
+        <span style="font-size:9px;color:var(--tx1)">Thrust (max ${maxThrust})</span>
+        <input class="cbt-num" type="number" id="cbt-thrust" min="0" max="${maxThrust}" value="${act ? act.thrustAllocated : 0}">
+        <button class="cbt-btn" onclick="uiAllocThrust()">Allocate</button>
+        <span style="font-size:9px;color:var(--tx1)">Dodge</span>
+        <input class="cbt-num" type="number" id="cbt-dodge" min="0" value="${act ? act.dodge : 0}">
+        <button class="cbt-btn" onclick="uiDodge()">Evade</button>
+      </div>
+      ${others.length ? `<div class="cbt-ctl-row">
+        <select class="cbt-sel" id="cbt-range-target">${targetOpts}</select>
+        <button class="cbt-btn" onclick="uiChangeRange(-1)">▸ Close</button>
+        <button class="cbt-btn" onclick="uiChangeRange(1)">◂ Open</button>
+      </div>` : ''}`;
+  } else if(enc.phase === 'attack'){
+    const st = act ? combatStatsOf(act) : null;
+    const weapons = st && st.weapons ? st.weapons : [];
+    const wOpts = weapons.length ? weapons.map(w => `<option value="${w.id}">${escQH(w.name)} (${escQH(w.type)}${w.damage ? ', ' + escQH(w.damage) : ''})</option>`).join('') : `<option value="">— no weapons on sheet —</option>`;
+    phaseCtl = `
+      <div class="cbt-ctl-row">
+        <select class="cbt-sel" id="cbt-atk-target" style="flex:1;min-width:90px">${targetOpts}</select>
+        <select class="cbt-sel" id="cbt-atk-weapon" style="flex:1;min-width:90px">${wOpts}</select>
+      </div>
+      <div class="cbt-ctl-row">
+        <button class="cbt-btn fire" onclick="uiFire()">🔥 Fire</button>
+        <button class="cbt-btn" onclick="uiPointDefence()" title="Turret lasers vs incoming missiles">🛡 Point Defence</button>
+        <button class="cbt-btn" onclick="uiSensorLock()" title="Electronics (Sensors) lock">📡 Lock</button>
+      </div>`;
+  } else { // action
+    phaseCtl = `
+      <div class="cbt-ctl-row">
+        <select class="cbt-sel" id="cbt-act-target">${targetOpts}</select>
+        <button class="cbt-btn" onclick="uiSensorLock()">📡 Sensor Lock</button>
+      </div>
+      <div class="cbt-ctl-row">
+        <span style="font-size:9px;color:var(--tx1)">Leadership Effect</span>
+        <input class="cbt-num" type="number" id="cbt-lead" value="0">
+        <button class="cbt-btn" onclick="uiAdjustInit()" title="Adjust next round's initiative">Apply</button>
+      </div>`;
+  }
+
+  return `<div class="cbt-sec-tab">Acting: ${act ? escQH(redactedShipName(act)) : '—'} — ${escQH(enc.phase)} phase</div>
+    <div class="cbt-controls">
+      ${phaseCtl}
+      <div class="cbt-ctl-row" style="border-top:.5px solid var(--bd0);padding-top:6px;margin-top:2px">
+        <button class="cbt-btn primary" onclick="uiAdvance()">Next ▸</button>
+        <input class="cbt-sel" id="cbt-add-name" placeholder="Reinforcement" style="flex:1;min-width:90px">
+        <button class="cbt-btn" onclick="uiAddEnemy()">+ Ship</button>
+        <button class="cbt-btn danger" onclick="uiEndEncounter()">End</button>
+      </div>
+    </div>`;
+}
+
+function renderCombatLog(enc){
+  const entries = (enc.log || []).slice(-60).reverse();
+  if(!entries.length) return `<div class="cbt-log"><div style="font-size:10px;color:var(--tx1);font-style:italic">No actions yet.</div></div>`;
+  return `<div class="cbt-log">${entries.map(e => {
+    const bd = e.meta && e.meta.breakdown;
+    let dmHTML = '';
+    if(bd && Array.isArray(bd.dm)){
+      const rows = bd.dm.map(d => `<div><span class="${d.value >= 0 ? 'pos' : 'neg'}">${d.value >= 0 ? '+' : ''}${d.value}</span> ${escQH(d.label)}</div>`).join('');
+      dmHTML = `<span class="cbt-dm-toggle" onclick="toggleDMBreak('${e.id}')">[DM ${bd.total >= 0 ? '+' : ''}${bd.total}]</span>
+        <div class="cbt-dm-break" id="dm-${e.id}">${rows}<div style="margin-top:3px;border-top:.5px solid var(--bd0);padding-top:3px">Target ${bd.difficulty}+ · range ${escQH(bd.band)}</div></div>`;
+    }
+    return `<div class="cbt-log-entry kind-${escQH(e.kind)}">${escQH(e.text)}${dmHTML}</div>`;
+  }).join('')}</div>`;
+}
+function toggleDMBreak(id){ const el = document.getElementById('dm-' + id); if(el) el.classList.toggle('open'); }
+
+// ── UI action wrappers (read DOM → call engine → re-render) ──────────────────
+function uiStartEncounter(){ startEncounter(); renderCombat(); }
+function uiEndEncounter(){ if(confirm('End this encounter? The battle log will be cleared.')){ endEncounter(); renderCombat(); } }
+function uiRollInit(){ rollInitiative(); renderCombat(); }
+function uiAdvance(){ advanceCombatTurn(); renderCombat(); }
+function uiToggleReveal(id){
+  const s = combatShipById(id); if(!s) return;
+  s.revealed = !s.revealed;
+  combatLog('system', `${s.name} ${s.revealed ? 'revealed to' : 'hidden from'} the players.`, { shipId: id });
+  saveCombatEncounter(); renderCombat();
+}
+function uiRemoveShip(id){ if(confirm('Remove this ship from combat?')){ removeCombatShip(id); renderCombat(); } }
+function uiAddEnemy(){
+  const el = document.getElementById('cbt-new-name') || document.getElementById('cbt-add-name');
+  const name = (el && el.value.trim()) || 'Hostile Contact';
+  addCombatShip(makeShipStats({ name }), { name, side: 'hostile', revealed: false });
+  renderCombat();
+}
+function uiAllocThrust(){ const act = combatActiveShip(); const v = document.getElementById('cbt-thrust'); if(act && v){ allocateThrust(act.id, v.value); renderCombat(); } }
+function uiDodge(){ const act = combatActiveShip(); const v = document.getElementById('cbt-dodge'); if(act && v){ setDodge(act.id, v.value); renderCombat(); } }
+function uiChangeRange(delta){
+  const act = combatActiveShip(); const t = document.getElementById('cbt-range-target');
+  if(!act || !t) return;
+  const r = changeRange(act.id, t.value, delta);
+  if(!r.ok && r.reason) combatLog('manoeuvre', `Manoeuvre failed: ${r.reason}.`);
+  saveCombatEncounter(); renderCombat();
+}
+function uiFire(){
+  const act = combatActiveShip(); const t = document.getElementById('cbt-atk-target'); const w = document.getElementById('cbt-atk-weapon');
+  if(!act || !t || !t.value) return;
+  resolveAttack(act.id, t.value, w ? w.value : null);
+  renderCombat();
+}
+function uiPointDefence(){ const act = combatActiveShip(); if(act){ pointDefence(act.id, null); renderCombat(); } }
+function uiSensorLock(){
+  const act = combatActiveShip();
+  const t = document.getElementById('cbt-atk-target') || document.getElementById('cbt-act-target');
+  if(act && t && t.value){ attemptSensorLock(act.id, t.value); renderCombat(); }
+}
+function uiAdjustInit(){ const act = combatActiveShip(); const v = document.getElementById('cbt-lead'); if(act && v){ adjustInitiative(act.id, Number(v.value) || 0); renderCombat(); } }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPERIAL CALENDAR  (V1 — the campaign-date spine)
@@ -11111,6 +11509,8 @@ makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
+makePanelDraggable('combat-wrap', 'combat-header');
+makePanelResizable('combat-wrap');
 makePanelDraggable('cal-wrap', 'cal-header');
 makePanelResizable('cal-wrap');
 makePanelDraggable('disc-wrap', 'disc-header');
@@ -11177,7 +11577,7 @@ loadTextureCatalog().then(() => {
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
 loadAlertState().then(() => applyAlertState());
-loadCombatEncounter(); // Phase 1: hydrate any in-progress encounter; UI hooks land in Phase 3
+loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => renderImperialDate());
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
