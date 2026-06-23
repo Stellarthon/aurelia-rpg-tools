@@ -104,9 +104,18 @@ range/initiative/hazard referencing them.
   (0 — core is flat 8+), point-defence step (−1), dodge-per-Thrust (−1), and the
   target-size DM. Weapon damage is never guessed — it is a referee-entered dice
   expression per mount. Sources: Traveller SRD + Core Rulebook tables.
-- **Phase 3 — Player & combat UI.** Combat screen in the existing panel language;
-  turn order, phase, range grid, per-ship status, acting crew actions; reuse ship
-  card for enemies (gated per reveal).
+- **Phase 3 — Player & combat UI ✅ (this commit).** Floating combat console
+  (`#combat-wrap`, launcher `⚔ Combat`) cloned from the existing panel chrome —
+  draggable/resizable/collapsible. Referee gets the full board plus
+  phase-appropriate action controls wired to the Phase-2 engine (thrust/range/
+  dodge in Manoeuvre; target+weapon Fire, point defence, sensor lock in Attack;
+  sensor lock + Leadership adjust in Action; add/remove/reveal ships; Next ▸).
+  Players get a read-only, fog-redacted view of the same shared state via the
+  poll. Ship cards show Hull/Structure bars + active crits; a per-pair range
+  grid; and a battle log where every attack carries an inspectable `[DM ±n]`
+  breakdown. Fog hardening: the player redactor now also strips log entries that
+  reference a hidden ship by id OR by name. Render smoke-tests pass (referee +
+  player views, DM breakdown, fog).
 - **Phase 4 — Referee tooling.** Encounter setup, enemy editing via the inline
   flow, add ships mid-combat, toggleable environmental hazards without reload.
 - **Phase 5 — Animation & feedback.** Lightweight, reduced-motion-respecting cues
