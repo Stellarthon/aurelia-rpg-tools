@@ -2223,10 +2223,10 @@ input#ui-scale-range{
       <input type="text" id="search-input" placeholder="🔍 Find system, NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
     </div>
-    <button id="quest-btn" onclick="toggleQuestPanel()" title="Quest Log">📜 Quests</button>
+    <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
-    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Discovery Log / Codex — revealed lore & intel">🗂 Codex</button>
+    <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
@@ -2242,7 +2242,7 @@ input#ui-scale-range{
     <!-- ── Shared-sync status pill (offline hardening) — updated by updateConnPill() ── -->
     <div id="conn-pill" class="cp-live" title="Shared sync — Live"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
-      <span class="pm-label">Player Mode</span>
+      <span class="pm-label">Traveller View</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
     </div>
   </div>
@@ -2656,7 +2656,7 @@ input#ui-scale-range{
 
   <div id="health-wrap" class="ref-only">
     <div id="health-header" onclick="toggleHealthPanel()">
-      <span id="health-title">♥ NPC HEALTH</span>
+      <span id="health-title">♥ NPC STATUS</span>
       <span id="health-count">0</span>
       <span id="health-toggle">▼</span>
     </div>
@@ -2737,14 +2737,14 @@ input#ui-scale-range{
   <div id="quest-wrap" class="hidden">
     <div id="quest-header" onclick="toggleQuestCollapse()">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 QUEST LOG</span>
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 MISSION LOG</span>
         <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
       </div>
       <span id="quest-toggle">▼</span>
     </div>
     <div id="quest-body"></div>
     <div id="quest-foot" class="ref-only">
-      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Quest</button>
+      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Mission</button>
     </div>
     <div class="panel-resize-handle" id="quest-resize"></div>
   </div>
@@ -2795,7 +2795,7 @@ input#ui-scale-range{
   <!-- ── Discovery Log / Codex panel ── -->
   <div id="disc-wrap" class="hidden">
     <div id="disc-header" onclick="toggleDiscCollapse()">
-      <span id="disc-title-lbl">🗂 CODEX <span id="disc-count">0</span></span>
+      <span id="disc-title-lbl">🗂 LIBRARY DATA <span id="disc-count">0</span></span>
       <span id="disc-toggle">▼</span>
     </div>
     <div id="disc-body"></div>
@@ -2825,12 +2825,12 @@ input#ui-scale-range{
   <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
     <div id="quest-edit-card">
       <div id="quest-edit-header">
-        <span id="quest-edit-title">NEW QUEST</span>
+        <span id="quest-edit-title">NEW MISSION</span>
         <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
       </div>
       <div id="quest-edit-body">
         <div class="design-field-group">
-          <div class="design-field-label">Quest Title</div>
+          <div class="design-field-label">Mission Title</div>
           <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
         </div>
         <div class="design-field-group">
@@ -2843,7 +2843,7 @@ input#ui-scale-range{
         </div>
         <div class="design-field-group">
           <div class="design-field-label">Player Description (visible to players)</div>
-          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this quest..."></textarea>
+          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this mission..."></textarea>
         </div>
         <div class="design-field-group">
           <div class="design-field-label">Referee Notes (private)</div>
@@ -4032,14 +4032,18 @@ let currentView = "galaxy"; // landing view is the Orion Arm starmap
 const pmCheck = document.getElementById("pm-check");
 const rootEl = document.getElementById("root");
 
-function togglePM(){
-  pmCheck.checked = !pmCheck.checked;
-  rootEl.classList.toggle("pm-active", pmCheck.checked);
+// Single source of truth for syncing UI/state to the current player-mode value.
+// Both the toolbar toggle (togglePM, which sets .checked programmatically and so
+// does NOT fire 'change') and the checkbox's own 'change' event route through
+// here, so the two paths can never drift apart.
+function applyPlayerMode(){
+  const on = pmCheck.checked;
+  rootEl.classList.toggle("pm-active", on);
   const fp = document.getElementById('float-panels');
-  if(fp) fp.classList.toggle('pm-active', pmCheck.checked);
-  if(pmCheck.checked) forceDesignModeOff();
+  if(fp) fp.classList.toggle('pm-active', on);
+  if(on) forceDesignModeOff();
   try {
-    if(pmCheck.checked) localStorage.setItem("aurelia_pm","1");
+    if(on) localStorage.setItem("aurelia_pm","1");
     else localStorage.removeItem("aurelia_pm");
   } catch(e){}
   if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
@@ -4047,24 +4051,14 @@ function togglePM(){
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
-  if(pmCheck.checked){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
+  if(on){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
   applyAlertState(); // refresh the alert puck / overlay for the new role
 }
-pmCheck.addEventListener("change", function(){
-  rootEl.classList.toggle("pm-active", this.checked);
-  if(this.checked) forceDesignModeOff();
-  try {
-    if(this.checked) localStorage.setItem("aurelia_pm","1");
-    else localStorage.removeItem("aurelia_pm");
-  } catch(e){}
-  if(currentView === "station" && cur) { renderTabs(); renderDetail(); updateStationLocks(); }
-  if(currentView === "body" && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
-  if(currentView === "system" && selectedBody) selectBody(selectedBody);
-  checkIdentity();
-  renderWhoAmI();
-  if(this.checked){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
-  applyAlertState();
-});
+function togglePM(){
+  pmCheck.checked = !pmCheck.checked;
+  applyPlayerMode();
+}
+pmCheck.addEventListener("change", applyPlayerMode);
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active")
     const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; startPolling(); startAlertPolling(); } } catch(e){}
 
@@ -4401,8 +4395,9 @@ function renderBodyContentSections(body, pm){
       const rowsHTML = mergedRows.map(({item:r, key:rkey}) => {
         designOriginalRegistry[rkey] = r;
         const rdata = resolveContent(rkey, r);
-        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
-        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
+        designItemDataRegistry[rkey] = rdata;
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="editNpcRowByKey('${rkey}')" title="Edit this detail">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteDesignItemByKey('${rkey}')" title="Remove this detail">🗑</button>` : '';
         return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
@@ -5623,8 +5618,9 @@ function renderDetail(){
       const rowsHTML = mergedRows.map(({item:r, key:rkey}) => {
         designOriginalRegistry[rkey] = r;
         const rdata = resolveContent(rkey, r);
-        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
-        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
+        designItemDataRegistry[rkey] = rdata;
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="editNpcRowByKey('${rkey}')" title="Edit this detail">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteDesignItemByKey('${rkey}')" title="Remove this detail">🗑</button>` : '';
         return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
@@ -5679,8 +5675,9 @@ function renderDetail(){
       html += mergedChecks.map(({item:c, key:ckey}) => {
         designOriginalRegistry[ckey] = c;
         const cdata = resolveContent(ckey, c);
-        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
-        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
+        designItemDataRegistry[ckey] = cdata;
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="editCheckByKey('${ckey}')" title="Edit this check">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteDesignItemByKey('${ckey}')" title="Remove this check">🗑</button>` : '';
         return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>🎲 ${cdata.skill}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(dg=>{
           const cls=dg.cls||degCls[dg.c]||"deg-p";
           const lbl=dg.label||dg.l||"";
@@ -5704,8 +5701,9 @@ function renderDetail(){
       html += mergedEvents.map(({item:e, key:ekey}) => {
         designOriginalRegistry[ekey] = e;
         const edata = resolveContent(ekey, e);
-        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
-        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ekey}', ${JSON.stringify(edata).replace(/"/g,'&quot;')})" title="Remove this event">🗑</button>` : '';
+        designItemDataRegistry[ekey] = edata;
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="editEventByKey('${ekey}')" title="Edit this event">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteDesignItemByKey('${ekey}')" title="Remove this event">🗑</button>` : '';
         return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${edata.t}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${edata.e}</div>`;
       }).join("");
     }
@@ -5745,7 +5743,7 @@ async function renderPlayerNotesTab(container, key){
     showIdentityModal();
     return;
   }
-  container.innerHTML = `<div id="whoami-strip">Playing as <span onclick="changeIdentity()">${myIdentity}</span></div>
+  container.innerHTML = `<div id="whoami-strip">Playing as <span onclick="changeIdentity()">${escHtml(myIdentity)}</span></div>
     <div class="notes-subtabs">
       <div class="notes-subtab ${notesSubTab==='private'?'on':''}" onclick="setNotesSubTab('${key}','private')">MY NOTES</div>
       <div class="notes-subtab ${notesSubTab==='party'?'on':''}" onclick="setNotesSubTab('${key}','party')">PARTY NOTEBOOK</div>
@@ -5755,14 +5753,14 @@ async function renderPlayerNotesTab(container, key){
   if(notesSubTab === 'private'){
     const text = await loadPrivateNote(key);
     const body = document.getElementById('player-notes-body');
-    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${text}</textarea>
+    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${escHtml(text)}</textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="savePrivNotesTab('${key}')">Save</button><span class="saved-msg" id="priv-smsg">✓ Saved</span></div>`;
   } else {
     const list = await loadPartyNotes(key);
     const body = document.getElementById('player-notes-body');
     if(body){
       body.innerHTML = (list.length ? list.map(n =>
-        `<div class="party-note-entry"><div class="party-note-author">${n.author}</div><div class="party-note-text">${n.text}</div></div>`
+        `<div class="party-note-entry"><div class="party-note-author">${escHtml(n.author)}</div><div class="party-note-text">${escHtml(n.text)}</div></div>`
       ).join('') : '<div class="init-empty">No party notes yet for this area.</div>')
       + `<textarea class="note-ta" id="party-nta" placeholder="Add a note the whole party can see..." style="margin-top:8px;min-height:60px"></textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="addPartyNoteTab('${key}')">Post</button></div>`;
@@ -5957,8 +5955,8 @@ function renderEventLog(){
   }
   body.innerHTML = eventLog.map(e =>
     `<div class="evlog-entry">
-      <div class="evlog-time">${e.time}${e.area?' · '+e.area:''}</div>
-      <div class="evlog-text">${e.text}</div>
+      <div class="evlog-time">${escHtml(e.time)}${e.area?' · '+escHtml(e.area):''}</div>
+      <div class="evlog-text">${escHtml(e.text)}</div>
     </div>`
   ).join('');
 }
@@ -6144,7 +6142,7 @@ function saveCombatants(){
   } catch(e){}
 }
 
-function roll2d6(){ return (1+Math.floor(Math.random()*6)) + (1+Math.floor(Math.random()*6)); }
+// roll2d6() / d6() live in the "Dice" section further down (single definition).
 
 function addCombatant(){
   const nameEl = document.getElementById('init-name-input');
@@ -6367,12 +6365,12 @@ function renderInit(){
     let healthHTML = '';
     if(c.healthMode === 'simple'){
       healthHTML = `<div class="hp-block">
-        ${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+        ${healthBarHTML('Hits', c.hp, c.maxHp, '#4CAF50')}
         <div class="hp-adjust-row">
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max hits">
         </div>
       </div>`;
     } else if(c.healthMode === 'detailed'){
@@ -6407,7 +6405,7 @@ function renderInit(){
         <button class="init-btn" onclick="moveCombatant(${c.id},1)" title="Move down">▼</button>
         <button class="init-btn ${c.ambush==='atk'?'danger':''}" onclick="toggleAmbush(${c.id},'atk')" title="Ambushing (+6)">AMB+</button>
         <button class="init-btn ${c.ambush==='def'?'danger':''}" onclick="toggleAmbush(${c.id},'def')" title="Ambushed (−6)">AMB−</button>
-        <button class="init-btn" onclick="cycleHealthMode(${c.id})" title="Cycle health tracking: off → simple → detailed">${c.healthMode==='none'?'+ HP':c.healthMode==='simple'?'HP: Simple':'HP: Detailed'}</button>
+        <button class="init-btn" onclick="cycleHealthMode(${c.id})" title="Cycle damage tracking: off → simple → detailed">${c.healthMode==='none'?'+ Damage':c.healthMode==='simple'?'Dmg: Simple':'Dmg: Detailed'}</button>
         <button class="init-btn" onclick="toggleDown(${c.id})" title="Toggle down/out">${c.down?'Revive':'Down'}</button>
         <button class="init-btn danger" onclick="removeCombatant(${c.id})" title="Remove">✕</button>
       </div>
@@ -6443,19 +6441,19 @@ function renderHealthPanel(){
   count.textContent = tracked.length;
 
   if(!tracked.length){
-    body.innerHTML = '<div class="init-empty">No NPCs being tracked yet. Use the "+ HP" button on a combatant in the Initiative panel to start tracking them here.</div>';
+    body.innerHTML = '<div class="init-empty">No NPCs being tracked yet. Use the "+ Damage" button on a combatant in the Initiative panel to start tracking them here.</div>';
     return;
   }
 
   body.innerHTML = tracked.map(c => {
     let healthHTML = '';
     if(c.healthMode === 'simple'){
-      healthHTML = `${healthBarHTML('HP', c.hp, c.maxHp, '#4CAF50')}
+      healthHTML = `${healthBarHTML('Hits', c.hp, c.maxHp, '#4CAF50')}
         <div class="hp-adjust-row">
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-1)">−1</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',-5)">−5</button>
           <button class="init-btn" onclick="adjustHealth(${c.id},'hp',1)">+1</button>
-          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max HP">
+          <input type="number" inputmode="numeric" class="hp-max-input" value="${c.maxHp}" onchange="setMaxHealth(${c.id},'hp',this.value)" title="Max hits">
         </div>`;
     } else {
       healthHTML = `<div style="position:relative">
@@ -6637,6 +6635,32 @@ const supaStorage = {
     } catch(e){
       markOffline();
       return { ok: false, value: this.cacheGet(key), fromCache: true };
+    }
+  },
+  // Batched read — one request for many keys (key=in.(…)) instead of N round
+  // trips. Returns { ok, values:{key→value|null} }. On failure every key falls
+  // back to its localStorage cache, mirroring single-key get() semantics.
+  async getMany(keys){
+    const map = {};
+    keys.forEach(k => map[k] = null);
+    try {
+      const list = keys.map(encodeURIComponent).join(',');
+      const res = await fetch(`${SUPABASE_REST}?key=in.(${list})&select=key,value`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY
+        }
+      });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      rows.forEach(r => { map[r.key] = r.value; });
+      keys.forEach(k => this.cacheSet(k, map[k]));   // mirror authoritative server state
+      markOnline();
+      return { ok: true, values: map, fromCache: false };
+    } catch(e){
+      keys.forEach(k => map[k] = this.cacheGet(k));
+      markOffline();
+      return { ok: false, values: map, fromCache: true };
     }
   },
   // Raw upsert — throws on any failure. Used by both set() and the queue flush.
@@ -6862,138 +6886,126 @@ let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps
 
 async function pollRevealState(){
   if(isReferee()) return; // referee never polls — would be pointless and noisy
-  // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
-  // state intact), never an overwrite-with-empty-defaults that wipes the screen.
+  // One batched read for every shared key instead of a dozen sequential round
+  // trips (see supaStorage.getMany). batch.ok gates ALL processing: a failed
+  // fetch is a no-op that leaves in-memory state intact, never an overwrite with
+  // empty defaults that would wipe the screen. Each block keeps its own try/catch
+  // so one malformed value can't abort the rest.
+  const POLL_KEYS = ['reveal-status','station-clock','content-overrides',
+    'content-additions','content-deletions','quest-log','ship-state',
+    'imperial-date','campaign-events','discovery-log','reputation'];
+  const batch = await supaStorage.getMany(POLL_KEYS);
+  if(!batch.ok) return; // offline — retry next cycle, don't touch live state
+  const V = batch.values;
+
+  // Reveal status
   try {
-    const res = await supaStorage.get('reveal-status', true);
-    if(res.ok){
-      const fresh = res.value != null ? JSON.parse(res.value) : {};
-      if(JSON.stringify(fresh) !== JSON.stringify(revealedAreas)){
-        revealedAreas = fresh;
-        if(currentView === 'station') { renderDetail(); updateStationLocks(); }
-        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
-      }
+    const fresh = V['reveal-status'] != null ? JSON.parse(V['reveal-status']) : {};
+    if(JSON.stringify(fresh) !== JSON.stringify(revealedAreas)){
+      revealedAreas = fresh;
+      if(currentView === 'station') { renderDetail(); updateStationLocks(); }
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Pick up the referee's station clock changes
   try {
-    const resClock = await supaStorage.get('station-clock', true);
-    if(resClock.ok && resClock.value != null){
-      const freshMinutes = JSON.parse(resClock.value).minutes || 0;
+    if(V['station-clock'] != null){
+      const freshMinutes = JSON.parse(V['station-clock']).minutes || 0;
       if(freshMinutes !== clockMinutes){
         clockMinutes = freshMinutes;
         renderClock();
       }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Also pick up any Design Mode content edits the referee has made
   try {
-    const res2 = await supaStorage.get('content-overrides', true);
-    if(res2.ok){
-      const freshOverrides = res2.value != null ? JSON.parse(res2.value) : {};
-      if(JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides)){
-        contentOverrides = freshOverrides;
-        if(currentView === 'station' && cur) renderDetail();
-        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
-      }
+    const freshOverrides = V['content-overrides'] != null ? JSON.parse(V['content-overrides']) : {};
+    if(JSON.stringify(freshOverrides) !== JSON.stringify(contentOverrides)){
+      contentOverrides = freshOverrides;
+      if(currentView === 'station' && cur) renderDetail();
+      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // And any added/removed checks, events, or NPC rows
   try {
-    const res3 = await supaStorage.get('content-additions', true);
-    const res4 = await supaStorage.get('content-deletions', true);
-    if(res3.ok && res4.ok){
-      const freshAdditions = res3.value != null ? JSON.parse(res3.value) : {};
-      const freshDeletions = res4.value != null ? JSON.parse(res4.value) : {};
-      const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
-        || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
-      if(addDelChanged){
-        contentAdditions = freshAdditions;
-        contentDeletions = freshDeletions;
-        if(currentView === 'station' && cur) renderDetail();
-        if(currentView === 'system' && selectedBody) selectBody(selectedBody);
-        if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
-      }
+    const freshAdditions = V['content-additions'] != null ? JSON.parse(V['content-additions']) : {};
+    const freshDeletions = V['content-deletions'] != null ? JSON.parse(V['content-deletions']) : {};
+    const addDelChanged = JSON.stringify(freshAdditions) !== JSON.stringify(contentAdditions)
+      || JSON.stringify(freshDeletions) !== JSON.stringify(contentDeletions);
+    if(addDelChanged){
+      contentAdditions = freshAdditions;
+      contentDeletions = freshDeletions;
+      if(currentView === 'station' && cur) renderDetail();
+      if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+      if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Quest log — players see live updates as referee changes quest status,
   // adds objectives, or marks things done during a session
   try {
-    const resQ = await supaStorage.get('quest-log', true);
-    if(resQ.ok){
-      const freshQuests = resQ.value != null ? JSON.parse(resQ.value) || [] : [];
-      if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
-        questLog = freshQuests;
-        if(questPanelOpen) renderQuestPanel();
-      }
+    const freshQuests = V['quest-log'] != null ? JSON.parse(V['quest-log']) || [] : [];
+    if(JSON.stringify(freshQuests) !== JSON.stringify(questLog)){
+      questLog = freshQuests;
+      if(questPanelOpen) renderQuestPanel();
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
-    const resShip = await supaStorage.get('ship-state', true);
-    if(resShip.ok && resShip.value != null){
-      const freshShip = Object.assign({}, shipState, JSON.parse(resShip.value));
+    if(V['ship-state'] != null){
+      const freshShip = Object.assign({}, shipState, JSON.parse(V['ship-state']));
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
       }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Imperial date — players see the referee advance the campaign date
   try {
-    const resDate = await supaStorage.get('imperial-date', true);
-    if(resDate.ok && resDate.value != null){
-      const fresh = JSON.parse(resDate.value);
+    if(V['imperial-date'] != null){
+      const fresh = JSON.parse(V['imperial-date']);
       if(fresh.day !== imperialDate.day || fresh.year !== imperialDate.year){
         imperialDate = fresh;
         renderImperialDate();
         if(calPanelOpen) renderCalendarPanel();
       }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Campaign timeline — players see new/revealed dated events
   try {
-    const resEv = await supaStorage.get('campaign-events', true);
-    if(resEv.ok){
-      const freshEv = resEv.value != null ? JSON.parse(resEv.value) || [] : [];
-      if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
-        campaignEvents = freshEv;
-        if(calPanelOpen) renderCalendarPanel();
-      }
+    const freshEv = V['campaign-events'] != null ? JSON.parse(V['campaign-events']) || [] : [];
+    if(JSON.stringify(freshEv) !== JSON.stringify(campaignEvents)){
+      campaignEvents = freshEv;
+      if(calPanelOpen) renderCalendarPanel();
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Discovery log — players see entries the referee reveals (rumoured/known)
   try {
-    const resDisc = await supaStorage.get('discovery-log', true);
-    if(resDisc.ok){
-      const freshDisc = resDisc.value != null ? JSON.parse(resDisc.value) || [] : [];
-      if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
-        discoveryLog = freshDisc;
-        if(discPanelOpen) renderDiscoveryPanel();
-      }
+    const freshDisc = V['discovery-log'] != null ? JSON.parse(V['discovery-log']) || [] : [];
+    if(JSON.stringify(freshDisc) !== JSON.stringify(discoveryLog)){
+      discoveryLog = freshDisc;
+      if(discPanelOpen) renderDiscoveryPanel();
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 
   // Reputation — players see standing shifts and revealed milestones
   try {
-    const resRep = await supaStorage.get('reputation', true);
-    if(resRep.ok && resRep.value != null){
-      const freshRep = JSON.parse(resRep.value);
+    if(V['reputation'] != null){
+      const freshRep = JSON.parse(V['reputation']);
       if(JSON.stringify(freshRep) !== JSON.stringify(reputation)){
         reputation = freshRep;
         if(repPanelOpen) renderReputationPanel();
       }
     }
-  } catch(e){ /* silent — next poll will retry */ }
+  } catch(e){ /* malformed value — skip this key */ }
 }
 
 // Self-scheduling poll (setTimeout, not setInterval) so the interval can grow
@@ -8618,7 +8630,9 @@ function openRemovedItemsPanel(){
   const bodyEntries = [];
   Object.keys(bodyDeletions || {}).forEach(sysId => {
     Object.keys(bodyDeletions[sysId] || {}).forEach(bid => {
-      bodyEntries.push({ sysId, bid, entry: bodyDeletions[sysId][bid] });
+      const entry = bodyDeletions[sysId][bid];
+      if(entry && entry.childOf) return;   // cascaded moon — restores with its parent
+      bodyEntries.push({ sysId, bid, entry });
     });
   });
   const removedBoxes = getRemovedBoxTypes();
@@ -8912,6 +8926,18 @@ const designOriginalRegistry = {};
 function designEditOriginalTextFor(key){
   return designOriginalRegistry[key] || '';
 }
+
+// AUR-012: the inline design controls (NPC rows, skill checks, events) pass only
+// their generated item key through the onclick and look the data back up here,
+// instead of interpolating JSON.stringify(item) into the attribute — which broke
+// whenever referee-edited content contained a quote or "</" sequence. Both
+// registries are repopulated on every render right before the buttons are
+// emitted, so the lookup is always the item currently shown.
+const designItemDataRegistry = {};   // key → resolved item data, for the delete control
+function editNpcRowByKey(key){ openDesignEditNpcRow(key, designOriginalRegistry[key]); }
+function editCheckByKey(key){ openDesignEditCheck(key, designOriginalRegistry[key]); }
+function editEventByKey(key){ openDesignEditEvent(key, designOriginalRegistry[key]); }
+function deleteDesignItemByKey(key){ deleteContentItem(key, designItemDataRegistry[key]); }
 
 function closeDesignEdit(){
   document.getElementById('design-edit-panel').classList.add('hidden');
@@ -9279,7 +9305,7 @@ function renderQuestPanel(){
   if(countEl) countEl.textContent = activeCount;
 
   if(!visible.length){
-    body.innerHTML = `<div class="quest-empty">${ref ? 'No quests yet. Add one below.' : 'No active quests.'}</div>`;
+    body.innerHTML = `<div class="quest-empty">${ref ? 'No missions yet. Add one below.' : 'No active missions.'}</div>`;
     return;
   }
 
@@ -9309,7 +9335,7 @@ function renderQuestCard(q, ref){
       ${escQH(q.refNote).replace(/\n/g,'<br>')}
     </div>` : '';
 
-  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Quest</button>` : '';
+  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Mission</button>` : '';
 
   return `
     <div class="quest-card status-${q.status}" id="qcard-${q.id}">
@@ -10359,7 +10385,7 @@ function rumourToCodex(){
   saveDiscoveryLog();
   if(discPanelOpen) renderDiscoveryPanel();
   const note = document.getElementById('gen-codex-note');
-  if(note){ note.textContent = '✓ Sent to Codex as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
+  if(note){ note.textContent = '✓ Sent to Library Data as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
 }
 
 function setOracleWhere(w){ oracleWhere = w; renderOraclePanel(); }
@@ -10390,7 +10416,7 @@ function renderOraclePanel(){
       resultHTML = `<div class="gen-result">
         <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
         <div class="gen-meta">${fac}<span class="gen-tag">${oracleResult.reliability}</span>
-          <button class="disc-mini" onclick="rumourToCodex()" title="Push to the Codex as a rumour players can see">→ Codex</button>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>
           <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
       </div>`;
     } else {
@@ -10437,7 +10463,7 @@ function openQuestEditor(id){
   const isNew = !id;
   const q = isNew ? null : questLog.find(x => x.id === id);
 
-  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW QUEST' : 'EDIT QUEST';
+  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW MISSION' : 'EDIT MISSION';
   document.getElementById('qe-title').value = q ? q.title : '';
   document.getElementById('qe-status').value = q ? q.status : 'active';
   document.getElementById('qe-player-desc').value = q ? q.playerDesc||'' : '';
@@ -10494,7 +10520,7 @@ function readObjectiveRows(){
 
 async function saveQuestEdit(){
   const title = document.getElementById('qe-title').value.trim();
-  if(!title){ alert('A quest title is required.'); return; }
+  if(!title){ alert('A mission title is required.'); return; }
 
   const questData = {
     id: questEditingId || ('q-' + Date.now()),
@@ -10521,7 +10547,7 @@ async function saveQuestEdit(){
 
 async function deleteQuest(){
   if(!questEditingId) return;
-  if(!confirm('Delete this quest? This cannot be undone.')) return;
+  if(!confirm('Delete this mission? This cannot be undone.')) return;
   questLog = questLog.filter(x => x.id !== questEditingId);
   await saveQuestLog();
   closeQuestEditor();
@@ -10818,7 +10844,7 @@ function renderSessionStats(){
     '<div class="session-stat-row"><span>Station time</span><span>' + clockDisplay(clockMinutes) + '</span></div>' +
     '<div class="session-stat-row"><span>Events logged</span><span>' + eventLog.length + '</span></div>' +
     '<div class="session-stat-row"><span>Areas revealed</span><span>' + revealedCount + '</span></div>' +
-    '<div class="session-stat-row"><span>Quests active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
+    '<div class="session-stat-row"><span>Missions active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
     '<div class="session-stat-row"><span>NPCs placed on station</span><span>' + npcsPlaced + '</span></div>';
 }
 
@@ -11108,7 +11134,9 @@ function setNpcCreatorMode(mode){
 }
 
 function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Escapes all five HTML-significant characters so the result is safe in BOTH
+// text and quoted-attribute contexts (the quote escapes matter for attributes).
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function renderNpcCreatorBody(){
   const body = document.getElementById('npc-creator-body');
@@ -11395,7 +11423,7 @@ function tradeCodes(u){
   if(atm>=10&&hydro>=1) c.push('Fl');
   if(size>=6&&size<=8 && (atm===5||atm===6||atm===8) && hydro>=5&&hydro<=7) c.push('Ga');
   if(pop>=9) c.push('Hi');
-  if(['A','B'].includes(u.starport) && atm<=3 && (hydro<=3) && pop>=9) c.push('In');
+  if([0,1,2,4,7,9,10,11,12].includes(atm) && pop>=9) c.push('In'); // MgT2e Industrial
   if(pop>=1&&pop<=3) c.push('Lo');
   if(atm<=3 && hydro<=3 && pop>=6) c.push('Na');
   if(pop>=4&&pop<=6) c.push('Ni');
@@ -11834,47 +11862,65 @@ async function commitBodyEdit(id, obj){
   else selectBody(id);
 }
 
+// Tombstones one body (added or base) into bodyDeletions for the current system.
+// `extra` lets callers tag the record (e.g. childOf / moonIds). Returns nothing;
+// mutates bodyAdditions/bodyDeletions in place — caller is responsible for save.
+function tombstoneBody(bodyId, fallback, extra){
+  if(!bodyDeletions[currentSystemId]) bodyDeletions[currentSystemId] = {};
+  let rec;
+  if(isAddedBody(bodyId)){
+    const arr = bodyAdditions[currentSystemId] || [];
+    const idx = arr.findIndex(x => x.id === bodyId);
+    const removed = idx >= 0 ? arr.splice(idx, 1)[0] : fallback;
+    rec = { body: removed, t: Date.now(), wasAddition: true };
+  } else {
+    rec = { body: fallback, t: Date.now(), wasAddition: false };
+  }
+  bodyDeletions[currentSystemId][bodyId] = Object.assign(rec, extra || {});
+}
+
 async function deleteBody(id){
   const b = getBodies().find(x => x.id === id);
   if(!b) return;
-  // Warn if this body has moons that will be orphaned
+  // Moons would otherwise be left with a parentId pointing at a removed body
+  // (dangling reference). Cascade them out with the parent and record the group
+  // so a single restore re-attaches the whole set.
   const moons = getBodies().filter(x => x.isMoon && x.parentId === id);
   let msg = `Remove "${b.name}"? You can restore it from "Show Removed Items".`;
-  if(moons.length) msg = `"${b.name}" has ${moons.length} moon(s) which will no longer have a parent. ` + msg;
+  if(moons.length) msg = `"${b.name}" has ${moons.length} moon(s); they'll be removed with it and restored together. ` + msg;
   if(!confirm(msg)) return;
-  if(isAddedBody(id)){
-    const arr = bodyAdditions[currentSystemId] || [];
-    const idx = arr.findIndex(x => x.id === id);
-    if(idx >= 0){
-      // Keep a tombstone so it appears in "Removed Items" for restore
-      if(!bodyDeletions[currentSystemId]) bodyDeletions[currentSystemId] = {};
-      bodyDeletions[currentSystemId][id] = { body: arr[idx], t: Date.now(), wasAddition: true };
-      arr.splice(idx, 1);
-      await saveBodyAdditions();
-      await saveBodyDeletions();
-    }
-  } else {
-    if(!bodyDeletions[currentSystemId]) bodyDeletions[currentSystemId] = {};
-    bodyDeletions[currentSystemId][id] = { body: b, t: Date.now(), wasAddition: false };
-    await saveBodyDeletions();
-  }
-  showToast('Body removed', 'info');
+
+  // Tombstone the moons first, tagged childOf the parent so the Removed Items
+  // list shows only the parent entry and restore re-links them as a unit.
+  const moonIds = moons.map(m => m.id);
+  moons.forEach(m => tombstoneBody(m.id, m, { childOf: id }));
+  tombstoneBody(id, b, { moonIds });
+
+  await saveBodyAdditions();
+  await saveBodyDeletions();
+  showToast(moons.length ? `Body + ${moons.length} moon(s) removed` : 'Body removed', 'info');
   goSystemOverview();
 }
 
 async function restoreDeletedBody(sysId, id){
-  const entry = (bodyDeletions[sysId] || {})[id];
+  const dels = bodyDeletions[sysId] || {};
+  const entry = dels[id];
   if(!entry) return;
-  if(entry.wasAddition){
-    if(!bodyAdditions[sysId]) bodyAdditions[sysId] = [];
-    bodyAdditions[sysId].push(entry.body);
-    await saveBodyAdditions();
-  }
-  delete bodyDeletions[sysId][id];
+  const restoreOne = (bid, e) => {
+    if(e.wasAddition){
+      if(!bodyAdditions[sysId]) bodyAdditions[sysId] = [];
+      bodyAdditions[sysId].push(e.body);
+    }
+    delete dels[bid];
+  };
+  // Bring back any moons cascaded out with this body, then the body itself.
+  (entry.moonIds || []).forEach(mid => { if(dels[mid]) restoreOne(mid, dels[mid]); });
+  restoreOne(id, entry);
+  await saveBodyAdditions();
   await saveBodyDeletions();
   if(currentView === 'system'){ buildOrrery(); }
   closeRemovedItemsPanel();
-  showToast('Body restored');
+  showToast(entry.moonIds && entry.moonIds.length ? 'Body + moons restored' : 'Body restored');
 }
 
 
@@ -12179,10 +12225,10 @@ npcLocLoad();
 
 const KBD_DEFAULTS = [
   { id:'qref',      label:'Open / close Quick Reference', defaultKey:'r' },
-  { id:'quests',    label:'Open / close Quest Log',       defaultKey:'q' },
+  { id:'quests',    label:'Open / close Mission Log',     defaultKey:'q' },
   { id:'settings',  label:'Open Settings',                defaultKey:',' },
   { id:'search',    label:'Focus search bar',             defaultKey:'/' },
-  { id:'player',    label:'Toggle Player Mode',           defaultKey:'p' },
+  { id:'player',    label:'Toggle Traveller View',        defaultKey:'p' },
   { id:'clock1',    label:'Advance clock +1 min',         defaultKey:'1' },
   { id:'clock5',    label:'Advance clock +5 min',         defaultKey:'2' },
   { id:'clock15',   label:'Advance clock +15 min',        defaultKey:'3' },
