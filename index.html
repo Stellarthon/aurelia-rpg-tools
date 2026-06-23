@@ -925,7 +925,7 @@ textarea{font-family:var(--font)}
 #combat-title{font-size:11px;font-family:monospace;color:#C0392B;letter-spacing:1px}
 #combat-phase-badge{font-size:9px;font-family:monospace;background:#3B1A1A;color:#d45050;border-radius:10px;padding:2px 8px}
 #combat-toggle{font-size:10px;color:var(--tx1)}
-#combat-body{flex:1;overflow-y:auto;padding:10px 11px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+#combat-body{flex:1;min-height:0;overflow-y:auto;padding:10px 11px 20px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
 #combat-body.collapsed{display:none}
 .cbt-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:24px 8px;line-height:1.6}
 .cbt-statusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:monospace;font-size:10px;color:var(--tx1)}
@@ -959,6 +959,42 @@ textarea{font-family:var(--font)}
 .cbt-range-grid{display:flex;flex-direction:column;gap:3px}
 .cbt-range-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;font-family:monospace;color:var(--tx1);background:var(--bg0);border-radius:4px;padding:3px 7px}
 .cbt-range-band{color:var(--accentGold)}
+/* ── Radar scope (80s CRT tactical display) ─────────────────────────────────
+   Player-centric PPI: concentric rings = range bands (Adjacent centre →
+   Distant edge), blips plotted by range-to-player at a stable per-ship bearing.
+   Green-phosphor CRT look — scanlines, vignette glow, rotating sweep. The sweep
+   is the only motion and is disabled under prefers-reduced-motion. */
+.cbt-radar-wrap{display:flex;justify-content:center;padding:4px 0}
+.cbt-radar{position:relative;width:230px;height:230px;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, #04240f 0%, #03190b 60%, #020d06 100%);
+  border:2px solid #0c5a2c;box-shadow:0 0 0 3px #061a0e, 0 0 22px rgba(20,200,90,.35), inset 0 0 38px rgba(10,120,50,.45);
+  overflow:hidden;color:#37ff86;font-family:'Courier New',monospace}
+.cbt-radar::after{ /* scanlines + faint vignette */
+  content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.6)}
+.cbt-radar-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  border:1px solid rgba(55,255,134,.28);border-radius:50%}
+.cbt-radar-cross{position:absolute;background:rgba(55,255,134,.18)}
+.cbt-radar-cross.h{left:0;right:0;top:50%;height:1px}
+.cbt-radar-cross.v{top:0;bottom:0;left:50%;width:1px}
+.cbt-radar-sweep{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 0deg, rgba(55,255,134,.0) 0deg, rgba(55,255,134,.0) 300deg, rgba(55,255,134,.10) 340deg, rgba(80,255,150,.45) 359deg, rgba(55,255,134,0) 360deg);
+  animation:radarSweep 4s linear infinite}
+@keyframes radarSweep{to{transform:rotate(360deg)}}
+.cbt-radar-lbl{position:absolute;transform:translate(-50%,-50%);font-size:7px;letter-spacing:.5px;
+  color:rgba(55,255,134,.5);text-shadow:0 0 3px rgba(55,255,134,.6);white-space:nowrap}
+.cbt-blip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+  font-size:13px;line-height:1;cursor:default;text-shadow:0 0 6px currentColor;z-index:3}
+.cbt-blip .cbt-blip-lbl{font-size:7px;margin-top:1px;letter-spacing:.3px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbt-blip.player{color:#9bffd0;cursor:default}
+.cbt-blip.hostile{color:#ff5a5a;cursor:pointer}
+.cbt-blip.allied{color:#5ad1ff;cursor:pointer}
+.cbt-blip.destroyed{color:#5a5f6b;opacity:.6}
+.cbt-blip.active{animation:blipPulse 1.2s ease-in-out infinite}
+.cbt-blip.sel{outline:1px dashed currentColor;outline-offset:2px;border-radius:3px}
+@keyframes blipPulse{0%,100%{filter:drop-shadow(0 0 1px currentColor)}50%{filter:drop-shadow(0 0 7px currentColor)}}
+@media(prefers-reduced-motion:reduce){.cbt-radar-sweep{animation:none;opacity:.25}.cbt-blip.active{animation:none}}
 /* Controls */
 .cbt-controls{display:flex;flex-direction:column;gap:6px;background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:8px}
 .cbt-ctl-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -970,7 +1006,7 @@ textarea{font-family:var(--font)}
 .cbt-sel,.cbt-num{font-size:10px;font-family:monospace;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 6px}
 .cbt-num{width:52px}
 /* Battle log */
-.cbt-log{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;background:var(--bg0);border-radius:6px;padding:7px 8px}
+.cbt-log{display:flex;flex-direction:column;gap:4px;background:var(--bg0);border-radius:6px;padding:7px 8px}
 .cbt-log-entry{font-size:10px;line-height:1.5;color:var(--tx0);font-family:monospace;border-left:2px solid var(--bd0);padding:2px 7px}
 .cbt-log-entry.kind-attack{border-left-color:#ff6b6b}
 .cbt-log-entry.kind-critical{border-left-color:var(--txD);color:var(--txD)}
@@ -994,6 +1030,70 @@ textarea{font-family:var(--font)}
 @media(max-width:640px){
   #combat-wrap{width:300px;height:60vh;top:54px;left:0}
 }
+/* ── Combat FX layer (Phase 5 — abstract/diagrammatic) ──────────────────────
+   An absolutely-positioned overlay inside the panel. Beams/projectiles are
+   drawn between ship-card centres; impacts flash the target card. Everything
+   is pointer-events:none so it never blocks interaction, and motion is gated by
+   prefers-reduced-motion (falls back to a plain opacity flash). */
+#combat-fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5}
+#combat-wrap{position:fixed} /* ensure offset parent for #combat-fx (re-affirmed) */
+.fx-beam{position:absolute;height:2px;transform-origin:0 50%;border-radius:2px;opacity:0;
+  filter:drop-shadow(0 0 3px currentColor);background:currentColor;color:#ff5a5a}
+.fx-beam.t-beam-laser{color:#ff5a5a;height:2px}
+.fx-beam.t-pulse-laser{color:#ff7a3a;height:2px;background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)}
+.fx-beam.t-plasma{color:#c060ff;height:4px}
+.fx-beam.t-sandcaster{color:#9aa6c0;height:3px;opacity:0}
+.fx-beam.fire{animation:fxBeam .42s ease-out forwards}
+.fx-beam.miss{opacity:.25!important;animation:fxBeamMiss .5s ease-out forwards}
+@keyframes fxBeam{0%{opacity:0;transform:scaleX(.1)}18%{opacity:1}100%{opacity:0;transform:scaleX(1)}}
+@keyframes fxBeamMiss{0%{opacity:0}20%{opacity:.3}100%{opacity:0}}
+.fx-proj{position:absolute;width:8px;height:8px;border-radius:50%;background:#ffd36b;
+  filter:drop-shadow(0 0 4px #ffae42);opacity:0}
+.fx-proj.fire{animation:fxProj .6s linear forwards}
+@keyframes fxProj{0%{opacity:0}8%{opacity:1}92%{opacity:1}100%{opacity:0}}
+.fx-float{position:absolute;font-family:monospace;font-size:12px;font-weight:700;color:#ff6b6b;
+  text-shadow:0 1px 2px #000;opacity:0;white-space:nowrap}
+.fx-float.go{animation:fxFloat 1s ease-out forwards}
+.fx-float.heal{color:var(--txS)}
+.fx-float.crit{color:#ff3b3b;font-size:13px}
+.fx-float.miss{color:var(--tx1);font-size:10px}
+@keyframes fxFloat{0%{opacity:0;transform:translateY(4px)}20%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+.cbt-ship.fx-hit{animation:fxHit .45s ease-out}
+.cbt-ship.fx-crit{animation:fxCrit .55s ease-out}
+.cbt-ship.fx-lock{box-shadow:0 0 0 1px var(--txS) inset, 0 0 10px rgba(76,175,130,.6)!important}
+.cbt-ship.fx-pd{animation:fxPD .4s ease-out}
+@keyframes fxHit{0%{box-shadow:0 0 0 0 rgba(255,90,90,.0)}30%{box-shadow:0 0 0 2px rgba(255,90,90,.9), 0 0 14px rgba(255,90,90,.5)}100%{box-shadow:none}}
+@keyframes fxCrit{0%{transform:translateX(0)}15%{transform:translateX(-4px)}30%{transform:translateX(4px)}45%{transform:translateX(-3px)}60%{transform:translateX(3px)}100%{transform:translateX(0);box-shadow:none}}
+@keyframes fxPD{0%,100%{box-shadow:none}40%{box-shadow:0 0 0 2px rgba(154,166,192,.8) inset}}
+#combat-sfx-btn{font-size:12px;cursor:pointer;opacity:.85;line-height:1}
+#combat-sfx-btn.muted{opacity:.4;filter:grayscale(1)}
+@media(prefers-reduced-motion:reduce){
+  /* Keep cause→effect legible without movement: simple opacity flashes only. */
+  .fx-beam.fire,.fx-beam.miss{animation:fxBeamMiss .4s ease-out forwards}
+  .fx-proj.fire{animation:fxBeamMiss .4s ease-out forwards}
+  .fx-float.go{animation:fxBeamMiss 1s ease-out forwards}
+  .cbt-ship.fx-crit{animation:fxHit .45s ease-out}
+}
+/* Hazard control rows + weapon editor rows */
+.cbt-haz-row{display:flex;align-items:center;gap:6px;font-size:9px;font-family:monospace;color:var(--tx1)}
+.cbt-haz-name{flex:1}
+.cbt-haz-name.on{color:var(--txD)}
+.cbt-haz-dm{color:var(--tx1);font-size:8px}
+.cbt-weap-row{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+/* ── Ship combat-stat editor modal — reuses the ship-data-file sheet look ── */
+#combat-edit-modal{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.62);
+  display:flex;align-items:flex-start;justify-content:center;padding:38px 12px;overflow-y:auto}
+#combat-edit-modal.hidden{display:none}
+#combat-edit-card{width:100%;max-width:420px;background:#e7e5dc;border:1px solid #23252c;
+  border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.6);
+  font-family:'Segoe UI',system-ui,Arial,sans-serif;display:flex;flex-direction:column;max-height:86vh}
+.cbt-edit-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+  border-bottom:1px solid #c8c5b8;font-family:monospace;font-size:12px;font-weight:700;color:#1b1d23;flex-shrink:0}
+.cbt-edit-hdr .cbt-btn{background:#fff;color:#1b1d23;border-color:#bbb}
+.cbt-edit-body{padding:11px 12px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
+.sf-skill-grid{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:5px 8px;align-items:center;
+  font-size:11px;color:#1b1d23}
+.sf-skill-grid span{font-size:10px;color:#3a3d45}
 
 /* ── Red Alert dramatic ship state ──────────────────────────────────────
    Non-blocking full-screen tint + edge pulse (pointer-events:none so the UI
@@ -2862,10 +2962,19 @@ input#ui-scale-range{
         <span id="combat-title">⚔ SPACE COMBAT</span>
         <span id="combat-phase-badge"></span>
       </div>
-      <span id="combat-toggle">▼</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="combat-sfx-btn" onclick="event.stopPropagation();toggleCombatSfx()" title="Toggle combat sound effects">🔊</span>
+        <span id="combat-toggle">▼</span>
+      </div>
     </div>
     <div id="combat-body"></div>
+    <div id="combat-fx"></div>
     <div class="panel-resize-handle" id="combat-resize"></div>
+  </div>
+
+  <!-- ── Enemy/player ship combat-stat editor (referee) ── -->
+  <div id="combat-edit-modal" class="hidden" onclick="if(event.target===this) closeShipEditor()">
+    <div id="combat-edit-card"></div>
   </div>
 
   <!-- ── Red Alert dramatic ship state ── -->
@@ -9750,6 +9859,14 @@ function renderShipPanel(){
     </div>
   </div>`);
 
+  // Combat loadout — referee opens the shared ship editor on this ship (sets
+  // Thrust, power, armour rating, sensor DM, crew-skill DMs, Structure, weapons).
+  if(ref){
+    sec.push(`<div class="sf-sec"><div class="sf-card" style="background:#dfe6df">
+      <button class="cbt-btn" style="width:100%" onclick="openShipEditor('player')">⚔ Edit combat loadout</button>
+    </div></div>`);
+  }
+
   body.innerHTML = sec.join('');
 }
 
@@ -10255,7 +10372,9 @@ function changeRange(aId, bId, deltaBands){
 function allocateThrust(shipId, n){
   if(!isReferee() || !combatEncounter) return;
   const s = combatShipById(shipId); if(!s) return;
-  const st = combatStatsOf(s); const maxThrust = (st && Number(st.thrust)) || 0;
+  const st = combatStatsOf(s);
+  // Gravity wells etc. reduce effective Thrust available to manoeuvre.
+  const maxThrust = Math.max(0, ((st && Number(st.thrust)) || 0) - combatHazardThrustPenalty());
   s.thrustAllocated = Math.max(0, Math.min(maxThrust, Number(n) || 0));
   saveCombatEncounter();
 }
@@ -10288,6 +10407,8 @@ function buildAttackDM(attackerId, targetId, weapon){
   if(tgt && tgt.dodge) dm.push({ label: 'Target dodging', value: MGT2E.tunables.dodgePerThrust * tgt.dodge });
   const wcrit = (aSt && aSt.crits && Number(aSt.crits.weapons)) || 0; // weapons-system damage degrades fire
   if(wcrit) dm.push({ label: 'Weapon crit', value: -wcrit });
+  const hazDM = combatHazardAttackDM();
+  if(hazDM) dm.push({ label: 'Environment', value: hazDM });
   const total = dm.reduce((s, d) => s + d.value, 0);
   return { band, locked, weapon, difficulty: MGT2E.tunables.attackDifficulty, dm, total };
 }
@@ -10395,11 +10516,12 @@ function attemptSensorLock(operatorId, targetId){
   const st = combatStatsOf(op);
   const sensors = (st && st.crewSkills && Number(st.crewSkills.sensors)) || 0;
   const sensorDM = (st && Number(st.sensorDM)) || 0;
+  const hazDM = combatHazardSensorDM();
   const r = combatRoll2D();
-  const total = r.sum + sensors + sensorDM;
+  const total = r.sum + sensors + sensorDM + hazDM;
   const ok = total >= 8;
   if(ok){ op.sensorLocks = op.sensorLocks || {}; op.sensorLocks[targetId] = true; }
-  combatLog('action', `${op.name} ${ok?'gains':'fails'} sensor lock on ${tgt.name} (2D ${r.sum} + Sensors ${sensors} + DM ${sensorDM} = ${total} vs 8).`,
+  combatLog('action', `${op.name} ${ok?'gains':'fails'} sensor lock on ${tgt.name} (2D ${r.sum} + Sensors ${sensors} + DM ${sensorDM}${hazDM?` ${hazDM>=0?'+':''}${hazDM} env`:''} = ${total} vs 8).`,
     { operatorId, targetId, total, ok });
   saveCombatEncounter();
   return { ok, total };
@@ -10439,6 +10561,7 @@ function pointDefence(defenderId, weaponId){
 // ═══════════════════════════════════════════════════════════════════════════
 
 let combatPanelOpen = false;
+let combatSelTarget = null; // radar/blip-selected target id, prefills the action selects
 let combatCollapsed = false;
 
 function toggleCombatPanel(){
@@ -10499,27 +10622,39 @@ function renderCombat(){
     </div>`);
   }
 
+  // Tactical radar scope (player-centric)
+  out.push(renderCombatRadar(ref));
+
   // Ships
   out.push(`<div class="cbt-sec-tab">Ships</div>`);
   out.push(enc.ships.map(s => renderCombatShip(s, ref)).join(''));
 
-  // Range grid
+  // Active environmental hazards — visible to everyone (read-only chips).
+  const hazChips = combatHazardChips();
+  if(hazChips) out.push(hazChips);
+
+  // Range grid (referee gets a per-pair band setter — referee fiat, no Thrust).
   const pairs = combatRangePairs();
   if(pairs.length){
     out.push(`<div class="cbt-sec-tab">Range</div>`);
     out.push(`<div class="cbt-range-grid">${pairs.map(p => `
-      <div class="cbt-range-row"><span>${escQH(p.a)} ↔ ${escQH(p.b)}</span><span class="cbt-range-band">${escQH(p.band)}</span></div>
+      <div class="cbt-range-row"><span>${escQH(p.a)} ↔ ${escQH(p.b)}</span>${
+        ref
+          ? `<select class="cbt-sel" onchange="setRangeDirect('${p.aId}','${p.bId}',this.value);renderCombat()">${COMBAT_RANGE_BANDS.map((b,i)=>`<option value="${i}"${i===p.idx?' selected':''}>${b}</option>`).join('')}</select>`
+          : `<span class="cbt-range-band">${escQH(p.band)}</span>`
+      }</div>
     `).join('')}</div>`);
   }
 
-  // Referee controls
-  if(ref) out.push(renderCombatControls(enc));
+  // Referee controls + hazard tooling
+  if(ref){ out.push(renderCombatControls(enc)); out.push(renderHazardControls()); }
 
   // Battle log
   out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
   out.push(renderCombatLog(enc));
 
   body.innerHTML = out.join('');
+  combatFXScan(); // replay any new battle-log events as abstract FX (Phase 5)
 }
 
 // Players never hold an unrevealed enemy, but guard the name anyway.
@@ -10539,10 +10674,14 @@ function renderCombatShip(s, ref){
   if(destroyed) tags.push(`<span class="cbt-tag destroyed">Destroyed</span>`);
   const refCtl = (ref && s.ref !== 'player') ? `
     <div class="cbt-ctl-row" style="margin-top:2px">
+      <button class="cbt-btn" onclick="openShipEditor('${s.id}')">✏ Edit</button>
       <button class="cbt-btn" onclick="uiToggleReveal('${s.id}')">${s.revealed ? '🙈 Hide from players' : '👁 Reveal to players'}</button>
       <button class="cbt-btn danger" onclick="uiRemoveShip('${s.id}')">Remove</button>
+    </div>` : (ref && s.ref === 'player') ? `
+    <div class="cbt-ctl-row" style="margin-top:2px">
+      <button class="cbt-btn" onclick="openShipEditor('player')">✏ Edit combat stats</button>
     </div>` : '';
-  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}">
+  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}" id="cbtship-${s.id}">
     <div class="cbt-ship-top">
       <span class="cbt-ship-name">${escQH(redactedShipName(s))}</span>
       <span class="cbt-ship-tags">${tags.join('')}</span>
@@ -10562,10 +10701,56 @@ function combatRangePairs(){
     const [a, b] = k.split('|');
     const sa = combatShipById(a), sb = combatShipById(b);
     if(!sa || !sb) return;
-    out.push({ a: redactedShipName(sa), b: redactedShipName(sb), band: COMBAT_RANGE_BANDS[combatEncounter.ranges[k]] || '—' });
+    const idx = combatEncounter.ranges[k];
+    out.push({ aId: a, bId: b, a: redactedShipName(sa), b: redactedShipName(sb), idx, band: COMBAT_RANGE_BANDS[idx] || '—' });
   });
   return out;
 }
+
+// ── Tactical radar scope (CRT, player-centric) ──────────────────────────────
+// Concentric rings are the range bands (Adjacent ~centre → Distant ~edge);
+// each non-player ship is a blip at its range-to-player, on a stable bearing
+// derived from its id so it doesn't jump around between renders. Hostile blips
+// are clickable to pick the action target. Fog-safe: players only ever hold
+// revealed ships, so only those reach this render.
+function combatBearingDeg(id){ let h = 2166136261; for(let i = 0; i < id.length; i++){ h ^= id.charCodeAt(i); h = (h * 16777619) >>> 0; } return h % 360; }
+function combatBandRadiusFrac(idx){ return 0.16 + (Math.max(0, idx) / (COMBAT_RANGE_BANDS.length - 1)) * 0.80; } // 0.16 (Adjacent) → 0.96 (Distant)
+
+function renderCombatRadar(ref){
+  if(!combatEncounter) return '';
+  const player = combatEncounter.ships.find(s => s.ref === 'player');
+  const others = combatEncounter.ships.filter(s => s.ref !== 'player');
+  if(!player || !others.length) return ''; // nothing to plot yet
+
+  // Range rings + their labels (skip Adjacent's ring to keep the centre clean).
+  let rings = '<div class="cbt-radar-cross h"></div><div class="cbt-radar-cross v"></div>';
+  COMBAT_RANGE_BANDS.forEach((band, i) => {
+    const f = combatBandRadiusFrac(i);
+    rings += `<div class="cbt-radar-ring" style="width:${(f * 100).toFixed(1)}%;height:${(f * 100).toFixed(1)}%"></div>`;
+    rings += `<div class="cbt-radar-lbl" style="left:50%;top:${(50 - f * 50).toFixed(1)}%">${escQH(band)}</div>`;
+  });
+
+  // Blips
+  let blips = `<div class="cbt-blip player" style="left:50%;top:50%" title="${escQH(redactedShipName(player))}">◊<span class="cbt-blip-lbl">${escQH(redactedShipName(player))}</span></div>`;
+  others.forEach(s => {
+    const idx = combatEncounter.ranges[combatPairKey(player.id, s.id)];
+    const f = combatBandRadiusFrac(idx == null ? COMBAT_RANGE_BANDS.length - 1 : idx);
+    const ang = combatBearingDeg(s.id) * Math.PI / 180;
+    const x = 50 + f * 50 * Math.cos(ang), y = 50 + f * 50 * Math.sin(ang);
+    const destroyed = s.status === 'destroyed';
+    const cls = [ 'cbt-blip', s.side === 'hostile' ? 'hostile' : 'allied',
+      destroyed ? 'destroyed' : '', (combatEncounter.activeShipId === s.id && !destroyed) ? 'active' : '',
+      combatSelTarget === s.id ? 'sel' : '' ].filter(Boolean).join(' ');
+    const glyph = destroyed ? '✕' : (s.side === 'hostile' ? '▲' : '◆');
+    const click = (ref && !destroyed) ? ` onclick="uiSelectTarget('${s.id}')"` : '';
+    blips += `<div class="${cls}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"${click} title="${escQH(redactedShipName(s))} — ${escQH(COMBAT_RANGE_BANDS[idx] || '?')}">${glyph}<span class="cbt-blip-lbl">${escQH(redactedShipName(s))}</span></div>`;
+  });
+
+  return `<div class="cbt-radar-wrap"><div class="cbt-radar">
+    ${rings}<div class="cbt-radar-sweep"></div>${blips}
+  </div></div>`;
+}
+function uiSelectTarget(id){ combatSelTarget = (combatSelTarget === id) ? null : id; renderCombat(); }
 
 // ── Referee action controls (phase-appropriate) ─────────────────────────────
 function renderCombatControls(enc){
@@ -10590,7 +10775,7 @@ function renderCombatControls(enc){
   const act = combatActiveShip();
   const others = combatLiveShips().filter(s => act && s.id !== act.id);
   const shipOpts = (sel) => combatLiveShips().map(s => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${escQH(redactedShipName(s))}</option>`).join('');
-  const targetOpts = others.map(s => `<option value="${s.id}">${escQH(redactedShipName(s))}</option>`).join('');
+  const targetOpts = others.map(s => `<option value="${s.id}"${s.id === combatSelTarget ? ' selected' : ''}>${escQH(redactedShipName(s))}</option>`).join('');
   let phaseCtl = '';
 
   if(enc.phase === 'manoeuvre'){
@@ -10705,6 +10890,355 @@ function uiSensorLock(){
   if(act && t && t.value){ attemptSensorLock(act.id, t.value); renderCombat(); }
 }
 function uiAdjustInit(){ const act = combatActiveShip(); const v = document.getElementById('cbt-lead'); if(act && v){ adjustInitiative(act.id, Number(v.value) || 0); renderCombat(); } }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 4: referee tooling (ship editor, hazards, setup)
+// ───────────────────────────────────────────────────────────────────────────
+// Enemy/NPC ships are edited with the SAME ship-data-file layout as the player
+// ship (sf-* sheet classes), via generic field helpers that write to the ship's
+// stats block — one ship model, one edit idiom. Environmental hazards are a
+// referee-toggleable list stored on the encounter; their DMs fold live into the
+// engine's attack/sensor resolution (no reload — players pick them up on poll).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const COMBAT_WEAPON_TYPES = ['beam-laser','pulse-laser','missile','sandcaster','plasma'];
+
+// Hazard presets. DMs are FLAGGED tunables (referee can edit per-instance): they
+// reflect the spirit of MgT2e environmental effects, not a quoted table.
+const COMBAT_HAZARDS = {
+  asteroid: { kind:'asteroid', name:'Asteroid Field', attackDM:-1, sensorDM:-2, thrustPenalty:0,
+              note:'Cover & collision risk — attacks and sensors hampered.' },
+  nebula:   { kind:'nebula', name:'Nebula / Interference', attackDM:0, sensorDM:-4, thrustPenalty:0,
+              note:'Sensors badly degraded; locks hard to gain.' },
+  gravity:  { kind:'gravity', name:'Gravity Well', attackDM:0, sensorDM:0, thrustPenalty:2,
+              note:'Manoeuvring fights the well — effective Thrust reduced.' },
+  debris:   { kind:'debris', name:'Debris Field', attackDM:-1, sensorDM:-1, thrustPenalty:1,
+              note:'Scattered wreckage — minor penalties all round.' },
+  dust:     { kind:'dust', name:'Dust / Solar Glare', attackDM:-2, sensorDM:0, thrustPenalty:0,
+              note:'Visual obscuration — gunnery hampered.' }
+};
+
+function combatActiveHazards(){ return combatEncounter ? (combatEncounter.hazards || []).filter(h => h.active) : []; }
+function combatHazardAttackDM(){ return combatActiveHazards().reduce((s, h) => s + (Number(h.attackDM) || 0), 0); }
+function combatHazardSensorDM(){ return combatActiveHazards().reduce((s, h) => s + (Number(h.sensorDM) || 0), 0); }
+function combatHazardThrustPenalty(){ return combatActiveHazards().reduce((s, h) => s + (Number(h.thrustPenalty) || 0), 0); }
+
+function addHazard(kind){
+  if(!isReferee() || !combatEncounter) return;
+  const p = COMBAT_HAZARDS[kind]; if(!p) return;
+  combatEncounter.hazards = combatEncounter.hazards || [];
+  combatEncounter.hazards.push(Object.assign({ id: 'hz_' + Math.random().toString(36).slice(2, 8), active: true }, p));
+  combatLog('system', `Environmental hazard added: ${p.name} (active).`);
+  saveCombatEncounter();
+}
+function toggleHazard(id){
+  if(!isReferee() || !combatEncounter) return;
+  const h = (combatEncounter.hazards || []).find(x => x.id === id); if(!h) return;
+  h.active = !h.active;
+  combatLog('system', `${h.name} ${h.active ? 'activated' : 'cleared'}.`);
+  saveCombatEncounter();
+}
+function removeHazard(id){
+  if(!isReferee() || !combatEncounter) return;
+  combatEncounter.hazards = (combatEncounter.hazards || []).filter(x => x.id !== id);
+  saveCombatEncounter();
+}
+
+// Referee fiat: set a pair's range band directly (setup, ambush, or correction)
+// — no Thrust cost, since this is the referee placing ships, not a manoeuvre.
+function setRangeDirect(aId, bId, bandIdx){
+  if(!isReferee() || !combatEncounter) return;
+  combatEncounter.ranges[combatPairKey(aId, bId)] = Math.max(0, Math.min(COMBAT_RANGE_BANDS.length - 1, Number(bandIdx) || 0));
+  saveCombatEncounter();
+}
+
+// ── Generic stat editor (works for enemy stats AND the player's shipState) ───
+// The player ship is editable as id 'player' even with no active encounter
+// (it reads/writes shipState directly); enemies resolve through the encounter.
+function combatEditIsPlayer(shipId){ return shipId === 'player' || (combatShipById(shipId) || {}).ref === 'player'; }
+function combatEditStats(shipId){
+  if(combatEditIsPlayer(shipId)) return shipState;
+  const s = combatShipById(shipId); return s ? combatStatsOf(s) : null;
+}
+function persistShipStat(shipId){
+  if(combatEditIsPlayer(shipId)){ saveShipState(); if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert(); if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel(); }
+  else if(combatEncounter){ saveCombatEncounter(); }
+}
+function updateCombatShipStat(shipId, path, value){
+  if(!isReferee()) return;
+  const st = combatEditStats(shipId); if(!st) return;
+  const numericFlat = ['tonnage','jumpRating','hullPoints','hullPointsMax','structurePoints','structurePointsMax','thrust','power','powerMax','armourRating','sensorDM','fuel','fuelMax'];
+  if(path.indexOf('crewSkills.') === 0){
+    const k = path.split('.')[1];
+    st.crewSkills = st.crewSkills || {};
+    st.crewSkills[k] = Number(value) || 0;
+  } else {
+    st[path] = numericFlat.includes(path) ? (Number(value) || 0) : value;
+  }
+  persistShipStat(shipId); renderShipEditor(); renderCombat();
+}
+function addCombatWeapon(shipId){
+  if(!isReferee()) return;
+  const st = combatEditStats(shipId); if(!st) return;
+  st.weapons = st.weapons || [];
+  st.weapons.push({ id: 'w_' + Math.random().toString(36).slice(2, 7), name: 'New Weapon', type: 'beam-laser', mount: 'turret', damage: '2D', range: 'Very Long', ammo: 0, ammoMax: 0, notes: '' });
+  persistShipStat(shipId); renderShipEditor();
+}
+function updateCombatWeapon(shipId, wid, field, value){
+  if(!isReferee()) return;
+  const st = combatEditStats(shipId); if(!st || !st.weapons) return;
+  const w = st.weapons.find(x => x.id === wid); if(!w) return;
+  w[field] = (field === 'ammo' || field === 'ammoMax') ? (Number(value) || 0) : value;
+  persistShipStat(shipId); renderShipEditor(); renderCombat();
+}
+function removeCombatWeapon(shipId, wid){
+  if(!isReferee()) return;
+  const st = combatEditStats(shipId); if(!st || !st.weapons) return;
+  st.weapons = st.weapons.filter(x => x.id !== wid);
+  persistShipStat(shipId); renderShipEditor();
+}
+
+// ── Enemy ship editor modal (reuses the ship-data-file sheet layout) ─────────
+let shipEditorId = null;
+function openShipEditor(shipId){ shipEditorId = shipId; document.getElementById('combat-edit-modal').classList.remove('hidden'); renderShipEditor(); }
+function closeShipEditor(){ shipEditorId = null; const m = document.getElementById('combat-edit-modal'); if(m) m.classList.add('hidden'); }
+
+// Field helpers — mirror sfTextField/sfNumField but target a combat ship's stats.
+function efText(shipId, field, ph){ const st = combatEditStats(shipId); return `<input class="sf-input" type="text" value="${escAttr(st ? st[field] : '')}" placeholder="${escAttr(ph||'')}" onchange="updateCombatShipStat('${shipId}','${field}',this.value)">`; }
+function efNum(shipId, field, sfx){ const st = combatEditStats(shipId); return `<input class="sf-input" type="number" step="any" value="${st ? st[field] : 0}" onchange="updateCombatShipStat('${shipId}','${field}',this.value)">${sfx ? ` ${escQH(sfx)}` : ''}`; }
+function efSkill(shipId, skill){ const st = combatEditStats(shipId); const v = st && st.crewSkills ? (st.crewSkills[skill] || 0) : 0; return `<input class="sf-input sm" type="number" step="1" value="${v}" onchange="updateCombatShipStat('${shipId}','crewSkills.${skill}',this.value)">`; }
+
+function renderShipEditor(){
+  const card = document.getElementById('combat-edit-card');
+  if(!card || !shipEditorId) return;
+  const isPlayer = combatEditIsPlayer(shipEditorId);
+  const ship = isPlayer ? { id: 'player', ref: 'player', name: shipState.name } : combatShipById(shipEditorId);
+  if(!ship){ closeShipEditor(); return; }
+  const st = combatEditStats(shipEditorId);
+  const wRows = (st.weapons || []).map(w => `
+    <div class="cbt-weap-row">
+      <input class="sf-input" style="flex:2" value="${escAttr(w.name)}" onchange="updateCombatWeapon('${ship.id}','${w.id}','name',this.value)">
+      <select class="cbt-sel" onchange="updateCombatWeapon('${ship.id}','${w.id}','type',this.value)">${COMBAT_WEAPON_TYPES.map(t => `<option value="${t}"${t === w.type ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      <input class="sf-input" style="width:56px" value="${escAttr(w.damage || '')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="updateCombatWeapon('${ship.id}','${w.id}','damage',this.value)">
+      <button class="cbt-btn danger" onclick="removeCombatWeapon('${ship.id}','${w.id}')">✕</button>
+    </div>`).join('');
+  card.innerHTML = `
+    <div class="cbt-edit-hdr">
+      <span>✏ ${escQH(ship.ref === 'player' ? 'Edit Player Ship' : 'Edit Ship')}</span>
+      <button class="cbt-btn" onclick="closeShipEditor()">✕ Close</button>
+    </div>
+    <div class="cbt-edit-body">
+      <div class="sf-sec"><div class="sf-tab">Ship Data File</div><div class="sf-card">
+        <div class="sf-row"><span class="sf-lbl">Name</span><span class="sf-fld">${efText(ship.id,'name','Ship name')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Class</span><span class="sf-fld">${efText(ship.id,'shipClass')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Size</span><span class="sf-fld">${efNum(ship.id,'tonnage','tons')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Armour</span><span class="sf-fld">${efNum(ship.id,'armourRating')}</span></div>
+      </div></div>
+      <div class="sf-sec"><div class="sf-tab">Hull / Structure</div><div class="sf-card">
+        <div class="sf-row"><span class="sf-lbl">Hull</span><span class="sf-fld">${efNum(ship.id,'hullPoints')} / ${efNum(ship.id,'hullPointsMax')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Structure</span><span class="sf-fld">${efNum(ship.id,'structurePoints')} / ${efNum(ship.id,'structurePointsMax')}</span></div>
+      </div></div>
+      <div class="sf-sec"><div class="sf-tab">Drives / Sensors</div><div class="sf-card">
+        <div class="sf-row"><span class="sf-lbl">Thrust</span><span class="sf-fld">${efNum(ship.id,'thrust')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Jump</span><span class="sf-fld">${efNum(ship.id,'jumpRating')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Power</span><span class="sf-fld">${efNum(ship.id,'power')} / ${efNum(ship.id,'powerMax')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">Sensor DM</span><span class="sf-fld">${efNum(ship.id,'sensorDM')}</span></div>
+      </div></div>
+      <div class="sf-sec"><div class="sf-tab">Crew Skills (DM)</div><div class="sf-card">
+        <div class="sf-skill-grid">
+          <span>Pilot</span>${efSkill(ship.id,'pilot')}<span>Gunnery</span>${efSkill(ship.id,'gunnery')}
+          <span>Engineer</span>${efSkill(ship.id,'engineer')}<span>Sensors</span>${efSkill(ship.id,'sensors')}
+          <span>Tactics</span>${efSkill(ship.id,'tactics')}<span>Leadership</span>${efSkill(ship.id,'leadership')}
+        </div>
+      </div></div>
+      <div class="sf-sec"><div class="sf-tab">Weapons</div><div class="sf-card">
+        ${wRows || '<div style="font-size:11px;color:#7a7a7a">No weapons. Add one below.</div>'}
+        <button class="cbt-btn" style="margin-top:6px" onclick="addCombatWeapon('${ship.id}')">+ Add weapon</button>
+      </div></div>
+    </div>`;
+}
+
+// ── Hazard control block (referee) + read-only hazard chips (everyone) ───────
+function renderHazardControls(){
+  const haz = combatEncounter ? (combatEncounter.hazards || []) : [];
+  const active = haz.map(h => `
+    <div class="cbt-haz-row">
+      <span class="cbt-haz-name${h.active ? ' on' : ''}">${escQH(h.name)}</span>
+      <span class="cbt-haz-dm">${h.attackDM ? `atk ${h.attackDM}` : ''} ${h.sensorDM ? `sen ${h.sensorDM}` : ''} ${h.thrustPenalty ? `thr -${h.thrustPenalty}` : ''}</span>
+      <button class="cbt-btn" onclick="toggleHazard('${h.id}');renderCombat()">${h.active ? 'Clear' : 'Set'}</button>
+      <button class="cbt-btn danger" onclick="removeHazard('${h.id}');renderCombat()">✕</button>
+    </div>`).join('');
+  return `<div class="cbt-sec-tab">Environment</div>
+    <div class="cbt-controls">
+      ${active || '<div style="font-size:9px;color:var(--tx1)">No hazards.</div>'}
+      <div class="cbt-ctl-row" style="border-top:.5px solid var(--bd0);padding-top:6px;margin-top:2px">
+        ${Object.values(COMBAT_HAZARDS).map(p => `<button class="cbt-btn" onclick="addHazard('${p.kind}');renderCombat()" title="${escAttr(p.note)}">+ ${escQH(p.name)}</button>`).join('')}
+      </div>
+    </div>`;
+}
+function combatHazardChips(){
+  const active = combatActiveHazards();
+  if(!active.length) return '';
+  return `<div class="cbt-ctl-row" style="margin-top:2px">${active.map(h => `<span class="cbt-chip" title="${escAttr(h.note)}">⚠ ${escQH(h.name)}</span>`).join('')}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 5: animation & feedback (abstract / diagrammatic)
+// ───────────────────────────────────────────────────────────────────────────
+// Effects are driven entirely off the battle log, so they fire identically for
+// the referee (who appends entries by acting) and for players (who receive them
+// on poll) — one code path, no duplication. A cursor tracks the last entry
+// already animated so a freshly opened panel never replays the backlog. All FX
+// live in a pointer-events:none overlay and self-remove, so they never block
+// the combat loop; motion honours prefers-reduced-motion, and audio is a tiny
+// WebAudio synth (no asset files) behind a per-device mute.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let combatFXLastId = null;     // last log id animated (null = not yet primed)
+let combatSfxEnabled = true;
+try { combatSfxEnabled = localStorage.getItem('aurelia_combat_sfx') !== '0'; } catch(e){}
+const combatReducedMotion = (typeof matchMedia === 'function') && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function toggleCombatSfx(){
+  combatSfxEnabled = !combatSfxEnabled;
+  try { localStorage.setItem('aurelia_combat_sfx', combatSfxEnabled ? '1' : '0'); } catch(e){}
+  const b = document.getElementById('combat-sfx-btn');
+  if(b){ b.classList.toggle('muted', !combatSfxEnabled); b.textContent = combatSfxEnabled ? '🔊' : '🔇'; }
+}
+
+// Walk the log for entries newer than the cursor and animate each.
+function combatFXScan(){
+  const log = (combatEncounter && combatEncounter.log) || [];
+  if(combatFXLastId === null){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // prime, no backlog
+  const idx = log.findIndex(e => e.id === combatFXLastId);
+  if(idx < 0){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // log reset/trimmed — re-prime quietly
+  const fresh = log.slice(idx + 1);
+  if(!fresh.length) return;
+  combatFXLastId = fresh[fresh.length - 1].id;
+  // Only animate while the panel is actually visible.
+  const wrap = document.getElementById('combat-wrap');
+  if(!wrap || wrap.classList.contains('hidden') || combatCollapsed) return;
+  fresh.forEach((e, i) => setTimeout(() => playCombatFX(e), i * 220)); // small stagger if several land at once
+}
+
+function fxLayer(){ return document.getElementById('combat-fx'); }
+function fxCardCenter(shipId){
+  const card = document.getElementById('cbtship-' + shipId), layer = fxLayer();
+  if(!card || !layer) return null;
+  const cr = card.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+  return { x: cr.left - lr.left + cr.width / 2, y: cr.top - lr.top + cr.height / 2, card };
+}
+function fxFlashCard(shipId, cls){
+  const card = document.getElementById('cbtship-' + shipId);
+  if(!card) return;
+  card.classList.remove(cls); void card.offsetWidth; card.classList.add(cls);
+  setTimeout(() => card.classList.remove(cls), 700);
+}
+function fxFloatText(shipId, text, cls){
+  const c = fxCardCenter(shipId), layer = fxLayer();
+  if(!c || !layer) return;
+  const el = document.createElement('div');
+  el.className = 'fx-float ' + (cls || '');
+  el.textContent = text;
+  el.style.left = c.x + 'px'; el.style.top = (c.y - 6) + 'px';
+  el.style.transform = 'translateX(-50%)';
+  layer.appendChild(el);
+  void el.offsetWidth; el.classList.add('go');
+  setTimeout(() => el.remove(), 1100);
+}
+function fxBeam(fromId, toId, type, miss){
+  const a = fxCardCenter(fromId), b = fxCardCenter(toId), layer = fxLayer();
+  if(!a || !b || !layer) return;
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.max(6, Math.hypot(dx, dy)), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  const el = document.createElement('div');
+  el.className = `fx-beam t-${type || 'beam-laser'} ${miss ? 'miss' : 'fire'}`;
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  el.style.width = len + 'px';
+  el.style.transform = `rotate(${ang}deg)`;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 600);
+}
+function fxProjectile(fromId, toId, onArrive){
+  const a = fxCardCenter(fromId), b = fxCardCenter(toId), layer = fxLayer();
+  if(!a || !b || !layer){ if(onArrive) onArrive(); return; }
+  if(combatReducedMotion){ // no travel — just flash arrival
+    if(onArrive) setTimeout(onArrive, 120); return;
+  }
+  const el = document.createElement('div');
+  el.className = 'fx-proj fire';
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  el.style.transition = 'left .56s linear, top .56s linear';
+  layer.appendChild(el);
+  void el.offsetWidth;
+  el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
+  setTimeout(() => { el.remove(); if(onArrive) onArrive(); }, 580);
+}
+
+// Map a battle-log entry → an abstract effect + sound.
+function playCombatFX(e){
+  if(!e) return;
+  const m = e.meta || {};
+  if(e.kind === 'attack'){
+    const type = (m.breakdown && m.breakdown.weapon && m.breakdown.weapon.type) || 'beam-laser';
+    const isMissile = type === 'missile';
+    const impact = () => {
+      if(m.hit){
+        fxFlashCard(m.targetId, (m.damage && m.damage.crits && m.damage.crits.filter(Boolean).length) ? 'fx-crit' : 'fx-hit');
+        const dmg = m.damage && typeof m.damage.dmg === 'number' ? m.damage.dmg : null;
+        if(dmg != null) fxFloatText(m.targetId, '−' + dmg, dmg === 0 ? 'miss' : '');
+        combatSfx('impact');
+      } else {
+        fxFloatText(m.targetId, 'miss', 'miss');
+      }
+    };
+    if(isMissile && m.hit && (m.travel === 0)){
+      combatSfx('missile');
+      fxProjectile(m.attackerId, m.targetId, impact);
+    } else {
+      fxBeam(m.attackerId, m.targetId, type, !m.hit);
+      combatSfx(type === 'plasma' ? 'plasma' : 'laser');
+      setTimeout(impact, combatReducedMotion ? 60 : 240);
+    }
+  } else if(e.kind === 'critical'){
+    if(m.targetId){ fxFlashCard(m.targetId, 'fx-crit'); fxFloatText(m.targetId, '✦ ' + (m.location || 'crit'), 'crit'); combatSfx('crit'); }
+  } else if(e.kind === 'action'){
+    if(m.defenderId){ fxFlashCard(m.defenderId, 'fx-pd'); combatSfx('pd'); }          // point defence
+    else if(m.operatorId && m.ok){ fxFlashCard(m.operatorId, 'fx-lock'); combatSfx('lock'); } // sensor lock gained
+  }
+}
+
+// ── Tiny WebAudio synth — short, quiet cues; no external assets ──────────────
+let _combatAudioCtx = null;
+function combatSfx(kind){
+  if(!combatSfxEnabled) return;
+  try {
+    _combatAudioCtx = _combatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _combatAudioCtx; if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const beep = (type, f0, f1, dur, vol) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, now);
+      if(f1 != null) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + dur);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.connect(g); g.connect(ctx.destination); o.start(now); o.stop(now + dur + 0.02);
+    };
+    const noise = (dur, vol) => {
+      const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+      for(let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; g.gain.value = vol; src.connect(g); g.connect(ctx.destination); src.start(now);
+    };
+    if(kind === 'laser')        beep('square', 880, 220, 0.14, 0.05);
+    else if(kind === 'plasma')  beep('sawtooth', 320, 90, 0.22, 0.06);
+    else if(kind === 'missile') beep('sine', 200, 520, 0.3, 0.04);
+    else if(kind === 'impact'){ noise(0.18, 0.07); beep('triangle', 160, 60, 0.18, 0.05); }
+    else if(kind === 'crit'){   noise(0.28, 0.09); beep('sawtooth', 240, 50, 0.3, 0.07); }
+    else if(kind === 'pd')      beep('square', 1200, 1200, 0.05, 0.03);
+    else if(kind === 'lock')    beep('sine', 660, 990, 0.12, 0.035);
+  } catch(err){ /* audio unavailable — silent, never fatal */ }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPERIAL CALENDAR  (V1 — the campaign-date spine)
