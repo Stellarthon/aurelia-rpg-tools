@@ -925,7 +925,7 @@ textarea{font-family:var(--font)}
 #combat-title{font-size:11px;font-family:monospace;color:#C0392B;letter-spacing:1px}
 #combat-phase-badge{font-size:9px;font-family:monospace;background:#3B1A1A;color:#d45050;border-radius:10px;padding:2px 8px}
 #combat-toggle{font-size:10px;color:var(--tx1)}
-#combat-body{flex:1;overflow-y:auto;padding:10px 11px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+#combat-body{flex:1;min-height:0;overflow-y:auto;padding:10px 11px 20px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
 #combat-body.collapsed{display:none}
 .cbt-empty{color:var(--tx1);font-size:11px;font-style:italic;text-align:center;padding:24px 8px;line-height:1.6}
 .cbt-statusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:monospace;font-size:10px;color:var(--tx1)}
@@ -1006,7 +1006,7 @@ textarea{font-family:var(--font)}
 .cbt-sel,.cbt-num{font-size:10px;font-family:monospace;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 6px}
 .cbt-num{width:52px}
 /* Battle log */
-.cbt-log{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;background:var(--bg0);border-radius:6px;padding:7px 8px}
+.cbt-log{display:flex;flex-direction:column;gap:4px;background:var(--bg0);border-radius:6px;padding:7px 8px}
 .cbt-log-entry{font-size:10px;line-height:1.5;color:var(--tx0);font-family:monospace;border-left:2px solid var(--bd0);padding:2px 7px}
 .cbt-log-entry.kind-attack{border-left-color:#ff6b6b}
 .cbt-log-entry.kind-critical{border-left-color:var(--txD);color:var(--txD)}
