@@ -1,0 +1,106 @@
+# Archon Gambit — Phase 3: Space Combat (MgT2e core)
+
+> Audit, decisions, and build plan for the space-combat module. Companion to
+> `phase-2-feasibility-study.md`. Single-file build (`index.html`), Supabase
+> single-key/value backend (`aurelia_state`), honour-system client-side gating.
+
+---
+
+## 1. Feasibility verdict
+
+Faithful **MgT2e core** space combat is feasible on the current architecture,
+with **one load-bearing caveat**:
+
+The acceptance criterion *"role-gating … enforced at the data layer, not just
+the UI"* is **not achievable** as written. "Supabase" here is a single
+key/value table hit with one publishable key embedded in the page
+(`index.html` ~L6525). RLS is blanket `USING (true)` / `WITH CHECK (true)` for
+the public role — anyone with the page source can read/write every row. The app
+already documents this: gating is spoiler control, not security. DB-enforced
+secrecy with live sync would require Supabase Auth + per-identity JWTs + new
+RLS — a re-architecture of the whole app, not the combat module.
+
+**Resolution (decided):** combat is **referee-authoritative**. Hidden enemy
+ships/stats are simply never written to shared storage until the referee reveals
+them, and the player view is redacted on read. This is consistent with how every
+other secret in the app stays referee-side, and it satisfies the *intent* of the
+criterion within the existing design pillar.
+
+## 2. System audit (as found in code)
+
+| System | Location | Notes |
+|---|---|---|
+| Shared state / sync | `index.html` ~L6620–6710 | One JSON blob per key; optimistic write + offline queue; last-write-wins; 4s poll. |
+| Permission model | ~L6796–6828 | `isReferee()`, `myIdentity` (honour-system), `canSee(audience)` where audience ∈ `all`\|`referee`\|`[identity…]`. Render gating only. |
+| Ship model (singleton) | ~L9363 (`shipState`) | One ship ("Archon Gambit"). Had: tonnage, jumpRating, hull pts, fuel, free-text armour, `crits{}` (11 systems, sev 0–6). **Not** a multi-instance template. |
+| Red Alert | ~L9645–9775 | Shared `ship-alert-state`; auto-raises <25% hull; 1.5s fast poll. Combat damage feeds this. |
+| Personal initiative tracker | ~L6125 (`combatants`) | 2D6+mod, DEX/INT tiebreak — but **localStorage-only**, not synced. Pattern to borrow, not extend. |
+| Ship edit flow | `sfTextField`/`sfNumField` ~L9444 | Referee inline inputs / player static text. Reuse for enemy-ship editing. |
+| UI tokens / panels | CSS `:root` ~L11; `makePanelDraggable/Resizable` | Floating, collapsible panels; danger `--txD`, gold accent, `--rad:6px`. |
+
+**Combat stats that were missing** (added in Phase 1): numeric M-Drive Thrust,
+power/powerMax, numeric armourRating, sensorDM, per-role crew-skill DMs, and a
+weapons/turret loadout. (MgT2e core only — bay/spinal = High Guard, flagged.)
+
+## 3. Locked decisions
+
+| Topic | Decision |
+|---|---|
+| Fog & sync | **Referee-authoritative.** Referee is sole writer/source of truth; players poll read-only; hidden state never shipped until revealed; redacted on read. |
+| Range model | **Per-pair range bands** (`ranges{}` keyed by canonical pair key). |
+| Fidelity | **Faithful MgT2e core.** High Guard extras flagged, not faked. |
+| Enemy ships | **Referee-authored** via the existing inline ship-edit flow; one shared schema (`makeShipStats`). |
+| Combat → crits | Combat writes into the existing `shipState.crits` and trips Red Alert. |
+| Step model | Referee-driven step-through; players read via a 1.5s combat poll. |
+| Concurrency | Referee-only mutation → no conflicting writes to resolve. |
+| Ship migration | Additive + lazy default (merged on load); no destructive migration. |
+
+## 4. Data model
+
+New shared key **`combat-encounter`** (single active encounter):
+
+```
+encounter = {
+  id, status:'setup'|'active'|'ended', round, phase:'manoeuvre'|'attack'|'action',
+  activeShipId, initiative:[shipId…],
+  ships:[ combatShip ], ranges:{ pairKey: bandIndex }, hazards:[…], log:[…], createdAt
+}
+combatShip = {
+  id, ref:'player'|null, name, side, stats:makeShipStats()|null /* player reads shipState */,
+  thrustAllocated, dodge, sensorLocks:{}, pointDefenceUsed, initiativeScore,
+  status:'active'|'disabled'|'destroyed', revealed, visibleTo
+}
+```
+
+The player ship is `ref:'player'` and reads live from `shipState` (never
+duplicated). Enemies hold a full `makeShipStats()` block. `redactEncounterForPlayer()`
+is the read boundary: it drops unrevealed/unauthorised ships and prunes any
+range/initiative/hazard referencing them.
+
+## 5. Phased plan & acceptance criteria
+
+- **Phase 1 — Data & state foundation ✅ (this commit).** Extended ship schema +
+  `makeShipStats()` factory; `combat-encounter` key with persistence, redaction,
+  battle log, referee lifecycle (create/end), and player poll wired into boot.
+  *No combat UI/logic yet.* — AC: enemies are instances of the shared model;
+  state persists & survives refresh; redaction verified.
+- **Phase 2 — Core loop.** Initiative (Tactics(Naval) start, Leadership adjust),
+  Manoeuvre/Attack/Action phases, per-pair range + Thrust/dodge, 2D+Gunner attack
+  vs range/size with sensor lock, armour→damage table→hits, criticals into
+  `crits`, point defence, EW/smart-missile, full battle log + inspectable DM
+  breakdown. Wire damage → Red Alert.
+- **Phase 3 — Player & combat UI.** Combat screen in the existing panel language;
+  turn order, phase, range grid, per-ship status, acting crew actions; reuse ship
+  card for enemies (gated per reveal).
+- **Phase 4 — Referee tooling.** Encounter setup, enemy editing via the inline
+  flow, add ships mid-combat, toggleable environmental hazards without reload.
+- **Phase 5 — Animation & feedback.** Lightweight, reduced-motion-respecting cues
+  for lasers/missiles/plasma/hits/crits; never block the loop.
+
+## 6. Open questions (non-blocking for Phase 1/2)
+
+- **Phase 4:** exact hazard list + DMs (asteroid field, nebula/sensor
+  interference, gravity well, debris)?
+- **Phase 5:** visual style — abstract/diagrammatic vs. illustrative?
+- **Phase 3 refinement:** per-stat fog (e.g. reveal a ship but hide its weapon
+  loadout) — needed, or is whole-ship reveal enough?
