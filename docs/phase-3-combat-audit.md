@@ -116,15 +116,27 @@ range/initiative/hazard referencing them.
   breakdown. Fog hardening: the player redactor now also strips log entries that
   reference a hidden ship by id OR by name. Render smoke-tests pass (referee +
   player views, DM breakdown, fog).
-- **Phase 4 — Referee tooling.** Encounter setup, enemy editing via the inline
-  flow, add ships mid-combat, toggleable environmental hazards without reload.
+- **Phase 4 — Referee tooling ✅ (this commit).** Full ship stat + weapon
+  editing for enemies AND the player ship via one modal that reuses the
+  ship-data-file sheet layout (`sf-*` classes) and writes through a single
+  generic updater (`updateCombatShipStat`/weapon CRUD) — one ship model, one
+  edit idiom. Reachable from each enemy card and from the Ship panel ("⚔ Edit
+  combat loadout"), the latter working even with no active encounter. Mid-combat
+  reinforcements (add ship while active). Referee per-pair range setter (fiat,
+  no Thrust). Environmental hazards: a preset list (asteroid field, nebula,
+  gravity well, debris, dust/glare) the referee adds/toggles/removes live; their
+  DMs fold into the engine's attack and sensor resolution and (gravity)
+  effective Thrust, with no reload — players pick them up on poll and see
+  read-only hazard chips. Hazard DMs are FLAGGED tunables in `COMBAT_HAZARDS`.
+  13 Phase-4 tests pass.
 - **Phase 5 — Animation & feedback.** Lightweight, reduced-motion-respecting cues
   for lasers/missiles/plasma/hits/crits; never block the loop.
 
 ## 6. Open questions (non-blocking for Phase 1/2)
 
-- **Phase 4:** exact hazard list + DMs (asteroid field, nebula/sensor
-  interference, gravity well, debris)?
+- **Phase 4 (answered, but confirm DMs):** hazard set shipped as asteroid /
+  nebula / gravity well / debris / dust-glare. Default DMs in `COMBAT_HAZARDS`
+  are best-effort and flagged — confirm/adjust against your table.
 - **Phase 5:** visual style — abstract/diagrammatic vs. illustrative?
 - **Phase 3 refinement:** per-stat fog (e.g. reveal a ship but hide its weapon
   loadout) — needed, or is whole-ship reveal enough?
