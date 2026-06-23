@@ -84,11 +84,26 @@ range/initiative/hazard referencing them.
   battle log, referee lifecycle (create/end), and player poll wired into boot.
   *No combat UI/logic yet.* — AC: enemies are instances of the shared model;
   state persists & survives refresh; redaction verified.
-- **Phase 2 — Core loop.** Initiative (Tactics(Naval) start, Leadership adjust),
-  Manoeuvre/Attack/Action phases, per-pair range + Thrust/dodge, 2D+Gunner attack
-  vs range/size with sensor lock, armour→damage table→hits, criticals into
-  `crits`, point defence, EW/smart-missile, full battle log + inspectable DM
-  breakdown. Wire damage → Red Alert.
+- **Phase 2 — Core loop ✅ (this commit).** Engine only (no visuals): initiative
+  (2D + Tactics(Naval); Leadership adjust), Manoeuvre/Attack/Action phase &
+  round sequencing, per-pair range bands + Thrust allocation/dodge, 2D attack
+  with an inspectable DM breakdown + sensor lock, damage → armour → Hull →
+  Structure, Sustained-Damage (10% Hull) + Effect-6 criticals with escalation
+  into the existing `crits` model, point defence with cumulative penalty,
+  missile travel-time by band, append-only battle log. Player damage wires into
+  the existing Red Alert + crit-pip UI. 20 engine unit tests pass.
+
+  **Rules provenance.** Fixed numbers are in the `MGT2E` constant with their
+  table reference: Thrust (Table 207 — Adjacent/Close 1, Short 2, Medium 5,
+  Long 10, Very Long 25, Distant 50), the 2D Critical Hits Location table
+  (matches the app's 11 crit systems), missile travel-time by band, the
+  Sustained-Damage 10% rule, Effect-6 crit trigger, and the severity-6 cap
+  (→ 6D extra damage). Interpretation-dependent values are isolated in
+  `MGT2E.tunables` and **flagged for referee confirmation**: attack difficulty
+  (8+), sensor-lock DM (+1; some tables read +2/Boon), per-range attack DM
+  (0 — core is flat 8+), point-defence step (−1), dodge-per-Thrust (−1), and the
+  target-size DM. Weapon damage is never guessed — it is a referee-entered dice
+  expression per mount. Sources: Traveller SRD + Core Rulebook tables.
 - **Phase 3 — Player & combat UI.** Combat screen in the existing panel language;
   turn order, phase, range grid, per-ship status, acting crew actions; reuse ship
   card for enemies (gated per reveal).
