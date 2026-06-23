@@ -10046,6 +10046,7 @@ function makeEncounter(){
     ships: [ makeCombatShip({ id:'player', ref:'player', revealed:true, name: shipState.name }) ],
     ranges: {},                // { pairKey(aId,bId): bandIndex }
     hazards: [],               // [{ id, kind, name, dm, note, active }] — Phase 4
+    pendingMissiles: [],       // [{ attackerId, targetId, weapon, effect, impactRound, name }] — in flight
     log: [],                   // append-only battle log (Phase 2 fills it)
     createdAt: Date.now()
   };
@@ -10069,6 +10070,7 @@ function makeCombatShip(o){
     sensorLocks: {},                    // { targetShipId: true }
     pointDefenceUsed: 0,                // cumulative PD penalty counter this round
     initiativeScore: 0,
+    pendingInitiativeAdj: 0,            // Leadership adjustment, applied at next round start
     status: 'active',                   // 'active' | 'disabled' | 'destroyed'
     // fog-of-war: until revealed, the player redactor strips this ship entirely
     revealed: o.revealed || false,
@@ -10124,6 +10126,8 @@ function redactEncounterForPlayer(enc){
   copy.ranges = prunedRanges;
   copy.initiative = (copy.initiative || []).filter(id => visibleIds.has(id));
   copy.hazards = (copy.hazards || []).filter(h => h.active);
+  // In-flight missiles that involve a hidden ship must not leak to players.
+  copy.pendingMissiles = (copy.pendingMissiles || []).filter(m => visibleIds.has(m.attackerId) && visibleIds.has(m.targetId));
   // Battle log: drop any entry that references a ship the player can't see —
   // by meta id OR by the hidden ship's NAME appearing in the free text — so the
   // log itself never betrays an unrevealed contact's existence.
@@ -10141,6 +10145,7 @@ function redactEncounterForPlayer(enc){
 }
 
 // ── Battle log (append-only; supports later undo/recovery) ──────────────────
+const COMBAT_LOG_CAP = 200; // keep the shared encounter row (and poll payload) bounded
 function combatLog(kind, text, meta){
   if(!combatEncounter) return;
   combatEncounter.log.push({
@@ -10148,6 +10153,7 @@ function combatLog(kind, text, meta){
     at: Date.now(), round: combatEncounter.round, phase: combatEncounter.phase,
     kind: kind || 'note', text: text || '', meta: meta || null
   });
+  if(combatEncounter.log.length > COMBAT_LOG_CAP) combatEncounter.log.splice(0, combatEncounter.log.length - COMBAT_LOG_CAP);
 }
 
 // ── Referee lifecycle (Phase 1: create / end / persist only) ────────────────
@@ -10306,10 +10312,10 @@ function rollInitiative(){
 function adjustInitiative(shipId, effect){
   if(!isReferee() || !combatEncounter) return;
   const s = combatShipById(shipId); if(!s) return;
-  s.initiativeScore += Number(effect) || 0;
-  combatEncounter.initiative = combatEncounter.ships.slice()
-    .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
-  combatLog('action', `${s.name} adjusts initiative by ${effect} (Leadership) for next round.`, { shipId });
+  // MgT2e: a Leadership check adjusts NEXT round's initiative. Stash it and
+  // apply at round rollover so the current round's turn order is untouched.
+  s.pendingInitiativeAdj = (Number(s.pendingInitiativeAdj) || 0) + (Number(effect) || 0);
+  combatLog('action', `${s.name} will adjust initiative by ${effect} (Leadership) next round.`, { shipId });
   saveCombatEncounter();
 }
 
@@ -10337,12 +10343,37 @@ function advanceCombatTurn(){
 function newCombatRound(){
   combatEncounter.round += 1;
   combatEncounter.phase = 'manoeuvre';
-  // Reset per-round state. Initiative carries over (with any Leadership adjust).
+  // Apply any deferred Leadership initiative adjustments, then re-sort.
+  let reSorted = false;
+  combatEncounter.ships.forEach(s => {
+    if(s.pendingInitiativeAdj){ s.initiativeScore += s.pendingInitiativeAdj; s.pendingInitiativeAdj = 0; reSorted = true; }
+  });
+  if(reSorted){
+    combatEncounter.initiative = combatEncounter.ships.slice()
+      .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
+  }
+  // Reset per-round state.
   combatEncounter.ships.forEach(s => { s.thrustAllocated = 0; s.dodge = false; s.pointDefenceUsed = 0; });
+  combatLog('system', `Round ${combatEncounter.round} — Manoeuvre phase.`);
+  // Resolve any missiles arriving this round (impact happens before actions).
+  resolvePendingMissiles();
   const order = combatEncounter.initiative.filter(id => { const s = combatShipById(id); return s && s.status !== 'destroyed'; });
   combatEncounter.activeShipId = order[0] || null;
-  combatLog('system', `Round ${combatEncounter.round} — Manoeuvre phase.`);
   saveCombatEncounter();
+}
+
+// Resolve in-flight missiles whose impact round has arrived (Long+ launches).
+function resolvePendingMissiles(){
+  if(!combatEncounter || !combatEncounter.pendingMissiles) return;
+  const due = combatEncounter.pendingMissiles.filter(m => m.impactRound <= combatEncounter.round);
+  combatEncounter.pendingMissiles = combatEncounter.pendingMissiles.filter(m => m.impactRound > combatEncounter.round);
+  due.forEach(m => {
+    const tgt = combatShipById(m.targetId);
+    if(!tgt || tgt.status === 'destroyed') return; // target gone — missile is wasted
+    const dmgInfo = applyCombatDamage(m.targetId, m.weapon, m.effect);
+    combatLog('attack', `${m.name || 'Missile'} from ${(combatShipById(m.attackerId)||{}).name || '?'} impacts ${tgt.name}${dmgInfo ? `, ${dmgInfo.summary}` : ''}.`,
+      { attackerId: m.attackerId, targetId: m.targetId, weapon: m.name, hit: true, travel: 0, damage: dmgInfo });
+  });
 }
 
 // ── Referee: Manoeuvre phase — Thrust, range bands, dodge ────────────────────
@@ -10364,6 +10395,10 @@ function changeRange(aId, bId, deltaBands){
   const cost = rangeTransitionCost(cur, target);
   if(cost > pool) return { ok:false, reason:`needs ${cost} Thrust, have ${pool}` };
   combatEncounter.ranges[key] = target;
+  // Consume the spent Thrust from the two ships (initiator first), so a phase's
+  // allocation can't be reused for unlimited band changes.
+  let remaining = cost;
+  [a, b].forEach(ship => { if(ship && remaining > 0){ const t = Math.min(ship.thrustAllocated || 0, remaining); ship.thrustAllocated -= t; remaining -= t; } });
   combatLog('manoeuvre', `${a?a.name:aId}/${b?b.name:bId} range → ${COMBAT_RANGE_BANDS[target]} (spent ${cost}/${pool} Thrust).`,
     { aId, bId, from: COMBAT_RANGE_BANDS[cur], to: COMBAT_RANGE_BANDS[target], cost });
   saveCombatEncounter();
@@ -10428,6 +10463,11 @@ function resolveAttack(attackerId, targetId, weaponId){
   let dmgInfo = null;
   if(hit && travel === 0){
     dmgInfo = applyCombatDamage(targetId, weapon, effect);
+  } else if(hit && travel > 0){
+    // Long-range missile: schedule the impact for a later round (resolved at
+    // round start) rather than dropping it.
+    combatEncounter.pendingMissiles = combatEncounter.pendingMissiles || [];
+    combatEncounter.pendingMissiles.push({ attackerId, targetId, weapon, effect, impactRound: combatEncounter.round + travel, name: weapon.name });
   }
   combatLog('attack',
     `${atk.name} fires ${weapon.name} at ${tgt.name}: 2D ${r.sum} ${bd.total>=0?'+':''}${bd.total} = ${roll} vs ${bd.difficulty} → ${hit?'HIT':'miss'}${hit?` (Effect ${effect})`:''}${travel?` — missile impacts in ${travel} round(s)`:''}${dmgInfo?`, ${dmgInfo.summary}`:''}.`,
@@ -10474,8 +10514,14 @@ function applyCombatDamage(targetId, weapon, effect){
   }
   // Effect ≥ 6 also scores a critical (verified).
   if((Number(effect) || 0) >= MGT2E.critEffectThreshold){ crits.push(applyCrit(targetId, rollCritLocation(), 1)); }
-  // Destruction check.
-  if(st.structurePoints <= 0 && (Number(st.structurePointsMax) || 0) > 0){
+  // Destruction check. Use Structure if the ship has any; otherwise fall back to
+  // Hull, so a ship with no Structure defined can still be destroyed (and one
+  // with Structure isn't killed merely by Hull reaching 0).
+  const maxStruct = Number(st.structurePointsMax) || 0;
+  const maxHullCap = Number(st.hullPointsMax) || 0;
+  const dead = maxStruct > 0 ? (st.structurePoints <= 0)
+             : (maxHullCap > 0 && (Number(st.hullPoints) || 0) <= 0);
+  if(dead && tgt.status !== 'destroyed'){
     tgt.status = 'destroyed';
     combatLog('system', `${tgt.name} is destroyed.`, { targetId });
   }
@@ -10497,8 +10543,11 @@ function applyCrit(targetId, location, severity){
   const cur = Number(st.crits[location]) || 0;
   if(cur >= 6){
     // Severity capped — further crits deal 6D extra damage instead (verified).
+    // Route it through Hull→Structure overflow so it can actually destroy a ship.
     let extra = 0; for(let i=0;i<6;i++) extra += 1 + Math.floor(Math.random()*6);
-    st.hullPoints = Math.max(0, (Number(st.hullPoints)||0) - extra);
+    let hull = (Number(st.hullPoints)||0) - extra, struct = Number(st.structurePoints)||0;
+    if(hull < 0){ struct += hull; hull = 0; }
+    st.hullPoints = hull; st.structurePoints = Math.max(0, struct);
     combatLog('critical', `${tgt.name}: ${location} already at Severity 6 — ${extra} extra damage.`, { targetId, location, extra });
     return { location, severity: 6, extra };
   }
