@@ -4047,7 +4047,7 @@ function togglePM(){
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
-  if(pmCheck.checked){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
+  if(pmCheck.checked){ startPolling(); startAlertPolling(); startCombatPolling(); } else { stopPolling(); stopAlertPolling(); stopCombatPolling(); }
   applyAlertState(); // refresh the alert puck / overlay for the new role
 }
 pmCheck.addEventListener("change", function(){
@@ -4062,11 +4062,11 @@ pmCheck.addEventListener("change", function(){
   if(currentView === "system" && selectedBody) selectBody(selectedBody);
   checkIdentity();
   renderWhoAmI();
-  if(this.checked){ startPolling(); startAlertPolling(); } else { stopPolling(); stopAlertPolling(); }
+  if(this.checked){ startPolling(); startAlertPolling(); startCombatPolling(); } else { stopPolling(); stopAlertPolling(); stopCombatPolling(); }
   applyAlertState();
 });
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active")
-    const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; startPolling(); startAlertPolling(); } } catch(e){}
+    const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; startPolling(); startAlertPolling(); startCombatPolling(); } } catch(e){}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM MAP
@@ -9388,9 +9388,44 @@ let shipState = {
   origin: 'Aurelia',
   destination: '',
   jumpParsecs: 0,      // distance to destination, parsecs
+  // ── Combat stats (Phase 1 — additive; lazy-default merged on load) ─────────
+  // These extend the sheet with the numerics MgT2e *core* space combat needs.
+  // They are dormant until the combat module reads them; existing rows simply
+  // pick up the defaults below via the Object.assign merge in loadShipState().
+  // The SAME field set is produced by makeShipStats() for enemy/NPC ships, so
+  // there is one ship model, not a parallel one (per the Phase-1 ruling).
+  thrust: 2,           // M-Drive Thrust rating (number) — drives range-band Thrust allocation
+  power: 0,            // current power points available to systems
+  powerMax: 0,         // power plant output
+  armourRating: 0,     // numeric armour (subtracted from rolled damage); `armour` stays the sheet text
+  sensorDM: 0,         // Electronics (Sensors) DM for locks / EW
+  crewSkills: { pilot:0, gunnery:0, engineer:0, sensors:0, tactics:0, leadership:0 },
+  // Weapon mounts. type ∈ 'beam-laser'|'pulse-laser'|'missile'|'sandcaster'|'plasma'
+  // mount ∈ 'turret'|'fixed'|'barbette'. ammo/ammoMax only meaningful for missiles/sandcasters.
+  // Bay/spinal mounts are High Guard scope — flagged, not modelled here.
+  weapons: [],         // [{ id, name, type, mount, count, ammo, ammoMax, notes }]
   // ── Critical hits — severity 0..6 per system ──
   crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 }
 };
+
+// ── Shared ship-stat factory ───────────────────────────────────────────────
+// Produces the canonical ship-stat shape used for BOTH the player ship and
+// enemy/NPC ships, so combat never forks into a second model. Referee-authored
+// enemies are just makeShipStats({...}) objects living inside the encounter.
+function makeShipStats(overrides){
+  return Object.assign({
+    name: '', shipClass: '', configuration: '', hullOptions: '',
+    armour: '', armourRating: 0,
+    tonnage: 100, jumpRating: 1,
+    hullPoints: 40, hullPointsMax: 40,
+    driveReaction: '', driveManoeuvre: '',
+    thrust: 1, power: 0, powerMax: 0, sensorDM: 0,
+    fuel: 0, fuelMax: 0, fuelProcessor: '',
+    crewSkills: { pilot:0, gunnery:0, engineer:0, sensors:0, tactics:0, leadership:0 },
+    weapons: [],
+    crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 }
+  }, overrides || {});
+}
 
 async function loadShipState(){
   try {
@@ -9734,6 +9769,175 @@ async function pollAlertState(){
       if(JSON.stringify(fresh) !== JSON.stringify(alertState)){
         alertState = fresh;
         applyAlertState();
+      }
+    }
+  } catch(e){ /* silent — next poll retries */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 1: data & state foundation  (MgT2e core)
+// ───────────────────────────────────────────────────────────────────────────
+// Architecture (decided in the Phase-3 audit):
+//   • REFEREE-AUTHORITATIVE. The referee's device is the single source of truth
+//     and the only writer of combat state. Players are read-only and poll for
+//     updates (mirrors the Red Alert fast-poll pattern). This is what makes
+//     enemy secrecy work on the existing single-key/honour-system backend:
+//     hidden ships/stats simply are NOT written to shared storage until the
+//     referee reveals them — consistent with how every other secret in the app
+//     stays referee-side rather than relying on (non-existent) row-level DB
+//     security. See CLAUDE.md / the shared-state note above.
+//   • ONE SHIP MODEL. Player ship = shipState; enemies = makeShipStats(...).
+//   • PER-PAIR RANGE BANDS. ranges{} is keyed by a canonical ship-pair key.
+//
+// Shared state in aurelia_state, key 'combat-encounter'. Phase 1 establishes
+// the schema, persistence, the redaction/reveal boundary, and the player poll.
+// The combat *resolution* loop (initiative, attacks, damage, criticals) is
+// Phase 2 and is intentionally NOT implemented here yet.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Abstract range bands, ordered Adjacent → Distant (MgT2e core).
+const COMBAT_RANGE_BANDS = ['Adjacent','Close','Short','Medium','Long','Very Long','Distant'];
+const COMBAT_PHASES = ['manoeuvre','attack','action']; // round = 6 min, three sequential phases
+
+// The active encounter. `null` = no combat in progress. Only the referee mutates
+// this; players receive it (already redacted) via the poll.
+let combatEncounter = null;
+let combatPollId = null;
+const COMBAT_POLL_MS = 1500; // combat is dynamic — match the Red Alert cadence
+
+// A fresh, empty encounter skeleton. The player ship is seeded as the first
+// combatant, referencing shipState (ref:'player') so it stays the one model.
+function makeEncounter(){
+  return {
+    id: 'enc_' + Math.random().toString(36).slice(2, 10),
+    status: 'setup',           // 'setup' | 'active' | 'ended'
+    round: 0,
+    phase: 'manoeuvre',        // COMBAT_PHASES
+    activeShipId: null,        // whose turn within the current phase
+    initiative: [],            // ordered array of ship ids
+    ships: [ makeCombatShip({ id:'player', ref:'player', revealed:true, name: shipState.name }) ],
+    ranges: {},                // { pairKey(aId,bId): bandIndex }
+    hazards: [],               // [{ id, kind, name, dm, note, active }] — Phase 4
+    log: [],                   // append-only battle log (Phase 2 fills it)
+    createdAt: Date.now()
+  };
+}
+
+// One combatant's per-encounter state. For enemies, `stats` is a full
+// makeShipStats() object; for the player ship, stats is read live from
+// shipState at render time and `ref:'player'` marks that, so we never duplicate
+// the player's authoritative sheet into the encounter blob.
+function makeCombatShip(o){
+  o = o || {};
+  return {
+    id: o.id || 'shp_' + Math.random().toString(36).slice(2, 8),
+    ref: o.ref || null,                 // 'player' → read stats from shipState; else null
+    name: o.name || 'Unknown Contact',
+    side: o.side || (o.ref === 'player' ? 'allied' : 'hostile'),
+    stats: o.ref === 'player' ? null : makeShipStats(o.stats || {}),
+    // live combat state
+    thrustAllocated: 0,
+    dodge: false,
+    sensorLocks: {},                    // { targetShipId: true }
+    pointDefenceUsed: 0,                // cumulative PD penalty counter this round
+    initiativeScore: 0,
+    status: 'active',                   // 'active' | 'disabled' | 'destroyed'
+    // fog-of-war: until revealed, the player redactor strips this ship entirely
+    revealed: o.revealed || false,
+    visibleTo: o.visibleTo || 'all'     // canSee() audience once revealed
+  };
+}
+
+// Canonical, order-independent key for a pair of ships (per-pair range bands).
+function combatPairKey(a, b){ return [a, b].sort().join('|'); }
+function getRangeBand(aId, bId){
+  if(!combatEncounter) return null;
+  const idx = combatEncounter.ranges[combatPairKey(aId, bId)];
+  return (idx == null) ? null : COMBAT_RANGE_BANDS[idx];
+}
+
+// ── Persistence (referee writes; players read) ─────────────────────────────
+async function loadCombatEncounter(){
+  try {
+    const res = await supaStorage.get('combat-encounter', true);
+    const raw = res.value != null ? JSON.parse(res.value) : null;
+    // Players only ever hold the redacted view; the referee holds the full one.
+    combatEncounter = (raw && !isReferee()) ? redactEncounterForPlayer(raw) : raw;
+  } catch(e){ combatEncounter = null; }
+}
+
+async function saveCombatEncounter(){
+  if(!isReferee()) return;                 // referee-authoritative: only the ref writes
+  try { await supaStorage.set('combat-encounter', JSON.stringify(combatEncounter), true); }
+  catch(e){ console.error('Combat save failed:', e); }
+}
+
+// The redaction boundary. Even though the full blob technically reaches every
+// device (single-key backend), we redact on read so the player UI cannot render
+// unrevealed ships or hidden enemy stats — the same honour-system gating the
+// rest of the app uses, applied at the combat layer.
+function redactEncounterForPlayer(enc){
+  const copy = JSON.parse(JSON.stringify(enc));
+  copy.ships = (copy.ships || [])
+    .filter(s => s.ref === 'player' || (s.revealed && canSee(s.visibleTo)))
+    .map(s => {
+      if(s.ref === 'player') return s;     // player reads own stats from shipState
+      // Revealed enemy: keep combat-visible state, drop nothing extra for now.
+      // (Per-stat fog — e.g. hidden weapons — is a Phase-3 refinement.)
+      return s;
+    });
+  // Drop range pairs that reference a now-hidden ship.
+  const visibleIds = new Set(copy.ships.map(s => s.id));
+  const prunedRanges = {};
+  for(const k of Object.keys(copy.ranges || {})){
+    const [a, b] = k.split('|');
+    if(visibleIds.has(a) && visibleIds.has(b)) prunedRanges[k] = copy.ranges[k];
+  }
+  copy.ranges = prunedRanges;
+  copy.initiative = (copy.initiative || []).filter(id => visibleIds.has(id));
+  copy.hazards = (copy.hazards || []).filter(h => h.active);
+  return copy;
+}
+
+// ── Battle log (append-only; supports later undo/recovery) ──────────────────
+function combatLog(kind, text, meta){
+  if(!combatEncounter) return;
+  combatEncounter.log.push({
+    id: 'lg_' + Math.random().toString(36).slice(2, 8),
+    at: Date.now(), round: combatEncounter.round, phase: combatEncounter.phase,
+    kind: kind || 'note', text: text || '', meta: meta || null
+  });
+}
+
+// ── Referee lifecycle (Phase 1: create / end / persist only) ────────────────
+function startEncounter(){
+  if(!isReferee()) return;
+  combatEncounter = makeEncounter();
+  combatLog('system', 'Encounter created (setup).');
+  saveCombatEncounter();
+}
+function endEncounter(){
+  if(!isReferee() || !combatEncounter) return;
+  combatEncounter.status = 'ended';
+  combatLog('system', 'Encounter ended.');
+  saveCombatEncounter();
+  combatEncounter = null;
+  saveCombatEncounter();                    // clear the shared row
+}
+
+// ── Player poll (referee never polls — they are the source of truth) ────────
+function startCombatPolling(){ stopCombatPolling(); if(isReferee()) return; combatPollId = setInterval(pollCombatEncounter, COMBAT_POLL_MS); }
+function stopCombatPolling(){ if(combatPollId){ clearInterval(combatPollId); combatPollId = null; } }
+async function pollCombatEncounter(){
+  if(isReferee()) return;
+  try {
+    const res = await supaStorage.get('combat-encounter', true);
+    if(res.ok){
+      const raw = res.value != null ? JSON.parse(res.value) : null;
+      const fresh = raw ? redactEncounterForPlayer(raw) : null;
+      if(JSON.stringify(fresh) !== JSON.stringify(combatEncounter)){
+        combatEncounter = fresh;
+        // Phase 3 will hook the combat UI re-render here.
       }
     }
   } catch(e){ /* silent — next poll retries */ }
@@ -10608,6 +10812,7 @@ loadTextureCatalog().then(() => {
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
 loadAlertState().then(() => applyAlertState());
+loadCombatEncounter(); // Phase 1: hydrate any in-progress encounter; UI hooks land in Phase 3
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => renderImperialDate());
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
