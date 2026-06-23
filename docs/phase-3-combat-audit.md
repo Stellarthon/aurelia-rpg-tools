@@ -20,11 +20,16 @@ already documents this: gating is spoiler control, not security. DB-enforced
 secrecy with live sync would require Supabase Auth + per-identity JWTs + new
 RLS — a re-architecture of the whole app, not the combat module.
 
-**Resolution (decided):** combat is **referee-authoritative**. Hidden enemy
-ships/stats are simply never written to shared storage until the referee reveals
-them, and the player view is redacted on read. This is consistent with how every
-other secret in the app stays referee-side, and it satisfies the *intent* of the
-criterion within the existing design pillar.
+**Resolution (decided):** combat is **referee-authoritative** with
+**render-side fog**. Only the referee writes the `combat-encounter` row, and
+the full encounter (including unrevealed ships) is stored there; the **player
+client redacts on read** (`redactEncounterForPlayer`) so unrevealed ships, their
+stats, ranges, in-flight missiles, and log lines never reach the player UI. This
+is the *same honour-system exposure as the rest of the app* — a determined player
+reading the raw row could see hidden data — not DB-enforced secrecy. True
+secrecy (referee writes a redacted row + keeps full state in referee-local
+storage) was considered and deliberately **not** implemented, to stay consistent
+with the existing design pillar. (Audit decision, 2026-06-23.)
 
 ## 2. System audit (as found in code)
 
@@ -46,7 +51,7 @@ weapons/turret loadout. (MgT2e core only — bay/spinal = High Guard, flagged.)
 
 | Topic | Decision |
 |---|---|
-| Fog & sync | **Referee-authoritative.** Referee is sole writer/source of truth; players poll read-only; hidden state never shipped until revealed; redacted on read. |
+| Fog & sync | **Referee-authoritative, render-side fog.** Referee is sole writer/source of truth; players poll read-only. Full encounter is stored; the player client redacts on read (not DB-enforced — same honour-system as the rest of the app). |
 | Range model | **Per-pair range bands** (`ranges{}` keyed by canonical pair key). |
 | Fidelity | **Faithful MgT2e core.** High Guard extras flagged, not faked. |
 | Enemy ships | **Referee-authored** via the existing inline ship-edit flow; one shared schema (`makeShipStats`). |
