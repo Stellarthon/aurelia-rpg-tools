@@ -9372,6 +9372,8 @@ let shipState = {
   jumpRating: 2,       // installed J-drive rating
   hullPoints: 80,      // current hull points
   hullPointsMax: 80,   // hull points at full
+  structurePoints: 80,    // current Structure points (damage flows here once Hull is breached)
+  structurePointsMax: 80, // Structure points at full
   // ── Drive output (display strings, as written on the sheet) ──
   driveReaction: '',
   driveManoeuvre: '',
@@ -9403,7 +9405,8 @@ let shipState = {
   // Weapon mounts. type ∈ 'beam-laser'|'pulse-laser'|'missile'|'sandcaster'|'plasma'
   // mount ∈ 'turret'|'fixed'|'barbette'. ammo/ammoMax only meaningful for missiles/sandcasters.
   // Bay/spinal mounts are High Guard scope — flagged, not modelled here.
-  weapons: [],         // [{ id, name, type, mount, count, ammo, ammoMax, notes }]
+  weapons: [],         // [{ id, name, type, mount, damage:'2D', range:'Very Long', count, ammo, ammoMax, notes }]
+                       // `damage` is the referee-entered dice expr the engine rolls (never guessed).
   // ── Critical hits — severity 0..6 per system ──
   crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 }
 };
@@ -9418,6 +9421,7 @@ function makeShipStats(overrides){
     armour: '', armourRating: 0,
     tonnage: 100, jumpRating: 1,
     hullPoints: 40, hullPointsMax: 40,
+    structurePoints: 40, structurePointsMax: 40,
     driveReaction: '', driveManoeuvre: '',
     thrust: 1, power: 0, powerMax: 0, sensorDM: 0,
     fuel: 0, fuelMax: 0, fuelProcessor: '',
@@ -9937,10 +9941,371 @@ async function pollCombatEncounter(){
       const fresh = raw ? redactEncounterForPlayer(raw) : null;
       if(JSON.stringify(fresh) !== JSON.stringify(combatEncounter)){
         combatEncounter = fresh;
-        // Phase 3 will hook the combat UI re-render here.
+        if(typeof renderCombat === 'function') renderCombat(); // Phase 3 UI hook (defined later)
       }
     }
   } catch(e){ /* silent — next poll retries */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 2: the core combat loop  (MgT2e core, rules-faithful)
+// ───────────────────────────────────────────────────────────────────────────
+// Read-only correctness first: this implements round/phase/initiative
+// sequencing, per-pair range bands + Thrust allocation, 2D attack resolution
+// with an INSPECTABLE DM breakdown, damage → Hull → Structure → criticals, and
+// point defence — all referee-driven and written to the shared encounter so the
+// battle log is the authoritative record. No combat visuals yet (Phase 3).
+//
+// Rules provenance: every fixed number MgT2e core states is in MGT2E below, with
+// the Table reference. A few values are interpretation-dependent across the 2016
+// / 2022 printings (sensor-lock DM, per-range attack DM, dodge/PD magnitudes) —
+// those are isolated in MGT2E.tunables and flagged so the referee can correct
+// one place rather than hunt through logic. Sources verified against the
+// Traveller SRD and Core Rulebook tables (Table 207 Thrust; Sustained Damage;
+// Critical Hits Location 2D table; missile travel-time by band).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MGT2E = {
+  // Table 207 — Thrust required to change to a range band (verified).
+  // Band index → its own thrust value. A transition between two adjacent bands
+  // costs the OUTER band's value (the documented, common reading of the table;
+  // the rule text is famously ambiguous, hence keeping it explicit here).
+  bandThrust: { Adjacent:1, Close:1, Short:2, Medium:5, Long:10, 'Very Long':25, Distant:50 },
+
+  // 2D Critical Hits Location table (verified — matches the app's crit systems).
+  critLocation: { 2:'sensors', 3:'powerplant', 4:'fuel', 5:'weapons', 6:'armour',
+                  7:'hull', 8:'mdrive', 9:'cargo', 10:'jdrive', 11:'crew', 12:'bridge' },
+
+  // Missile travel time (rounds to impact) by the range band at launch (verified).
+  // Outside Close, missiles gain the Smart trait. Listed = rounds AFTER launch.
+  missileTravel: { Adjacent:0, Close:0, Short:0, Medium:0, Long:1, 'Very Long':4, Distant:10 },
+
+  // Sustained Damage: each time cumulative damage crosses a 10%-of-max-Hull
+  // threshold, a Severity-1 critical strikes a rolled location (verified, 2022).
+  sustainedThresholdPct: 0.10,
+  // An attack whose Effect ≥ 6 also scores a critical (verified).
+  critEffectThreshold: 6,
+
+  // ── Interpretation-dependent tunables (FLAGGED — confirm against your printing)
+  tunables: {
+    attackDifficulty: 8,        // Average (8+) task — the core space-attack target number
+    sensorLockDM: 1,            // DM to attacks vs a locked target (some tables read +2 / a Boon)
+    rangeAttackDM: {            // core uses a flat 8+; left at 0 unless your table applies range DMs
+      Adjacent:0, Close:0, Short:0, Medium:0, Long:0, 'Very Long':0, Distant:0
+    },
+    pointDefenceStep: -1,       // cumulative DM per extra PD attempt this round (1st = 0)
+    dodgePerThrust: -1          // attacker DM per Thrust the target spends dodging (cap = pilot skill)
+  }
+};
+
+const COMBAT_SHIP_SIZE_DM = (tonnage) => {
+  // Target-size DM (larger ships are easier to hit). Approximate MgT2e scaling —
+  // FLAGGED as a tunable-class value; referee can disable by returning 0.
+  const t = Number(tonnage) || 0;
+  if(t >= 100000) return 6;
+  if(t >= 25000)  return 4;
+  if(t >= 5000)   return 2;
+  if(t >= 1000)   return 1;
+  if(t < 100)     return -1; // small craft / fighters are harder to hit
+  return 0;
+};
+
+function combatRoll2D(){ const a=1+Math.floor(Math.random()*6), b=1+Math.floor(Math.random()*6); return {a,b,sum:a+b}; }
+
+// Resolve a combatant's effective stats. The player ship always reads its live
+// authoritative sheet (shipState); enemies carry their own stats block.
+function combatStatsOf(ship){
+  if(!ship) return null;
+  return ship.ref === 'player' ? shipState : ship.stats;
+}
+function combatShipById(id){ return combatEncounter ? combatEncounter.ships.find(s => s.id === id) : null; }
+
+// ── Referee: roster ────────────────────────────────────────────────────────
+function addCombatShip(stats, opts){
+  if(!isReferee() || !combatEncounter) return null;
+  const ship = makeCombatShip(Object.assign({ stats: stats || {}, name: (stats && stats.name) || 'Hostile Contact' }, opts || {}));
+  combatEncounter.ships.push(ship);
+  // Seed an unknown range (Long) between the newcomer and every existing ship.
+  combatEncounter.ships.forEach(other => {
+    if(other.id !== ship.id) combatEncounter.ranges[combatPairKey(ship.id, other.id)] = COMBAT_RANGE_BANDS.indexOf('Long');
+  });
+  combatLog('system', `${ship.name} entered the engagement.`, { shipId: ship.id });
+  saveCombatEncounter();
+  return ship.id;
+}
+function removeCombatShip(id){
+  if(!isReferee() || !combatEncounter) return;
+  const s = combatShipById(id); if(!s) return;
+  combatEncounter.ships = combatEncounter.ships.filter(x => x.id !== id);
+  combatEncounter.initiative = combatEncounter.initiative.filter(x => x !== id);
+  Object.keys(combatEncounter.ranges).forEach(k => { if(k.split('|').includes(id)) delete combatEncounter.ranges[k]; });
+  combatLog('system', `${s.name} left the engagement.`, { shipId: id });
+  saveCombatEncounter();
+}
+
+// ── Referee: initiative & round/phase sequencing ────────────────────────────
+// Initiative = 2D + Commander's Tactics (Naval) skill (verified). The Commander
+// may, in the Action phase, attempt a Leadership check to adjust NEXT round's
+// initiative — exposed as adjustInitiative() for the referee to apply that Effect.
+function rollInitiative(){
+  if(!isReferee() || !combatEncounter) return;
+  combatEncounter.ships.forEach(s => {
+    const st = combatStatsOf(s);
+    const tactics = (st && st.crewSkills && Number(st.crewSkills.tactics)) || 0;
+    const r = combatRoll2D();
+    s.initiativeScore = r.sum + tactics;
+    combatLog('initiative', `${s.name} initiative ${s.initiativeScore} (2D ${r.sum} + Tactics ${tactics}).`,
+      { shipId: s.id, roll: r.sum, tactics, total: s.initiativeScore });
+  });
+  combatEncounter.initiative = combatEncounter.ships.slice()
+    .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
+  combatEncounter.status = 'active';
+  combatEncounter.round = 1;
+  combatEncounter.phase = 'manoeuvre';
+  combatEncounter.activeShipId = combatEncounter.initiative[0] || null;
+  combatLog('system', `Round 1 — Manoeuvre phase. Initiative: ${combatEncounter.initiative.map(id => (combatShipById(id)||{}).name).join(' → ')}.`);
+  saveCombatEncounter();
+}
+function adjustInitiative(shipId, effect){
+  if(!isReferee() || !combatEncounter) return;
+  const s = combatShipById(shipId); if(!s) return;
+  s.initiativeScore += Number(effect) || 0;
+  combatEncounter.initiative = combatEncounter.ships.slice()
+    .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
+  combatLog('action', `${s.name} adjusts initiative by ${effect} (Leadership) for next round.`, { shipId });
+  saveCombatEncounter();
+}
+
+// Advance the acting ship; wrap → next phase; after Action → new round.
+function advanceCombatTurn(){
+  if(!isReferee() || !combatEncounter || combatEncounter.status !== 'active') return;
+  const order = combatEncounter.initiative.filter(id => { const s = combatShipById(id); return s && s.status !== 'destroyed'; });
+  if(!order.length) return;
+  const idx = order.indexOf(combatEncounter.activeShipId);
+  if(idx < order.length - 1){
+    combatEncounter.activeShipId = order[idx + 1];
+  } else {
+    const pi = COMBAT_PHASES.indexOf(combatEncounter.phase);
+    if(pi < COMBAT_PHASES.length - 1){
+      combatEncounter.phase = COMBAT_PHASES[pi + 1];
+      combatEncounter.activeShipId = order[0];
+      combatLog('system', `${combatEncounter.phase[0].toUpperCase() + combatEncounter.phase.slice(1)} phase.`);
+    } else {
+      newCombatRound();
+      return;
+    }
+  }
+  saveCombatEncounter();
+}
+function newCombatRound(){
+  combatEncounter.round += 1;
+  combatEncounter.phase = 'manoeuvre';
+  // Reset per-round state. Initiative carries over (with any Leadership adjust).
+  combatEncounter.ships.forEach(s => { s.thrustAllocated = 0; s.dodge = false; s.pointDefenceUsed = 0; });
+  const order = combatEncounter.initiative.filter(id => { const s = combatShipById(id); return s && s.status !== 'destroyed'; });
+  combatEncounter.activeShipId = order[0] || null;
+  combatLog('system', `Round ${combatEncounter.round} — Manoeuvre phase.`);
+  saveCombatEncounter();
+}
+
+// ── Referee: Manoeuvre phase — Thrust, range bands, dodge ────────────────────
+function rangeTransitionCost(fromIdx, toIdx){
+  // Cost to step one band = the OUTER band's Table-207 value, summed across steps.
+  let cost = 0, lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx);
+  for(let i = lo; i < hi; i++){ cost += MGT2E.bandThrust[COMBAT_RANGE_BANDS[i + 1]]; }
+  return cost;
+}
+function changeRange(aId, bId, deltaBands){
+  if(!isReferee() || !combatEncounter) return { ok:false, reason:'no encounter' };
+  const key = combatPairKey(aId, bId);
+  const cur = combatEncounter.ranges[key]; if(cur == null) return { ok:false, reason:'no range set' };
+  const target = Math.max(0, Math.min(COMBAT_RANGE_BANDS.length - 1, cur + deltaBands));
+  if(target === cur) return { ok:false, reason:'no change' };
+  // Closing/opening combines BOTH ships' allocated Thrust (verified).
+  const a = combatShipById(aId), b = combatShipById(bId);
+  const pool = (a ? a.thrustAllocated : 0) + (b ? b.thrustAllocated : 0);
+  const cost = rangeTransitionCost(cur, target);
+  if(cost > pool) return { ok:false, reason:`needs ${cost} Thrust, have ${pool}` };
+  combatEncounter.ranges[key] = target;
+  combatLog('manoeuvre', `${a?a.name:aId}/${b?b.name:bId} range → ${COMBAT_RANGE_BANDS[target]} (spent ${cost}/${pool} Thrust).`,
+    { aId, bId, from: COMBAT_RANGE_BANDS[cur], to: COMBAT_RANGE_BANDS[target], cost });
+  saveCombatEncounter();
+  return { ok:true, cost };
+}
+function allocateThrust(shipId, n){
+  if(!isReferee() || !combatEncounter) return;
+  const s = combatShipById(shipId); if(!s) return;
+  const st = combatStatsOf(s); const maxThrust = (st && Number(st.thrust)) || 0;
+  s.thrustAllocated = Math.max(0, Math.min(maxThrust, Number(n) || 0));
+  saveCombatEncounter();
+}
+function setDodge(shipId, thrustSpent){
+  if(!isReferee() || !combatEncounter) return;
+  const s = combatShipById(shipId); if(!s) return;
+  const st = combatStatsOf(s);
+  const pilot = (st && st.crewSkills && Number(st.crewSkills.pilot)) || 0;
+  s.dodge = Math.max(0, Math.min(pilot, Number(thrustSpent) || 0)); // dodge DM capped at Pilot skill
+  if(s.dodge > 0) combatLog('manoeuvre', `${s.name} evades (dodge ${s.dodge}).`, { shipId });
+  saveCombatEncounter();
+}
+
+// ── Referee: Attack phase — resolution with inspectable DM breakdown ─────────
+// Builds the full breakdown first (so the UI can show it BEFORE/with the roll),
+// then rolls 2D, computes Effect, and applies damage on a hit.
+function buildAttackDM(attackerId, targetId, weapon){
+  const atk = combatShipById(attackerId), tgt = combatShipById(targetId);
+  const aSt = combatStatsOf(atk), tSt = combatStatsOf(tgt);
+  const band = getRangeBand(attackerId, targetId) || 'Long';
+  const gunnery = (aSt && aSt.crewSkills && Number(aSt.crewSkills.gunnery)) || 0;
+  const locked = !!(atk && atk.sensorLocks && atk.sensorLocks[targetId]);
+  const dm = [];
+  dm.push({ label: 'Gunnery', value: gunnery });
+  if(locked) dm.push({ label: 'Sensor lock', value: MGT2E.tunables.sensorLockDM });
+  const rdm = MGT2E.tunables.rangeAttackDM[band] || 0;
+  if(rdm) dm.push({ label: `Range (${band})`, value: rdm });
+  const sizeDM = COMBAT_SHIP_SIZE_DM(tSt && tSt.tonnage);
+  if(sizeDM) dm.push({ label: 'Target size', value: sizeDM });
+  if(tgt && tgt.dodge) dm.push({ label: 'Target dodging', value: MGT2E.tunables.dodgePerThrust * tgt.dodge });
+  const wcrit = (aSt && aSt.crits && Number(aSt.crits.weapons)) || 0; // weapons-system damage degrades fire
+  if(wcrit) dm.push({ label: 'Weapon crit', value: -wcrit });
+  const total = dm.reduce((s, d) => s + d.value, 0);
+  return { band, locked, weapon, difficulty: MGT2E.tunables.attackDifficulty, dm, total };
+}
+function resolveAttack(attackerId, targetId, weaponId){
+  if(!isReferee() || !combatEncounter) return null;
+  const atk = combatShipById(attackerId), tgt = combatShipById(targetId);
+  if(!atk || !tgt) return null;
+  const aSt = combatStatsOf(atk);
+  const weapon = (aSt.weapons || []).find(w => w.id === weaponId) || (aSt.weapons || [])[0] || { name:'Weapon', type:'beam-laser', damage:'1D' };
+  const bd = buildAttackDM(attackerId, targetId, weapon);
+  const r = combatRoll2D();
+  const roll = r.sum + bd.total;
+  const effect = roll - bd.difficulty;
+  const hit = effect >= 0;
+  // Missile timing (Smart outside Close); core impact is immediate at short ranges.
+  const travel = (weapon.type === 'missile') ? (MGT2E.missileTravel[bd.band] || 0) : 0;
+  let dmgInfo = null;
+  if(hit && travel === 0){
+    dmgInfo = applyCombatDamage(targetId, weapon, effect);
+  }
+  combatLog('attack',
+    `${atk.name} fires ${weapon.name} at ${tgt.name}: 2D ${r.sum} ${bd.total>=0?'+':''}${bd.total} = ${roll} vs ${bd.difficulty} → ${hit?'HIT':'miss'}${hit?` (Effect ${effect})`:''}${travel?` — missile impacts in ${travel} round(s)`:''}${dmgInfo?`, ${dmgInfo.summary}`:''}.`,
+    { attackerId, targetId, weapon: weapon.name, dice: r, breakdown: bd, roll, effect, hit, travel, damage: dmgInfo });
+  saveCombatEncounter();
+  return { roll, effect, hit, breakdown: bd, travel, damage: dmgInfo };
+}
+
+// ── Damage → Hull → Structure → criticals (verified mechanics) ───────────────
+function rollDamage(weapon, effect){
+  // Weapon damage is an editable dice expression on the mount (e.g. '2D', '3D6').
+  // Effect of the attack is added to damage (verified). No guessing on weapon
+  // damage values — they come from the referee-entered weapon stat.
+  const expr = String((weapon && weapon.damage) || '1D').toLowerCase();
+  const m = expr.match(/(\d+)\s*d(?:6)?\s*([+-]\s*\d+)?/);
+  let total = 0, dice = 1, mod = 0;
+  if(m){ dice = parseInt(m[1], 10) || 1; mod = m[2] ? parseInt(m[2].replace(/\s/g,''), 10) : 0; }
+  for(let i = 0; i < dice; i++) total += 1 + Math.floor(Math.random() * 6);
+  total += mod + (Number(effect) || 0);
+  return Math.max(0, total);
+}
+function applyCombatDamage(targetId, weapon, effect){
+  const tgt = combatShipById(targetId); if(!tgt) return null;
+  const st = combatStatsOf(tgt);
+  const armour = Number(st.armourRating) || 0;
+  const raw = rollDamage(weapon, effect);
+  const dmg = Math.max(0, raw - armour);            // armour subtracts from rolled damage (verified)
+  // Apply to Hull first, overflow to Structure (verified: Hull breached → Structure).
+  const beforeHull = Number(st.hullPoints) || 0;
+  let remaining = dmg;
+  let hull = beforeHull - remaining;
+  let struct = Number(st.structurePoints) || 0;
+  if(hull < 0){ struct += hull; hull = 0; }          // overflow eats Structure
+  st.hullPoints = hull;
+  st.structurePoints = Math.max(0, struct);
+  const crits = [];
+  // Sustained Damage: one Severity-1 crit per 10%-of-max-Hull threshold crossed.
+  const maxHull = Number(st.hullPointsMax) || 0;
+  if(maxHull > 0){
+    const step = MGT2E.sustainedThresholdPct * maxHull;
+    const crossedBefore = Math.floor((maxHull - beforeHull) / step);
+    const crossedAfter  = Math.floor((maxHull - Math.max(0, hull)) / step);
+    for(let i = crossedBefore; i < crossedAfter; i++){ crits.push(applyCrit(targetId, rollCritLocation(), 1)); }
+  }
+  // Effect ≥ 6 also scores a critical (verified).
+  if((Number(effect) || 0) >= MGT2E.critEffectThreshold){ crits.push(applyCrit(targetId, rollCritLocation(), 1)); }
+  // Destruction check.
+  if(st.structurePoints <= 0 && (Number(st.structurePointsMax) || 0) > 0){
+    tgt.status = 'destroyed';
+    combatLog('system', `${tgt.name} is destroyed.`, { targetId });
+  }
+  // Wire the player ship's damage into the existing Red Alert + crit UI.
+  if(tgt.ref === 'player'){
+    saveShipState();
+    if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert();
+    if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
+  }
+  const critTxt = crits.filter(Boolean).length ? ` + ${crits.filter(Boolean).length} critical(s): ${crits.filter(Boolean).map(c=>`${c.location} sev ${c.severity}`).join(', ')}` : '';
+  return { raw, armour, dmg, hull: st.hullPoints, structure: st.structurePoints, crits,
+           summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${st.hullPoints}/${maxHull}${critTxt}` };
+}
+function rollCritLocation(){ return MGT2E.critLocation[combatRoll2D().sum]; }
+function applyCrit(targetId, location, severity){
+  const tgt = combatShipById(targetId); if(!tgt || !location) return null;
+  const st = combatStatsOf(tgt);
+  if(!st.crits) st.crits = {};
+  const cur = Number(st.crits[location]) || 0;
+  if(cur >= 6){
+    // Severity capped — further crits deal 6D extra damage instead (verified).
+    let extra = 0; for(let i=0;i<6;i++) extra += 1 + Math.floor(Math.random()*6);
+    st.hullPoints = Math.max(0, (Number(st.hullPoints)||0) - extra);
+    combatLog('critical', `${tgt.name}: ${location} already at Severity 6 — ${extra} extra damage.`, { targetId, location, extra });
+    return { location, severity: 6, extra };
+  }
+  // Repeat to a hit location: new severity or old+1, whichever higher (verified).
+  const sev = Math.min(6, Math.max(cur + 1, Number(severity) || 1));
+  st.crits[location] = sev;
+  combatLog('critical', `${tgt.name}: critical to ${location} — Severity ${sev}.`, { targetId, location, severity: sev });
+  return { location, severity: sev };
+}
+
+// ── Sensors / EW (Action or Attack phase) ────────────────────────────────────
+function attemptSensorLock(operatorId, targetId){
+  if(!isReferee() || !combatEncounter) return null;
+  const op = combatShipById(operatorId), tgt = combatShipById(targetId); if(!op || !tgt) return null;
+  const st = combatStatsOf(op);
+  const sensors = (st && st.crewSkills && Number(st.crewSkills.sensors)) || 0;
+  const sensorDM = (st && Number(st.sensorDM)) || 0;
+  const r = combatRoll2D();
+  const total = r.sum + sensors + sensorDM;
+  const ok = total >= 8;
+  if(ok){ op.sensorLocks = op.sensorLocks || {}; op.sensorLocks[targetId] = true; }
+  combatLog('action', `${op.name} ${ok?'gains':'fails'} sensor lock on ${tgt.name} (2D ${r.sum} + Sensors ${sensors} + DM ${sensorDM} = ${total} vs 8).`,
+    { operatorId, targetId, total, ok });
+  saveCombatEncounter();
+  return { ok, total };
+}
+function breakSensorLock(operatorId, targetId){
+  if(!isReferee() || !combatEncounter) return;
+  const op = combatShipById(operatorId); if(!op || !op.sensorLocks) return;
+  delete op.sensorLocks[targetId];
+  saveCombatEncounter();
+}
+
+// ── Point defence vs incoming missiles (cumulative penalty per attempt) ──────
+function pointDefence(defenderId, weaponId){
+  if(!isReferee() || !combatEncounter) return null;
+  const def = combatShipById(defenderId); if(!def) return null;
+  const st = combatStatsOf(def);
+  const gunnery = (st && st.crewSkills && Number(st.crewSkills.gunnery)) || 0;
+  const penalty = (def.pointDefenceUsed || 0) * MGT2E.tunables.pointDefenceStep; // 1st attempt = 0
+  const r = combatRoll2D();
+  const total = r.sum + gunnery + penalty;
+  const ok = total >= 8;
+  def.pointDefenceUsed = (def.pointDefenceUsed || 0) + 1;
+  combatLog('action', `${def.name} point defence (attempt ${def.pointDefenceUsed}): 2D ${r.sum} + Gunnery ${gunnery} ${penalty} = ${total} vs 8 → ${ok?'missile destroyed':'miss'}.`,
+    { defenderId, total, ok, penalty });
+  saveCombatEncounter();
+  return { ok, total, penalty };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
