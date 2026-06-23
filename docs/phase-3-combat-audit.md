@@ -129,14 +129,23 @@ range/initiative/hazard referencing them.
   effective Thrust, with no reload — players pick them up on poll and see
   read-only hazard chips. Hazard DMs are FLAGGED tunables in `COMBAT_HAZARDS`.
   13 Phase-4 tests pass.
-- **Phase 5 — Animation & feedback.** Lightweight, reduced-motion-respecting cues
-  for lasers/missiles/plasma/hits/crits; never block the loop.
+- **Phase 5 — Animation & feedback ✅ (this commit).** Abstract/diagrammatic FX
+  driven entirely off the battle log, so they fire identically for the referee
+  (on action) and players (on poll) — one path. A cursor stops a freshly opened
+  panel replaying the backlog. Beams between ship cards coloured by weapon type
+  (beam/pulse/plasma/sandcaster), travelling missile projectiles, hit/crit card
+  flash + shake, floating damage numbers, point-defence and sensor-lock pulses.
+  All in a pointer-events:none overlay that self-removes (never blocks the loop);
+  motion honours prefers-reduced-motion (falls back to opacity flashes). Audio is
+  a tiny WebAudio synth (no asset files) behind a per-device 🔊/🔇 mute. 7 FX
+  tests pass.
 
 ## 6. Open questions (non-blocking for Phase 1/2)
 
 - **Phase 4 (answered, but confirm DMs):** hazard set shipped as asteroid /
   nebula / gravity well / debris / dust-glare. Default DMs in `COMBAT_HAZARDS`
   are best-effort and flagged — confirm/adjust against your table.
-- **Phase 5:** visual style — abstract/diagrammatic vs. illustrative?
-- **Phase 3 refinement:** per-stat fog (e.g. reveal a ship but hide its weapon
-  loadout) — needed, or is whole-ship reveal enough?
+- **Phase 5 (answered):** abstract/diagrammatic chosen and shipped.
+- **Phase 3 refinement (still open):** per-stat fog (e.g. reveal a ship but hide
+  its weapon loadout) — needed, or is whole-ship reveal enough? Currently reveal
+  is whole-ship.

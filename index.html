@@ -994,6 +994,50 @@ textarea{font-family:var(--font)}
 @media(max-width:640px){
   #combat-wrap{width:300px;height:60vh;top:54px;left:0}
 }
+/* ── Combat FX layer (Phase 5 — abstract/diagrammatic) ──────────────────────
+   An absolutely-positioned overlay inside the panel. Beams/projectiles are
+   drawn between ship-card centres; impacts flash the target card. Everything
+   is pointer-events:none so it never blocks interaction, and motion is gated by
+   prefers-reduced-motion (falls back to a plain opacity flash). */
+#combat-fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5}
+#combat-wrap{position:fixed} /* ensure offset parent for #combat-fx (re-affirmed) */
+.fx-beam{position:absolute;height:2px;transform-origin:0 50%;border-radius:2px;opacity:0;
+  filter:drop-shadow(0 0 3px currentColor);background:currentColor;color:#ff5a5a}
+.fx-beam.t-beam-laser{color:#ff5a5a;height:2px}
+.fx-beam.t-pulse-laser{color:#ff7a3a;height:2px;background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)}
+.fx-beam.t-plasma{color:#c060ff;height:4px}
+.fx-beam.t-sandcaster{color:#9aa6c0;height:3px;opacity:0}
+.fx-beam.fire{animation:fxBeam .42s ease-out forwards}
+.fx-beam.miss{opacity:.25!important;animation:fxBeamMiss .5s ease-out forwards}
+@keyframes fxBeam{0%{opacity:0;transform:scaleX(.1)}18%{opacity:1}100%{opacity:0;transform:scaleX(1)}}
+@keyframes fxBeamMiss{0%{opacity:0}20%{opacity:.3}100%{opacity:0}}
+.fx-proj{position:absolute;width:8px;height:8px;border-radius:50%;background:#ffd36b;
+  filter:drop-shadow(0 0 4px #ffae42);opacity:0}
+.fx-proj.fire{animation:fxProj .6s linear forwards}
+@keyframes fxProj{0%{opacity:0}8%{opacity:1}92%{opacity:1}100%{opacity:0}}
+.fx-float{position:absolute;font-family:monospace;font-size:12px;font-weight:700;color:#ff6b6b;
+  text-shadow:0 1px 2px #000;opacity:0;white-space:nowrap}
+.fx-float.go{animation:fxFloat 1s ease-out forwards}
+.fx-float.heal{color:var(--txS)}
+.fx-float.crit{color:#ff3b3b;font-size:13px}
+.fx-float.miss{color:var(--tx1);font-size:10px}
+@keyframes fxFloat{0%{opacity:0;transform:translateY(4px)}20%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+.cbt-ship.fx-hit{animation:fxHit .45s ease-out}
+.cbt-ship.fx-crit{animation:fxCrit .55s ease-out}
+.cbt-ship.fx-lock{box-shadow:0 0 0 1px var(--txS) inset, 0 0 10px rgba(76,175,130,.6)!important}
+.cbt-ship.fx-pd{animation:fxPD .4s ease-out}
+@keyframes fxHit{0%{box-shadow:0 0 0 0 rgba(255,90,90,.0)}30%{box-shadow:0 0 0 2px rgba(255,90,90,.9), 0 0 14px rgba(255,90,90,.5)}100%{box-shadow:none}}
+@keyframes fxCrit{0%{transform:translateX(0)}15%{transform:translateX(-4px)}30%{transform:translateX(4px)}45%{transform:translateX(-3px)}60%{transform:translateX(3px)}100%{transform:translateX(0);box-shadow:none}}
+@keyframes fxPD{0%,100%{box-shadow:none}40%{box-shadow:0 0 0 2px rgba(154,166,192,.8) inset}}
+#combat-sfx-btn{font-size:12px;cursor:pointer;opacity:.85;line-height:1}
+#combat-sfx-btn.muted{opacity:.4;filter:grayscale(1)}
+@media(prefers-reduced-motion:reduce){
+  /* Keep cause→effect legible without movement: simple opacity flashes only. */
+  .fx-beam.fire,.fx-beam.miss{animation:fxBeamMiss .4s ease-out forwards}
+  .fx-proj.fire{animation:fxBeamMiss .4s ease-out forwards}
+  .fx-float.go{animation:fxBeamMiss 1s ease-out forwards}
+  .cbt-ship.fx-crit{animation:fxHit .45s ease-out}
+}
 /* Hazard control rows + weapon editor rows */
 .cbt-haz-row{display:flex;align-items:center;gap:6px;font-size:9px;font-family:monospace;color:var(--tx1)}
 .cbt-haz-name{flex:1}
@@ -2882,9 +2926,13 @@ input#ui-scale-range{
         <span id="combat-title">⚔ SPACE COMBAT</span>
         <span id="combat-phase-badge"></span>
       </div>
-      <span id="combat-toggle">▼</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="combat-sfx-btn" onclick="event.stopPropagation();toggleCombatSfx()" title="Toggle combat sound effects">🔊</span>
+        <span id="combat-toggle">▼</span>
+      </div>
     </div>
     <div id="combat-body"></div>
+    <div id="combat-fx"></div>
     <div class="panel-resize-handle" id="combat-resize"></div>
   </div>
 
@@ -10566,6 +10614,7 @@ function renderCombat(){
   out.push(renderCombatLog(enc));
 
   body.innerHTML = out.join('');
+  combatFXScan(); // replay any new battle-log events as abstract FX (Phase 5)
 }
 
 // Players never hold an unrevealed enemy, but guard the name anyway.
@@ -10592,7 +10641,7 @@ function renderCombatShip(s, ref){
     <div class="cbt-ctl-row" style="margin-top:2px">
       <button class="cbt-btn" onclick="openShipEditor('player')">✏ Edit combat stats</button>
     </div>` : '';
-  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}">
+  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}" id="cbtship-${s.id}">
     <div class="cbt-ship-top">
       <span class="cbt-ship-name">${escQH(redactedShipName(s))}</span>
       <span class="cbt-ship-tags">${tags.join('')}</span>
@@ -10946,6 +10995,164 @@ function combatHazardChips(){
   const active = combatActiveHazards();
   if(!active.length) return '';
   return `<div class="cbt-ctl-row" style="margin-top:2px">${active.map(h => `<span class="cbt-chip" title="${escAttr(h.note)}">⚠ ${escQH(h.name)}</span>`).join('')}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACE COMBAT — Phase 5: animation & feedback (abstract / diagrammatic)
+// ───────────────────────────────────────────────────────────────────────────
+// Effects are driven entirely off the battle log, so they fire identically for
+// the referee (who appends entries by acting) and for players (who receive them
+// on poll) — one code path, no duplication. A cursor tracks the last entry
+// already animated so a freshly opened panel never replays the backlog. All FX
+// live in a pointer-events:none overlay and self-remove, so they never block
+// the combat loop; motion honours prefers-reduced-motion, and audio is a tiny
+// WebAudio synth (no asset files) behind a per-device mute.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let combatFXLastId = null;     // last log id animated (null = not yet primed)
+let combatSfxEnabled = true;
+try { combatSfxEnabled = localStorage.getItem('aurelia_combat_sfx') !== '0'; } catch(e){}
+const combatReducedMotion = (typeof matchMedia === 'function') && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function toggleCombatSfx(){
+  combatSfxEnabled = !combatSfxEnabled;
+  try { localStorage.setItem('aurelia_combat_sfx', combatSfxEnabled ? '1' : '0'); } catch(e){}
+  const b = document.getElementById('combat-sfx-btn');
+  if(b){ b.classList.toggle('muted', !combatSfxEnabled); b.textContent = combatSfxEnabled ? '🔊' : '🔇'; }
+}
+
+// Walk the log for entries newer than the cursor and animate each.
+function combatFXScan(){
+  const log = (combatEncounter && combatEncounter.log) || [];
+  if(combatFXLastId === null){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // prime, no backlog
+  const idx = log.findIndex(e => e.id === combatFXLastId);
+  if(idx < 0){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // log reset/trimmed — re-prime quietly
+  const fresh = log.slice(idx + 1);
+  if(!fresh.length) return;
+  combatFXLastId = fresh[fresh.length - 1].id;
+  // Only animate while the panel is actually visible.
+  const wrap = document.getElementById('combat-wrap');
+  if(!wrap || wrap.classList.contains('hidden') || combatCollapsed) return;
+  fresh.forEach((e, i) => setTimeout(() => playCombatFX(e), i * 220)); // small stagger if several land at once
+}
+
+function fxLayer(){ return document.getElementById('combat-fx'); }
+function fxCardCenter(shipId){
+  const card = document.getElementById('cbtship-' + shipId), layer = fxLayer();
+  if(!card || !layer) return null;
+  const cr = card.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+  return { x: cr.left - lr.left + cr.width / 2, y: cr.top - lr.top + cr.height / 2, card };
+}
+function fxFlashCard(shipId, cls){
+  const card = document.getElementById('cbtship-' + shipId);
+  if(!card) return;
+  card.classList.remove(cls); void card.offsetWidth; card.classList.add(cls);
+  setTimeout(() => card.classList.remove(cls), 700);
+}
+function fxFloatText(shipId, text, cls){
+  const c = fxCardCenter(shipId), layer = fxLayer();
+  if(!c || !layer) return;
+  const el = document.createElement('div');
+  el.className = 'fx-float ' + (cls || '');
+  el.textContent = text;
+  el.style.left = c.x + 'px'; el.style.top = (c.y - 6) + 'px';
+  el.style.transform = 'translateX(-50%)';
+  layer.appendChild(el);
+  void el.offsetWidth; el.classList.add('go');
+  setTimeout(() => el.remove(), 1100);
+}
+function fxBeam(fromId, toId, type, miss){
+  const a = fxCardCenter(fromId), b = fxCardCenter(toId), layer = fxLayer();
+  if(!a || !b || !layer) return;
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.max(6, Math.hypot(dx, dy)), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  const el = document.createElement('div');
+  el.className = `fx-beam t-${type || 'beam-laser'} ${miss ? 'miss' : 'fire'}`;
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  el.style.width = len + 'px';
+  el.style.transform = `rotate(${ang}deg)`;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 600);
+}
+function fxProjectile(fromId, toId, onArrive){
+  const a = fxCardCenter(fromId), b = fxCardCenter(toId), layer = fxLayer();
+  if(!a || !b || !layer){ if(onArrive) onArrive(); return; }
+  if(combatReducedMotion){ // no travel — just flash arrival
+    if(onArrive) setTimeout(onArrive, 120); return;
+  }
+  const el = document.createElement('div');
+  el.className = 'fx-proj fire';
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  el.style.transition = 'left .56s linear, top .56s linear';
+  layer.appendChild(el);
+  void el.offsetWidth;
+  el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
+  setTimeout(() => { el.remove(); if(onArrive) onArrive(); }, 580);
+}
+
+// Map a battle-log entry → an abstract effect + sound.
+function playCombatFX(e){
+  if(!e) return;
+  const m = e.meta || {};
+  if(e.kind === 'attack'){
+    const type = (m.breakdown && m.breakdown.weapon && m.breakdown.weapon.type) || 'beam-laser';
+    const isMissile = type === 'missile';
+    const impact = () => {
+      if(m.hit){
+        fxFlashCard(m.targetId, (m.damage && m.damage.crits && m.damage.crits.filter(Boolean).length) ? 'fx-crit' : 'fx-hit');
+        const dmg = m.damage && typeof m.damage.dmg === 'number' ? m.damage.dmg : null;
+        if(dmg != null) fxFloatText(m.targetId, '−' + dmg, dmg === 0 ? 'miss' : '');
+        combatSfx('impact');
+      } else {
+        fxFloatText(m.targetId, 'miss', 'miss');
+      }
+    };
+    if(isMissile && m.hit && (m.travel === 0)){
+      combatSfx('missile');
+      fxProjectile(m.attackerId, m.targetId, impact);
+    } else {
+      fxBeam(m.attackerId, m.targetId, type, !m.hit);
+      combatSfx(type === 'plasma' ? 'plasma' : 'laser');
+      setTimeout(impact, combatReducedMotion ? 60 : 240);
+    }
+  } else if(e.kind === 'critical'){
+    if(m.targetId){ fxFlashCard(m.targetId, 'fx-crit'); fxFloatText(m.targetId, '✦ ' + (m.location || 'crit'), 'crit'); combatSfx('crit'); }
+  } else if(e.kind === 'action'){
+    if(m.defenderId){ fxFlashCard(m.defenderId, 'fx-pd'); combatSfx('pd'); }          // point defence
+    else if(m.operatorId && m.ok){ fxFlashCard(m.operatorId, 'fx-lock'); combatSfx('lock'); } // sensor lock gained
+  }
+}
+
+// ── Tiny WebAudio synth — short, quiet cues; no external assets ──────────────
+let _combatAudioCtx = null;
+function combatSfx(kind){
+  if(!combatSfxEnabled) return;
+  try {
+    _combatAudioCtx = _combatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _combatAudioCtx; if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const beep = (type, f0, f1, dur, vol) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, now);
+      if(f1 != null) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + dur);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.connect(g); g.connect(ctx.destination); o.start(now); o.stop(now + dur + 0.02);
+    };
+    const noise = (dur, vol) => {
+      const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+      for(let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; g.gain.value = vol; src.connect(g); g.connect(ctx.destination); src.start(now);
+    };
+    if(kind === 'laser')        beep('square', 880, 220, 0.14, 0.05);
+    else if(kind === 'plasma')  beep('sawtooth', 320, 90, 0.22, 0.06);
+    else if(kind === 'missile') beep('sine', 200, 520, 0.3, 0.04);
+    else if(kind === 'impact'){ noise(0.18, 0.07); beep('triangle', 160, 60, 0.18, 0.05); }
+    else if(kind === 'crit'){   noise(0.28, 0.09); beep('sawtooth', 240, 50, 0.3, 0.07); }
+    else if(kind === 'pd')      beep('square', 1200, 1200, 0.05, 0.03);
+    else if(kind === 'lock')    beep('sine', 660, 990, 0.12, 0.035);
+  } catch(err){ /* audio unavailable — silent, never fatal */ }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
