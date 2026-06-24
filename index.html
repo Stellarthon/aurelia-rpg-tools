@@ -890,6 +890,36 @@ textarea{font-family:var(--font)}
 .sf-hex.on{background:#b23a3a;border-color:#7a2020}
 #ship-body.ship-ref .sf-hex{cursor:pointer}
 
+/* Repeating-row tables (weapons, ammo, cargo, passengers, crew, etc.):
+   slate header row + cream data rows. Referee edits cells inline and gets a
+   trailing ✕ delete column + an Add button; players read text with empty rows
+   filtered out. Grid template is set inline per table from the column weights. */
+.sf-tbl{border:1px solid #23252c;border-radius:0 4px 4px 4px;overflow:hidden;background:#faf9f5}
+.sf-tbl-hd,.sf-tbl-rw{display:grid;align-items:stretch}
+.sf-tbl-hd>div{
+  background:#3a3e4a;color:#fff;font-family:'Arial Narrow',Arial,sans-serif;font-weight:800;
+  font-size:8px;letter-spacing:.6px;text-transform:uppercase;padding:3px 6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.sf-tbl-rw{border-top:1px solid #cecabf}
+.sf-tbl-rw>div{padding:2px 6px;font-size:11px;color:#15171c;display:flex;align-items:center;min-width:0}
+.sf-tbl-rw .sf-input{font-size:11px}
+.sf-tbl-val{font-weight:600;word-break:break-word}
+.sf-tbl-empty{padding:5px 8px;font-size:10px;color:#8a887d;font-style:italic;border-top:1px solid #cecabf}
+.sf-row-del{cursor:pointer;color:#b23a3a;font-weight:800;justify-content:center;font-size:12px}
+.sf-row-del:hover{color:#7a2020}
+.sf-add{
+  align-self:flex-start;margin-top:4px;background:#eceae1;border:1px solid #3a3e4a;color:#3a3e4a;
+  font-family:'Arial Narrow',Arial,sans-serif;font-weight:800;font-size:9px;letter-spacing:.8px;
+  text-transform:uppercase;padding:3px 11px;border-radius:4px;cursor:pointer
+}
+.sf-add:hover{background:#3a3e4a;color:#fff}
+.sf-notes{
+  width:100%;min-height:52px;resize:vertical;background:transparent;border:1px dashed #9a988d;
+  border-radius:3px;font:inherit;font-size:11px;color:#15171c;font-weight:500;padding:4px 6px;outline:none
+}
+.sf-notes:focus{border-color:#3a3e4a;background:#fffdf4}
+
 #ship-btn{
   font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);
   border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;
@@ -3262,13 +3292,38 @@ GALAXY_NODES.forEach(n => {
   }
 });
 
-// Undirected jump-lane set built from base connections (single source of truth
-// for the rendered lines and the detail-panel connection list).
+// Undirected jump-lane set — the single source of truth for the rendered lines,
+// the detail-panel connection list, and each node's `connections` array. Layered
+// so a referee can edit lanes in Design Mode: effective = base + additions −
+// deletions. The base connections are snapshotted once so overlays never lose
+// the originals. Additions/deletions persist to Supabase (key 'galaxy-lanes').
 const GX_LANES = new Set();
 function gxLaneKey(a,b){ return a < b ? a+'|'+b : b+'|'+a; }
-GALAXY_NODES.forEach(s => (s.connections||[]).forEach(cid => {
-  if(GX_MAP[cid] && cid !== s.id) GX_LANES.add(gxLaneKey(s.id, cid));
-}));
+let gxLaneAdditions = [];   // canonical lane keys added beyond the base data
+let gxLaneDeletions = [];   // canonical lane keys removed from the base data
+GALAXY_NODES.forEach(s => { s._baseConnections = (s.connections||[]).slice(); });
+function gxRebuildLanes(){
+  GX_LANES.clear();
+  GALAXY_NODES.forEach(s => (s._baseConnections||[]).forEach(cid => {
+    if(GX_MAP[cid] && cid !== s.id) GX_LANES.add(gxLaneKey(s.id, cid));
+  }));
+  gxLaneDeletions.forEach(k => GX_LANES.delete(k));
+  gxLaneAdditions.forEach(k => {
+    const [a,b] = k.split('|');
+    if(GX_MAP[a] && GX_MAP[b] && a !== b) GX_LANES.add(k);
+  });
+  // Rebuild every node's connections array from the effective set so the detail
+  // panel's count + connection list stay in sync with the drawn lanes.
+  const adj = {};
+  GALAXY_NODES.forEach(s => adj[s.id] = []);
+  GX_LANES.forEach(k => {
+    const [a,b] = k.split('|');
+    if(adj[a] && !adj[a].includes(b)) adj[a].push(b);
+    if(adj[b] && !adj[b].includes(a)) adj[b].push(a);
+  });
+  GALAXY_NODES.forEach(s => s.connections = adj[s.id]);
+}
+gxRebuildLanes();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GALAXY MAP — ENGINE  (ported from orion_arm_map_v4, namespaced gx*)
@@ -3283,6 +3338,83 @@ GALAXY_NODES.forEach(s => (s.connections||[]).forEach(cid => {
 let gxInited = false;       // star field + nodes rendered once
 let gxViewReady = false;    // initial zoom-to-fit done
 let gxSelectedId = null;    // currently selected galaxy node
+let gxLinkMode = false;     // armed while adding a jump lane (Design Mode)
+let gxLinkOrigin = null;    // first system picked while linking
+
+// ── Jump-lane overlay persistence (Supabase-synced, shared like body edits) ──
+async function loadGalaxyLanes(){
+  try {
+    const r = await supaStorage.get('galaxy-lanes', true);
+    const v = r.value != null ? JSON.parse(r.value) : {};
+    gxLaneAdditions = Array.isArray(v.additions) ? v.additions : [];
+    gxLaneDeletions = Array.isArray(v.deletions) ? v.deletions : [];
+  } catch(e){ gxLaneAdditions = []; gxLaneDeletions = []; }
+  gxRebuildLanes();
+}
+async function saveGalaxyLanes(){
+  try { await supaStorage.set('galaxy-lanes', JSON.stringify({additions:gxLaneAdditions, deletions:gxLaneDeletions}), true); }
+  catch(e){ console.error('Galaxy lane save failed', e); }
+}
+
+// Re-apply the cyan selection ring after a structural redraw (gxRenderSystems
+// replaces the node group's innerHTML, which drops the appended ring).
+function gxApplySelRing(){
+  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
+  if(!gxSelectedId) return;
+  const sys = GX_MAP[gxSelectedId]; if(!sys) return;
+  const node = document.querySelector(`#gx-systems [data-id="${gxSelectedId}"]`);
+  if(!node) return;
+  const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
+  ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
+  ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
+  ring.setAttribute('class','gx-sel-ring');
+  node.appendChild(ring);
+}
+
+// ── Add / remove lanes (Design Mode, referee only) ──
+function gxAddLane(a, b){
+  if(a === b){ showToast('Pick a different destination'); return; }
+  if(!GX_MAP[a] || !GX_MAP[b]) return;
+  const k = gxLaneKey(a, b);
+  if(GX_LANES.has(k)){ showToast('That jump lane already exists'); return; }
+  const di = gxLaneDeletions.indexOf(k);
+  if(di >= 0) gxLaneDeletions.splice(di, 1);   // un-delete a previously removed base lane
+  else if(!gxLaneAdditions.includes(k)) gxLaneAdditions.push(k);
+  gxRebuildLanes(); saveGalaxyLanes();
+  gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  showToast('Jump lane added');
+}
+function gxRemoveLane(k){
+  if(!designModeOn || !isReferee()) return;
+  if(!GX_LANES.has(k)) return;
+  if(!confirm('Remove this jump lane?')) return;
+  const ai = gxLaneAdditions.indexOf(k);
+  if(ai >= 0) gxLaneAdditions.splice(ai, 1);    // a session addition — just drop it
+  else if(!gxLaneDeletions.includes(k)) gxLaneDeletions.push(k); // tombstone a base lane
+  gxRebuildLanes(); saveGalaxyLanes();
+  gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  showToast('Jump lane removed');
+}
+// Arm/cancel lane-add mode, then complete it on the next node tap.
+function gxArmLink(originId){
+  if(!designModeOn || !isReferee()) return;
+  gxLinkMode = true; gxLinkOrigin = originId || null;
+  showToast('Tap a destination system to link');
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+}
+function gxCancelLink(){
+  gxLinkMode = false; gxLinkOrigin = null;
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+}
+function gxLinkPick(id){
+  if(!gxLinkOrigin){ gxLinkOrigin = id; return; }
+  const origin = gxLinkOrigin;
+  gxLinkMode = false; gxLinkOrigin = null;
+  gxAddLane(origin, id);
+}
 
 // ── Star field (seeded, reproducible) ──────────────────────────────────────
 function gxSeedStars(){
@@ -3342,12 +3474,18 @@ function gxSeedStars(){
 // ── Render jump lanes + nodes ──────────────────────────────────────────────
 function gxRenderLanes(){
   const g = document.getElementById('gx-lanes'); if(!g) return;
+  const editing = designModeOn && isReferee();
   let h = '';
   GX_LANES.forEach(k => {
     const [a,b] = k.split('|');
     const sa = GX_MAP[a], sb = GX_MAP[b];
     if(!sa || !sb) return;
-    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="#1d4a66" stroke-width="0.7" opacity="0.55"/>`;
+    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="${editing ? '#c0506e' : '#1d4a66'}" stroke-width="${editing ? '1.1' : '0.7'}" opacity="${editing ? '0.8' : '0.55'}"/>`;
+    // In Design Mode each lane gets a fat transparent hit-line so it's easy to
+    // tap to remove. Nodes render in a later <g>, so node taps win over lanes.
+    if(editing){
+      h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="transparent" stroke-width="6" style="cursor:pointer" onclick="gxRemoveLane('${k}')"/>`;
+    }
   });
   g.innerHTML = h;
 }
@@ -3412,13 +3550,29 @@ function gxResetView(){
 function gxAttachPanZoom(){
   if(gxPanZoomAttached) return;
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  let gxDownEmpty=false, gxDownX=0, gxDownY=0, gxMoved=false; // for click-empty-to-deselect
   canvas.addEventListener('pointerdown', e=>{
+    // A press that starts on empty space (not a node/lane/control) is either a
+    // pan or, if it doesn't move, a click that deselects the current system.
+    gxDownEmpty = !(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||(e.target.closest && e.target.closest('#gx-lanes')));
+    gxDownX=e.clientX; gxDownY=e.clientY; gxMoved=false;
     if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener('pointermove', e=>{ if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT(); });
-  canvas.addEventListener('pointerup', ()=>{ gxDragging=false; canvas.classList.remove('panning'); });
+  canvas.addEventListener('pointermove', e=>{
+    if(Math.abs(e.clientX-gxDownX)>4 || Math.abs(e.clientY-gxDownY)>4) gxMoved=true;
+    if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT();
+  });
+  canvas.addEventListener('pointerup', ()=>{
+    gxDragging=false; canvas.classList.remove('panning');
+    // Clean tap on empty space → deselect (or cancel an armed lane link).
+    if(gxDownEmpty && !gxMoved){
+      if(gxLinkMode) gxCancelLink();
+      else if(gxSelectedId) gxDeselect();
+    }
+    gxDownEmpty=false;
+  });
   canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
   let lastDist=null;
   canvas.addEventListener('touchmove', e=>{
@@ -3435,21 +3589,30 @@ function gxAttachPanZoom(){
 }
 
 // ── Selection + detail panel ───────────────────────────────────────────────
-function gxOnNodeClick(id){ gxSelectSystem(id); }
+// In Design Mode link mode, a node tap builds a lane; otherwise it toggles the
+// selection (tap a selected system again to deselect it).
+function gxOnNodeClick(id){
+  if(designModeOn && isReferee() && gxLinkMode){ gxLinkPick(id); return; }
+  if(gxSelectedId === id){ gxDeselect(); return; }
+  gxSelectSystem(id);
+}
+
+// Clear the current selection and return the detail panel to the overview.
+function gxDeselect(){
+  gxSelectedId = null;
+  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
+  const nameEl = document.getElementById('galaxy-dname');
+  if(nameEl){ nameEl.textContent = 'THE ORION ARM'; nameEl.style.color = ''; }
+  const dt = document.getElementById('galaxy-dtype');
+  if(dt) dt.textContent = 'Select a system to inspect';
+  const ov = document.getElementById('galaxy-overview'); if(ov) ov.style.display = 'block';
+  const det = document.getElementById('galaxy-sys-detail'); if(det){ det.style.display = 'none'; det.innerHTML = ''; }
+}
 
 function gxSelectSystem(id){
   const sys = GX_MAP[id]; if(!sys) return;
-  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
   gxSelectedId = id;
-  const node = document.querySelector(`#gx-systems [data-id="${id}"]`);
-  if(node){
-    const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
-    ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
-    ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
-    ring.setAttribute('class','gx-sel-ring');
-    node.appendChild(ring);
-  }
+  gxApplySelRing();
   const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
   const nameEl = document.getElementById('galaxy-dname');
   nameEl.textContent = (sys.label||sys.name).replace(' ★','').toUpperCase();
@@ -3483,21 +3646,37 @@ function gxUpdateDetail(id){
     <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
   </div>`;
 
+  const laneEditing = designModeOn && isReferee();
   html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
   if((sys.connections||[]).length){
     sys.connections.forEach(cid => {
       const c = GX_MAP[cid]; if(!c) return;
       const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
+      const trash = laneEditing
+        ? `<button onclick="event.stopPropagation();gxRemoveLane('${gxLaneKey(id,cid)}')" title="Remove this jump lane" style="margin-left:8px;background:none;border:none;color:#c0506e;cursor:pointer;font-size:12px;flex-shrink:0">🗑</button>`
+        : '';
       html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
         <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
         <span style="font-size:12px;color:var(--tx0)">${escHtml((c.label||c.name).replace(' ★',''))}</span>
-        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>
+        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>${trash}
       </div>`;
     });
   } else {
     html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
   }
   html += `</div>`;
+
+  // ── Design Mode — jump-lane editing ──
+  if(laneEditing){
+    const linking = gxLinkMode && gxLinkOrigin === id;
+    html += `<div class="s-sec" style="border-top:.5px dashed var(--bd0);margin-top:4px;padding-top:10px">
+      <div class="s-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>
+      ${linking
+        ? `<button class="view-close-btn" style="background:#2a0c1a;border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button>`
+        : `<button class="view-close-btn" onclick="gxArmLink('${id}')">+ Add jump lane from here</button>`}
+      <div style="font-size:10px;color:var(--tx1);margin-top:2px">Tap any jump lane on the map, or a 🗑 above, to remove it.</div>
+    </div>`;
+  }
   det.innerHTML = html;
 }
 
@@ -3514,7 +3693,9 @@ function goGalaxy(){
     document.getElementById('breadcrumb').innerHTML = '';
     updateBackBtn();
     gxEnsureRendered();
+    gxRenderLanes();   // reflect any lane edits + design-mode treatment
     gxRenderSystems(); // refresh surveyed dots
+    gxApplySelRing();  // restore the selection ring (gxRenderSystems drops it)
     requestAnimationFrame(() => { if(!gxViewReady) gxResetView(); });
   });
 }
@@ -4084,6 +4265,13 @@ const ORR_OUTER_A = 435;   // semi-major of the outermost slot
 const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
 const ORR_PLANET_T = 207 * Math.PI / 180; // fan angle (bottom-left)
 
+// Per-body geometry captured during buildOrrery so the selection highlight can
+// be redrawn on its own (#orr-sel layer) when a body is clicked, WITHOUT
+// regenerating the whole orrery SVG — regenerating restarts every CSS animation
+// (twinkling stars, asteroid-belt shimmer), which looked like the animation
+// "resetting" every time you tapped a planet.
+let orrGeom = {};
+
 // Semi-major / semi-minor for orbit slot p (1..maxP), linearly spaced.
 function orbitAxes(p, maxP){
   let a;
@@ -4116,6 +4304,7 @@ function buildOrrery(){
   if(!svg) return;
   const W=800, H=500;
   const bodies = getBodies();
+  orrGeom = {}; // rebuilt below; feeds updateOrrerySelection()
 
   // Max occupied orbit slot drives the layout. Default 6 so a near-empty
   // system still spaces sensibly.
@@ -4202,10 +4391,14 @@ function buildOrrery(){
 
   const tiltDeg = (ORR_TILT * 180 / Math.PI).toFixed(1);
 
-  // ── Orbit ellipses (one per slot, belt slots styled copper) ─
+  // ── Orbit ellipses (one per OCCUPIED slot, belt slots styled copper) ─
+  // Only orbit positions that actually hold a body get a ring — empty slots in
+  // the 1..maxP range are left blank rather than drawn as hollow rings.
   const beltSlots = {};
   bodies.forEach(b => { if(isBeltBody(b) && b.orbitPos) beltSlots[b.orbitPos] = true; });
+  const occupiedSlots = new Set(orbitPositions);
   for(let p = maxP; p >= 1; p--){
+    if(!occupiedSlots.has(p)) continue;
     const [a,b] = orbitAxes(p, maxP);
     const isBelt = !!beltSlots[p];
     html += `<ellipse class="orbit-ring" cx="${ORR_SX}" cy="${ORR_SY}" rx="${a.toFixed(1)}" ry="${b.toFixed(1)}" fill="none"
@@ -4215,6 +4408,10 @@ function buildOrrery(){
       opacity="${isBelt ? '0.7' : '0.55'}"
       transform="rotate(${tiltDeg},${ORR_SX},${ORR_SY})"/>`;
   }
+
+  // Selection-highlight layer — populated by updateOrrerySelection() so a body
+  // click never has to rebuild the whole SVG (which would restart animations).
+  html += `<g id="orr-sel" pointer-events="none"></g>`;
 
   // ── Asteroid belts — seeded procedural dot fields ──────────
   bodies.forEach(b => {
@@ -4241,7 +4438,7 @@ function buildOrrery(){
     }
     // Belt click target + label at the fan position
     const [bpx,bpy] = orbitPoint(va, vb, ORR_PLANET_T);
-    if(selectedBody===b.id) html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${(va+2).toFixed(1)}" ry="${(vb+2).toFixed(1)}" fill="${col}" opacity="0.08" transform="rotate(${tiltDeg},${ORR_SX},${ORR_SY})" pointer-events="none"/>`;
+    orrGeom[b.id] = {kind:'belt', va, vb, color:col};
     html += `<circle cx="${bpx.toFixed(1)}" cy="${bpy.toFixed(1)}" r="28" fill="transparent" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
     html += `<text x="${bpx.toFixed(1)}" y="${(bpy+32).toFixed(1)}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
     if(b.hook) html += `<text x="${(bpx+18).toFixed(1)}" y="${(bpy-12).toFixed(1)}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
@@ -4265,7 +4462,7 @@ function buildOrrery(){
     const [px,py] = orbitPoint(...orbitAxes(b.orbitPos, maxP), ORR_PLANET_T);
     const r = b.displayRadius || 7;
     const gid = `pg-${b.id}`;
-    if(selectedBody===b.id) html += `<circle cx="${px}" cy="${py}" r="${r+7}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
+    orrGeom[b.id] = {kind:'planet', px, py, r, color:b.color};
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
     html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
@@ -4301,7 +4498,7 @@ function buildOrrery(){
     html += `<circle id="star-glow-mid" cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*2.1}" fill="${star.color}" opacity="0.12"/>`;
     html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*1.45}" fill="${star.color}" opacity="0.22"/>`;
     html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr}" fill="${star.color}" data-body="${star.id}" class="body-node" style="cursor:pointer"/>`;
-    if(selectedBody===star.id) html += `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${sr*1.45}" fill="none" stroke="${star.color}" stroke-width="1.5" opacity="0.7" pointer-events="none"/>`;
+    orrGeom[star.id] = {kind:'star', sr, color:star.color};
     html += `<text x="${ORR_SX}" y="${ORR_SY+sr+18}" text-anchor="middle" fill="#E8A020" font-size="9" font-family="monospace" pointer-events="none">${star.name}</text>`;
   }
 
@@ -4351,6 +4548,27 @@ function buildOrrery(){
     el.addEventListener("click", () => selectBody(el.getAttribute("data-body")));
     el.addEventListener("touchend", e => { e.preventDefault(); selectBody(el.getAttribute("data-body")); });
   });
+  updateOrrerySelection();
+}
+
+// Redraws ONLY the selection-highlight layer from orrGeom + selectedBody. Cheap
+// and animation-safe: it never touches the rest of the orrery SVG, so the star
+// twinkle and asteroid-belt shimmer keep running when you switch bodies.
+function updateOrrerySelection(){
+  const g = document.getElementById('orr-sel');
+  if(!g) return;
+  const geo = orrGeom[selectedBody];
+  if(!selectedBody || !geo){ g.innerHTML = ''; return; }
+  const tilt = (ORR_TILT * 180 / Math.PI).toFixed(1);
+  let h = '';
+  if(geo.kind === 'planet'){
+    h = `<circle cx="${geo.px}" cy="${geo.py}" r="${geo.r+7}" fill="${geo.color}" opacity="0.2"/>`;
+  } else if(geo.kind === 'belt'){
+    h = `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${(geo.va+2).toFixed(1)}" ry="${(geo.vb+2).toFixed(1)}" fill="${geo.color}" opacity="0.08" transform="rotate(${tilt},${ORR_SX},${ORR_SY})"/>`;
+  } else if(geo.kind === 'star'){
+    h = `<circle cx="${ORR_SX}" cy="${ORR_SY}" r="${(geo.sr*1.45).toFixed(1)}" fill="none" stroke="${geo.color}" stroke-width="1.5" opacity="0.7"/>`;
+  }
+  g.innerHTML = h;
 }
 
 // Shared renderer for a body's content sections (UWP header, fields, overview,
@@ -4441,7 +4659,10 @@ function selectBody(id){
   selectedBody = id;
   const body = getBodies().find(b=>b.id===id);
   if(!body) return;
-  buildOrrery();
+  // Only repaint the selection ring/glow — NOT the whole orrery — so clicking a
+  // body doesn't restart the SVG's CSS animations. orrGeom was populated by the
+  // last buildOrrery() (on system entry / design edits), which stays valid.
+  updateOrrerySelection();
 
   document.getElementById("sys-overview").classList.add("v-hidden");
   const det = document.getElementById("sys-body-detail");
@@ -8730,6 +8951,13 @@ function refreshDesignAffordances(){
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'system' && selectedBody) selectBody(selectedBody);
   if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  // Galaxy view: lanes gain/lose their editable (clickable) treatment, and the
+  // detail panel gains/loses the lane-editing controls. Any armed link is void.
+  if(!designModeOn){ gxLinkMode = false; gxLinkOrigin = null; }
+  if(currentView === 'galaxy'){
+    if(typeof gxRenderLanes === 'function'){ gxRenderLanes(); gxRenderSystems(); gxApplySelRing(); }
+    if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  }
 }
 
 function toggleDesignMode(){
@@ -9125,7 +9353,12 @@ function makePanelDraggable(panelId, headerId){
     // before clearing right/bottom, so a tap that never moves the mouse
     // produces zero visible change.
     dragging = true;
-    const uiS = getUIScale() / 100;
+    // The floating panels live in #float-panels, a sibling of #root that is
+    // NOT inside the UI-scale transform, so their fixed positions are in raw
+    // viewport (screen) space — exactly what e.clientX/Y and
+    // getBoundingClientRect() report. No scale conversion: dividing by the UI
+    // scale here is what caused panels to jump/offset when scale != 100%.
+    const uiS = 1;
     startX = e.clientX / uiS; startY = e.clientY / uiS;
     const rect = panel.getBoundingClientRect();
     // getBoundingClientRect is in screen (scaled) space; divide by scale
@@ -9147,7 +9380,7 @@ function makePanelDraggable(panelId, headerId){
   let moved = false;
   header.addEventListener('pointermove', (e) => {
     if(!dragging) return;
-    const uiS2 = getUIScale() / 100;
+    const uiS2 = 1; // panels are outside the scaled #root — see pointerdown note
     const dx = e.clientX / uiS2 - startX, dy = e.clientY / uiS2 - startY;
     if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
     if(!moved) return;
@@ -9187,7 +9420,7 @@ function makePanelResizable(panelId){
 
   handle.addEventListener('pointerdown', (e) => {
     resizing = true;
-    const uiS = getUIScale() / 100;
+    const uiS = 1; // panels are outside the scaled #root — see makePanelDraggable note
     startX = e.clientX / uiS; startY = e.clientY / uiS;
     const rect = panel.getBoundingClientRect();
     startW = rect.width / uiS; startH = rect.height / uiS;
@@ -9198,7 +9431,7 @@ function makePanelResizable(panelId){
 
   handle.addEventListener('pointermove', (e) => {
     if(!resizing) return;
-    const uiS = getUIScale() / 100;
+    const uiS = 1; // panels are outside the scaled #root — see makePanelDraggable note
     const dx = e.clientX / uiS - startX, dy = e.clientY / uiS - startY;
     const newW = startW + dx, newH = startH + dy;
     panel.style.width = newW + 'px';
@@ -9253,6 +9486,7 @@ let questLog = [];        // array of quest objects
 let questPanelOpen = false;
 let questCollapsed = false;
 let questEditingId = null; // id of quest being edited, or null for new
+let questOpenId = null;    // id of the single expanded mission card (accordion)
 
 // ── Persistence ──────────────────────────────────────────────────────────
 
@@ -9343,7 +9577,7 @@ function renderQuestCard(q, ref){
         <span class="quest-title">${escQH(q.title)}</span>
         <span class="quest-status-badge">${statusLabel}</span>
       </div>
-      <div class="quest-card-body" id="qbody-${q.id}">
+      <div class="quest-card-body${q.id === questOpenId ? ' open' : ''}" id="qbody-${q.id}">
         ${q.playerDesc ? `<div class="quest-player-desc">${escQH(q.playerDesc).replace(/\n/g,'<br>')}</div>` : ''}
         ${objHTML}
         ${refNoteHTML}
@@ -9415,7 +9649,27 @@ let shipState = {
   destination: '',
   jumpParsecs: 0,      // distance to destination, parsecs
   // ── Critical hits — severity 0..6 per system ──
-  crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 }
+  crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 },
+  // ── Weapons & combat loadout (sheet page 1) — repeating-row tables ──
+  turretWeapons: [],   // {name, tl, range, damage, traits}
+  otherWeapons:  [],   // {name, tl, range, damage, traits}
+  ammunition:    [],   // {type, onHand, tonsPerAtk, costPerAtk, traits}
+  screens:       [],   // Screens & Point Defence — {type, damageReduction, thrustSensorDM}
+  // ── Ship's locker — general gear/equipment carried aboard (not trade cargo) ──
+  inventory:         [], // {item, qty, notes}
+  // ── Cargo & passengers (sheet page 2) ──
+  cargoCapacity:     '',
+  cargoContents:     [], // {type, tons, notes}
+  passengerCapacity: '',
+  passengers:        [], // {name, passage, notes}
+  // ── Systems (sheet page 2) ──
+  sensors:       [],   // {type, dm}
+  accommodation: [],   // {type, number}
+  computerBandwidth: '',
+  computerSystems:   '',
+  software:      [],   // {name, rating}
+  crew:          [],   // {role, name, notes}
+  notes:         ''
 };
 
 async function loadShipState(){
@@ -9550,6 +9804,12 @@ function renderShipPanel(){
     </div>
   </div>`);
 
+  // ── WEAPONS & POINT DEFENCE (sheet page 1) ──
+  sec.push(shipTableSection('turretWeapons'));
+  sec.push(shipTableSection('otherWeapons'));
+  sec.push(shipTableSection('ammunition'));
+  sec.push(shipTableSection('screens'));
+
   // ── FLIGHT STATUS — preserved live, gated readouts ──
   const status = [];
   // Fuel — visible to all, foregrounded for the pilot (Rhett)
@@ -9622,6 +9882,40 @@ function renderShipPanel(){
     ${costRow('runningCost','Running Cost')}
   </div>`);
 
+  // ── CARGO (sheet page 2) ──
+  sec.push(`<div class="sf-sec">
+    <div class="sf-tab">Cargo Capacity</div>
+    <div class="sf-card"><div class="sf-row"><span class="sf-lbl">Capacity</span><span class="sf-fld">${sfTextField('cargoCapacity','tons')}</span></div></div>
+  </div>`);
+  sec.push(shipTableSection('cargoContents'));
+
+  // ── SHIP'S LOCKER — crew gear / equipment / loot kept aboard ──
+  sec.push(shipTableSection('inventory'));
+
+  // ── PASSENGERS (sheet page 2) ──
+  sec.push(`<div class="sf-sec">
+    <div class="sf-tab">Passenger Capacity</div>
+    <div class="sf-card"><div class="sf-row"><span class="sf-lbl">Capacity</span><span class="sf-fld">${sfTextField('passengerCapacity')}</span></div></div>
+  </div>`);
+  sec.push(shipTableSection('passengers'));
+
+  // ── SENSORS / ACCOMMODATION (sheet page 2) ──
+  sec.push(shipTableSection('sensors'));
+  sec.push(shipTableSection('accommodation'));
+
+  // ── SHIP'S COMPUTER (sheet page 2) ──
+  sec.push(`<div class="sf-sec">
+    <div class="sf-tab">Ship's Computer</div>
+    <div class="sf-card">
+      <div class="sf-row"><span class="sf-lbl">Bandwidth</span><span class="sf-fld">${sfTextField('computerBandwidth')}</span></div>
+      <div class="sf-row"><span class="sf-lbl">Systems</span><span class="sf-fld">${sfTextField('computerSystems')}</span></div>
+    </div>
+  </div>`);
+  sec.push(shipTableSection('software'));
+
+  // ── CREW (sheet page 2) ──
+  sec.push(shipTableSection('crew'));
+
   // ── CRITICAL HITS ──
   sec.push(`<div class="sf-sec">
     <div class="sf-tab">Critical Hits</div>
@@ -9629,6 +9923,17 @@ function renderShipPanel(){
       <div class="sf-crit-grid">${SHIP_CRIT_SYSTEMS.map(([k,l]) => shipCritRow(k, l, ref)).join('')}</div>
     </div>
   </div>`);
+
+  // ── NOTES (sheet page 2) ──
+  {
+    const notesHTML = ref
+      ? `<textarea class="sf-notes" placeholder="Free notes…" onchange="updateShipField('notes', this.value)">${escHtml(shipState.notes)}</textarea>`
+      : `<div class="sf-val" style="white-space:pre-wrap">${shipState.notes ? escQH(shipState.notes) : '—'}</div>`;
+    sec.push(`<div class="sf-sec">
+      <div class="sf-tab">Notes</div>
+      <div class="sf-card">${notesHTML}</div>
+    </div>`);
+  }
 
   body.innerHTML = sec.join('');
 }
@@ -9651,6 +9956,94 @@ function setShipCrit(system, n){
   if(!shipState.crits) shipState.crits = {};
   const cur = Number(shipState.crits[system]) || 0;
   shipState.crits[system] = (cur === n) ? n - 1 : n; // click filled pip again to step down
+  saveShipState();
+  renderShipPanel();
+}
+
+// ── Repeating-row sheet tables ───────────────────────────────────────────────
+// Each entry is an array on shipState (one object per row). Column tuples are
+// [key, header, flexWeight]; the grid template is built from the weights, with
+// a trailing delete column for the referee. Matches the official MgT2e sheet's
+// turret/other weapons, ammunition, screens & point defence (page 1) and cargo,
+// passengers, sensors, accommodation, software & crew (page 2).
+const SHIP_TABLES = {
+  turretWeapons: { tab:'Turret Weapons', cols:[['name','Weapon',2],['tl','TL',0.6],['range','Range',1],['damage','Damage',1.1],['traits','Traits',1.5]] },
+  otherWeapons:  { tab:'Other Weapons',  cols:[['name','Weapon',2],['tl','TL',0.6],['range','Range',1],['damage','Damage',1.1],['traits','Traits',1.5]] },
+  ammunition:    { tab:'Ammunition',     cols:[['type','Type',1.7],['onHand','On Hand',0.9],['tonsPerAtk','Tons/Atk',0.9],['costPerAtk','Cost/Atk',1],['traits','Traits',1.2]] },
+  screens:       { tab:'Screens & Point Defence', cols:[['type','Type',1.7],['damageReduction','Dmg Reduction',1.2],['thrustSensorDM','Thrust & Sensor DM',1.5]] },
+  cargoContents: { tab:'Cargo Hold Contents', cols:[['type','Type',1.8],['tons','Tons',0.8],['notes','Notes',2.4]] },
+  inventory:     { tab:"Ship's Locker", cols:[['item','Item',2],['qty','Qty',0.7],['notes','Notes',2.4]] },
+  passengers:    { tab:'Passengers',     cols:[['name','Name',1.8],['passage','Passage',1.2],['notes','Notes',2]] },
+  sensors:       { tab:'Sensors',        cols:[['type','Type',2.6],['dm','DM',0.7]] },
+  accommodation: { tab:'Accommodation',  cols:[['type','Type',2.6],['number','Number',0.8]] },
+  software:      { tab:'Software',        cols:[['name','Software',2.4],['rating','Rating',0.8]] },
+  crew:          { tab:'Crew',           cols:[['role','Role',1.4],['name','Name',1.6],['notes','Notes',2]] },
+};
+
+function shipTableSection(tblKey){
+  const cfg = SHIP_TABLES[tblKey];
+  const ref = isReferee();
+  const cols = cfg.cols;
+  const rows = Array.isArray(shipState[tblKey]) ? shipState[tblKey] : [];
+  const tmpl = cols.map(c => c[2] + 'fr').join(' ') + (ref ? ' 22px' : '');
+
+  const head = `<div class="sf-tbl-hd" style="grid-template-columns:${tmpl}">`
+    + cols.map(c => `<div>${c[1]}</div>`).join('')
+    + (ref ? '<div></div>' : '') + '</div>';
+
+  // Players never see blank rows; the referee keeps them for in-place editing.
+  const visRows = ref ? rows : rows.filter(r => cols.some(c => String(r[c[0]] || '').trim()));
+
+  let rowsHTML;
+  if(!visRows.length){
+    rowsHTML = `<div class="sf-tbl-empty">${ref ? 'No entries — add one below.' : '—'}</div>`;
+  } else {
+    rowsHTML = visRows.map(r => {
+      const i = rows.indexOf(r); // real index even when the player view filtered some out
+      const cells = cols.map(c => {
+        if(ref) return `<div><input class="sf-input" type="text" value="${escAttr(r[c[0]])}" placeholder="${escAttr(c[1])}" onchange="updateShipRow('${tblKey}',${i},'${c[0]}',this.value)"></div>`;
+        const v = String(r[c[0]] || '');
+        return `<div><span class="sf-tbl-val">${v ? escQH(v) : '—'}</span></div>`;
+      }).join('');
+      const del = ref ? `<div class="sf-row-del" onclick="removeShipRow('${tblKey}',${i})" title="Remove row">✕</div>` : '';
+      return `<div class="sf-tbl-rw" style="grid-template-columns:${tmpl}">${cells}${del}</div>`;
+    }).join('');
+  }
+
+  const addBtn = ref ? `<button class="sf-add" onclick="addShipRow('${tblKey}')">+ Add</button>` : '';
+  return `<div class="sf-sec">
+    <div class="sf-tab">${cfg.tab}</div>
+    <div class="sf-tbl">${head}${rowsHTML}</div>
+    ${addBtn}
+  </div>`;
+}
+
+function addShipRow(tblKey){
+  if(!isReferee() || !SHIP_TABLES[tblKey]) return;
+  if(!Array.isArray(shipState[tblKey])) shipState[tblKey] = [];
+  const blank = {};
+  SHIP_TABLES[tblKey].cols.forEach(c => blank[c[0]] = '');
+  shipState[tblKey].push(blank);
+  saveShipState();
+  renderShipPanel();
+}
+
+// Cell edits fire on blur (onchange), so the input has already lost focus and the
+// DOM already holds the new text — no re-render needed (nothing derived depends on
+// it, and skipping it keeps tab-to-next-cell navigation intact).
+function updateShipRow(tblKey, idx, col, value){
+  if(!isReferee()) return;
+  const arr = shipState[tblKey];
+  if(!Array.isArray(arr) || !arr[idx]) return;
+  arr[idx][col] = value;
+  saveShipState();
+}
+
+function removeShipRow(tblKey, idx){
+  if(!isReferee()) return;
+  const arr = shipState[tblKey];
+  if(!Array.isArray(arr) || !arr[idx]) return;
+  arr.splice(idx, 1);
   saveShipState();
   renderShipPanel();
 }
@@ -9739,10 +10132,15 @@ function renderAlertCtl(){
   const max = Number(shipState.hullPointsMax) || 0, hp = Number(shipState.hullPoints) || 0;
   const pct = max > 0 ? Math.round(hp / max * 100) : 100;
   const takeoverBtn = `<button class="sac-btn takeover" onclick="setAlertMode('ai-takeover','CORE INTELLIGENCE ASSUMING DIRECT CONTROL')">👁 AI Takeover</button>`;
+  // Stable slot layout so controls never swap places when the mode changes:
+  //   [ alert toggle ] [ status chip ] [ AI control ]
+  // The alert toggle (Red Alert / Stand Down / Restore Control) is always
+  // leftmost; the AI control (AI Takeover button, or the AI-in-control status)
+  // is always rightmost; any status chip (HULL %) sits between them.
   if(alertState.mode === 'ai-takeover'){
-    ctl.innerHTML = `<span class="sac-ai">👁 AI IN CONTROL</span><button class="sac-btn standdown" onclick="setAlertMode('normal')">■ Restore Control</button>`;
+    ctl.innerHTML = `<button class="sac-btn standdown" onclick="setAlertMode('normal')">■ Restore Control</button><span class="sac-ai">👁 AI IN CONTROL</span>`;
   } else if(alertState.mode === 'red-alert'){
-    ctl.innerHTML = `<span class="sac-hull">HULL ${pct}%</span>${takeoverBtn}<button class="sac-btn standdown" onclick="setAlertMode('normal')">■ Stand Down</button>`;
+    ctl.innerHTML = `<button class="sac-btn standdown" onclick="setAlertMode('normal')">■ Stand Down</button><span class="sac-hull">HULL ${pct}%</span>${takeoverBtn}`;
   } else {
     ctl.innerHTML = `<button class="sac-btn raise" onclick="setAlertMode('red-alert','Red alert')">⚠ Red Alert</button>${takeoverBtn}`;
   }
@@ -10444,8 +10842,14 @@ function renderOraclePanel(){
 }
 
 function toggleQuestCard(id){
-  const body = document.getElementById('qbody-'+id);
-  if(body) body.classList.toggle('open');
+  // Accordion: only one mission expanded at a time so opening several missions
+  // doesn't stack their bodies and grow the panel. Tracked in questOpenId so the
+  // expansion survives a renderQuestPanel() re-render (e.g. after toggling an
+  // objective or a poll update).
+  questOpenId = (questOpenId === id) ? null : id;
+  document.querySelectorAll('#quest-body .quest-card-body').forEach(el => {
+    el.classList.toggle('open', el.id === 'qbody-' + questOpenId);
+  });
 }
 
 async function toggleObjective(questId, objIdx){
@@ -10623,6 +11027,13 @@ loadLocationStores().then(() => {
   if(currentView === 'body' && selectedBody){
     if(selectedBodyLoc && findLocation(selectedBodyLoc)) selectBodyLocation(selectedBodyLoc);
     else buildBodyView(selectedBody);
+  }
+});
+loadGalaxyLanes().then(() => {
+  // Redraw lanes + connection counts once the shared lane overlay has loaded.
+  if(currentView === 'galaxy'){
+    gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
+    if(gxSelectedId) gxUpdateDetail(gxSelectedId);
   }
 });
 loadTextureCatalog().then(() => {
