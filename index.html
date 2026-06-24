@@ -3752,13 +3752,21 @@ function gxResetView(){
 function gxAttachPanZoom(){
   if(gxPanZoomAttached) return;
   const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
+  let downX = 0, downY = 0, startedOnEmpty = false;
   canvas.addEventListener('pointerdown', e=>{
     if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
     gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
     canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e=>{ if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT(); });
-  canvas.addEventListener('pointerup', ()=>{ gxDragging=false; canvas.classList.remove('panning'); });
+  canvas.addEventListener('pointerup', e=>{
+    gxDragging=false; canvas.classList.remove('panning');
+    // A click on empty space (negligible drag) deselects the current system,
+    // returning to the overview (where the route kill-switch lives).
+    const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+    if(startedOnEmpty && moved < 5 && gxSelectedId) gxDeselectSystem();
+    startedOnEmpty = false;
+  });
   canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
   let lastDist=null;
   canvas.addEventListener('touchmove', e=>{
@@ -3776,6 +3784,21 @@ function gxAttachPanZoom(){
 
 // ── Selection + detail panel ───────────────────────────────────────────────
 function gxOnNodeClick(id){ gxSelectSystem(id); }
+
+// Clear the current selection and restore the overview panel (clicking empty
+// space on the map, per playtest feedback — the overview holds the route
+// kill-switch, which is otherwise unreachable while a system is selected).
+function gxDeselectSystem(){
+  gxSelectedId = null;
+  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
+  const nameEl = document.getElementById('galaxy-dname');
+  if(nameEl){ nameEl.textContent = 'THE ORION ARM'; nameEl.style.color = ''; }
+  const typeEl = document.getElementById('galaxy-dtype');
+  if(typeEl) typeEl.textContent = 'Select a system to inspect';
+  const ov = document.getElementById('galaxy-overview'); if(ov) ov.style.display = '';
+  const det = document.getElementById('galaxy-sys-detail'); if(det) det.style.display = 'none';
+  gxRenderRouteControl(); // refresh the kill-switch now that the overview is back
+}
 
 function gxSelectSystem(id){
   const sys = GX_MAP[id]; if(!sys) return;
@@ -4643,14 +4666,24 @@ function buildOrrery(){
     html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" pointer-events="none"/>`;
 
     // Rings — data-driven via ringStyle: 'major' | 'subtle'
+    // Top-half clip used to restore a textured giant's upper hemisphere after the
+    // ring-occlusion redraw — otherwise the flat fill erases the photo texture.
+    if((b.ringStyle === 'major' || b.ringStyle === 'subtle') && tUrlP){
+      html += `<clipPath id="orr-top-${b.id}"><path d="M ${(px-r).toFixed(1)} ${py.toFixed(1)} A ${r} ${r} 0 0 1 ${(px+r).toFixed(1)} ${py.toFixed(1)} Z"/></clipPath>`;
+    }
+    const orrTexTop = tUrlP
+      ? `<image href="${escAttr(tUrlP)}" xlink:href="${escAttr(tUrlP)}" x="${px-r}" y="${py-r}" width="${2*r}" height="${2*r}" preserveAspectRatio="xMidYMid slice" clip-path="url(#orr-top-${b.id})" pointer-events="none"/>`
+      : '';
     if(b.ringStyle === 'major'){
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+14}" ry="${(r+14)*0.27}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.3" pointer-events="none"/>`;
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+9}" ry="${(r+9)*0.27}" fill="none" stroke="${b.color}" stroke-width="3.5" opacity="0.55" pointer-events="none"/>`;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+      html += orrTexTop;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
     } else if(b.ringStyle === 'subtle'){
       html += `<ellipse cx="${px}" cy="${py}" rx="${r+8}" ry="${(r+8)*0.22}" fill="none" stroke="${b.color}" stroke-width="2" opacity="0.38" pointer-events="none"/>`;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="${b.color}" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
+      html += orrTexTop;
       html += `<circle cx="${px}" cy="${py}" r="${r}" fill="url(#${gid})" clip-path="inset(0 0 50% 0)" pointer-events="none"/>`;
     }
 
@@ -5060,11 +5093,21 @@ function discPlanet(body, CX, CY, col, style){
     // so the bottom half keeps its banding rather than rendering flat.
     const frontHalf = `M ${CX-PR} ${CY} A ${PR} ${PR} 0 0 0 ${CX+PR} ${CY} Z`;
     s += `<path d="${frontHalf}" fill="${col}" pointer-events="none"/>`;
-    if(ggDetail){
+    if(texUrl){
+      // Photo-textured giant: re-emit the texture over the front (lower) half so
+      // the ring-occlusion redraw doesn't leave it flat. Same image geometry as
+      // the full disc, so the two halves line up seamlessly.
       s += `<clipPath id="bv-front"><path d="${frontHalf}"/></clipPath>`;
-      s += `<g clip-path="url(#bv-clip)"><g clip-path="url(#bv-front)">${ggDetail}</g></g>`;
+      const texF = escAttr(texUrl);
+      s += `<image href="${texF}" xlink:href="${texF}" x="${CX-PR}" y="${CY-PR}" width="${2*PR}" height="${2*PR}" preserveAspectRatio="xMidYMid slice" clip-path="url(#bv-front)" pointer-events="none"/>`;
+      s += `<path d="${frontHalf}" fill="url(#bv-base)" opacity="0.4" pointer-events="none"/>`;
+    } else {
+      if(ggDetail){
+        s += `<clipPath id="bv-front"><path d="${frontHalf}"/></clipPath>`;
+        s += `<g clip-path="url(#bv-clip)"><g clip-path="url(#bv-front)">${ggDetail}</g></g>`;
+      }
+      s += `<path d="${frontHalf}" fill="url(#bv-base)" pointer-events="none"/>`;
     }
-    s += `<path d="${frontHalf}" fill="url(#bv-base)" pointer-events="none"/>`;
   }
 
   // Name label
