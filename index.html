@@ -425,6 +425,15 @@ textarea{font-family:var(--font)}
 #galaxy-db .s-sec{margin-top:14px}
 #galaxy-db .s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
 #galaxy-db .s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
+/* ── Route blocking (galaxy map) ── */
+.gx-route-ctl-box{background:var(--bg2);border:.5px solid var(--bd2);border-radius:6px;padding:8px 10px;margin-bottom:12px}
+.gx-route-ctl-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--tx0)}
+.gx-route-ctl-hint{font-size:9px;color:var(--tx1);font-family:monospace;margin-top:5px;line-height:1.5}
+.gx-conn-ctl{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:0 0 6px 15px;border-bottom:.5px solid var(--bg2)}
+.gx-conn-reason{flex:1;min-width:120px;font-size:10px;background:var(--bg1);border:.5px solid var(--bd2);border-radius:4px;color:var(--tx0);padding:3px 6px}
+.gx-conn-status{font-size:10px;padding:2px 0 6px 15px;border-bottom:.5px solid var(--bg2)}
+.gx-conn-status.blocked{color:#d45050}
+.gx-conn-status.adv{color:#e0a040}
 /* Blank-system prompt (shown in #sys-overview for unsurveyed systems). */
 .blank-sys-card{border:1px dashed var(--bd0);border-radius:8px;padding:16px 14px;text-align:center;margin-top:6px}
 .blank-sys-icon{font-size:26px;margin-bottom:6px}
@@ -2515,6 +2524,7 @@ input#ui-scale-range{
         </div>
         <div id="galaxy-db">
           <div id="galaxy-overview">
+            <div id="gx-route-ctl"></div>
             <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:14px">
               The Orion Arm spans hundreds of inhabited systems across six major faction territories.
               The Archon Collective observes from beyond the charted boundaries.<br><br>
@@ -3487,6 +3497,104 @@ GALAXY_NODES.forEach(s => (s.connections||[]).forEach(cid => {
 }));
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ROUTE BLOCKING  (V2 — referee-controlled jump-lane closures + auto advisory)
+// ───────────────────────────────────────────────────────────────────────────
+// Shared campaign state in aurelia_state key 'route-blocks'. Two layers:
+//   • Manual blocks — hard, story-truth closures the referee sets per lane
+//     (red). Each carries an optional reason and an `explain` flag (default
+//     true) controlling whether nav crew see the reason or just "unavailable".
+//   • Auto advisory — soft, derived from ship state (amber). Treated globally:
+//     a jump lane is a single jump in this map's model, so if the ship cannot
+//     currently make ANY jump (no J-drive, or fuel below one jump's worth) the
+//     whole network is flagged out-of-range. We deliberately do NOT invent
+//     per-lane parsec distances the data model doesn't carry.
+// `enabled` is the kill-switch: flipping it off makes every manual block inert
+// instantly. Block/advisory styling is shown only to the nav crew (Rhett +
+// Cass) and the referee; other players see ordinary lanes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let routeBlocks = { enabled: true, blocks: {} };
+
+async function loadRouteBlocks(){
+  try { const r = await supaStorage.get('route-blocks', true); if(r.value != null){ const v = JSON.parse(r.value); routeBlocks = { enabled: v.enabled !== false, blocks: v.blocks || {} }; } }
+  catch(e){ routeBlocks = { enabled: true, blocks: {} }; }
+}
+async function saveRouteBlocks(){
+  try { await supaStorage.set('route-blocks', JSON.stringify(routeBlocks), true); }
+  catch(e){ console.error('Route blocks save failed:', e); }
+}
+
+// The active manual block for a lane (null when none or kill-switch off).
+function gxRouteBlock(a, b){
+  if(!routeBlocks.enabled) return null;
+  return routeBlocks.blocks[gxLaneKey(a, b)] || null;
+}
+// Can the ship currently make a single jump? (J-drive present + fuel for 1 jump.)
+function gxShipCanJump(){
+  const r = Number(shipState.jumpRating) || 0;
+  if(r < 1) return false;
+  const need = +(0.1 * (Number(shipState.tonnage) || 0)).toFixed(1); // one J-1 jump's fuel
+  return (Number(shipState.fuel) || 0) >= need;
+}
+// Is the soft out-of-range advisory currently in force? (global, ship-derived)
+function gxAdvisoryActive(){ return !gxShipCanJump(); }
+// Does the current viewer see route restrictions? Nav crew + referee only.
+function gxSeesRoutes(){ return canSee(SHIP_NAV_AUDIENCE); }
+
+function toggleRouteKillSwitch(){
+  if(!isReferee()) return;
+  routeBlocks.enabled = !routeBlocks.enabled;
+  saveRouteBlocks();
+  gxRenderLanes();
+  gxRenderRouteControl();
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+}
+// Toggle a manual block on the lane between the selected system and a neighbour.
+function toggleRouteBlock(a, b){
+  if(!isReferee()) return;
+  const k = gxLaneKey(a, b);
+  if(routeBlocks.blocks[k]) delete routeBlocks.blocks[k];
+  else routeBlocks.blocks[k] = { reason: '', explain: true };
+  saveRouteBlocks();
+  gxRenderLanes();
+  gxRenderRouteControl();
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+}
+function setRouteBlockReason(a, b, reason){
+  if(!isReferee()) return;
+  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
+  blk.reason = reason;
+  saveRouteBlocks();
+  gxRenderLanes();
+}
+function toggleRouteBlockExplain(a, b){
+  if(!isReferee()) return;
+  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
+  blk.explain = !blk.explain;
+  saveRouteBlocks();
+  gxRenderLanes();
+  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+}
+
+// Referee kill-switch + status, injected into the galaxy overview panel.
+function gxRenderRouteControl(){
+  const el = document.getElementById('gx-route-ctl'); if(!el) return;
+  if(!isReferee()){ el.innerHTML = ''; return; }
+  const on = routeBlocks.enabled;
+  const n = Object.keys(routeBlocks.blocks).length;
+  el.innerHTML = `<div class="gx-route-ctl-box">
+    <div class="gx-route-ctl-row">
+      <span>🚧 Route blocking — ${on ? '<b style="color:#d45050">ARMED</b>' : '<b style="color:var(--tx1)">off</b>'}</span>
+      <div class="theme-toggle ${on?'on':''}" role="switch" tabindex="0" aria-checked="${on}"
+           title="${on ? 'Blocks active — tap to disarm all' : 'Blocks inert — tap to arm'}"
+           onclick="toggleRouteKillSwitch()"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRouteKillSwitch();}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="gx-route-ctl-hint">${n} lane${n===1?'':'s'} blocked. Select a system to set blocks on its jump connections.${gxAdvisoryActive()?' <span style="color:#e0a040">Ship cannot currently jump — all lanes show out-of-range (amber).</span>':''}</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // GALAXY MAP — ENGINE  (ported from orion_arm_map_v4, namespaced gx*)
 // ═══════════════════════════════════════════════════════════════════════════
 // The Orion Arm starmap is the app's landing view. Nodes are star systems;
@@ -3558,12 +3666,28 @@ function gxSeedStars(){
 // ── Render jump lanes + nodes ──────────────────────────────────────────────
 function gxRenderLanes(){
   const g = document.getElementById('gx-lanes'); if(!g) return;
+  const seesRoutes = gxSeesRoutes();
+  const advisory = seesRoutes && gxAdvisoryActive();
   let h = '';
   GX_LANES.forEach(k => {
     const [a,b] = k.split('|');
     const sa = GX_MAP[a], sb = GX_MAP[b];
     if(!sa || !sb) return;
-    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="#1d4a66" stroke-width="0.7" opacity="0.55"/>`;
+    const blk = seesRoutes ? gxRouteBlock(a,b) : null;
+    let stroke = '#1d4a66', w = '0.7', op = '0.55', dash = '', title = '';
+    if(blk){
+      stroke = '#d45050'; w = '1.3'; op = '0.9'; dash = ' stroke-dasharray="4,3"';
+      const showReason = isReferee() || blk.explain;
+      title = (showReason && blk.reason) ? blk.reason : 'Route unavailable';
+    } else if(advisory){
+      stroke = '#e0a040'; w = '0.9'; op = '0.7'; dash = ' stroke-dasharray="2,3"';
+      title = 'Out of range — ship cannot currently jump';
+    }
+    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="${stroke}" stroke-width="${w}" opacity="${op}"${dash}>${title?`<title>${escHtml(title)}</title>`:''}</line>`;
+    if(blk){
+      const mx = (sa.x+sb.x)/2, my = (sa.y+sb.y)/2;
+      h += `<g pointer-events="none"><circle cx="${mx}" cy="${my}" r="3.4" fill="#1a0808" stroke="#d45050" stroke-width="0.8"/><text x="${mx}" y="${my+2.1}" font-size="5" fill="#d45050" text-anchor="middle" font-family="monospace">✕</text></g>`;
+    }
   });
   g.innerHTML = h;
 }
@@ -3699,16 +3823,33 @@ function gxUpdateDetail(id){
     <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
   </div>`;
 
+  const seesRoutes = gxSeesRoutes(), ref = isReferee(), advisory = seesRoutes && gxAdvisoryActive();
   html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
+  if(ref) html += `<div style="font-size:9px;color:var(--tx1);font-family:monospace;margin:-2px 0 6px">Referee: block / unblock a lane below. ${routeBlocks.enabled ? 'Blocking ARMED.' : 'Blocking is OFF (kill-switch).'}</div>`;
   if((sys.connections||[]).length){
     sys.connections.forEach(cid => {
       const c = GX_MAP[cid]; if(!c) return;
       const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
+      const blk = seesRoutes ? gxRouteBlock(id, cid) : null;
       html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
         <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
-        <span style="font-size:12px;color:var(--tx0)">${escHtml((c.label||c.name).replace(' ★',''))}</span>
+        <span style="font-size:12px;color:${blk?'#d45050':'var(--tx0)'}">${blk?'⛔ ':''}${escHtml((c.label||c.name).replace(' ★',''))}</span>
         <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>
       </div>`;
+      if(ref){
+        html += `<div class="gx-conn-ctl">
+          <button class="disc-mini${blk?' del':''}" onclick="toggleRouteBlock('${id}','${cid}')">${blk?'Unblock':'Block'}</button>`;
+        if(blk){
+          html += `<input class="gx-conn-reason" placeholder="Reason (e.g. Hegemony interdiction)" value="${escAttr(blk.reason||'')}" onchange="setRouteBlockReason('${id}','${cid}',this.value)">
+            <button class="disc-mini" title="Toggle whether nav crew see the reason" onclick="toggleRouteBlockExplain('${id}','${cid}')">${blk.explain?'👁 reason shown':'🚫 reason hidden'}</button>`;
+        }
+        html += `</div>`;
+      } else if(blk){
+        const showReason = blk.explain && blk.reason;
+        html += `<div class="gx-conn-status blocked">⛔ ${showReason ? escHtml(blk.reason) : 'Route unavailable'}</div>`;
+      } else if(advisory){
+        html += `<div class="gx-conn-status adv">⚠ Out of range — insufficient fuel/jump</div>`;
+      }
     });
   } else {
     html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
@@ -3731,6 +3872,8 @@ function goGalaxy(){
     updateBackBtn();
     gxEnsureRendered();
     gxRenderSystems(); // refresh surveyed dots
+    gxRenderLanes();   // refresh route-block / advisory styling for this viewer
+    gxRenderRouteControl();
     requestAnimationFrame(() => { if(!gxViewReady) gxResetView(); });
   });
 }
@@ -7037,10 +7180,18 @@ function canSee(audience){
 function applyIdentityClass(){
   if(!rootEl) return;
   rootEl.classList.remove('as-rhett','as-cass','as-other');
-  if(isReferee()) return;
+  if(isReferee()){ refreshRoleGatedViews(); return; }
   if(myIdentity === 'Rhett Calder')      rootEl.classList.add('as-rhett');
   else if(myIdentity === 'Cassia Velen') rootEl.classList.add('as-cass');
   else if(myIdentity)                    rootEl.classList.add('as-other');
+  refreshRoleGatedViews();
+}
+// Re-render the surfaces whose content depends on role/identity (galaxy route
+// styling) when the viewer's role or identity changes.
+function refreshRoleGatedViews(){
+  if(currentView === 'galaxy' && typeof gxRenderLanes === 'function'){
+    gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  }
 }
 
 async function loadRevealState(){
@@ -7158,6 +7309,21 @@ async function pollRevealState(){
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
+        // Fuel/jump changes can flip the out-of-range advisory — refresh lanes.
+        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Route blocks — nav crew see the referee arm/disarm lanes mid-session
+  try {
+    const resRB = await supaStorage.get('route-blocks', true);
+    if(resRB.ok){
+      const freshRB = resRB.value != null ? JSON.parse(resRB.value) : { enabled:true, blocks:{} };
+      const normRB = { enabled: freshRB.enabled !== false, blocks: freshRB.blocks || {} };
+      if(JSON.stringify(normRB) !== JSON.stringify(routeBlocks)){
+        routeBlocks = normRB;
+        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); }
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -12166,6 +12332,7 @@ loadImperialDate().then(() => renderImperialDate());
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
+loadRouteBlocks().then(() => { if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); } });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
