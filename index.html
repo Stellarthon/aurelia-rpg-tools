@@ -8851,11 +8851,11 @@ function renderSettingsMenu(showArchon){
         style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--bd0);border-radius:var(--rad);color:var(--tx0);padding:7px 9px;font-family:monospace;font-size:12px">
     </div>
     <div class="settings-row" style="gap:8px">
-      <button onclick="applyContentTokenFromInput()" style="flex:1;padding:7px">Apply token</button>
-      <button onclick="clearContentToken()" style="flex:1;padding:7px"${tok ? '' : ' disabled'}>Clear token</button>
+      <button onclick="applyContentTokenFromInput()" style="flex:1;padding:8px;background:var(--accentGoldBg);border:1px solid var(--accentGold);color:var(--accentGold);border-radius:var(--rad);font-weight:700;font-size:12px;cursor:pointer">Apply token</button>
+      <button onclick="clearContentToken()" style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:12px;cursor:pointer"${tok ? '' : ' disabled'}>Clear token</button>
     </div>
     <div class="settings-row">
-      <button onclick="copyInviteLink()" style="flex:1;padding:7px" title="Build a shareable link that applies the token in the box above">🔗 Copy invite link (for the token above)</button>
+      <button onclick="copyInviteLink()" style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:12px;cursor:pointer" title="Build a shareable link that applies the token in the box above">🔗 Copy invite link</button>
     </div>`;
 
   html += kbdSettingsHTML();
