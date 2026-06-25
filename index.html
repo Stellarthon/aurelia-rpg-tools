@@ -7223,6 +7223,14 @@ const CONTENT_API = SUPABASE_URL + '/functions/v1/get-content';
 function getContentToken(){ try { return localStorage.getItem('aurelia_token') || ''; } catch(e){ return ''; } }
 function setContentToken(t){ try { t ? localStorage.setItem('aurelia_token', String(t).trim()) : localStorage.removeItem('aurelia_token'); } catch(e){} }
 function secureContentOn(){ return !!getContentToken(); }
+// Settings-tab token tools. Both reload so hydrateSecureContent re-runs cleanly
+// (it mutates the data structures at boot), or returns to local referee mode.
+function applyContentTokenFromInput(){
+  const el = document.getElementById('content-token-input');
+  setContentToken(el ? el.value : '');
+  location.reload();
+}
+function clearContentToken(){ setContentToken(''); location.reload(); }
 // Mirror of the server/extractor classification: fields stripped locally before
 // server fragments are applied. MUST stay in sync with tools/extract-content.mjs.
 const REDACT_FIELDS = {
@@ -8268,6 +8276,25 @@ function renderSettingsMenu(showArchon){
   // everyone. Referee tools (design mode), morality, and the animation /
   // orbital-ring toggles live in the Referee menu; campaign-editing tools
   // live in the Design menu. The showArchon arg is kept for back-compat.
+  // ── Secure Content (per-player token) ──
+  const tok = getContentToken();
+  const roleLabel = !tok ? 'Local mode (no token)'
+    : (secureRole ? (secureRole === 'referee' ? 'Referee' : (myIdentity || 'Player')) : 'connecting…');
+  html += `
+    <div class="settings-section-lbl">Secure Content</div>
+    <div class="settings-row">
+      <span class="settings-row-label">Acting as</span>
+      <span style="color:var(--accentGold);font-weight:700">${escHtml(roleLabel)}</span>
+    </div>
+    <div class="settings-row">
+      <input id="content-token-input" type="text" placeholder="Paste access token…" value="${escHtml(tok)}"
+        style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--bd0);border-radius:var(--rad);color:var(--tx0);padding:7px 9px;font-family:monospace;font-size:12px">
+    </div>
+    <div class="settings-row" style="gap:8px">
+      <button onclick="applyContentTokenFromInput()" style="flex:1;padding:7px">Apply token</button>
+      <button onclick="clearContentToken()" style="flex:1;padding:7px"${tok ? '' : ' disabled'}>Clear token</button>
+    </div>`;
+
   html += kbdSettingsHTML();
   card.innerHTML = html;
 }
