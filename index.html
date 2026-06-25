@@ -1678,6 +1678,12 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #root.anim-off .ast,
 #root.anim-off .loc-station-icon{animation:none!important}
 #root.rings-off .orbit-ring{display:none!important}
+/* Honour the OS "reduce motion" setting for the same ambient animations — a
+   user who asked for reduced motion shouldn't get hundreds of jittering belt
+   dots (accessibility) and shouldn't pay their per-frame cost (performance). */
+@media(prefers-reduced-motion:reduce){
+  #star-glow-outer,#star-glow-mid,.twinkle-a,.twinkle-b,.twinkle-c,.ast,.loc-station-icon{animation:none!important}
+}
 
 /* ── Referee + Design header menus (cloned from #settings-menu) ── */
 #referee-menu,#design-menu{
@@ -4955,6 +4961,9 @@ let selectedBody = null;
 const ORR_SX = 594, ORR_SY = 180;
 const ORR_TILT = -28 * Math.PI / 180;
 const ORR_COS = Math.cos(ORR_TILT), ORR_SIN = Math.sin(ORR_TILT);
+// Max belt dots that ANIMATE per orrery render (across all belts). Excess dots
+// draw static — bounds per-frame compositor cost on dense/multi-belt systems.
+const ORR_ANIM_DOT_BUDGET = 180;
 const ORR_INNER_A = 75;    // semi-major of orbit slot 1
 const ORR_OUTER_A = 435;   // semi-major of the outermost slot
 const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
@@ -5097,6 +5106,11 @@ function buildOrrery(){
   }
 
   // ── Asteroid belts — seeded procedural dot fields ──────────
+  // The per-dot "vibe" is a sub-pixel transform animation; on SVG circles it is
+  // not GPU-composited, so hundreds of them melt frame rate on tablet hardware.
+  // Cap how many dots ANIMATE (across all belts) — the rest render identically
+  // but static. Visual density is unchanged; the jitter is imperceptible anyway.
+  let animBudget = ORR_ANIM_DOT_BUDGET;
   bodies.forEach(b => {
     if(!isBeltBody(b) || !b.orbitPos) return;
     const [va, vb] = orbitAxes(b.orbitPos, maxP);
@@ -5117,7 +5131,9 @@ function buildOrrery(){
       const ex = ra * Math.cos(ang), ey = rb * Math.sin(ang);
       const vx = ORR_SX + ex*ORR_COS - ey*ORR_SIN;
       const vy = ORR_SY + ex*ORR_SIN + ey*ORR_COS;
-      html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" class="ast ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s" pointer-events="none"/>`;
+      const animate = animBudget > 0; if(animate) animBudget--;
+      const anim = animate ? ` ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s"` : `"`;
+      html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" class="ast${anim} pointer-events="none"/>`;
     }
     // Belt click target + label at the fan position
     const [bpx,bpy] = orbitPoint(va, vb, ORR_PLANET_T);
