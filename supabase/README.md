@@ -87,3 +87,30 @@ bad token gets `401`; referee parity matches the old hardcoded data.
 Once this passes, proceed to the client cutover (Stages 2–3 in the plan) — and
 strip the referee content from `index.html` **only after** the player path is
 verified end to end.
+
+## Step 6 — Stage 2 client (already in index.html, default OFF)
+
+`index.html` now contains the secure-content client (`hydrateSecureContent` et
+al.). **It is a no-op until a token is stored**, so the live app is unchanged.
+To test the per-player path in a browser:
+
+```js
+// In the browser devtools console, on the deployed map:
+setContentToken('<RHETT_TOKEN>'); location.reload();   // load as a player
+```
+
+On reload the client strips the baked-in referee fields, fetches `get-content`,
+and applies only this token's fragments. Verify:
+- Referee-only content (NPC stat blocks, checks, "Referee Context", RSR tags) is
+  **gone** from station/body views.
+- Player-safe content (read-aloud, body names, descriptions) is intact.
+
+```js
+setContentToken('<REFEREE_TOKEN>'); location.reload();  // load as referee → secrets return
+setContentToken(''); location.reload();                 // disable secure mode → hardcoded data
+```
+
+> **Stage 2 fails to *usability*** (a fetch error keeps the hardcoded data and
+> shows a toast) so a bad token can't brick the map mid-session. **Stage 3** makes
+> secure mode the default, strips the referee literals from the shipped file, and
+> switches to fail-*closed* — do that only after the above is confirmed on-device.
