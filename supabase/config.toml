@@ -1,0 +1,7 @@
+# Supabase project config (per-player redaction).
+# get-content authenticates with OUR OWN opaque player/referee tokens, not
+# Supabase JWTs — so the platform's JWT gate MUST be disabled for it, or the
+# gateway 401s every request before our code runs. (We still authorise inside
+# the function via the players table + service role.)
+[functions.get-content]
+verify_jwt = false
