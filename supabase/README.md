@@ -122,3 +122,27 @@ setContentToken(''); location.reload();                 // disable secure mode �
 > shows a toast) so a bad token can't brick the map mid-session. **Stage 3** makes
 > secure mode the default, strips the referee literals from the shipped file, and
 > switches to fail-*closed* — do that only after the above is confirmed on-device.
+
+## Step 7 — Stage 3: de-bake the secrets (`tools/strip-secrets.mjs`)
+
+**Coverage is now complete.** The extractor and strip cover all five
+secret-bearing structures: `BASE_BODIES_AUROS`, `MAIN`, `GALAXY_NODES`,
+`BASE_LOCATIONS`, and `TIMED_EVENTS` (the GM-only event log). Generic GM tooling
+(`ARCHON_BANDS`, `NPC_GEN`, the `ORACLE_*` / rumour / encounter tables) is
+intentionally kept in the bundle as non-secret.
+
+**Order matters — the server must have the content before the bundle loses it:**
+
+1. **Re-seed** with the expanded content (it now includes locations + the
+   timeline): re-run `seed/campaign_content.seed.sql` in the SQL editor.
+2. **Re-verify** redaction (the §Step 5 SQL/curl checks) — a player must still
+   get `0` referee fragments; a referee now gets the full **128** fragments.
+3. **De-bake the bundle:** `node tools/strip-secrets.mjs` rewrites `index.html`,
+   removing all referee literals (a player's downloaded HTML → 0 bytes of
+   secrets). The tool **aborts** if any secret structure isn't covered, so it
+   can't produce a partial strip. Re-runnable / idempotent.
+4. After this, a referee **must** load a referee token (Settings → Secure
+   Content) to see referee content — it's no longer in the file. Secure-by-
+   default and fail-closed then come for free (no secrets remain to fall back to).
+
+Publish the stripped `index.html` only after steps 1–2 pass.
