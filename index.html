@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Aurelian System — Referee Map</title>
@@ -11,7 +11,7 @@
 :root{
   --bg0:#0f1117;--bg1:#181c27;--bg2:#1e2333;
   --bd0:#2e3347;--bd1:#252a3a;--bd2:#1e2333;
-  --tx0:#e8eaf0;--tx1:#8b91a8;
+  --tx0:#e8eaf0;--tx1:#a3a9bf;
   --txI:#5b8ef0;--bgI:#1a2650;
   --txS:#4caf82;--bgS:#0f2e20;
   --txW:#d4913a;--bgW:#2e1f0a;
@@ -2409,7 +2409,7 @@ input#ui-scale-range{
       <button class="clk-btn ref-only" onclick="advanceClock(15)">+15</button>
       <button class="clk-btn ref-only" onclick="advanceClock(30)">+30</button>
       <div id="clock-sep" class="ref-only"></div>
-      <button id="clock-reset" class="ref-only" onclick="resetClock()" title="Reset to 00:00">↺</button>
+      <button id="clock-reset" class="ref-only" aria-label="Reset clock to 00:00" onclick="resetClock()" title="Reset to 00:00">↺</button>
     </div>
     <!-- ── Imperial date chip ── -->
     <div id="impdate-wrap">
@@ -2418,9 +2418,9 @@ input#ui-scale-range{
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
     <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
-    <button id="referee-menu-btn" class="ref-only" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
-    <button id="design-menu-btn" class="ref-only" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
-        <button id="settings-btn" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
+    <button id="referee-menu-btn" class="ref-only" aria-label="Referee tools" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
+    <button id="design-menu-btn" class="ref-only" aria-label="Design tools" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
+        <button id="settings-btn" aria-label="Settings" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
     <div id="search-wrap">
       <input type="text" id="search-input" placeholder="🔍 Find system, NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
       <div id="search-results"></div>
@@ -2737,7 +2737,7 @@ input#ui-scale-range{
     <div id="sheet-card">
       <div id="sheet-card-header">
         <span id="sheet-card-title">CHARACTER SHEET</span>
-        <button id="sheet-close-btn" onclick="closeSheet()">✕</button>
+        <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
       </div>
       <div id="sheet-card-body"></div>
       <div id="sheet-card-footer">
@@ -2755,7 +2755,7 @@ input#ui-scale-range{
     <div id="design-edit-card">
       <div id="design-edit-header">
         <span id="design-edit-title">EDIT TEXT</span>
-        <button id="design-edit-close" onclick="closeDesignEdit()">✕</button>
+        <button id="design-edit-close" aria-label="Close" onclick="closeDesignEdit()">✕</button>
       </div>
       <div id="design-edit-body">
         <div id="design-history-list"></div>
@@ -2781,7 +2781,7 @@ input#ui-scale-range{
     <div id="npc-creator-card">
       <div id="npc-creator-hdr">
         <span id="npc-creator-title">✦ Add NPC</span>
-        <button id="npc-creator-close" onclick="closeNpcCreator()">✕</button>
+        <button id="npc-creator-close" aria-label="Close" onclick="closeNpcCreator()">✕</button>
       </div>
       <div class="npc-creator-tabs">
         <button class="npc-creator-tab on" id="npc-tab-manual" onclick="setNpcCreatorMode('manual')">✍ Manual</button>
@@ -2797,7 +2797,7 @@ input#ui-scale-range{
     <div id="body-creator-card">
       <div id="body-creator-hdr">
         <span id="body-creator-title">✦ Add Body</span>
-        <button id="body-creator-close" onclick="closeBodyCreator()">✕</button>
+        <button id="body-creator-close" aria-label="Close" onclick="closeBodyCreator()">✕</button>
       </div>
       <div class="npc-creator-tabs" id="body-creator-tabs">
         <button class="npc-creator-tab on" id="body-tab-manual" onclick="setBodyCreatorMode('manual')">✍ Manual</button>
@@ -2812,7 +2812,7 @@ input#ui-scale-range{
     <div id="loc-creator-card">
       <div id="loc-creator-hdr">
         <span id="loc-creator-title">✦ Add Location</span>
-        <button id="loc-creator-close" onclick="closeLocationCreator()">✕</button>
+        <button id="loc-creator-close" aria-label="Close" onclick="closeLocationCreator()">✕</button>
       </div>
       <div id="loc-creator-body"></div>
     </div>
@@ -2823,7 +2823,7 @@ input#ui-scale-range{
     <div id="session-card">
       <div id="session-card-hdr">
         <span id="session-card-title">🎬 Session Tools</span>
-        <button id="session-card-close" onclick="closeSessionTools()">✕</button>
+        <button id="session-card-close" aria-label="Close" onclick="closeSessionTools()">✕</button>
       </div>
       <div id="session-card-body">
         <div class="session-section">
@@ -2930,7 +2930,7 @@ input#ui-scale-range{
   <div id="qref-panel">
     <div id="qref-hdr">
       <span id="qref-title">📖 Quick Reference</span>
-      <button id="qref-close" onclick="closeQref()">✕</button>
+      <button id="qref-close" aria-label="Close" onclick="closeQref()">✕</button>
     </div>
     <div id="qref-search-wrap">
       <input id="qref-search" type="text" placeholder="Filter rules..." oninput="renderQref()">
@@ -4502,7 +4502,11 @@ function buildOrrery(){
         <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${b.uwpString||'—'}</td>
         <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
       tr.style.cursor="pointer";
+      tr.setAttribute("role","button");
+      tr.setAttribute("tabindex","0");
+      tr.setAttribute("aria-label", `${b.name} — ${(b.type||'').split('·')[0].trim()}`);
       tr.onclick = () => selectBody(b.id);
+      tr.onkeydown = (e) => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectBody(b.id); } };
       tbl.appendChild(tr);
     });
   }
@@ -6970,6 +6974,7 @@ const SYNC_QUEUE_KEY = 'aurelia_sync_queue';
 // unreachable · 'offline' = browser reports no connection.
 let connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'live';
 let lastSyncTs = null;
+let _quotaWarned = false; // gate so the "storage full" warning shows at most once
 
 const supaStorage = {
   cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
@@ -6977,7 +6982,15 @@ const supaStorage = {
     try {
       if(value == null) localStorage.removeItem(CACHE_PREFIX + key);
       else localStorage.setItem(CACHE_PREFIX + key, value);
-    } catch(e){ /* quota / disabled — non-fatal, sync still works in-memory */ }
+    } catch(e){
+      /* quota / disabled — non-fatal, sync still works in-memory, but warn
+         the referee once so a full store doesn't lose changes silently. */
+      const quota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+      if(quota && !_quotaWarned){
+        _quotaWarned = true;
+        if(typeof showToast === 'function') showToast('Storage full — recent changes may not persist. Export your campaign to be safe.');
+      }
+    }
   },
   async get(key, shared){
     try {
