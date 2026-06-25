@@ -7754,6 +7754,28 @@ function clearContentToken(){
   if(t){ try { localStorage.removeItem(_contentCacheKey(t)); } catch(e){} } // wipe cached content on sign-out
   setContentToken(''); location.reload();
 }
+// Invite links: the referee shares <app-url>#token=<TOKEN>; a player opening it
+// has the token applied automatically. The token rides in the URL *fragment*, so
+// it is never sent to the host/server (stays out of access logs); we also strip
+// it from the address bar right after applying so it doesn't linger.
+function ingestTokenFromUrl(){
+  try {
+    const m = (location.hash || '').match(/[#&]token=([^&]+)/);
+    if(m && m[1]){
+      setContentToken(decodeURIComponent(m[1]));
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch(e){}
+}
+function copyInviteLink(){
+  const el = document.getElementById('content-token-input');
+  const t = (el ? el.value : '').trim();
+  if(!t){ if(typeof showToast === 'function') showToast('Paste a player token first.'); return; }
+  const link = location.origin + location.pathname + '#token=' + encodeURIComponent(t);
+  const done = () => { if(typeof showToast === 'function') showToast('Invite link copied — send it to the player.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, () => prompt('Copy this invite link:', link));
+  else prompt('Copy this invite link:', link);
+}
 // Mirror of the server/extractor classification: fields stripped locally before
 // server fragments are applied. MUST stay in sync with tools/extract-content.mjs.
 const REDACT_FIELDS = {
@@ -8831,6 +8853,9 @@ function renderSettingsMenu(showArchon){
     <div class="settings-row" style="gap:8px">
       <button onclick="applyContentTokenFromInput()" style="flex:1;padding:7px">Apply token</button>
       <button onclick="clearContentToken()" style="flex:1;padding:7px"${tok ? '' : ' disabled'}>Clear token</button>
+    </div>
+    <div class="settings-row">
+      <button onclick="copyInviteLink()" style="flex:1;padding:7px" title="Build a shareable link that applies the token in the box above">🔗 Copy invite link (for the token above)</button>
     </div>`;
 
   html += kbdSettingsHTML();
@@ -12958,6 +12983,7 @@ loadRevealState().then(() => {
 loadClockState().then(() => { renderClock(); });
 // Secure per-player content (Stage 2): no-op unless a token is stored. When on,
 // strips baked-in secrets and applies only this token's server-authorised data.
+ingestTokenFromUrl();     // apply a token from an invite link (#token=…) before hydrating
 hydrateSecureContent();
 loadContentOverrides().then(() => {
   if(currentView === 'station' && cur){ renderDetail(); }
