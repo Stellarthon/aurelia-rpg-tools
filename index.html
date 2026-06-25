@@ -2168,18 +2168,6 @@ input#ui-scale-range{
 
 /* ── Player refresh button (iOS home-screen apps suspend setInterval, so
      players need a manual way to pull fresh reveal state) ── */
-#player-refresh-btn{
-  display:none;position:fixed;top:54px;left:10px;z-index:60;
-  background:#1a3a2a;color:#4CAF50;border:1px solid #4CAF50;
-  border-radius:20px;padding:8px 14px;font-size:11px;font-family:monospace;
-  font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.4);
-  display:none;align-items:center;gap:6px;letter-spacing:0.5px
-}
-#root.pm-active #player-refresh-btn{display:flex}
-#player-refresh-btn:active{transform:scale(0.96)}
-#player-refresh-btn.spinning .refresh-icon{animation:refresh-spin 0.6s linear}
-@keyframes refresh-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-#player-refresh-btn.just-updated{background:#2a4a1a;border-color:#8BC34A}
 
 /* ── Shared-sync connectivity pill (offline hardening) ──
    Lives in the header (always present, both roles). Quiet when Live, prominent
@@ -2395,9 +2383,6 @@ input#ui-scale-range{
   <!-- ── View transition overlay ── -->
   <div id="view-transition"></div>
   <!-- ── Player manual refresh (iOS home-screen apps don't run background timers reliably) ── -->
-  <button id="player-refresh-btn" onclick="manualRefresh()">
-    <span class="refresh-icon">⟲</span> Refresh
-  </button>
 
 
   <!-- ── Header ── -->
@@ -8105,30 +8090,9 @@ function stopPolling(){
   if(pollIntervalId){ clearTimeout(pollIntervalId); pollIntervalId = null; }
 }
 
-// ── Manual refresh — for iOS home-screen apps, which suspend setInterval
-// timers when backgrounded/idle, so polling alone isn't reliable there.
-// Gives players a guaranteed way to pull the latest reveal state on tap.
-async function manualRefresh(){
-  const btn = document.getElementById('player-refresh-btn');
-  if(!btn) return;
-  btn.classList.add('spinning');
-  btn.disabled = true;
-  await pollRevealState();                 // pull the full shared state, not just reveals
-  // Honest feedback: only claim "Updated" when the fetch actually reached the
-  // server — connState is 'live' iff the last network op succeeded.
-  if(connState === 'live'){
-    btn.classList.add('just-updated');
-    btn.innerHTML = '<span class="refresh-icon">✓</span> Updated';
-  } else {
-    btn.innerHTML = '<span class="refresh-icon">⚠</span> Offline';
-  }
-  setTimeout(() => {
-    btn.classList.remove('just-updated');
-    btn.innerHTML = '<span class="refresh-icon">⟲</span> Refresh';
-  }, 1500);
-  btn.classList.remove('spinning');
-  btn.disabled = false;
-}
+// Players don't need a manual refresh button: the 4s poll covers active use, and
+// the visibilitychange/focus re-poll below covers the iOS timer-suspension gap
+// when a backgrounded home-screen app returns to the foreground.
 
 async function saveRevealState(){
   try { await supaStorage.set('reveal-status', JSON.stringify(revealedAreas), true); }
