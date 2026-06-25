@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1117">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-180.png">
 <title>Aurelian System — Referee Map</title>
 <style>
 /* ── Variables ── */
@@ -1678,6 +1681,12 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #root.anim-off .ast,
 #root.anim-off .loc-station-icon{animation:none!important}
 #root.rings-off .orbit-ring{display:none!important}
+/* Honour the OS "reduce motion" setting for the same ambient animations — a
+   user who asked for reduced motion shouldn't get hundreds of jittering belt
+   dots (accessibility) and shouldn't pay their per-frame cost (performance). */
+@media(prefers-reduced-motion:reduce){
+  #star-glow-outer,#star-glow-mid,.twinkle-a,.twinkle-b,.twinkle-c,.ast,.loc-station-icon{animation:none!important}
+}
 
 /* ── Referee + Design header menus (cloned from #settings-menu) ── */
 #referee-menu,#design-menu{
@@ -4955,6 +4964,9 @@ let selectedBody = null;
 const ORR_SX = 594, ORR_SY = 180;
 const ORR_TILT = -28 * Math.PI / 180;
 const ORR_COS = Math.cos(ORR_TILT), ORR_SIN = Math.sin(ORR_TILT);
+// Max belt dots that ANIMATE per orrery render (across all belts). Excess dots
+// draw static — bounds per-frame compositor cost on dense/multi-belt systems.
+const ORR_ANIM_DOT_BUDGET = 180;
 const ORR_INNER_A = 75;    // semi-major of orbit slot 1
 const ORR_OUTER_A = 435;   // semi-major of the outermost slot
 const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
@@ -5097,6 +5109,11 @@ function buildOrrery(){
   }
 
   // ── Asteroid belts — seeded procedural dot fields ──────────
+  // The per-dot "vibe" is a sub-pixel transform animation; on SVG circles it is
+  // not GPU-composited, so hundreds of them melt frame rate on tablet hardware.
+  // Cap how many dots ANIMATE (across all belts) — the rest render identically
+  // but static. Visual density is unchanged; the jitter is imperceptible anyway.
+  let animBudget = ORR_ANIM_DOT_BUDGET;
   bodies.forEach(b => {
     if(!isBeltBody(b) || !b.orbitPos) return;
     const [va, vb] = orbitAxes(b.orbitPos, maxP);
@@ -5117,7 +5134,9 @@ function buildOrrery(){
       const ex = ra * Math.cos(ang), ey = rb * Math.sin(ang);
       const vx = ORR_SX + ex*ORR_COS - ey*ORR_SIN;
       const vy = ORR_SY + ex*ORR_SIN + ey*ORR_COS;
-      html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" class="ast ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s" pointer-events="none"/>`;
+      const animate = animBudget > 0; if(animate) animBudget--;
+      const anim = animate ? ` ${vibeClass}" style="animation-duration:${vibeDur}s;animation-delay:-${vibeDelay}s"` : `"`;
+      html += `<circle cx="${vx.toFixed(1)}" cy="${vy.toFixed(1)}" r="${dotSize.toFixed(1)}" fill="${col}" opacity="${op.toFixed(2)}" class="ast${anim} pointer-events="none"/>`;
     }
     // Belt click target + label at the fan position
     const [bpx,bpy] = orbitPoint(va, vb, ORR_PLANET_T);
@@ -7745,7 +7764,11 @@ function applyContentTokenFromInput(){
   setContentToken(el ? el.value : '');
   location.reload();
 }
-function clearContentToken(){ setContentToken(''); location.reload(); }
+function clearContentToken(){
+  const t = getContentToken();
+  if(t){ try { localStorage.removeItem(_contentCacheKey(t)); } catch(e){} } // wipe cached content on sign-out
+  setContentToken(''); location.reload();
+}
 // Mirror of the server/extractor classification: fields stripped locally before
 // server fragments are applied. MUST stay in sync with tools/extract-content.mjs.
 const REDACT_FIELDS = {
@@ -7795,6 +7818,36 @@ function refreshSecureViews(){
     else if(currentView === 'station' && cur){ renderTabs(); renderDetail(); }
   } catch(e){ console.error('refreshSecureViews failed', e); }
 }
+// Offline cache (Stage 3.1): the device keeps its OWN token's last get-content
+// response so a mid-session dropout falls back to last-known content instead of
+// failing closed. It only ever caches content the token is authorised to see, on
+// that user's own device, and clearContentToken() wipes it on sign-out.
+function _contentCacheKey(token){ return 'aurelia_content_' + token; }
+function cacheSecureContent(token, data){
+  try { localStorage.setItem(_contentCacheKey(token), JSON.stringify(
+    { identity: data.identity, role: data.role, content: data.content, reveals: data.reveals })); }
+  catch(e){ /* quota / disabled — non-fatal, the live fetch already worked */ }
+}
+function getCachedSecureContent(token){
+  try { const raw = localStorage.getItem(_contentCacheKey(token)); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+// Strip baked-in secrets, apply this token's fragments, and bind its role to the UI.
+function applyHydratedData(data){
+  stripLocalSecrets();
+  applySecureFragments(data.content);
+  // A player token enters player mode so referee CHROME (Oracle, referee/design
+  // menus, clock controls — all .ref-only) hides too, not just the content.
+  secureRole = (data.role === 'referee') ? 'referee' : 'player';
+  if(data.identity) myIdentity = data.identity;
+  const fp = document.getElementById('float-panels');
+  const playerMode = secureRole !== 'referee';
+  if(pmCheck) pmCheck.checked = playerMode;
+  if(rootEl) rootEl.classList.toggle('pm-active', playerMode);
+  if(fp) fp.classList.toggle('pm-active', playerMode);
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  refreshSecureViews();
+}
 async function hydrateSecureContent(){
   const token = getContentToken();
   if(!token) return false;                 // secure mode off → keep hardcoded data
@@ -7807,27 +7860,20 @@ async function hydrateSecureContent(){
     });
     if(!res.ok) throw new Error('get-content ' + res.status);
     data = await res.json();
+    cacheSecureContent(token, data);       // refresh the offline fallback on every success
   } catch(e){
-    // Fail to USABILITY in Stage 2 (keep hardcoded data) but warn loudly; Stage 3
-    // will fail CLOSED once the bundle no longer carries the secrets.
+    // Offline / unreachable: fall back to this token's last cached content so a
+    // referee doesn't lose their NPCs/checks mid-session. No cache → fail CLOSED
+    // (the bundle holds no secrets), leaving the player-safe shell.
     console.error('Secure content fetch failed', e);
-    if(typeof showToast === 'function') showToast('Secure content unavailable — check token/connection. Showing local data.');
-    return false;
+    data = getCachedSecureContent(token);
+    if(!data){
+      if(typeof showToast === 'function') showToast('Secure content unavailable — check token/connection.');
+      return false;
+    }
+    if(typeof showToast === 'function') showToast('Offline — using last saved content.');
   }
-  stripLocalSecrets();
-  applySecureFragments(data.content);
-  // Bind the token's role to the whole UI: a player token enters player mode so
-  // referee CHROME (Oracle, referee/design menus, clock controls — all .ref-only)
-  // hides too, not just the content. Referee token keeps referee mode.
-  secureRole = (data.role === 'referee') ? 'referee' : 'player';
-  if(data.identity) myIdentity = data.identity;
-  const fp = document.getElementById('float-panels');
-  const playerMode = secureRole !== 'referee';
-  if(pmCheck) pmCheck.checked = playerMode;
-  if(rootEl) rootEl.classList.toggle('pm-active', playerMode);
-  if(fp) fp.classList.toggle('pm-active', playerMode);
-  if(typeof applyIdentityClass === 'function') applyIdentityClass();
-  refreshSecureViews();
+  applyHydratedData(data);
   return true;
 }
 
@@ -14734,6 +14780,13 @@ kbdLoad();
 loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on-demand in Settings
 renderEventLog();
 renderRsrMarkers();
+</script>
+<script>
+// Register the offline-shell service worker. Secure-context only (https / the
+// installed PWA), and failure is non-fatal — the app runs identically without it.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
