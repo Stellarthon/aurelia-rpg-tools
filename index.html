@@ -7164,8 +7164,11 @@ const REVEALABLE_AURELIA_LOCS  = ['station','capitol','cradle','hegemony-base','
 let revealedAreas = {}; // {areaId: true/false} — shared
 let myIdentity = null;  // local to this device — "Rhett Calder", "Cassia Velen", etc.
 let notesViewMode = 'private'; // 'private' | 'party'
+let secureRole = null;  // set from the get-content token response; overrides pmCheck when present
 
-function isReferee(){ return !pmCheck.checked; }
+// With a secure token, the SERVER's role is authoritative for the whole UI
+// (chrome + content). Without one, fall back to the local player-mode checkbox.
+function isReferee(){ return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
 
 // ── Permission model (V1) ────────────────────────────────────────────────
 // Per-viewer information gating. This is spoiler/visibility control, NOT
@@ -7277,6 +7280,17 @@ async function hydrateSecureContent(){
   }
   stripLocalSecrets();
   applySecureFragments(data.content);
+  // Bind the token's role to the whole UI: a player token enters player mode so
+  // referee CHROME (Oracle, referee/design menus, clock controls — all .ref-only)
+  // hides too, not just the content. Referee token keeps referee mode.
+  secureRole = (data.role === 'referee') ? 'referee' : 'player';
+  if(data.identity) myIdentity = data.identity;
+  const fp = document.getElementById('float-panels');
+  const playerMode = secureRole !== 'referee';
+  if(pmCheck) pmCheck.checked = playerMode;
+  if(rootEl) rootEl.classList.toggle('pm-active', playerMode);
+  if(fp) fp.classList.toggle('pm-active', playerMode);
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
   refreshSecureViews();
   return true;
 }
