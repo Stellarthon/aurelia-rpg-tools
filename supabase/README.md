@@ -57,8 +57,16 @@ select identity, role, token from public.players;  -- hand each token out once
 ## Step 4 — Deploy the Edge Function (Stage 1)
 
 ```bash
-supabase functions deploy get-content
+supabase functions deploy get-content --no-verify-jwt
 ```
+
+**⚠ JWT verification MUST be off for this function.** Our bearer token is our own
+opaque player/referee token, not a Supabase JWT — with the platform's JWT gate on,
+the gateway returns 401 *before* the function runs (the cause of the
+"Secure content unavailable" toast). `config.toml` sets `verify_jwt = false` for
+CLI deploys; if you deployed via the **dashboard**, open the function → **Details/
+Settings** and turn **OFF** "Verify JWT" / "Enforce JWT verification", then
+redeploy the (updated) source.
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform — no
 manual key handling, and the service-role key never leaves the server.
