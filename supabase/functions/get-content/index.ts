@@ -13,7 +13,10 @@
 //   → 200 { identity, role, content: [{path, value}], reveals }
 //     401 { error } on a bad/missing token
 //
-// Deploy:  supabase functions deploy get-content
+// Deploy:  supabase functions deploy get-content --no-verify-jwt
+//          (or toggle OFF "Verify JWT" / "Enforce JWT" for this function in the
+//           dashboard). REQUIRED: our bearer token is NOT a Supabase JWT, so with
+//           JWT verification ON the gateway 401s before this code runs.
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically
 //          by the platform; no manual key handling.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,7 +24,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  // Must list every header the browser sends, or the preflight blocks the call.
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (body: unknown, status = 200) =>
