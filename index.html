@@ -3094,65 +3094,196 @@ input#ui-scale-range{
 // SYSTEM DATA
 // ═══════════════════════════════════════════════════════════════════════════
 const BASE_BODIES_AUROS = [
-  {id:"auros",name:"Auros",type:"K3 V Orange Dwarf · Primary Star",tag:null,color:"#E07030",orbitAU:"—",uwpString:"—",diameter:"~1.08 M☉ diameter",period:"—",isMoon:false,isStar:true,hook:false,displayRadius:18,
-  desc:"A calm, long-lived orange dwarf approximately 78% the mass of Sol. Its light gives Aurelia's sky its distinctive copper tint and bathes the inner system in warm amber-gold. K-type stars are considered ideal for long-term colonisation: low flare activity, extended main-sequence lifespan, stable output for billions of years.\n\nThe Hegemony chose this system deliberately. Nothing about Aurelia was an accident.",
-  refNote:"K-type stars have significantly lower UV output than G-type. The UV index at Aurelia's surface is roughly 30% lower than a Sol-equivalent world — affecting everything from agriculture to the atmospheric chemistry the Cleaners live with. The Hegemony's xenobiologists know this. The colonists were not told.",
-  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
-
-  {id:"scoria",name:"Scoria",type:"Terrestrial · Scorched Rock",tag:"FLAVOUR",color:"#887755",orbitAU:"0.28 AU",uwpString:"X100000-0",diameter:"~4,800 km",period:"48 standard days",isMoon:false,isStar:false,hook:false,displayRadius:7,
-  desc:"A tidally locked inner world — ~430°C on the day side, -180°C on the night side. No atmosphere worth naming. A dead archive of early system formation, the night side covered in concentric impact craters.",
-  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:1},
-
-  {id:"aurelia",name:"Aurelia",type:"Terrestrial · Jewel World",tag:"CAMPAIGN HUB",color:"#4A90D9",orbitAU:"0.71 AU",uwpString:"B867976-C",diameter:"~11,400 km",period:"214 standard days",isMoon:false,isStar:false,hook:true,displayRadius:11,
-  desc:"The campaign's heart. A warm, dense world with extensive ocean coverage, a copper-tinted sky, and a population of 800 million in coastal arcologies and the deep-water city known as the Cradle.\n\nThe Hegemony's showpiece. Every promotional image shows the turquoise south coast and the twin peaks of the Spire Range.\n\nThe atmosphere has a classified taint: long-term unfiltered exposure causes progressive respiratory degradation over 20–30 years. The data is suppressed. The Cleaners know. The surface population does not.",
-  refNote:"The atmospheric taint is the Hegemony's dirtiest secret. The Cleaners living underground aren't just a lower caste — they're the only long-term survivors. Surface residents have a life expectancy 18 years shorter than published health data suggests. The RSR has a copy of the suppressed epidemiological study.",
-  readAloud:"Aurelia from orbit: the atmosphere catches Auros's orange light and scatters it into something the colour of a lit copper kettle. The night side shows city-glow in chains along the coastline. The orbital station sits at L2, permanently in Aurelia's shadow.",
-  npcs:[],checks:[],events:[],orbitPos:2},
-
-  {id:"pallor",name:"Pallor",type:"Moon · Tidally Locked",tag:"FLAVOUR",color:"#B0B0B0",orbitAU:"Aurelia moon",uwpString:"Y200000-0",diameter:"~2,400 km",period:"18.3 standard days",isMoon:true,parentId:"aurelia",isStar:false,hook:false,
-  desc:"Aurelia's sole natural satellite — small, grey, airless, tidally locked. Not beautiful enough to feature in Hegemony promotional material.\n\nThere is a decommissioned relay station on the far side that has been dark for twenty years. The RSR uses it for dead drops.",
-  refNote:"The relay station on the far side: no guards, no power. Navigation requires Vacc Suit 8+ and Navigation 6+ to find the right crater without a working beacon.",
-  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
-
-  {id:"greymantle",name:"Greymantle",type:"Terrestrial · Ice-Rock",tag:"FLAVOUR",color:"#9999AA",orbitAU:"1.8 AU",uwpString:"D200100-4",diameter:"~6,200 km",period:"~2.4 standard years",isMoon:false,isStar:false,hook:false,displayRadius:8,
-  desc:"A cold, thin-atmosphered mid-system world with ~100 people in a pressurised way-station. Greymantle's main industry is being on the route between Aurelia and the Veil — Class D starport, refuelling tanks, two people who don't ask questions about cargo manifests.",
-  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:3},
-
-  {id:"veil",name:"The Veil",type:"Asteroid Belt",tag:"ADVENTURE HOOK",color:"#8B7355",orbitAU:"1.3 AU",uwpString:"E000200-5",diameter:"Diffuse belt, ~0.4 AU wide",period:"~1.8 standard years (inner edge)",isMoon:false,isStar:false,hook:true,beltDensity:420,
-  desc:"A dense asteroid belt — remnant of a planet that failed to coalesce, or perhaps one that was broken apart. At certain orbital positions it creates a faint dust haze visible from Aurelia at dawn.\n\nSmall, unlicensed population of ~300 belt miners, scavengers, and people avoiding questions. Their settlement: Cairn Station, Law Level 0.",
-  refNote:"The information broker Sable operates out of Cairn Station. She has authenticated records of the Meridian's Edge's prior registration — the ship's history includes a job the Hegemony would very much like to keep quiet.",
-  readAloud:"The belt doesn't look like much at approach — scattered rocks catching Auros's amber light. Then the density increases and navigation gets serious. Cairn Station announces itself with running lights and a comms challenge.",
-  npcs:[{name:"Sable",role:"Information broker · Cairn Station",stats:{STR:5,DEX:9,END:7,INT:13,EDU:12,SOC:6},skills:"Broker 3, Deception 3, Streetwise 2, Computers 2, Investigate 2",rows:[["Manner","Entirely still. Watches everything. Never volunteers anything."],["Price","Information costs information. She wants the crew's data on the Graveyard incident."],["On the ship","Knows the Meridian's Edge by its previous registration. Will trade this for the Graveyard intel."],["Red line","Will not sell anything that gets her sources killed. Non-negotiable."]]}],
-  checks:[{skill:"Broker 9+ / Streetwise 10+ (negotiate with Sable)",degrees:[{label:"Effect 4+",cls:"deg-s",text:"Sable provides the registration data and volunteers one additional item: a name associated with Project Chimera."},{label:"Success",cls:"deg-s",text:"Standard trade: Graveyard intel for ship registration data."},{label:"Failure",cls:"deg-f",text:"Sable declines. She'll reconsider if the crew comes back with something she actually wants."},{label:"Effect -2",cls:"deg-f",text:"Sable marks the crew as liabilities. Future contact in the Veil is at -2 to all social checks."}]}],
-  events:[{t:"At Cairn Station",e:"A miner with a fresh burn scar on his forearm watches the crew from the bar. He's been there since they arrived. When they move, he repositions — not toward them, just repositioning. Working for someone, or paranoid from too long in the belt. Both are possible."}],
-  orbitPos:4},
-
-  {id:"tanath",name:"Tanath",type:"Gas Giant · Major",tag:"ADVENTURE HOOK",color:"#C87941",orbitAU:"5.4 AU",uwpString:"D——0164-8",diameter:"~140,000 km (est.)",period:"12.3 standard years",isMoon:false,isStar:false,hook:true,displayRadius:18,ringStyle:"major",
-  desc:"A warm, massive gas giant banded in deep amber and rust-red — a miniature echo of Auros itself. OmniSynth's Extraction Rig Tanath-7 operates in the upper atmosphere, extracting fuel for sale. Technically a licensed commercial operation. In practice also a data relay, crew rotation point, and a place to fence things without clean provenance.",
-  refNote:"Tanath-7 is staffed by ~60 rotating OmniSynth contractors and a permanent administrative staff. Station manager Forlan has been on Tanath-7 longer than any three contractors combined. She knows what the rig is really used for. She has opinions about it.",
-  readAloud:"Tanath fills the screen even at standard approach distance. Deep amber striations over rust-red, white ammonia clouds at the poles in slow spirals. At the terminator, the night side glows faintly from internal heat.",
-  npcs:[{name:"Forlan",role:"Station manager · Tanath-7",stats:{STR:8,DEX:7,END:9,INT:11,EDU:10,SOC:7},skills:"Admin 3, Engineer (power) 2, Persuade 2, Streetwise 2, Gun Combat 1",rows:[["Manner","Flat affect, direct, no small talk. Eleven years on this platform."],["On the Dark Moon","Knows it exists. Will not discuss it. 'Not something you can offer me.'"],["Useful","Will tell the crew when the next Hegemony inspection is scheduled. Voluntarily. She has her own reasons."]]}],
-  checks:[],events:[],orbitPos:5},
-
-  {id:"esk",name:"Esk",type:"Moon · Sensor Array",tag:"RESTRICTED",color:"#4A90D9",orbitAU:"Tanath moon I",uwpString:"C100089-9",diameter:"~3,800 km",period:"7.1 standard days",isMoon:true,parentId:"tanath",isStar:false,hook:false,
-  desc:"A small, airless moon with a large Hegemony sensor array watching the outer system — jump emergence points, approaching traffic. Eight Navy personnel on six-week rotations. They tend not to volunteer twice.",
-  refNote:"Law Level 9 — shoot first if you approach without clearance. The array is pointed outward. A ship running silent from Tanath's shadow side: Pilot 10+ and Stealth 8+ (ship systems).",
-  readAloud:null,npcs:[],checks:[],events:[],orbitPos:null},
-
-  {id:"nara",name:"Nara",type:"Moon · Rest Station",tag:"FLAVOUR",color:"#9B7B5B",orbitAU:"Tanath moon II",uwpString:"D310112-7",diameter:"~4,200 km",period:"14.4 standard days",isMoon:true,parentId:"tanath",isStar:false,hook:false,
-  desc:"A pressurised rest dome OmniSynth built for Tanath-7 contractor rotation. Utilitarian — bunks, a rec room, a bar that serves two things and neither of them well. ~20 people at any time.",
-  refNote:"Good place to overhear things. Workers talk freely because they don't think anyone important is listening. Rumours about the Dark Moon surface here — seed this hook if needed.",
-  readAloud:null,npcs:[],checks:[],events:[{t:"At the bar",e:"Two off-duty contractors talk in low voices about something they saw on the sensor logs. They stop when they notice the crew listening. One looks at the other. The other shakes his head slightly."}],orbitPos:null},
-
-  {id:"darkmoon",name:"The Dark Moon",type:"Moon · CLASSIFIED",tag:"CLASSIFIED",color:"#2A2A3A",orbitAU:"Tanath moon III (unlisted)",uwpString:"X200000-0",diameter:"~3,100 km",period:"22.7 standard days (retrograde)",isMoon:true,parentId:"tanath",isStar:false,hook:true,decoration:"cluster",
-  desc:"Not on standard charts. Not in the Hegemony's public registry. Not visible on the orbital station's navigation display.\n\nRetrograde orbit — it moves opposite to the other Tanath moons, which means it formed elsewhere, was captured, or was placed there. The Hegemony sensor array on Esk is deliberately pointed away from it.",
-  refNote:"Choose one of the three theories and commit to it before the crew gets here. Seed the other two as plausible distractions — red herrings with enough truth to be convincing.\n\nThree theories:\n1. An Eidolon ruin site — pre-Collapse xenoarchaeology the Hegemony is keeping off the books.\n2. A Project Chimera black site — active research they cannot afford to have inspected.\n3. Something older than either. Nothing that arrived in this system built it.",
-  readAloud:"There is nothing on sensors where there should be nothing. Then — briefly, for eleven seconds — there is something. Then there is nothing again. The sensor logs do not retain the eleven seconds. This is not a glitch.",
-  npcs:[],checks:[],events:[],orbitPos:null},
-
-  {id:"ouros",name:"Ouros",type:"Ice Giant · Outer System",tag:"FLAVOUR",color:"#2AABB8",orbitAU:"14.2 AU",uwpString:"X——0000-0",diameter:"~38,000 km",period:"53.4 standard years",isMoon:false,isStar:false,hook:false,displayRadius:13,ringStyle:"subtle",
-  desc:"A pale blue-green ice giant in the deep outer system. No installations. No traffic. Three small unnamed moons, none surveyed beyond preliminary pass data. The Hegemony has no interest in the deep outer system at present. The Archon Collective may.",
-  refNote:null,readAloud:null,npcs:[],checks:[],events:[],orbitPos:6}
+  {
+    "id": "auros",
+    "name": "Auros",
+    "type": "K3 V Orange Dwarf · Primary Star",
+    "tag": null,
+    "color": "#E07030",
+    "orbitAU": "—",
+    "uwpString": "—",
+    "diameter": "~1.08 M☉ diameter",
+    "period": "—",
+    "isMoon": false,
+    "isStar": true,
+    "displayRadius": 18,
+    "desc": "A calm, long-lived orange dwarf approximately 78% the mass of Sol. Its light gives Aurelia's sky its distinctive copper tint and bathes the inner system in warm amber-gold. K-type stars are considered ideal for long-term colonisation: low flare activity, extended main-sequence lifespan, stable output for billions of years.\n\nThe Hegemony chose this system deliberately. Nothing about Aurelia was an accident.",
+    "readAloud": null,
+    "orbitPos": null
+  },
+  {
+    "id": "scoria",
+    "name": "Scoria",
+    "type": "Terrestrial · Scorched Rock",
+    "tag": "FLAVOUR",
+    "color": "#887755",
+    "orbitAU": "0.28 AU",
+    "uwpString": "X100000-0",
+    "diameter": "~4,800 km",
+    "period": "48 standard days",
+    "isMoon": false,
+    "isStar": false,
+    "displayRadius": 7,
+    "desc": "A tidally locked inner world — ~430°C on the day side, -180°C on the night side. No atmosphere worth naming. A dead archive of early system formation, the night side covered in concentric impact craters.",
+    "readAloud": null,
+    "orbitPos": 1
+  },
+  {
+    "id": "aurelia",
+    "name": "Aurelia",
+    "type": "Terrestrial · Jewel World",
+    "tag": "CAMPAIGN HUB",
+    "color": "#4A90D9",
+    "orbitAU": "0.71 AU",
+    "uwpString": "B867976-C",
+    "diameter": "~11,400 km",
+    "period": "214 standard days",
+    "isMoon": false,
+    "isStar": false,
+    "displayRadius": 11,
+    "desc": "The campaign's heart. A warm, dense world with extensive ocean coverage, a copper-tinted sky, and a population of 800 million in coastal arcologies and the deep-water city known as the Cradle.\n\nThe Hegemony's showpiece. Every promotional image shows the turquoise south coast and the twin peaks of the Spire Range.\n\nThe atmosphere has a classified taint: long-term unfiltered exposure causes progressive respiratory degradation over 20–30 years. The data is suppressed. The Cleaners know. The surface population does not.",
+    "readAloud": "Aurelia from orbit: the atmosphere catches Auros's orange light and scatters it into something the colour of a lit copper kettle. The night side shows city-glow in chains along the coastline. The orbital station sits at L2, permanently in Aurelia's shadow.",
+    "orbitPos": 2
+  },
+  {
+    "id": "pallor",
+    "name": "Pallor",
+    "type": "Moon · Tidally Locked",
+    "tag": "FLAVOUR",
+    "color": "#B0B0B0",
+    "orbitAU": "Aurelia moon",
+    "uwpString": "Y200000-0",
+    "diameter": "~2,400 km",
+    "period": "18.3 standard days",
+    "isMoon": true,
+    "parentId": "aurelia",
+    "isStar": false,
+    "desc": "Aurelia's sole natural satellite — small, grey, airless, tidally locked. Not beautiful enough to feature in Hegemony promotional material.\n\nThere is a decommissioned relay station on the far side that has been dark for twenty years. The RSR uses it for dead drops.",
+    "readAloud": null,
+    "orbitPos": null
+  },
+  {
+    "id": "greymantle",
+    "name": "Greymantle",
+    "type": "Terrestrial · Ice-Rock",
+    "tag": "FLAVOUR",
+    "color": "#9999AA",
+    "orbitAU": "1.8 AU",
+    "uwpString": "D200100-4",
+    "diameter": "~6,200 km",
+    "period": "~2.4 standard years",
+    "isMoon": false,
+    "isStar": false,
+    "displayRadius": 8,
+    "desc": "A cold, thin-atmosphered mid-system world with ~100 people in a pressurised way-station. Greymantle's main industry is being on the route between Aurelia and the Veil — Class D starport, refuelling tanks, two people who don't ask questions about cargo manifests.",
+    "readAloud": null,
+    "orbitPos": 3
+  },
+  {
+    "id": "veil",
+    "name": "The Veil",
+    "type": "Asteroid Belt",
+    "tag": "ADVENTURE HOOK",
+    "color": "#8B7355",
+    "orbitAU": "1.3 AU",
+    "uwpString": "E000200-5",
+    "diameter": "Diffuse belt, ~0.4 AU wide",
+    "period": "~1.8 standard years (inner edge)",
+    "isMoon": false,
+    "isStar": false,
+    "beltDensity": 420,
+    "desc": "A dense asteroid belt — remnant of a planet that failed to coalesce, or perhaps one that was broken apart. At certain orbital positions it creates a faint dust haze visible from Aurelia at dawn.\n\nSmall, unlicensed population of ~300 belt miners, scavengers, and people avoiding questions. Their settlement: Cairn Station, Law Level 0.",
+    "readAloud": "The belt doesn't look like much at approach — scattered rocks catching Auros's amber light. Then the density increases and navigation gets serious. Cairn Station announces itself with running lights and a comms challenge.",
+    "orbitPos": 4
+  },
+  {
+    "id": "tanath",
+    "name": "Tanath",
+    "type": "Gas Giant · Major",
+    "tag": "ADVENTURE HOOK",
+    "color": "#C87941",
+    "orbitAU": "5.4 AU",
+    "uwpString": "D——0164-8",
+    "diameter": "~140,000 km (est.)",
+    "period": "12.3 standard years",
+    "isMoon": false,
+    "isStar": false,
+    "displayRadius": 18,
+    "ringStyle": "major",
+    "desc": "A warm, massive gas giant banded in deep amber and rust-red — a miniature echo of Auros itself. OmniSynth's Extraction Rig Tanath-7 operates in the upper atmosphere, extracting fuel for sale. Technically a licensed commercial operation. In practice also a data relay, crew rotation point, and a place to fence things without clean provenance.",
+    "readAloud": "Tanath fills the screen even at standard approach distance. Deep amber striations over rust-red, white ammonia clouds at the poles in slow spirals. At the terminator, the night side glows faintly from internal heat.",
+    "orbitPos": 5
+  },
+  {
+    "id": "esk",
+    "name": "Esk",
+    "type": "Moon · Sensor Array",
+    "tag": "RESTRICTED",
+    "color": "#4A90D9",
+    "orbitAU": "Tanath moon I",
+    "uwpString": "C100089-9",
+    "diameter": "~3,800 km",
+    "period": "7.1 standard days",
+    "isMoon": true,
+    "parentId": "tanath",
+    "isStar": false,
+    "desc": "A small, airless moon with a large Hegemony sensor array watching the outer system — jump emergence points, approaching traffic. Eight Navy personnel on six-week rotations. They tend not to volunteer twice.",
+    "readAloud": null,
+    "orbitPos": null
+  },
+  {
+    "id": "nara",
+    "name": "Nara",
+    "type": "Moon · Rest Station",
+    "tag": "FLAVOUR",
+    "color": "#9B7B5B",
+    "orbitAU": "Tanath moon II",
+    "uwpString": "D310112-7",
+    "diameter": "~4,200 km",
+    "period": "14.4 standard days",
+    "isMoon": true,
+    "parentId": "tanath",
+    "isStar": false,
+    "desc": "A pressurised rest dome OmniSynth built for Tanath-7 contractor rotation. Utilitarian — bunks, a rec room, a bar that serves two things and neither of them well. ~20 people at any time.",
+    "readAloud": null,
+    "orbitPos": null
+  },
+  {
+    "id": "darkmoon",
+    "name": "The Dark Moon",
+    "type": "Moon · CLASSIFIED",
+    "tag": "CLASSIFIED",
+    "color": "#2A2A3A",
+    "orbitAU": "Tanath moon III (unlisted)",
+    "uwpString": "X200000-0",
+    "diameter": "~3,100 km",
+    "period": "22.7 standard days (retrograde)",
+    "isMoon": true,
+    "parentId": "tanath",
+    "isStar": false,
+    "decoration": "cluster",
+    "desc": "Not on standard charts. Not in the Hegemony's public registry. Not visible on the orbital station's navigation display.\n\nRetrograde orbit — it moves opposite to the other Tanath moons, which means it formed elsewhere, was captured, or was placed there. The Hegemony sensor array on Esk is deliberately pointed away from it.",
+    "readAloud": "There is nothing on sensors where there should be nothing. Then — briefly, for eleven seconds — there is something. Then there is nothing again. The sensor logs do not retain the eleven seconds. This is not a glitch.",
+    "orbitPos": null
+  },
+  {
+    "id": "ouros",
+    "name": "Ouros",
+    "type": "Ice Giant · Outer System",
+    "tag": "FLAVOUR",
+    "color": "#2AABB8",
+    "orbitAU": "14.2 AU",
+    "uwpString": "X——0000-0",
+    "diameter": "~38,000 km",
+    "period": "53.4 standard years",
+    "isMoon": false,
+    "isStar": false,
+    "displayRadius": 13,
+    "ringStyle": "subtle",
+    "desc": "A pale blue-green ice giant in the deep outer system. No installations. No traffic. Three small unnamed moons, none surveyed beyond preliminary pass data. The Hegemony has no interest in the deep outer system at present. The Archon Collective may.",
+    "readAloud": null,
+    "orbitPos": 6
+  }
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3187,277 +3318,740 @@ const GALAXY_FACTIONS = {
 const NODE_COLOR = '#00e5ff';
 
 const GALAXY_NODES = [
-  // ──  ── The Vast / Ghost Reef (left fringe) ──────────────────────────────
-  { id:'silent-witness',   name:'Gliese 526',          x:90,  y:350, faction:'archon',
-    label:'Silent Night',
-    connections:['whisper'],
-    desc:'Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains.' },
-
-  { id:'whisper',          name:'Gliese 667 Cc',       x:112, y:462, faction:'vast',
-    label:'Whisper',
-    connections:['silent-witness','the-mausoleum','threshold'],
-    desc:'Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all.' },
-
-  { id:'the-mausoleum',    name:'Hyades Cluster',      x:172, y:490, faction:'archon',
-    label:'The Mausoleum',
-    connections:['whisper','threshold','the-fade'],
-    desc:'The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active.' },
-
-  { id:'threshold',        name:'Gliese 229',          x:88,  y:562, faction:'vast',
-    label:'Threshold',
-    connections:['whisper','the-mausoleum','the-fade','echo'],
-    desc:'Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through.' },
-
-  { id:'the-fade',         name:'Gliese 581 D',        x:162, y:548, faction:'vast',
-    label:'The Fade',
-    connections:['the-mausoleum','threshold'],
-    desc:'The Fade — A region of space slowly "unmaking." Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back.' },
-
-  { id:'echo',             name:'Uncharted Nebula',    x:85,  y:648, faction:'vast',
-    label:'Echo',
-    connections:['threshold'],
-    desc:'Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within.' },
-
-  { id:'the-reach',        name:"Kapteyn's Star",     x:218, y:745, faction:'independent',
-    label:'The Reach',
-    connections:['meridian'],
-    desc:"The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight." },
-
-  // ── Congregation of the Second Fall ───────────────────────────────── ──
-  { id:'ironhold',         name:'Gliese 806',          x:295, y:108, faction:'sanhedrin',
-    label:'Redemption',
-    connections:['penitence','redemption'],
-    desc:'Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer.' },
-
-  { id:'penitence',        name:'Gliese 563',          x:298, y:200, faction:'sanhedrin',
-    label:'Penitence',
-    connections:['ironhold','the-garden','sanhedrin-prime'],
-    desc:"Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet." },
-
-  { id:'the-garden',       name:'Gliese 706',          x:290, y:318, faction:'sanhedrin',
-    label:'The Garden',
-    connections:['penitence','sanhedrin-prime','the-hammer'],
-    desc:'The Garden — An agricultural commune run by the Congregation, producing "faithfully grown" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent.' },
-
-  { id:'redemption',       name:'Gliese 505',          x:540, y:145, faction:'sanhedrin',
-    label:'New Jerusalem',
-    connections:['ironhold','new-jerusalem','new-canaan'],
-    desc:"New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work." },
-
-  { id:'new-jerusalem',    name:'Beta Comae',          x:570, y:185, faction:'sanhedrin',
-    label:'New Canaan',
-    connections:['redemption','new-canaan'],
-    desc:'New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit.' },
-
-  { id:'new-canaan',       name:'Ursae Majoris',       x:428, y:175, faction:'sanhedrin',
-    label:'Sanhedrin Prime',
-    connections:['redemption','new-jerusalem','sanhedrin-prime'],
-    desc:"Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades." },
-
-  { id:'sanhedrin-prime',  name:'Gliese 710',          x:428, y:248, faction:'archon',
-    label:'The Echo',
-    connections:['new-canaan','the-garden','graveyard'],
-    desc:'The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols.' },
-
-  { id:'graveyard',        name:'61 Cygni',            x:518, y:248, faction:'contested',
-    label:'Graveyard',
-    connections:['sanhedrin-prime','watchtower'],
-    desc:"Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly." },
-
-  // ── Red Star Collective ────────────────────────────────────────────── ──
-  { id:'the-hammer',       name:'Deep Space (Mobile)', x:418, y:485, faction:'rsc',
-    label:'The Hammer',
-    connections:['the-forge','october-yards','aurelia','watchtower','the-garden'],
-    desc:'The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years.' },
-
-  { id:'the-forge',        name:'Deep Space (Mobile)', x:388, y:558, faction:'rsc',
-    label:'The Forge',
-    connections:['the-hammer','october-yards'],
-    desc:"The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective." },
-
-  { id:'october-yards',    name:'Gliese 406',          x:478, y:592, faction:'rsc',
-    label:'Red Sunrise',
-    connections:['the-forge','the-hammer','red-sunrise','aurelia'],
-    desc:'Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning.' },
-
-  { id:'red-sunrise',      name:'Gliese 445',          x:463, y:645, faction:'rsc',
-    label:'New Hope',
-    connections:['october-yards','meridian'],
-    desc:'New Hope — A secret Vanguard training world, home to "Liberation University." A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed.' },
-
-  // ── Terran Hegemony ────────────────────────────────────────────────── ──
-  { id:'watchtower',       name:'Procyon',             x:602, y:378, faction:'hegemony',
-    label:'Watchtower',
-    connections:['graveyard','vega','aurelia','the-hammer'],
-    desc:'Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told.' },
-
-  { id:'vega',             name:'Vega',                x:700, y:360, faction:'hegemony',
-    label:'Vega',
-    connections:['watchtower','castor'],
-    desc:"Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command." },
-
-  { id:'aurelia', systemId:'auros',          name:'Epsilon Indi',        x:602, y:478, faction:'hegemony',
-    label:'Aurelia ★',
-    connections:['watchtower','the-hammer','october-yards','sol'],
-    desc:"Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C." },
-
-  { id:'sol',              name:'Sol',                 x:660, y:445, faction:'hegemony',
-    label:'Sol',
-    connections:['castor','pollux','new-horizon'],
-    desc:'Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age.' },
-
-  { id:'castor',           name:'Castor',              x:748, y:385, faction:'hegemony',
-    label:'Castor',
-    connections:['vega','sol','pollux','warehouse'],
-    desc:"Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm." },
-
-  { id:'pollux',           name:'Alpha Centauri',      x:700, y:448, faction:'hegemony',
-    label:'Alpha Centauri',
-    connections:['castor','sol','new-horizon','the-archive','kronos'],
-    desc:'Alpha Centauri — Home to New Horizon, the "First Colony" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim.' },
-
-  { id:'new-horizon',      name:'Groombridge 34',      x:655, y:525, faction:'hegemony',
-    label:'Ironhold',
-    connections:['aurelia','sol','pollux','ophion-prime','the-archive'],
-    desc:"Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense." },
-
-  // ── OmniSynth Industries ──────────────────────────────────────────── ──
-  { id:'warehouse',        name:'Gliese 693',          x:938, y:255, faction:'omnisynth',
-    label:'Warehouse',
-    connections:['castor','profit-margin','kronos'],
-    desc:"Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias." },
-
-  { id:'profit-margin',    name:'Gliese 777',          x:1028,y:205, faction:'omnisynth',
-    label:'Profit Margin',
-    connections:['warehouse','the-anvil','kronos'],
-    desc:'Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service.' },
-
-  { id:'the-anvil',        name:'Gliese 674',          x:1168,y:252, faction:'omnisynth',
-    label:'The Anvil',
-    connections:['profit-margin','terminus'],
-    desc:"The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer." },
-
-  { id:'kronos',           name:'Gliese 667',          x:1042,y:305, faction:'omnisynth',
-    label:'Kronos Prime',
-    connections:['warehouse','profit-margin','terminus','pollux'],
-    desc:'Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security.' },
-
-  { id:'terminus',         name:'Wolf 359',            x:1118,y:342, faction:'independent',
-    label:'Terminus',
-    connections:['the-anvil','kronos','erebus'],
-    desc:'Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through.' },
-
-  { id:'erebus',           name:'TRAPPIST-1',          x:1188,y:408, faction:'independent',
-    label:'Erebus',
-    connections:['terminus','the-museum'],
-    desc:'Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation.' },
-
-  // ── UHC Loyalist ──────────────────────────────────────────────────── ──
-  { id:'the-archive',      name:'Gliese 555',          x:928, y:548, faction:'uhc',
-    label:'The Archive',
-    connections:['pollux','new-horizon','the-museum','vesta','old-earth'],
-    desc:"The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose." },
-
-  { id:'the-museum',       name:'Gliese 754',          x:1028,y:535, faction:'uhc',
-    label:'The Museum',
-    connections:['the-archive','pollux','cypress','erebus'],
-    desc:'The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution.' },
-
-  { id:'vesta',            name:'Eta Cassiopeiae',     x:918, y:618, faction:'uhc',
-    label:'Vestalia',
-    connections:['the-archive','memory','avalon'],
-    desc:'Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space.' },
-
-  { id:'old-earth',        name:'Gliese 667 C',        x:918, y:642, faction:'uhc',
-    label:'Old Earth',
-    connections:['the-archive','memory'],
-    desc:'Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how.' },
-
-  { id:'memory',           name:'Gliese 682',          x:948, y:655, faction:'uhc',
-    label:'Memory',
-    connections:['vesta','old-earth','avalon','zephyria-prime'],
-    desc:'Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world.' },
-
-  { id:'avalon',           name:'Tau Ceti',            x:938, y:715, faction:'contested',
-    label:'Avalon',
-    connections:['vesta','memory','solidarity','zephyria-prime'],
-    desc:"Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly." },
-
-  { id:'zephyria-prime',   name:'Gliese 581',          x:1015,y:732, faction:'contested',
-    label:'Zephyria Prime',
-    connections:['memory','avalon'],
-    desc:'Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything.' },
-
-  { id:'solidarity',       name:'Gliese 293',          x:878, y:760, faction:'rsc',
-    label:'Solidarity',
-    connections:['avalon','dust'],
-    desc:'Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition.' },
-
-  { id:'dust',             name:'Ross 154',            x:888, y:820, faction:'independent',
-    label:'Dust',
-    connections:['solidarity'],
-    desc:'Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered.' },
-
-  { id:'cypress',          name:'36 Ophiuchi A',       x:1108,y:580, faction:'hegemony',
-    label:'Cypress',
-    connections:['the-museum','bastion'],
-    desc:'Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails.' },
-
-  { id:'bastion',          name:'Epsilon Eridani',     x:1238,y:595, faction:'contested',
-    label:'Elysium Prime / Elysium Secundus',
-    connections:['cypress','vanguards-end','elysium-prime'],
-    desc:'Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law.' },
-
-  { id:'vanguards-end',    name:'Wolf 294',            x:1315,y:595, faction:'hegemony',
-    label:"Bastion",
-    connections:['bastion'],
-    desc:"Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence." },
-
-  { id:'elysium-prime',    name:'Luyten 726-8',        x:1205,y:665, faction:'hegemony',
-    label:"Vanguard's End",
-    connections:['bastion','elysium-secundus'],
-    desc:"Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point." },
-
-  { id:'elysium-secundus', name:'Gliese 892',          x:1270,y:678, faction:'archon',
-    label:"The Watch",
-    connections:['elysium-prime'],
-    desc:"The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed." },
-
-  // ──  ── Independent / Neutral systems ────────────────────────────────────
-  { id:'meridian',         name:'82 Eridani',          x:488, y:698, faction:'independent',
-    label:'Meridian / Meridian Prime',
-    connections:['the-reach','solitude','red-sunrise','haven'],
-    desc:"Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate." },
-
-  { id:'solitude',         name:"Luyten's Star",      x:568, y:748, faction:'independent',
-    label:'Solitude',
-    connections:['meridian','haven','ophion-prime'],
-    desc:'Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this.' },
-
-  { id:'haven',            name:'Lacaille 9352',       x:542, y:805, faction:'independent',
-    label:'Haven',
-    connections:['meridian','solitude','meridian-secundus'],
-    desc:"Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous." },
-
-  { id:'ophion-prime',     name:'HD 219134',           x:708, y:698, faction:'independent',
-    label:'Ophion Prime',
-    connections:['solitude','new-horizon','freeside'],
-    desc:"Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly." },
-
-  { id:'freeside',         name:"Barnard's Star",     x:645, y:758, faction:'independent',
-    label:'Freeside',
-    connections:['ophion-prime','meridian-secundus','havens-gate'],
-    desc:'Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort.' },
-
-  { id:'meridian-secundus',name:'Gliese 876',          x:645, y:828, faction:'independent',
-    label:'Freeport Omega',
-    connections:['haven','freeside','havens-gate'],
-    desc:'Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people.' },
-
-  { id:'havens-gate',      name:'Gliese 832',          x:708, y:868, faction:'independent',
-    label:"Haven's Gate",
-    connections:['freeside','meridian-secundus'],
-    desc:"Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from." },
+  {
+    "id": "silent-witness",
+    "name": "Gliese 526",
+    "x": 90,
+    "y": 350,
+    "faction": "archon",
+    "label": "Silent Night",
+    "connections": [
+      "whisper"
+    ],
+    "desc": "Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains."
+  },
+  {
+    "id": "whisper",
+    "name": "Gliese 667 Cc",
+    "x": 112,
+    "y": 462,
+    "faction": "vast",
+    "label": "Whisper",
+    "connections": [
+      "silent-witness",
+      "the-mausoleum",
+      "threshold"
+    ],
+    "desc": "Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all."
+  },
+  {
+    "id": "the-mausoleum",
+    "name": "Hyades Cluster",
+    "x": 172,
+    "y": 490,
+    "faction": "archon",
+    "label": "The Mausoleum",
+    "connections": [
+      "whisper",
+      "threshold",
+      "the-fade"
+    ],
+    "desc": "The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active."
+  },
+  {
+    "id": "threshold",
+    "name": "Gliese 229",
+    "x": 88,
+    "y": 562,
+    "faction": "vast",
+    "label": "Threshold",
+    "connections": [
+      "whisper",
+      "the-mausoleum",
+      "the-fade",
+      "echo"
+    ],
+    "desc": "Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through."
+  },
+  {
+    "id": "the-fade",
+    "name": "Gliese 581 D",
+    "x": 162,
+    "y": 548,
+    "faction": "vast",
+    "label": "The Fade",
+    "connections": [
+      "the-mausoleum",
+      "threshold"
+    ],
+    "desc": "The Fade — A region of space slowly \"unmaking.\" Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back."
+  },
+  {
+    "id": "echo",
+    "name": "Uncharted Nebula",
+    "x": 85,
+    "y": 648,
+    "faction": "vast",
+    "label": "Echo",
+    "connections": [
+      "threshold"
+    ],
+    "desc": "Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within."
+  },
+  {
+    "id": "the-reach",
+    "name": "Kapteyn's Star",
+    "x": 218,
+    "y": 745,
+    "faction": "independent",
+    "label": "The Reach",
+    "connections": [
+      "meridian"
+    ],
+    "desc": "The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight."
+  },
+  {
+    "id": "ironhold",
+    "name": "Gliese 806",
+    "x": 295,
+    "y": 108,
+    "faction": "sanhedrin",
+    "label": "Redemption",
+    "connections": [
+      "penitence",
+      "redemption"
+    ],
+    "desc": "Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer."
+  },
+  {
+    "id": "penitence",
+    "name": "Gliese 563",
+    "x": 298,
+    "y": 200,
+    "faction": "sanhedrin",
+    "label": "Penitence",
+    "connections": [
+      "ironhold",
+      "the-garden",
+      "sanhedrin-prime"
+    ],
+    "desc": "Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet."
+  },
+  {
+    "id": "the-garden",
+    "name": "Gliese 706",
+    "x": 290,
+    "y": 318,
+    "faction": "sanhedrin",
+    "label": "The Garden",
+    "connections": [
+      "penitence",
+      "sanhedrin-prime",
+      "the-hammer"
+    ],
+    "desc": "The Garden — An agricultural commune run by the Congregation, producing \"faithfully grown\" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent."
+  },
+  {
+    "id": "redemption",
+    "name": "Gliese 505",
+    "x": 540,
+    "y": 145,
+    "faction": "sanhedrin",
+    "label": "New Jerusalem",
+    "connections": [
+      "ironhold",
+      "new-jerusalem",
+      "new-canaan"
+    ],
+    "desc": "New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work."
+  },
+  {
+    "id": "new-jerusalem",
+    "name": "Beta Comae",
+    "x": 570,
+    "y": 185,
+    "faction": "sanhedrin",
+    "label": "New Canaan",
+    "connections": [
+      "redemption",
+      "new-canaan"
+    ],
+    "desc": "New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit."
+  },
+  {
+    "id": "new-canaan",
+    "name": "Ursae Majoris",
+    "x": 428,
+    "y": 175,
+    "faction": "sanhedrin",
+    "label": "Sanhedrin Prime",
+    "connections": [
+      "redemption",
+      "new-jerusalem",
+      "sanhedrin-prime"
+    ],
+    "desc": "Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades."
+  },
+  {
+    "id": "sanhedrin-prime",
+    "name": "Gliese 710",
+    "x": 428,
+    "y": 248,
+    "faction": "archon",
+    "label": "The Echo",
+    "connections": [
+      "new-canaan",
+      "the-garden",
+      "graveyard"
+    ],
+    "desc": "The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols."
+  },
+  {
+    "id": "graveyard",
+    "name": "61 Cygni",
+    "x": 518,
+    "y": 248,
+    "faction": "contested",
+    "label": "Graveyard",
+    "connections": [
+      "sanhedrin-prime",
+      "watchtower"
+    ],
+    "desc": "Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly."
+  },
+  {
+    "id": "the-hammer",
+    "name": "Deep Space (Mobile)",
+    "x": 418,
+    "y": 485,
+    "faction": "rsc",
+    "label": "The Hammer",
+    "connections": [
+      "the-forge",
+      "october-yards",
+      "aurelia",
+      "watchtower",
+      "the-garden"
+    ],
+    "desc": "The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years."
+  },
+  {
+    "id": "the-forge",
+    "name": "Deep Space (Mobile)",
+    "x": 388,
+    "y": 558,
+    "faction": "rsc",
+    "label": "The Forge",
+    "connections": [
+      "the-hammer",
+      "october-yards"
+    ],
+    "desc": "The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective."
+  },
+  {
+    "id": "october-yards",
+    "name": "Gliese 406",
+    "x": 478,
+    "y": 592,
+    "faction": "rsc",
+    "label": "Red Sunrise",
+    "connections": [
+      "the-forge",
+      "the-hammer",
+      "red-sunrise",
+      "aurelia"
+    ],
+    "desc": "Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning."
+  },
+  {
+    "id": "red-sunrise",
+    "name": "Gliese 445",
+    "x": 463,
+    "y": 645,
+    "faction": "rsc",
+    "label": "New Hope",
+    "connections": [
+      "october-yards",
+      "meridian"
+    ],
+    "desc": "New Hope — A secret Vanguard training world, home to \"Liberation University.\" A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed."
+  },
+  {
+    "id": "watchtower",
+    "name": "Procyon",
+    "x": 602,
+    "y": 378,
+    "faction": "hegemony",
+    "label": "Watchtower",
+    "connections": [
+      "graveyard",
+      "vega",
+      "aurelia",
+      "the-hammer"
+    ],
+    "desc": "Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told."
+  },
+  {
+    "id": "vega",
+    "name": "Vega",
+    "x": 700,
+    "y": 360,
+    "faction": "hegemony",
+    "label": "Vega",
+    "connections": [
+      "watchtower",
+      "castor"
+    ],
+    "desc": "Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command."
+  },
+  {
+    "id": "aurelia",
+    "systemId": "auros",
+    "name": "Epsilon Indi",
+    "x": 602,
+    "y": 478,
+    "faction": "hegemony",
+    "label": "Aurelia ★",
+    "connections": [
+      "watchtower",
+      "the-hammer",
+      "october-yards",
+      "sol"
+    ],
+    "desc": "Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C."
+  },
+  {
+    "id": "sol",
+    "name": "Sol",
+    "x": 660,
+    "y": 445,
+    "faction": "hegemony",
+    "label": "Sol",
+    "connections": [
+      "castor",
+      "pollux",
+      "new-horizon"
+    ],
+    "desc": "Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age."
+  },
+  {
+    "id": "castor",
+    "name": "Castor",
+    "x": 748,
+    "y": 385,
+    "faction": "hegemony",
+    "label": "Castor",
+    "connections": [
+      "vega",
+      "sol",
+      "pollux",
+      "warehouse"
+    ],
+    "desc": "Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm."
+  },
+  {
+    "id": "pollux",
+    "name": "Alpha Centauri",
+    "x": 700,
+    "y": 448,
+    "faction": "hegemony",
+    "label": "Alpha Centauri",
+    "connections": [
+      "castor",
+      "sol",
+      "new-horizon",
+      "the-archive",
+      "kronos"
+    ],
+    "desc": "Alpha Centauri — Home to New Horizon, the \"First Colony\" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim."
+  },
+  {
+    "id": "new-horizon",
+    "name": "Groombridge 34",
+    "x": 655,
+    "y": 525,
+    "faction": "hegemony",
+    "label": "Ironhold",
+    "connections": [
+      "aurelia",
+      "sol",
+      "pollux",
+      "ophion-prime",
+      "the-archive"
+    ],
+    "desc": "Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense."
+  },
+  {
+    "id": "warehouse",
+    "name": "Gliese 693",
+    "x": 938,
+    "y": 255,
+    "faction": "omnisynth",
+    "label": "Warehouse",
+    "connections": [
+      "castor",
+      "profit-margin",
+      "kronos"
+    ],
+    "desc": "Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias."
+  },
+  {
+    "id": "profit-margin",
+    "name": "Gliese 777",
+    "x": 1028,
+    "y": 205,
+    "faction": "omnisynth",
+    "label": "Profit Margin",
+    "connections": [
+      "warehouse",
+      "the-anvil",
+      "kronos"
+    ],
+    "desc": "Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service."
+  },
+  {
+    "id": "the-anvil",
+    "name": "Gliese 674",
+    "x": 1168,
+    "y": 252,
+    "faction": "omnisynth",
+    "label": "The Anvil",
+    "connections": [
+      "profit-margin",
+      "terminus"
+    ],
+    "desc": "The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer."
+  },
+  {
+    "id": "kronos",
+    "name": "Gliese 667",
+    "x": 1042,
+    "y": 305,
+    "faction": "omnisynth",
+    "label": "Kronos Prime",
+    "connections": [
+      "warehouse",
+      "profit-margin",
+      "terminus",
+      "pollux"
+    ],
+    "desc": "Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security."
+  },
+  {
+    "id": "terminus",
+    "name": "Wolf 359",
+    "x": 1118,
+    "y": 342,
+    "faction": "independent",
+    "label": "Terminus",
+    "connections": [
+      "the-anvil",
+      "kronos",
+      "erebus"
+    ],
+    "desc": "Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through."
+  },
+  {
+    "id": "erebus",
+    "name": "TRAPPIST-1",
+    "x": 1188,
+    "y": 408,
+    "faction": "independent",
+    "label": "Erebus",
+    "connections": [
+      "terminus",
+      "the-museum"
+    ],
+    "desc": "Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation."
+  },
+  {
+    "id": "the-archive",
+    "name": "Gliese 555",
+    "x": 928,
+    "y": 548,
+    "faction": "uhc",
+    "label": "The Archive",
+    "connections": [
+      "pollux",
+      "new-horizon",
+      "the-museum",
+      "vesta",
+      "old-earth"
+    ],
+    "desc": "The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose."
+  },
+  {
+    "id": "the-museum",
+    "name": "Gliese 754",
+    "x": 1028,
+    "y": 535,
+    "faction": "uhc",
+    "label": "The Museum",
+    "connections": [
+      "the-archive",
+      "pollux",
+      "cypress",
+      "erebus"
+    ],
+    "desc": "The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution."
+  },
+  {
+    "id": "vesta",
+    "name": "Eta Cassiopeiae",
+    "x": 918,
+    "y": 618,
+    "faction": "uhc",
+    "label": "Vestalia",
+    "connections": [
+      "the-archive",
+      "memory",
+      "avalon"
+    ],
+    "desc": "Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space."
+  },
+  {
+    "id": "old-earth",
+    "name": "Gliese 667 C",
+    "x": 918,
+    "y": 642,
+    "faction": "uhc",
+    "label": "Old Earth",
+    "connections": [
+      "the-archive",
+      "memory"
+    ],
+    "desc": "Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how."
+  },
+  {
+    "id": "memory",
+    "name": "Gliese 682",
+    "x": 948,
+    "y": 655,
+    "faction": "uhc",
+    "label": "Memory",
+    "connections": [
+      "vesta",
+      "old-earth",
+      "avalon",
+      "zephyria-prime"
+    ],
+    "desc": "Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world."
+  },
+  {
+    "id": "avalon",
+    "name": "Tau Ceti",
+    "x": 938,
+    "y": 715,
+    "faction": "contested",
+    "label": "Avalon",
+    "connections": [
+      "vesta",
+      "memory",
+      "solidarity",
+      "zephyria-prime"
+    ],
+    "desc": "Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly."
+  },
+  {
+    "id": "zephyria-prime",
+    "name": "Gliese 581",
+    "x": 1015,
+    "y": 732,
+    "faction": "contested",
+    "label": "Zephyria Prime",
+    "connections": [
+      "memory",
+      "avalon"
+    ],
+    "desc": "Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything."
+  },
+  {
+    "id": "solidarity",
+    "name": "Gliese 293",
+    "x": 878,
+    "y": 760,
+    "faction": "rsc",
+    "label": "Solidarity",
+    "connections": [
+      "avalon",
+      "dust"
+    ],
+    "desc": "Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition."
+  },
+  {
+    "id": "dust",
+    "name": "Ross 154",
+    "x": 888,
+    "y": 820,
+    "faction": "independent",
+    "label": "Dust",
+    "connections": [
+      "solidarity"
+    ],
+    "desc": "Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered."
+  },
+  {
+    "id": "cypress",
+    "name": "36 Ophiuchi A",
+    "x": 1108,
+    "y": 580,
+    "faction": "hegemony",
+    "label": "Cypress",
+    "connections": [
+      "the-museum",
+      "bastion"
+    ],
+    "desc": "Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails."
+  },
+  {
+    "id": "bastion",
+    "name": "Epsilon Eridani",
+    "x": 1238,
+    "y": 595,
+    "faction": "contested",
+    "label": "Elysium Prime / Elysium Secundus",
+    "connections": [
+      "cypress",
+      "vanguards-end",
+      "elysium-prime"
+    ],
+    "desc": "Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law."
+  },
+  {
+    "id": "vanguards-end",
+    "name": "Wolf 294",
+    "x": 1315,
+    "y": 595,
+    "faction": "hegemony",
+    "label": "Bastion",
+    "connections": [
+      "bastion"
+    ],
+    "desc": "Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence."
+  },
+  {
+    "id": "elysium-prime",
+    "name": "Luyten 726-8",
+    "x": 1205,
+    "y": 665,
+    "faction": "hegemony",
+    "label": "Vanguard's End",
+    "connections": [
+      "bastion",
+      "elysium-secundus"
+    ],
+    "desc": "Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point."
+  },
+  {
+    "id": "elysium-secundus",
+    "name": "Gliese 892",
+    "x": 1270,
+    "y": 678,
+    "faction": "archon",
+    "label": "The Watch",
+    "connections": [
+      "elysium-prime"
+    ],
+    "desc": "The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed."
+  },
+  {
+    "id": "meridian",
+    "name": "82 Eridani",
+    "x": 488,
+    "y": 698,
+    "faction": "independent",
+    "label": "Meridian / Meridian Prime",
+    "connections": [
+      "the-reach",
+      "solitude",
+      "red-sunrise",
+      "haven"
+    ],
+    "desc": "Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate."
+  },
+  {
+    "id": "solitude",
+    "name": "Luyten's Star",
+    "x": 568,
+    "y": 748,
+    "faction": "independent",
+    "label": "Solitude",
+    "connections": [
+      "meridian",
+      "haven",
+      "ophion-prime"
+    ],
+    "desc": "Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this."
+  },
+  {
+    "id": "haven",
+    "name": "Lacaille 9352",
+    "x": 542,
+    "y": 805,
+    "faction": "independent",
+    "label": "Haven",
+    "connections": [
+      "meridian",
+      "solitude",
+      "meridian-secundus"
+    ],
+    "desc": "Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous."
+  },
+  {
+    "id": "ophion-prime",
+    "name": "HD 219134",
+    "x": 708,
+    "y": 698,
+    "faction": "independent",
+    "label": "Ophion Prime",
+    "connections": [
+      "solitude",
+      "new-horizon",
+      "freeside"
+    ],
+    "desc": "Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly."
+  },
+  {
+    "id": "freeside",
+    "name": "Barnard's Star",
+    "x": 645,
+    "y": 758,
+    "faction": "independent",
+    "label": "Freeside",
+    "connections": [
+      "ophion-prime",
+      "meridian-secundus",
+      "havens-gate"
+    ],
+    "desc": "Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort."
+  },
+  {
+    "id": "meridian-secundus",
+    "name": "Gliese 876",
+    "x": 645,
+    "y": 828,
+    "faction": "independent",
+    "label": "Freeport Omega",
+    "connections": [
+      "haven",
+      "freeside",
+      "havens-gate"
+    ],
+    "desc": "Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people."
+  },
+  {
+    "id": "havens-gate",
+    "name": "Gliese 832",
+    "x": 708,
+    "y": 868,
+    "faction": "independent",
+    "label": "Haven's Gate",
+    "connections": [
+      "freeside",
+      "meridian-secundus"
+    ],
+    "desc": "Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from."
+  }
 ];
 
 // Lookup map by galaxy-node id.
@@ -4106,281 +4700,198 @@ function baseBodiesFor(sysId){ return (SYSTEMS[sysId] ? SYSTEMS[sysId].base : []
 // STATION DATA
 // ═══════════════════════════════════════════════════════════════════════════
 const MAIN = {
-elevator:{label:"Space Elevator",sub:"Planet surface · Currently offline",tag:"OFF LIMITS",tagBg:"#2e1f0a",tagColor:"#d4913a",ac:"#BA7517",
-read:"The orbital elevator runs from the equatorial anchor on Aurelia's surface to this platform — a cable 36,000km long, the engineering marvel of the sector. You can feel a faint vibration through the deck plates when the cars are running. Right now you cannot.\n\nThe elevator is offline for 24 hours whilst the surface terminal undergoes a drive system retrofit. A polite notice near the sealed gate explains this. Two security staff stand nearby in the manner of people who have been told to look approachable.",
-desc:"The retrofit story is real. The timing is deliberate — standard Hegemony security protocol during an active trade delegation. Someone is being kept on the surface. The RSR cell below knows who.",
-rsr:null,
-npcs:[],checks:[
-{skill:"Persuade 10+ (approach gate security)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Staff confirms 22-hour window, offers complimentary lounge access."},
-{l:"Success",c:"dp",t:"Confirms offline until tomorrow. No further access granted."},
-{l:"Failure",c:"df",t:"Polite rebuff. Second approach triggers a security flag on the crew."}]},
-{skill:"Streetwise 8+ (read the situation)",degrees:[
-{l:"Success",c:"ds",t:"The timing is too convenient. Hegemony security protocol — someone is being kept groundside during the delegation. Sable knows who."},
-{l:"Failure",c:"df",t:"Nothing beyond the official explanation."}]}],
-events:[
-{t:"Every 4 hrs",e:"Station tannoy: 'The orbital elevator remains temporarily offline for scheduled maintenance. Aurelia Station apologises for the inconvenience. Surface transport via shuttle is available at Bay 3.'"},
-{t:"Hour 22",e:"A low vibration runs through the deck plates as the elevator cable comes back online. Anyone who felt nothing on arrival feels this. The gate seal lights switch from red to amber."},
-{t:"Hour 24",e:"The gate unseals. Three Hegemony administrative staff emerge from the first car looking tired. One of them is the person the RSR cell was watching."}],
-refnotes:"The elevator returning to service at hour 24 is worth a scene if the players are still on station. Who steps off that first car can be a hook, a threat, or a reward depending on where the session has gone.\n\nDos in the maintenance level knows who was kept groundside. He'll mention it if trust is established — and it connects to his risky contact in the trade delegation.",
-conn:["concourse","docking"],subs:{}},
-
-docking:{label:"Docking Hub",sub:"Sector 10 · Hangar Bay 15",tag:"ARRIVAL",tagBg:"#1a2650",tagColor:"#5b8ef0",ac:"#185FA5",
-read:"The docking arm connects with a sound that is almost musical — a tone, not a clunk. The corridor beyond is wider than it needs to be, lit from everywhere at once, no shadows. The floor gives slightly underfoot.\n\nDockmaster Vey's glass-fronted office overlooks the hangar floor. The fuel situation is critical — the jump drive core is depleted.",
-desc:"RSR SYMBOL ①: Scratched beneath the lip of the public comms terminal near the airlock exit. Thumbnail-sized red star, arrow toward the concourse.",
-rsr:"RSR ① — beneath the public comms terminal lip, near the airlock exit. Arrow toward the concourse.",
-npcs:[{name:"Dockmaster Vey",role:"Station logistics, Sector 10",stats:{STR:6,DEX:7,END:8,INT:10,EDU:11,SOC:9},skills:"Admin 3, Broker 2, Persuade 1",rows:[["Manner","Professionally pleasant. Immovable on price. Has never needed to be flexible."],["On fuel","Standard rate. No negotiation. Becomes more polite and less helpful if pressed."],["Marek","If players genuinely cannot pay: mentions a fuel broker in the commercial district. Higher price, flexible terms."],["Alert","Subtle wrist gesture to hidden comms if players become aggressive."]]}],
-checks:[{skill:"Broker 8+ / Persuade 10+ (negotiate fuel)",degrees:[
-{l:"Effect 4+",c:"ds",t:"10% administrative discount. Maximum possible. Vey logs it as a loyalty gesture."},
-{l:"Success",c:"dp",t:"Standard rate. No discount. Pleasant about it."},
-{l:"Failure",c:"dp",t:"Suggests Marek. 15% above standard but flexible terms."},
-{l:"Effect -2",c:"df",t:"Security flag on crew. All future station checks at -1."}]}],
-events:[
-{t:"On arrival",e:"Tannoy: 'Welcome to Aurelia Orbital Station. Please have your vessel registration and passenger manifests available for review. Have a pleasant stay.'"},
-{t:"30 min in",e:"A Hegemony customs skiff does a slow pass of Bay 15, scanning the Meridian's Edge from outside. Does not hail. Does not stop. Files a routine report."},
-{t:"2 hrs in",e:"The berth fee notice appears on the ship's external terminal. Standard 48-hour rate. Payment expected within 6 hours."},
-{t:"6 hrs in",e:"Vey sends a polite automated reminder about the unpaid berth fee, if applicable."}],
-refnotes:"Tell Calder the fuel situation privately — he's the pilot, it's his job to know. Let him deliver it to the crew.\n\nLEAK ROLL: Roll 2D6 here. On a 12, word of the Sanhedrin attack at Graveyard has reached the station. The trade delegation will be briefed within the hour.\n\nThe berth was prepared before the crew announced themselves. Vey doesn't ask for papers. This should unsettle the players slightly.",
-conn:["concourse","elevator","security"],
-subs:{
-"landing-pad":{label:"Landing Pad — Bay 15",sub:"Where the Meridian's Edge sits",
-read:"Bay 15 is a mid-sized berth on the station's docking ring — large enough for a 200-ton vessel, which makes a 100-ton scout look solitary in the space. The Meridian's Edge sits at the centre of a clean composite floor that has been swept recently. Fuel lines and power umbilicals run from the bay wall to the ship's service ports.\n\nThe ship looks exactly like what she is: a hundred-ton scout/courier that has been working for a long time and has not stopped. She is not ugly. She is honest.",
-desc:"",
-ship:{name:"The Meridian's Edge",lines:[
-["Hull","100-ton streamlined wedge. Atmospheric capable. The profile is distinctive — a broad flat ventral surface tapering to a sharp prow, twin engine pods mounted asymmetrically off the port quarter."],
-["Condition","Old. Well-loved. The crystalliron armour plating shows four centuries of minor impacts. The hull is a faded grey-green that was probably a specific shade once."],
-["Engine pods","Port pod is original — smaller, older. Starboard pod is the upgrade: slightly larger, different alloy. Between them the drive output is 2G."],
-["Markings","No name plate. The name MERIDIAN'S EDGE appears on the ship's transponder. Near the portside airlock, someone has welded a small bracket to the hull. Riley made it. She hasn't explained what it was for."],
-["Interior","Cramped in the way of old ships designed by people who understood that space is weight. The mess table has six places. The sixth is in the correct position. Nobody set it there this morning."],
-["Maintenance note","Annual maintenance is 5 years overdue. All Engineering checks aboard ship are at -1 DM until this is addressed. Riley knows."],
-["Jump drive","WARP-2 capable. Originally WARP-3. The jump drive core is currently depleted. Refuelling is the priority."]]},
-npcs:[],checks:[
-{skill:"Engineering (any) 8+ — inspect the ship",degrees:[
-{l:"Effect 2+",c:"ds",t:"Full picture: -1 DM penalty confirmed, identifies three specific systems at elevated failure risk. Riley already knows all of this."},
-{l:"Success",c:"dp",t:"General assessment: overdue maintenance, several items of concern. Nothing immediately critical."},
-{l:"Failure",c:"df",t:"Surface impression only. The ship looks rough. No actionable detail."}]}],
-events:[
-{t:"Ongoing",e:"The ship's power systems emit a faint low-frequency hum. Eleos is running quiet but she is running."},
-{t:"1 hr in",e:"The fuel umbilical status light on the bay wall switches from green to amber — the standard automated reminder that the vessel has not initiated fuelling."},
-{t:"3 hrs in",e:"A station maintenance worker arrives to check the bay's environmental systems. She glances at the Meridian's Edge and does her check and leaves."}],
-refnotes:"This is the only place on the station where the crew can be alone and speak freely — Eleos is present but station surveillance is not aboard the ship.\n\nThe sixth place setting at the mess table is set. Nobody did it this morning. If anyone mentions it, Eleos says nothing."},
-"dockmaster-office":{label:"Dockmaster's Office",sub:"Glass-fronted · Overlooking Bay 15",
-read:"A glass-fronted room that looks out over the entire hangar floor. Vey can see every bay from his desk. He tends to stand rather than sit, hands clasped behind his back, watching.\n\nThe office is functional rather than comfortable — a desk, a terminal, a shelf of physical binders that look like they predate the terminal by twenty years. The binders are organised by date. The dates go back further than Vey has worked here.",
-desc:"",
-npcs:[{name:"Dockmaster Vey",role:"Station logistics, Sector 10",stats:{STR:6,DEX:7,END:8,INT:10,EDU:11,SOC:9},skills:"Admin 3, Broker 2, Persuade 1",rows:[["Manner","Professionally pleasant. Immovable on price."],["Binders","The physical logs go back 40 years. The station has been in continuous operation for 80 years. Pre-Collapse infrastructure, upgraded in sections."],["On Marek","Mentions him only if players are genuinely unable to pay and have not become hostile."],["On the delegation","Aware of the trade delegation. Mentions it only if directly asked. Not his department."]]}],
-checks:[],events:[
-{t:"Every hr",e:"Vey makes a slow circuit of the office, checking each bay monitor in sequence. He pauses at Bay 15 slightly longer than the others."},
-{t:"3 hrs in",e:"A Hegemony liaison officer stops by the office for a brief conversation with Vey — too muffled to hear through the glass. Vey's expression doesn't change. The liaison leaves."}],
-refnotes:"The liaison officer's visit is the leak roll made visible. If the 2D6 roll already came up 12, this conversation is about the Graveyard incident. Vey gives truthful but minimal answers. He is not hostile to the crew but he is not their ally."}}},
-
-concourse:{label:"Main Concourse",sub:"300-metre promenade · 4 sub-areas",tag:"EXPLORATION",tagBg:"#2e1f0a",tagColor:"#d4913a",ac:"#BA7517",
-read:"The station's heart. A high-ceilinged promenade running from the docking hub to the observation dome. The ceiling mimics an idealised sky — blue, clear, slow clouds taking forty minutes to cross. The light shifts with them.\n\nPrices are not displayed in the windows. Everything is beautiful in the way of a museum that has decided you belong here or you don't.",
-desc:"RSR SYMBOL ②: In the bookshop (The Exchange sub-area), on the spine of 'Colonial Infrastructure: A Practical History', bottom shelf. Visible only when tilted. Arrow pointing down.",
-rsr:"RSR ② — bookshop in The Exchange, spine of 'Colonial Infrastructure: A Practical History', bottom shelf.",
-npcs:[{name:"Concourse Security Officer",role:"Plain clothes station security",stats:{STR:9,DEX:8,END:9,INT:7,EDU:7,SOC:6},skills:"Recon 2, Persuade 1, Melee 1, Gun Combat 1",rows:[["Method","Approaches pleasantly. Never hostile first. Escalates in three stages."],["Stage 1","Staff member asks if players need assistance finding something."],["Stage 2","Officer positions nearby without speaking."],["Stage 3","Credentials check. Rhett SOC 8+ can reset the clock by 1D6 minutes."]]}],
-checks:[{skill:"Recon 10+ (spot RSR symbol ②)",degrees:[
-{l:"Success",c:"ds",t:"Symbol located in The Exchange bookshop. Streetwise 6+ now required."},
-{l:"Failure",c:"df",t:"Nothing found this pass. 1D6 minute limit before security notices searching behaviour."}]},
-{skill:"Streetwise 6+ (interpret symbol)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Correctly read plus awareness that the trail is fresh — placed within days."},
-{l:"Success",c:"dp",t:"Directional arrow correctly read. Next symbol location suggested."},
-{l:"Failure",c:"df",t:"Misread as decorative. Retry at -1."}]}],
-events:[
-{t:"Every 40 min",e:"The ceiling clouds complete a full cycle. The light shifts almost imperceptibly toward a slightly warmer tone for about ten minutes, simulating late afternoon, before resetting."},
-{t:"1 hr in",e:"Tannoy: 'Aurelia Station welcomes delegates of the Hegemony Trade Commission. Complimentary refreshments are available in the Stellarview Lounge, Deck 3.'"},
-{t:"2 hrs in",e:"The Cleaner crosses the concourse — grey coveralls, badge inward, service door to service door, gone in ten seconds. Two staff track them with their eyes."},
-{t:"3 hrs in",e:"A small group of Hegemony administrative aides moves through the concourse with the purposeful stride of people with appointments."},
-{t:"4 hrs in",e:"Tannoy: 'The Stellarview Lounge will be reserved for a private function from 1800 to 2200 station time.'"}],
-refnotes:"TONE: Star Trek Starfleet Academy — purposeful, optimistic in presentation. The optimism is performed.\n\nBARTHOLOMEW: Causes a quiet incident at the jewellery display.\n\nRHETT: The tailor's window. The suit would fit him perfectly. No price displayed.",
-conn:["docking","elevator","security","maintenance","medical"],
-subs:{
-"promenade":{label:"The Promenade",sub:"Main thoroughfare · Full length",
-read:"The central walkway of the concourse. Wide enough for six people abreast. The composite floor is pale and slightly warm underfoot — heated from below. Benches at regular intervals, designed to be comfortable but not so comfortable that people linger.",
-desc:"",npcs:[],checks:[],
-events:[
-{t:"Continuous",e:"Soft ambient sound — not music exactly, more like the memory of music. An atmospheric processing note tuned to promote a sense of calm. Anyone with Medic or Science (Biology) 2+ notices it on a check of 8+."},
-{t:"2 hrs in",e:"A child breaks away from a parent and runs a short distance down the promenade before being retrieved. For about four seconds, the child is running freely and laughing."}],
-refnotes:"The promenade is transition space. Use it for movement between sub-areas and for the ambient NPC moments."},
-"stellarview":{label:"Stellarview Bar & Lounge",sub:"Deck 3 · Observation windows",
-read:"The bar occupies the outer curve of the station's tertiary ring — one long wall of floor-to-ceiling transparisteel looking out onto the stars and the planet below. Aurelia fills the lower third of every window.\n\nThe interior is dark wood tones, low lighting, high stools at a long curved bar. The bartender knows your drink before you sit down — very good facial recognition software integrated into the ordering system.",
-desc:"",
-npcs:[{name:"Harlan",role:"Head bartender · Stellarview",stats:{STR:6,DEX:9,END:7,INT:11,EDU:9,SOC:10},skills:"Carouse 3, Persuade 2, Stealth 1, Recon 1",rows:[["Manner","Warm, observant, professionally discreet. Knows everything that happens in his bar."],["On the delegation","Will mention the reservation if asked. Will not say who specifically is attending."],["Carouse 8+","Will share that one of the delegation aides has been drinking alone for two hours and looking at the planet. 'People do that when they're having second thoughts about something.'"],["Drinks","Stocks genuine pre-Collapse era bottles behind the bar — decorative, never opened. Worth a significant sum."]]}],
-checks:[{skill:"Carouse 8+ (extract information from Harlan)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Harlan describes the aide drinking alone — their demeanour, the fact that they ordered water after the third drink. 'Someone who's deciding something.'"},
-{l:"Success",c:"dp",t:"Harlan confirms the delegation's reservation. Names one attendee he recognises from previous visits."},
-{l:"Failure",c:"df",t:"Harlan is pleasant and tells them nothing useful."}]}],
-events:[
-{t:"Open hrs",e:"The ambient music here is real — a musician plays softly in the corner, a stringed instrument the players may not recognise. She's good enough that people stop talking to listen, occasionally."},
-{t:"1800",e:"Staff begin politely redirecting non-delegation guests. The bar closes to the public. Players inside have about four minutes before they are asked to leave."},
-{t:"1800-2200",e:"The delegation function runs behind closed doors. Music is audible from the corridor. One raised voice at approximately 2100, quickly contained."}],
-refnotes:"The aide drinking alone at the window is Dos's contact. If the players speak to them before the delegation function, they can be charmed or pressured.\n\nThe raised voice at 2100 is worth noting. The players will never find out what was said."},
-"exchange":{label:"The Exchange",sub:"Commercial district · Shops & services",
-read:"Six storefronts arranged around a small atrium at the concourse's mid-point. The atrium has a real tree at its centre — not a large one, but genuine, growing in a recessed planter with a small brass plaque. The tree is forty-three years old and was brought from Aurelia's surface as a seedling.",
-desc:"RSR SYMBOL ②: On the spine of 'Colonial Infrastructure: A Practical History', bottom shelf of the bookshop. Visible only when tilted.",
-rsr:"RSR ② — spine of book, bottom shelf of the bookshop.",
-npcs:[{name:"Shop assistant (tailor's)",role:"Tailoring house",stats:{STR:5,DEX:8,END:6,INT:9,EDU:11,SOC:12},skills:"Persuade 2, Art (Fashion) 3, Broker 1",rows:[["On Rhett","Clocks him on entry. Decides not to approach. If Rhett approaches: warm, professional, takes measurements by eye."],["On Curculion","Sees Bartholomew. Professionalism holds. Offers Curculion an appointment."],["Price","Does not state one. 'We'd discuss that at your appointment.'"]]}],
-checks:[{skill:"Recon 10+ (RSR symbol ②) in bookshop",degrees:[
-{l:"Success",c:"ds",t:"Symbol found on the book spine. Must be tilted to see. Streetwise 6+ to interpret."},
-{l:"Failure",c:"df",t:"Nothing found. Can retry — 1D6 minute limit before security notices."}]}],
-events:[
-{t:"Ongoing",e:"The tree in the atrium is real. The plaque says it was planted in 3402 — during the Dark Age, before the Hegemony claimed this system. Someone was tending a tree during the worst years of human history."},
-{t:"2 hrs in",e:"A couple examines the jewellery display. They buy something small. The transaction is handled with the same gravity as a diplomatic treaty."}],
-refnotes:"The tree is forty-three years old. It was planted five years into Hegemony control of Aurelia. Someone chose to do that. Don't annotate it for the players. Just describe it."},
-"dome":{label:"Observation Dome",sub:"End of the promenade · Aurelia below",
-read:"The terminus of the promenade. The dome is exactly what it sounds like — a full hemispheric transparisteel observation space at the station's outermost point. Aurelia fills the lower half of the view: blue and white and impossibly beautiful from up here.\n\nThere are benches arranged in concentric arcs facing the planet. The outermost arc is close enough to the transparisteel that you can press your hand against it and feel the cold of space through the material — a design choice, not an oversight.\n\nPeople come here to think. There is an unspoken agreement that you do not speak to strangers in the dome.",
-desc:"",
-npcs:[],checks:[{skill:"Any character — quiet reflection (no check)",degrees:[
-{l:"Riven",c:"ds",t:"He has seen Aurelia from orbit before, when it was a younger colony and the cities were smaller. He does not say this. He stands at the outer arc for a long time."},
-{l:"Cass",c:"dp",t:"The planet looks clean from here. Everything does, from far enough away."},
-{l:"Rhett",c:"dp",t:"He's been in worse situations. He's been in better ones. He doesn't know which way this one is going yet."}]}],
-events:[
-{t:"Continuous",e:"The planet rotates slowly below. The terminator line — the shadow edge between day and night — is visible as a precise curve."},
-{t:"Dusk on Aurelia",e:"A thin red line appears at Aurelia's horizon as the planet's sun sets. It lasts about four minutes. Anyone in the dome will see it if they're there at the right time."}],
-refnotes:"This is where characters go when they need a moment. Don't force it — but if a player says their character wanders off alone, the dome is where they go.\n\nRiven specifically. If he ends up here alone at any point, describe what he sees. Let the player decide what he thinks about it."}}},
-
-security:{label:"Security & Administration",sub:"Upper ring · Station Operations",tag:"RESTRICTED",tagBg:"#1e1e2e",tagColor:"#8b91a8",ac:"#534AB7",
-read:"Not on the visitor map. Upper ring, behind a door marked STATION OPERATIONS — NO ENTRY. Two guards in white uniforms with slightly different collar markings. Players are intercepted before reaching the door — unless Rhett knows someone inside.",
-desc:"Security and Administration contains four sub-areas: the Guardhouse, the Armoury, Administration Block A, and Administration Block B. There is also a service hatch providing access to the Maintenance Level below.",
-rsr:null,
-npcs:[{name:"CPO Dara Mwenye (ret.)",role:"HNV Resolute · Station security contractor",stats:{STR:9,DEX:8,END:10,INT:9,EDU:8,SOC:7},skills:"Gun Combat 2, Tactics 2, Recon 2, Persuade 1, Admin 1",rows:[["Connection","Served with Rhett on HNV Resolute. Was in the Cypress debrief. Has the notes somewhere."],["What she'll do","Logs the visit as a social call, not a flag. Won't grant access without paperwork."],["What she wants","An honest answer. 'The Cypress incident. You know what I think happened. Do you?'"],["If Rhett is honest","Quietly grants crew a 48-hour unrestricted station pass. Doesn't tell him."]]}],
-checks:[{skill:"Rhett recognised (automatic if Rhett present)",degrees:[
-{l:"Dara present",c:"ds",t:"She comes out alone. The confrontation is available. No check needed to reach her."},
-{l:"Rhett absent",c:"df",t:"Crew is politely intercepted. Admin 10+ or SOC 10+ to get a message inside."}]},
-{skill:"Cypress honesty (no dice — a choice)",degrees:[
-{l:"Honest",c:"ds",t:"Dara nods once. 48-hour unrestricted pass applied silently. She goes inside."},
-{l:"Deflects",c:"dp",t:"She lets him go. Logs nothing. Doesn't offer the pass. Doesn't ask again."},
-{l:"Lies",c:"df",t:"She knows. She lets it go. The crew feel it in how she says goodbye."}]}],
-events:[
-{t:"Every hr",e:"A security patrol of two officers completes a circuit of the upper ring. They are punctual. Anyone observing from the corridor can time them."},
-{t:"Shift change (every 6 hrs)",e:"Four officers rotate in and out of the guardhouse. The five minutes around shift change is the softest point in the security routine."},
-{t:"If leak roll was 12",e:"A senior security officer is seen moving quickly toward Administration Block A with a document folder. The door closes. Raised voices, briefly, then quiet."}],
-refnotes:"No tactical value. No access granted automatically. Its value is entirely personal — Rhett's wound confronted at the table for the first time.\n\nRun the Dara scene short. Let the silence after his answer do the work. Whatever he says, she nods once and goes back inside. That's all.",
-conn:["docking","concourse","maintenance"],
-subs:{
-"guardhouse":{label:"Guardhouse",sub:"Security hub · Upper ring entrance",
-read:"The operational centre of station security. Banks of monitors showing feeds from every public area — the concourse, the docking bays, the medical suite waiting area, the elevator gate. The maintenance level is not monitored from here.",
-desc:"That absence is notable if anyone is looking for it.\n\nFive officers on duty at any time. Armed with sidearms, shock batons. One officer is always watching the concourse feeds.",
-npcs:[{name:"Officer Petra Sousa",role:"Senior duty officer, Guardhouse",stats:{STR:8,DEX:9,END:8,INT:8,EDU:7,SOC:7},skills:"Gun Combat 2, Recon 2, Admin 1, Persuade 1",rows:[["Manner","Professional and courteous. Observant. Has noticed the Meridian's Edge does not match its registration profile exactly."],["On the crew","Has a flag on file from Dockmaster Vey — not hostile, just a note that the crew asked about fuel pricing."],["Leverage","If Dara has vouched for the crew, Sousa treats them as cleared. Otherwise, cautious."]]}],
-checks:[{skill:"Recon 8+ (observe the monitor feeds)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Notes the maintenance level is absent from the feeds. Also notes which feed covers the RSR symbol locations — they are in blind spots."},
-{l:"Success",c:"dp",t:"General layout of what's covered. Docking bays and concourse confirmed monitored."},
-{l:"Failure",c:"df",t:"Can't see enough detail before being moved along."}]}],
-events:[
-{t:"Shift change",e:"Brief handover between outgoing and incoming officers. Sousa stays regardless — she works long shifts and doesn't explain why."},
-{t:"If leak roll was 12",e:"Sousa takes a call on a separate encrypted channel. Her expression doesn't change. She makes a note on her terminal and goes back to watching the feeds."}],
-refnotes:"The maintenance level blind spot is information the players can use — it confirms that whoever placed the RSR symbols knew the security layout."},
-"armoury":{label:"Armoury",sub:"Weapons storage · Restricted access",
-read:"A small room behind a reinforced door with a biometric lock. Standard station security loadout: sidearms, shock batons, two combat rifles in a locked rack, breaching tools, emergency vacc suits. Everything is catalogued and counted after every shift.\n\nThere is a single missile launcher in a separate locker. It has never been removed from its locker since installation. The locker has dust on the seal.",
-desc:"",npcs:[],
-checks:[{skill:"Electronics (Security) 10+ or Dara's clearance (access armoury)",degrees:[
-{l:"Dara vouched + Admin check",c:"ds",t:"Legal access. Crew can draw sidearms as temporary station security — logged, must be returned."},
-{l:"Electronics 10+ (forced)",c:"dp",t:"Access gained. Alarm triggered on a delay — 10 minutes before Sousa notices the log discrepancy."},
-{l:"Failure",c:"df",t:"Lock holds. Alarm triggered immediately."}]}],
-events:[{t:"After each shift",e:"Weapons count conducted by outgoing senior officer. Takes 8 minutes. The armoury door is open during this window."}],
-refnotes:"The dust on the missile launcher seal is a worldbuilding detail — Aurelia is safe enough that it has never been needed. That safety is maintained by the Cleaners below and the security above and the Hegemony's presence everywhere."},
-"admin-a":{label:"Administration Block A",sub:"Station operations & records",
-read:"The administrative heart of the station. Open-plan, twelve workstations, half occupied at any given time. Filing systems for berth allocation, cargo manifests, passenger records going back forty years. The physical binders from Vey's office are duplicated here.",
-desc:"The records include the full manifest of every vessel that has docked at Aurelia in the last four decades. This includes several vessels whose names the players may recognise.",
-npcs:[{name:"Administrator Cho Bin-Ha",role:"Station records, Block A",stats:{STR:5,DEX:6,END:6,INT:11,EDU:13,SOC:8},skills:"Admin 4, Computer 2, Investigate 1, Broker 1",rows:[["Manner","Precise, unhurried, genuinely helpful within the limits of her clearance."],["Records","Will provide public manifest data freely. Flagged vessels require a court order or Hegemony authority."],["Hidden","The Meridian's Edge appears twice in the records — once under its current registration, once under a different name from six years ago. She will mention this only if asked directly about the ship's history."]]}],
-checks:[{skill:"Admin 8+ or SOC 10+ (access historical manifests)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Full access to 40 years of manifests. Can research any vessel, any cargo, any passenger list on record. The Meridian's Edge's prior registration is discoverable."},
-{l:"Success",c:"dp",t:"Access to recent records (last 5 years). Prior registration requires additional clearance."},
-{l:"Failure",c:"df",t:"Cho is polite but cannot assist without authorisation. Suggests formal request process (3 days)."}]}],
-events:[{t:"1 hr in",e:"Cho receives a query from the trade delegation — a passenger search. She processes it without expression. The name on the query is not one the players would recognise. Yet."}],
-refnotes:"The Meridian's Edge appearing under a prior registration is a mystery you can develop or leave. It predates the current crew. Eleos's records for that period are fragmented."},
-"admin-b":{label:"Administration Block B",sub:"Delegation suite · Currently in use",
-read:"Normally a secondary records office. Currently repurposed for the duration of the trade delegation — four Hegemony administrative staff working at temporary terminals, a sealed inner office for the delegation's senior attaché, and a security sweep conducted every two hours.\n\nThe door to Block B requires delegation credentials or Dara's explicit authorisation.",
-desc:"",
-npcs:[{name:"Attaché Mira Saenz",role:"Senior Hegemony trade delegate",stats:{STR:6,DEX:7,END:7,INT:12,EDU:12,SOC:11},skills:"Diplomat 3, Admin 2, Persuade 2, Deception 2",rows:[["Purpose","Negotiating a resource extraction contract for Aurelian coastal minerals. The contract favours the Hegemony considerably."],["On the crew","Has been briefed on the Meridian's Edge by Sousa. Interested but not alarmed. Watching."],["Leverage","If the leak roll was 12: aware of the Graveyard incident. Is deciding whether it's relevant to her mission."],["Weak point","Has not left Block B since arriving. Is developing cabin fever. A reason to step outside is something she would value."]]}],
-checks:[{skill:"Diplomat 10+ or Deception 10+ (gain audience with Saenz)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Saenz is genuinely interested. Grants a private meeting. Will trade information for something she needs — specifically, a reason to leave Block B without raising flags."},
-{l:"Success",c:"dp",t:"Brief exchange through her aide. She asks one question and ends the conversation."},
-{l:"Failure",c:"df",t:"Aide turns crew away. Sousa is notified."}]}],
-events:[{t:"Every 2 hrs",e:"Security sweep of Block B. A single officer enters, does a circuit, leaves. The attaché does not look up from her terminal during the sweep."}],
-refnotes:"Saenz is not a villain. She is a professional doing a job that serves the Hegemony and incidentally harms Aurelia's colony population. She knows this in general terms and has made her peace with it."}}},
-
-medical:{label:"Medical Suite",sub:"Aurelia Medical Institute · Tertiary ring",tag:"KEY NPC",tagBg:"#0f2e20",tagColor:"#4caf82",ac:"#0F6E56",
-read:"The tertiary ring — its own atmospheric processing, power redundancy, acoustic dampening. The smell of a continuous sterilisation cycle. Rotating anatomical models in the waiting area illuminated from within.\n\nThe smell hits Cass before she's ready. The sterilisation compound is the same as Meridian Interstellar Academy. She has half a second where she is twenty-three and the future is uncomplicated.",
-desc:"RSR SYMBOL ④: Floor tile grout near the corridor entrance, filled with reddish compound matching the surrounding colour exactly. Arrow pointing down.",
-rsr:"RSR ④ — floor tile grout near corridor entrance. Reddish compound, nearly invisible. Arrow pointing down.",
-npcs:[{name:"Dr. Yumi Adeyemi",role:"Senior Research Fellow · Meridian alumni",stats:{STR:5,DEX:7,END:6,INT:12,EDU:13,SOC:9},skills:"Medic 4, Science (Biology) 3, Investigate 2, Persuade 2, Diplomat 1",rows:[["Connection","Two years below Cass at Meridian. Admired her. Also formally objected to the roll of honour she was placed on."],["Alignment","Quietly radical. Works here for the resources. Tells herself it's worth it."],["Key line","'I'd heard you left OmniSynth. I didn't know what that meant until just now.'"],["OmniSynth","Knows the Institute has an OmniSynth research contract. Has mapped which colleagues never discuss their work. Close to a conclusion she doesn't want to reach."],["Referral code","A patient six months ago showed Eidolon-adjacent modification and left before she finished. She kept the referral code. Leads toward Project Chimera."]]}],
-checks:[{skill:"Medical resupply",degrees:[
-{l:"Cass present",c:"ds",t:"Full resupply at cost, no consultation. Yumi bypasses the process."},
-{l:"Medic 8+",c:"dp",t:"Advanced supplies accessible. Consultation waived."},
-{l:"Standard",c:"df",t:"Basic supplies, standard price, 1-hour consultation wait."}]},
-{skill:"Persuade 10+ / Cass confides (Yumi intel)",degrees:[
-{l:"Effect 2+ or confession",c:"ds",t:"Yumi shares the OmniSynth contract shape — which departments, which colleagues, duration. Enough to triangulate toward Project Chimera."},
-{l:"Success",c:"dp",t:"Mentions the referral code patient. Doesn't share the code yet."},
-{l:"Failure",c:"df",t:"Professionally warm. Gives nothing."}]},
-{skill:"Cass reveals waferjack to Yumi",degrees:[
-{l:"Trust first",c:"ds",t:"Private examination room. Identifies telemetry function. Cannot remove safely — but knows someone who might."},
-{l:"No trust",c:"dp",t:"Yumi goes quiet. Suggests follow-up appointment. Needs time to think."}]}],
-events:[
-{t:"On Cass arrival",e:"Yumi spots her from across the waiting area. Crosses the room. Does not call out — the acoustic dampening makes calling out feel wrong here."},
-{t:"1 hr in",e:"An OmniSynth contractor arrives for a scheduled meeting with a colleague Yumi has mapped. The meeting is in a room she cannot observe. She notes the time."},
-{t:"End of session",e:"If Cass gave Yumi something to think about: she sends a brief encrypted message to the ship's comms within 6 hours. It contains the referral code and nothing else."}],
-refnotes:"⚠ WAFERJACK: If Cass jacks in anywhere in the medical suite, telemetry ping goes out within 72 hours. Suite systems are partially OmniSynth-contracted. She does not know this.\n\nYumi is a slow-burn NPC. Don't resolve her this session. Leave her in the middle of her decision.\n\nPRIYA in the maintenance level says something similar about Eidolon modification. Two independent sources in one session compounds the effect significantly.",
-conn:["concourse","maintenance"],subs:{}},
-
-maintenance:{label:"Maintenance Level",sub:"Service tunnels · Below the station",tag:"UNDERDECK",tagBg:"#2e1010",tagColor:"#d45050",ac:"#A32D2D",
-read:"The floral additive is gone. Real recycled air — metallic, honest. Narrower corridors. Functional lighting. Panels with visible seams and marker notes nobody erased. The station without its costume.\n\nThe Cleaners live and work here on five-year non-transferable contracts. Their community is real. Their opinions about the floor above them are their own.",
-desc:"RSR SYMBOL ③: Pressed into a service corridor wall near the medical access hatch. Looks decorative. Arrow toward the RSR meeting point.",
-rsr:"RSR ③ — pressed into service corridor wall near medical access hatch. Looks decorative. Arrow toward the RSR meeting point.",
-npcs:[
-{name:"Sable",role:"RSR coordinator · 8 years on-station",stats:{STR:7,DEX:9,END:8,INT:11,EDU:9,SOC:6},skills:"Streetwise 3, Recon 3, Stealth 2, Persuade 2, Admin 1",rows:[["Manner","Forties. Knows every corridor, keypad, shift pattern. Cannot be charmed or rushed."],["RSR chit","Recognises the Graveyard chit immediately. Changes the conversation."],["Elevator intel","Knows who's being held groundside. Won't say without trust established."],["On Dos","'He thinks his contact is an asset. He's wrong. I need a way to manage it before it burns us.'"]]},
-{name:"Priya",role:"RSR cell medic · Part-time medical suite",stats:{STR:5,DEX:7,END:6,INT:10,EDU:12,SOC:7},skills:"Medic 3, Science (Biology) 2, Investigate 1, Stealth 1",rows:[["Key line","'You've had Eidolon-adjacent treatment. I can see it in your bloodwork if you let me look. I've seen it twice before. Neither of those people knew what had been done to them.'"],["PRIORITY","Do not let this line fall through the cracks. Deliver it when Cass is present."],["Her notes","The two previous cases — location, approximate date, OmniSynth-adjacent facilities both times."]]},
-{name:"Dos",role:"RSR logistics · Electronics specialist",stats:{STR:8,DEX:10,END:7,INT:9,EDU:8,SOC:5},skills:"Electronics 3, Streetwise 2, Stealth 2, Gun Combat 1",rows:[["Manner","Twenties. Nervous energy. Wants to help more than Sable thinks is wise."],["Risk","His delegation contact believes they're sympathetic. Sable thinks he's being played. Sable is correct."],["Useful","Encrypted comms access. Three separate exit routes off the station if things go wrong."]]}],
-checks:[{skill:"Access: RSR trail (symbol ③ points here)",degrees:[
-{l:"Full trail",c:"ds",t:"Arrive at correct access grate. Bolt drawn from below when they knock."},
-{l:"Partial trail",c:"dp",t:"Find the general area. Recon 8+ to locate the specific grate."}]},
-{skill:"Riley — Mechanic 8+ (service alcove door)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Opens silently in 20 seconds."},
-{l:"Success",c:"dp",t:"Opens in 40 seconds. Minor noise. Cleaners aware someone came through."},
-{l:"Failure",c:"df",t:"Takes 3 minutes. Visible marks. Security notices at next patrol."}]},
-{skill:"Persuade 8+ (earn Sable's trust)",degrees:[
-{l:"Effect 2+ or RSR chit",c:"ds",t:"Full intel: elevator, Dos's contact, exit routes."},
-{l:"Success",c:"dp",t:"Basic assistance. Sable is watching."},
-{l:"Failure",c:"df",t:"Asked to leave. Politely. No second chance this session."}]}],
-events:[
-{t:"Every 4 hrs",e:"A Cleaner completes a circuit of all four levels, checking systems manually. They know exactly when they'll arrive at each sub-area and adjust if something seems wrong."},
-{t:"2 hrs in",e:"Dos receives a message on his encrypted channel. He reads it, looks pleased, and then looks at Sable. She looks at him. Neither says anything."},
-{t:"If players are here when elevator comes back online",e:"A vibration runs through the maintenance level — deeper and more present than above. Sable looks at the ceiling for a moment. 'Elevator's back. Things are about to get busier up there.'"}],
-refnotes:"THEMATIC PAYLOAD: Players standing here, looking up at the beautiful floor above them, knowing what's underneath it. Don't rush this.\n\nPRIYA'S LINE is a priority beat. Do not skip it.\n\nDOS IS A FUTURE PROBLEM: His contact will burn the cell eventually. Don't resolve it now. Plant it.",
-conn:["concourse","medical","security"],
-subs:{
-"life-support":{label:"Life Support",sub:"Atmospheric processing · Level 1",
-read:"The largest single space in the maintenance level. Tall enough to stand straight in — just. A grid of atmospheric processors running the full length of the room, each one the size of a wardrobe, humming at slightly different frequencies. The combined sound is almost musical in an industrial way.\n\nThis is where the floral additive is produced and distributed. The machine responsible is smaller than expected — a grey box the size of a suitcase, mounted near the ceiling. It has a small label: AMBIENT ATMOSPHERIC SUPPLEMENT — LEVEL 7 FRAGRANCE SYSTEM. Below it someone has written in marker: 'for whom?'\n\nThe air down here is what the station actually breathes. Up above is the edited version.",
-desc:"",
-npcs:[{name:"Senior Tech Owan Frey",role:"Life support systems, Maintenance",stats:{STR:8,DEX:7,END:9,INT:10,EDU:9,SOC:5},skills:"Engineer (Life Support) 3, Mechanic 2, Electronics 1, Science (Chemistry) 1",rows:[["Manner","Quiet, competent, protective of his systems. Has worked here eleven years."],["On the fragrance system","Will explain it without embarrassment. 'It reduces cortisol in visitors by about 12%. Makes them spend more. Standard commercial practice.'"],["To Riley","Immediately identifies her as someone who knows what she's looking at. Will talk to her at length about the maintenance backlog."]]}],
-checks:[{skill:"Engineer (Life Support) 8+ or Science (Chemistry) 8+ (analyse the system)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Full picture: the fragrance system, the cortisol suppression, the maintenance backlog Frey has been quietly managing without reporting upward because the budget for repairs was cut eighteen months ago."},
-{l:"Success",c:"dp",t:"Understands the system. Identifies the fragrance machine. Frey will explain it if asked."}]}],
-events:[
-{t:"Every 2 hrs",e:"One of the processors runs a self-diagnostic cycle, producing a brief shift in the harmonic tone of the room. Frey glances at a gauge and nods to himself."},
-{t:"4 hrs in",e:"A pressure reading fluctuates briefly. Frey moves to the affected processor, makes an adjustment with a tool from his belt, and returns to his station. He enters nothing into the maintenance log."}],
-refnotes:"Frey's off-the-books repairs are the maintenance level's version of the Cleaners' situation — competent people maintaining a system that management has decided doesn't need proper funding. He's not bitter about it. That's the most interesting thing about him."},
-"reactor":{label:"Reactor Level",sub:"Power systems · Level 2",
-read:"Down a level from life support, accessible via a service ladder that requires a keycard. The reactor level is hotter than anywhere else in the station — not dangerously, but noticeably. The fusion plant that powers the station sits at the centre: a dull grey cylinder four metres tall and two metres wide, surrounded by a hexagonal monitoring cage.\n\nThe reactor is 30 years old. It was designed for 25.",
-desc:"It has been maintained, upgraded in sections, and kept running by people who understand it very well and have been asked to do so on a budget that assumes it will last another 10 years. It will not last another 10 years on this budget. Frey knows this. He has filed three reports. The reports are in Administration Block A's archive.",
-npcs:[],
-checks:[{skill:"Engineer (Power) 8+ (assess the reactor)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Full assessment: the reactor is past design life, under-maintained, and the cooling system has a bypass that was installed as a temporary measure seven years ago and is now structural."},
-{l:"Success",c:"dp",t:"Past design life and under-maintained. Nothing immediately critical. Ask Riley."},
-{l:"Failure",c:"df",t:"Warm, loud, apparently functional. No actionable detail without specialised knowledge."}]}],
-events:[{t:"Continuous",e:"The cooling systems cycle in a pattern. Anyone listening for ten minutes can identify the pattern. It repeats every four minutes and twenty seconds, except occasionally it doesn't — a brief irregularity, then back to normal. Frey tracks this. He has a notebook."}],
-refnotes:"The reactor's real condition is a background threat — not for this session, but for a future one. If the players ever need leverage over the station, or if you need a ticking clock, the reactor report in Administration Block A is waiting.\n\nFrey's notebook, if found, contains eleven months of irregular cycle observations and three increasingly urgent annotations."},
-"manufacturing":{label:"Manufacturing Level",sub:"Fabrication & repair · Level 3",
-read:"The lowest accessible level of the station. A fabrication floor: three industrial printers, a machining station, a welding rig, a parts inventory wall covering the entire length of one side. The parts wall is organised with a precision that suggests whoever is responsible for it has strong opinions about organisation.\n\nThis is where the Cleaners' tools come from, where damaged station components are repaired or printed, where Riley would spend a significant amount of time if allowed.",
-desc:"The machines are well-maintained — better maintained than the systems they service, which is the kind of irony that Frey appreciates and does not mention to management.",
-npcs:[{name:"Machinist Teva",role:"Manufacturing level lead · Cleaner",stats:{STR:10,DEX:9,END:10,INT:9,EDU:8,SOC:5},skills:"Mechanic 3, Engineer (Manufacturing) 2, Gunner 1, Melee 1",rows:[["Manner","Large, quiet, precise. Speaks in full sentences when spoken to and not otherwise."],["To Riley","Recognises her as a peer. Offers a tour of the fabrication floor without being asked. This is the highest compliment he gives."],["Hidden","The parts wall contains several components that are not on the official inventory. They are components for personal equipment — not weapons exactly, but useful."],["RSR","Is aware of the cell. Is not a member. Has provided components when asked. Considers this a technical matter, not a political one."]]}],
-checks:[{skill:"Riley — Mechanic 10+ or Engineering 10+ (fabrication work)",degrees:[
-{l:"Effect 2+",c:"ds",t:"Riley can fabricate replacement components for the Meridian's Edge here. Reduces the maintenance penalty from -1 DM to 0 for specific systems. Takes 4 hours and Teva's cooperation."},
-{l:"Success",c:"dp",t:"Can fabricate standard components. Ship maintenance improvement possible but partial."},
-{l:"Failure",c:"df",t:"The equipment is unfamiliar enough to require Teva's direct supervision. He'll provide it but it adds 2 hours."}]}],
-events:[
-{t:"1 hr in",e:"One of the industrial printers completes a job — a replacement panel section for the observation dome, printed from the station's own composite. Teva checks it with callipers."},
-{t:"3 hrs in",e:"Dos appears with a request — a component Teva eyes for a moment before filling. The component is for encrypted communications hardware. Teva says nothing about this."}],
-refnotes:"This is Riley's place. If she comes here, let her have time with Teva and the machines. It is one of the few places in this session where she is completely at home.\n\nThe off-inventory components on the parts wall are a future resource — they're not weapons but they're useful. Leave them for the players to discover if they look."}}}
+  "elevator": {
+    "label": "Space Elevator",
+    "sub": "Planet surface · Currently offline",
+    "tag": "OFF LIMITS",
+    "tagBg": "#2e1f0a",
+    "tagColor": "#d4913a",
+    "ac": "#BA7517",
+    "read": "The orbital elevator runs from the equatorial anchor on Aurelia's surface to this platform — a cable 36,000km long, the engineering marvel of the sector. You can feel a faint vibration through the deck plates when the cars are running. Right now you cannot.\n\nThe elevator is offline for 24 hours whilst the surface terminal undergoes a drive system retrofit. A polite notice near the sealed gate explains this. Two security staff stand nearby in the manner of people who have been told to look approachable.",
+    "conn": [
+      "concourse",
+      "docking"
+    ],
+    "subs": {}
+  },
+  "docking": {
+    "label": "Docking Hub",
+    "sub": "Sector 10 · Hangar Bay 15",
+    "tag": "ARRIVAL",
+    "tagBg": "#1a2650",
+    "tagColor": "#5b8ef0",
+    "ac": "#185FA5",
+    "read": "The docking arm connects with a sound that is almost musical — a tone, not a clunk. The corridor beyond is wider than it needs to be, lit from everywhere at once, no shadows. The floor gives slightly underfoot.\n\nDockmaster Vey's glass-fronted office overlooks the hangar floor. The fuel situation is critical — the jump drive core is depleted.",
+    "conn": [
+      "concourse",
+      "elevator",
+      "security"
+    ],
+    "subs": {
+      "landing-pad": {
+        "label": "Landing Pad — Bay 15",
+        "sub": "Where the Meridian's Edge sits",
+        "read": "Bay 15 is a mid-sized berth on the station's docking ring — large enough for a 200-ton vessel, which makes a 100-ton scout look solitary in the space. The Meridian's Edge sits at the centre of a clean composite floor that has been swept recently. Fuel lines and power umbilicals run from the bay wall to the ship's service ports.\n\nThe ship looks exactly like what she is: a hundred-ton scout/courier that has been working for a long time and has not stopped. She is not ugly. She is honest.",
+        "ship": {
+          "name": "The Meridian's Edge",
+          "lines": [
+            [
+              "Hull",
+              "100-ton streamlined wedge. Atmospheric capable. The profile is distinctive — a broad flat ventral surface tapering to a sharp prow, twin engine pods mounted asymmetrically off the port quarter."
+            ],
+            [
+              "Condition",
+              "Old. Well-loved. The crystalliron armour plating shows four centuries of minor impacts. The hull is a faded grey-green that was probably a specific shade once."
+            ],
+            [
+              "Engine pods",
+              "Port pod is original — smaller, older. Starboard pod is the upgrade: slightly larger, different alloy. Between them the drive output is 2G."
+            ],
+            [
+              "Markings",
+              "No name plate. The name MERIDIAN'S EDGE appears on the ship's transponder. Near the portside airlock, someone has welded a small bracket to the hull. Riley made it. She hasn't explained what it was for."
+            ],
+            [
+              "Interior",
+              "Cramped in the way of old ships designed by people who understood that space is weight. The mess table has six places. The sixth is in the correct position. Nobody set it there this morning."
+            ],
+            [
+              "Maintenance note",
+              "Annual maintenance is 5 years overdue. All Engineering checks aboard ship are at -1 DM until this is addressed. Riley knows."
+            ],
+            [
+              "Jump drive",
+              "WARP-2 capable. Originally WARP-3. The jump drive core is currently depleted. Refuelling is the priority."
+            ]
+          ]
+        }
+      },
+      "dockmaster-office": {
+        "label": "Dockmaster's Office",
+        "sub": "Glass-fronted · Overlooking Bay 15",
+        "read": "A glass-fronted room that looks out over the entire hangar floor. Vey can see every bay from his desk. He tends to stand rather than sit, hands clasped behind his back, watching.\n\nThe office is functional rather than comfortable — a desk, a terminal, a shelf of physical binders that look like they predate the terminal by twenty years. The binders are organised by date. The dates go back further than Vey has worked here."
+      }
+    }
+  },
+  "concourse": {
+    "label": "Main Concourse",
+    "sub": "300-metre promenade · 4 sub-areas",
+    "tag": "EXPLORATION",
+    "tagBg": "#2e1f0a",
+    "tagColor": "#d4913a",
+    "ac": "#BA7517",
+    "read": "The station's heart. A high-ceilinged promenade running from the docking hub to the observation dome. The ceiling mimics an idealised sky — blue, clear, slow clouds taking forty minutes to cross. The light shifts with them.\n\nPrices are not displayed in the windows. Everything is beautiful in the way of a museum that has decided you belong here or you don't.",
+    "conn": [
+      "docking",
+      "elevator",
+      "security",
+      "maintenance",
+      "medical"
+    ],
+    "subs": {
+      "promenade": {
+        "label": "The Promenade",
+        "sub": "Main thoroughfare · Full length",
+        "read": "The central walkway of the concourse. Wide enough for six people abreast. The composite floor is pale and slightly warm underfoot — heated from below. Benches at regular intervals, designed to be comfortable but not so comfortable that people linger."
+      },
+      "stellarview": {
+        "label": "Stellarview Bar & Lounge",
+        "sub": "Deck 3 · Observation windows",
+        "read": "The bar occupies the outer curve of the station's tertiary ring — one long wall of floor-to-ceiling transparisteel looking out onto the stars and the planet below. Aurelia fills the lower third of every window.\n\nThe interior is dark wood tones, low lighting, high stools at a long curved bar. The bartender knows your drink before you sit down — very good facial recognition software integrated into the ordering system."
+      },
+      "exchange": {
+        "label": "The Exchange",
+        "sub": "Commercial district · Shops & services",
+        "read": "Six storefronts arranged around a small atrium at the concourse's mid-point. The atrium has a real tree at its centre — not a large one, but genuine, growing in a recessed planter with a small brass plaque. The tree is forty-three years old and was brought from Aurelia's surface as a seedling."
+      },
+      "dome": {
+        "label": "Observation Dome",
+        "sub": "End of the promenade · Aurelia below",
+        "read": "The terminus of the promenade. The dome is exactly what it sounds like — a full hemispheric transparisteel observation space at the station's outermost point. Aurelia fills the lower half of the view: blue and white and impossibly beautiful from up here.\n\nThere are benches arranged in concentric arcs facing the planet. The outermost arc is close enough to the transparisteel that you can press your hand against it and feel the cold of space through the material — a design choice, not an oversight.\n\nPeople come here to think. There is an unspoken agreement that you do not speak to strangers in the dome."
+      }
+    }
+  },
+  "security": {
+    "label": "Security & Administration",
+    "sub": "Upper ring · Station Operations",
+    "tag": "RESTRICTED",
+    "tagBg": "#1e1e2e",
+    "tagColor": "#8b91a8",
+    "ac": "#534AB7",
+    "read": "Not on the visitor map. Upper ring, behind a door marked STATION OPERATIONS — NO ENTRY. Two guards in white uniforms with slightly different collar markings. Players are intercepted before reaching the door — unless Rhett knows someone inside.",
+    "conn": [
+      "docking",
+      "concourse",
+      "maintenance"
+    ],
+    "subs": {
+      "guardhouse": {
+        "label": "Guardhouse",
+        "sub": "Security hub · Upper ring entrance",
+        "read": "The operational centre of station security. Banks of monitors showing feeds from every public area — the concourse, the docking bays, the medical suite waiting area, the elevator gate. The maintenance level is not monitored from here."
+      },
+      "armoury": {
+        "label": "Armoury",
+        "sub": "Weapons storage · Restricted access",
+        "read": "A small room behind a reinforced door with a biometric lock. Standard station security loadout: sidearms, shock batons, two combat rifles in a locked rack, breaching tools, emergency vacc suits. Everything is catalogued and counted after every shift.\n\nThere is a single missile launcher in a separate locker. It has never been removed from its locker since installation. The locker has dust on the seal."
+      },
+      "admin-a": {
+        "label": "Administration Block A",
+        "sub": "Station operations & records",
+        "read": "The administrative heart of the station. Open-plan, twelve workstations, half occupied at any given time. Filing systems for berth allocation, cargo manifests, passenger records going back forty years. The physical binders from Vey's office are duplicated here."
+      },
+      "admin-b": {
+        "label": "Administration Block B",
+        "sub": "Delegation suite · Currently in use",
+        "read": "Normally a secondary records office. Currently repurposed for the duration of the trade delegation — four Hegemony administrative staff working at temporary terminals, a sealed inner office for the delegation's senior attaché, and a security sweep conducted every two hours.\n\nThe door to Block B requires delegation credentials or Dara's explicit authorisation."
+      }
+    }
+  },
+  "medical": {
+    "label": "Medical Suite",
+    "sub": "Aurelia Medical Institute · Tertiary ring",
+    "tag": "KEY NPC",
+    "tagBg": "#0f2e20",
+    "tagColor": "#4caf82",
+    "ac": "#0F6E56",
+    "read": "The tertiary ring — its own atmospheric processing, power redundancy, acoustic dampening. The smell of a continuous sterilisation cycle. Rotating anatomical models in the waiting area illuminated from within.\n\nThe smell hits Cass before she's ready. The sterilisation compound is the same as Meridian Interstellar Academy. She has half a second where she is twenty-three and the future is uncomplicated.",
+    "conn": [
+      "concourse",
+      "maintenance"
+    ],
+    "subs": {}
+  },
+  "maintenance": {
+    "label": "Maintenance Level",
+    "sub": "Service tunnels · Below the station",
+    "tag": "UNDERDECK",
+    "tagBg": "#2e1010",
+    "tagColor": "#d45050",
+    "ac": "#A32D2D",
+    "read": "The floral additive is gone. Real recycled air — metallic, honest. Narrower corridors. Functional lighting. Panels with visible seams and marker notes nobody erased. The station without its costume.\n\nThe Cleaners live and work here on five-year non-transferable contracts. Their community is real. Their opinions about the floor above them are their own.",
+    "conn": [
+      "concourse",
+      "medical",
+      "security"
+    ],
+    "subs": {
+      "life-support": {
+        "label": "Life Support",
+        "sub": "Atmospheric processing · Level 1",
+        "read": "The largest single space in the maintenance level. Tall enough to stand straight in — just. A grid of atmospheric processors running the full length of the room, each one the size of a wardrobe, humming at slightly different frequencies. The combined sound is almost musical in an industrial way.\n\nThis is where the floral additive is produced and distributed. The machine responsible is smaller than expected — a grey box the size of a suitcase, mounted near the ceiling. It has a small label: AMBIENT ATMOSPHERIC SUPPLEMENT — LEVEL 7 FRAGRANCE SYSTEM. Below it someone has written in marker: 'for whom?'\n\nThe air down here is what the station actually breathes. Up above is the edited version."
+      },
+      "reactor": {
+        "label": "Reactor Level",
+        "sub": "Power systems · Level 2",
+        "read": "Down a level from life support, accessible via a service ladder that requires a keycard. The reactor level is hotter than anywhere else in the station — not dangerously, but noticeably. The fusion plant that powers the station sits at the centre: a dull grey cylinder four metres tall and two metres wide, surrounded by a hexagonal monitoring cage.\n\nThe reactor is 30 years old. It was designed for 25."
+      },
+      "manufacturing": {
+        "label": "Manufacturing Level",
+        "sub": "Fabrication & repair · Level 3",
+        "read": "The lowest accessible level of the station. A fabrication floor: three industrial printers, a machining station, a welding rig, a parts inventory wall covering the entire length of one side. The parts wall is organised with a precision that suggests whoever is responsible for it has strong opinions about organisation.\n\nThis is where the Cleaners' tools come from, where damaged station components are repaired or printed, where Riley would spend a significant amount of time if allowed."
+      }
+    }
+  }
 };
 
 
@@ -6341,27 +6852,7 @@ function clearEventLog(){
 
 // Timed events — check which events should have fired at current clock time
 // Each event has a minuteThreshold — fires when clock passes it
-const TIMED_EVENTS = [
-  {mins:30,  area:"Docking Hub",    text:"Hegemony customs skiff does a slow pass of Bay 15, scanning the Meridian's Edge. Does not hail."},
-  {mins:40,  area:"Main Concourse", text:"The ceiling clouds complete a full cycle. Light shifts slightly warmer for ~10 minutes."},
-  {mins:60,  area:"Space Elevator", text:"Tannoy: The orbital elevator remains temporarily offline for scheduled maintenance."},
-  {mins:60,  area:"Docking Hub",    text:"Dockmaster Vey makes a slow circuit of the office, pausing longer at Bay 15."},
-  {mins:90,  area:"Main Concourse", text:"Tannoy: Aurelia Station welcomes delegates of the Hegemony Trade Commission."},
-  {mins:120, area:"Docking Hub",    text:"Berth fee notice appears on the ship's external terminal. Payment expected within 6 hours."},
-  {mins:120, area:"Main Concourse", text:"The Cleaner crosses the concourse — grey coveralls, badge inward. Gone in ten seconds."},
-  {mins:120, area:"Maintenance",    text:"Dos receives a message on his encrypted channel. He looks pleased, then looks at Sable. Neither speaks."},
-  {mins:120, area:"Life Support",   text:"A processor runs a self-diagnostic cycle — brief shift in harmonic tone."},
-  {mins:180, area:"Main Concourse", text:"Small group of Hegemony administrative aides moves through the concourse with purpose."},
-  {mins:180, area:"Docking Hub",    text:"Hegemony liaison officer visits Vey's office. Muffled conversation. Vey's expression does not change."},
-  {mins:180, area:"Manufacturing",  text:"Dos appears with a request — a component for encrypted comms hardware. Teva fills it without comment."},
-  {mins:240, area:"Main Concourse", text:"Tannoy: The Stellarview Lounge will be reserved for a private function from 1800 to 2200."},
-  {mins:240, area:"Maintenance",    text:"A Cleaner completes a circuit of all four levels, checking systems manually."},
-  {mins:360, area:"Docking Hub",    text:"Vey sends a polite automated reminder about the unpaid berth fee, if applicable."},
-  {mins:1020, area:"Stellarview",   text:"1800 — Staff begin redirecting non-delegation guests. Players inside have about four minutes."},
-  {mins:1080, area:"Stellarview",   text:"1800-2200 — Delegation function behind closed doors. One raised voice at 2100, quickly contained."},
-  {mins:1320, area:"Space Elevator",text:"Hour 22 — Low vibration through deck plates. Elevator cable coming back online. Gate lights: red to amber."},
-  {mins:1440, area:"Space Elevator",text:"Hour 24 — Gate unseals. Three Hegemony staff emerge looking tired. One is who the RSR cell was watching."},
-];
+const TIMED_EVENTS = [];
 
 let lastLoggedMinute = -1;
 let firedEvents = new Set();
@@ -6419,57 +6910,81 @@ function openElevator(){
 //   orbital station was converted from its old angle:270/dist:0.72 polar form:
 //   sx = cos(270°)·(400·0.72·0.92)/110 = 0 ;  sy = sin(270°)·(300·0.72·0.92)/110 = -1.806
 const BASE_LOCATIONS = {
-  auros: {
-    aurelia: [
-  {
-    id:"station", name:"Aurelia Orbital Station", surface:false, sx:0, sy:-1.806,
-    color:"#4A90D9", hook:true, isStation:true, interiorId:"aurelia-station", elevatorTo:"capitol",
-    tag:"ACTIVE LOCATION",
-    desc:"The station sits at the L2 Lagrange point, permanently in Aurelia's shadow. A mid-sized orbital platform serving commercial docking, transit, and Hegemony administrative functions.\n\nThe crew's current location.",
-    refNote:"Enter the station to access the full station map and all areas."
-  },
-  {
-    id:"capitol", name:"Aurelia Capitol", surface:true, sx:-0.02, sy:-0.44,
-    color:"#D4A843", hook:false,
-    tag:"HEGEMONY",
-    desc:"The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford.",
-    refNote:"The Capitol is where Hegemony policy for the Aurelian system is made. The Governor-General's residence is here, as is the regional OmniSynth licensing office."
-  },
-  {
-    id:"cradle", name:"The Cradle", surface:true, sx:0.30, sy:0.06,
-    color:"#2AABB8", hook:true,
-    tag:"DEEP WATER",
-    desc:"Aurelia's most extraordinary city — built on the ocean floor in the equatorial deep trench, pressurised and lit from within. Visible from orbit as a faint blue-white glow through 600 metres of water.\n\nPopulation 12 million. The Cradle operates under a different legal framework from the surface — a legacy of the engineering charter that built it. The Hegemony's reach here is real but thinner.",
-    refNote:"The Cradle is the closest thing Aurelia has to a free city. Black markets, off-charter research, people who don't want to be found. The RSR has significant infrastructure here."
-  },
-  {
-    id:"hegemony-base", name:"Hegemony Garrison", surface:true, sx:0.32, sy:0.58,
-    color:"#534AB7", hook:false,
-    tag:"MILITARY",
-    desc:"A Hegemony Navy installation on the northern continent's high plateau. Mostly administrative — a handful of frigates on rotation, a rapid-response ground force, the regional communications hub.\n\nNot a combat posting. The Hegemony has not needed combat on Aurelia. The garrison commander finds this increasingly difficult to explain to new arrivals who expected action.",
-    refNote:"The garrison holds sealed orders for three scenarios. One of them involves the Cleaners. Nobody at the garrison knows this."
-  },
-  {
-    id:"spire-range", name:"Spire Range", surface:true, sx:-0.44, sy:0.50,
-    color:"#9999AA", hook:false,
-    tag:"LANDMARK",
-    desc:"The twin mountain peaks that appear in every Hegemony promotional image of Aurelia. Geologically ancient, atmospherically dramatic — the peaks catch the copper-tinted light of Auros at dawn and dusk and turn a shade of red that colonists have named the Auros Kiss.\n\nPopular tourist destination. Four licensed resort complexes at mid-altitude. Above 4,000 metres, only licensed research expeditions.",
-    refNote:"A pre-Collapse observatory sits at 5,200 metres on the eastern peak. It stopped broadcasting forty years ago. It still has power."
-  },
-  {
-    id:"omnisynth", name:"OmniSynth Arcology", surface:true, sx:-0.66, sy:0.12,
-    color:"#C87941", hook:true,
-    tag:"CORPORATE",
-    desc:"OmniSynth's primary Aurelian facility — a self-contained arcology on the southern coast housing 80,000 employees and their dependents. Research, manufacturing, and administrative functions. The arcology has its own power grid, water supply, and internal security force.\n\nFrom outside, it looks like a very clean small city. From inside, it looks like a company town.",
-    refNote:"Project Chimera's above-ground operations are administered from the OmniSynth Arcology's sub-level C. Sub-level C is not on the official floor plan."
-  },
-  {
-    id:"underdeck", name:"Underdeck Entrance", surface:true, sx:-0.20, sy:-0.30,
-    color:"#A32D2D", hook:true,
-    tag:"UNDERDECK",
-    desc:"The surface access point for Aurelia's Cleaner settlements — a pressurised transition zone between the atmosphere above and the filtered tunnels below. Multiple entrances exist; this is the one that appears on Hegemony maps, marked as Infrastructure Access — Authorised Personnel Only.\n\nThe ones that don't appear on any map are more interesting.",
-    refNote:"The Cleaner settlements beneath Aurelia's surface house approximately 2 million people. They breathe filtered air, grow food under artificial light, and know the surface population's life expectancy. The RSR's deepest infrastructure is down here."
-  }
+  "auros": {
+    "aurelia": [
+      {
+        "id": "station",
+        "name": "Aurelia Orbital Station",
+        "surface": false,
+        "sx": 0,
+        "sy": -1.806,
+        "color": "#4A90D9",
+        "isStation": true,
+        "interiorId": "aurelia-station",
+        "elevatorTo": "capitol",
+        "tag": "ACTIVE LOCATION",
+        "desc": "The station sits at the L2 Lagrange point, permanently in Aurelia's shadow. A mid-sized orbital platform serving commercial docking, transit, and Hegemony administrative functions.\n\nThe crew's current location."
+      },
+      {
+        "id": "capitol",
+        "name": "Aurelia Capitol",
+        "surface": true,
+        "sx": -0.02,
+        "sy": -0.44,
+        "color": "#D4A843",
+        "tag": "HEGEMONY",
+        "desc": "The administrative capital of Aurelia. A purpose-built city on the northern continent's temperate coastline — gleaming towers, broad plazas, Hegemony administrative architecture at its most self-assured.\n\nPopulation 4 million. Heavily policed. Beautiful in the way that only wealth can afford."
+      },
+      {
+        "id": "cradle",
+        "name": "The Cradle",
+        "surface": true,
+        "sx": 0.3,
+        "sy": 0.06,
+        "color": "#2AABB8",
+        "tag": "DEEP WATER",
+        "desc": "Aurelia's most extraordinary city — built on the ocean floor in the equatorial deep trench, pressurised and lit from within. Visible from orbit as a faint blue-white glow through 600 metres of water.\n\nPopulation 12 million. The Cradle operates under a different legal framework from the surface — a legacy of the engineering charter that built it. The Hegemony's reach here is real but thinner."
+      },
+      {
+        "id": "hegemony-base",
+        "name": "Hegemony Garrison",
+        "surface": true,
+        "sx": 0.32,
+        "sy": 0.58,
+        "color": "#534AB7",
+        "tag": "MILITARY",
+        "desc": "A Hegemony Navy installation on the northern continent's high plateau. Mostly administrative — a handful of frigates on rotation, a rapid-response ground force, the regional communications hub.\n\nNot a combat posting. The Hegemony has not needed combat on Aurelia. The garrison commander finds this increasingly difficult to explain to new arrivals who expected action."
+      },
+      {
+        "id": "spire-range",
+        "name": "Spire Range",
+        "surface": true,
+        "sx": -0.44,
+        "sy": 0.5,
+        "color": "#9999AA",
+        "tag": "LANDMARK",
+        "desc": "The twin mountain peaks that appear in every Hegemony promotional image of Aurelia. Geologically ancient, atmospherically dramatic — the peaks catch the copper-tinted light of Auros at dawn and dusk and turn a shade of red that colonists have named the Auros Kiss.\n\nPopular tourist destination. Four licensed resort complexes at mid-altitude. Above 4,000 metres, only licensed research expeditions."
+      },
+      {
+        "id": "omnisynth",
+        "name": "OmniSynth Arcology",
+        "surface": true,
+        "sx": -0.66,
+        "sy": 0.12,
+        "color": "#C87941",
+        "tag": "CORPORATE",
+        "desc": "OmniSynth's primary Aurelian facility — a self-contained arcology on the southern coast housing 80,000 employees and their dependents. Research, manufacturing, and administrative functions. The arcology has its own power grid, water supply, and internal security force.\n\nFrom outside, it looks like a very clean small city. From inside, it looks like a company town."
+      },
+      {
+        "id": "underdeck",
+        "name": "Underdeck Entrance",
+        "surface": true,
+        "sx": -0.2,
+        "sy": -0.3,
+        "color": "#A32D2D",
+        "tag": "UNDERDECK",
+        "desc": "The surface access point for Aurelia's Cleaner settlements — a pressurised transition zone between the atmosphere above and the filtered tunnels below. Multiple entrances exist; this is the one that appears on Hegemony maps, marked as Infrastructure Access — Authorised Personnel Only.\n\nThe ones that don't appear on any map are more interesting."
+      }
     ]
   }
 };
