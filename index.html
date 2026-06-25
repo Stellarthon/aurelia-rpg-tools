@@ -7207,6 +7207,80 @@ function refreshRoleGatedViews(){
   }
 }
 
+// ── Secure content (per-player redaction client · Stage 2) ───────────────────
+// FLAG-GATED, DEFAULT OFF. With no token stored, every function here is a no-op
+// and the app renders the hardcoded data exactly as before. When the referee
+// hands a player a token (stored via setContentToken), we (1) strip the baked-in
+// referee fields from the in-memory data, then (2) apply only the fragments the
+// server returns for that token — so an unauthorised viewer cannot see secrets
+// even though the shipped file still contains them (Stage 3 removes them for
+// real). Server is authoritative; this is the client half of get-content.
+// See docs/per-player-redaction-plan.md and supabase/functions/get-content.
+const CONTENT_API = SUPABASE_URL + '/functions/v1/get-content';
+function getContentToken(){ try { return localStorage.getItem('aurelia_token') || ''; } catch(e){ return ''; } }
+function setContentToken(t){ try { t ? localStorage.setItem('aurelia_token', String(t).trim()) : localStorage.removeItem('aurelia_token'); } catch(e){} }
+function secureContentOn(){ return !!getContentToken(); }
+// Mirror of the server/extractor classification: fields stripped locally before
+// server fragments are applied. MUST stay in sync with tools/extract-content.mjs.
+const REDACT_FIELDS = {
+  body: ['refNote','hook','npcs','checks','events','rsr','refnotes'],
+  area: ['desc','rsr','npcs','checks','events','refnotes','refNote','hook'],
+  node: ['refNote','refnotes','npcs','checks','hook'],
+};
+function stripLocalSecrets(){
+  try {
+    BASE_BODIES_AUROS.forEach(b => REDACT_FIELDS.body.forEach(f => { delete b[f]; }));
+    Object.values(MAIN).forEach(a => {
+      REDACT_FIELDS.area.forEach(f => delete a[f]);
+      if(a.subs) Object.values(a.subs).forEach(s => REDACT_FIELDS.area.forEach(f => delete s[f]));
+    });
+    if(typeof GALAXY_NODES !== 'undefined') GALAXY_NODES.forEach(n => REDACT_FIELDS.node.forEach(f => { delete n[f]; }));
+  } catch(e){ console.error('stripLocalSecrets failed', e); }
+}
+function applySecureFragments(content){
+  for(const frag of (content || [])){
+    const p = String(frag.path || '').split('.'); const v = frag.value || {};
+    if(p[0] === 'body'){ const b = BASE_BODIES_AUROS.find(x => x.id === p[1]); if(b) Object.assign(b, v); }
+    else if(p[0] === 'node' && typeof GALAXY_NODES !== 'undefined'){ const n = GALAXY_NODES.find(x => x.id === p[1]); if(n) Object.assign(n, v); }
+    else if(p[0] === 'area' && MAIN[p[1]]){
+      if(p[2] === 'sub'){ MAIN[p[1]].subs = MAIN[p[1]].subs || {}; MAIN[p[1]].subs[p[3]] = Object.assign(MAIN[p[1]].subs[p[3]] || {}, v); }
+      else Object.assign(MAIN[p[1]], v);
+    }
+  }
+}
+function refreshSecureViews(){
+  try {
+    if(currentView === 'galaxy' && typeof gxRenderSystems === 'function') gxRenderSystems();
+    else if(currentView === 'system'){ buildOrrery(); if(selectedBody) selectBody(selectedBody); }
+    else if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+    else if(currentView === 'station' && cur){ renderTabs(); renderDetail(); }
+  } catch(e){ console.error('refreshSecureViews failed', e); }
+}
+async function hydrateSecureContent(){
+  const token = getContentToken();
+  if(!token) return false;                 // secure mode off → keep hardcoded data
+  let data;
+  try {
+    const res = await fetch(CONTENT_API, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if(!res.ok) throw new Error('get-content ' + res.status);
+    data = await res.json();
+  } catch(e){
+    // Fail to USABILITY in Stage 2 (keep hardcoded data) but warn loudly; Stage 3
+    // will fail CLOSED once the bundle no longer carries the secrets.
+    console.error('Secure content fetch failed', e);
+    if(typeof showToast === 'function') showToast('Secure content unavailable — check token/connection. Showing local data.');
+    return false;
+  }
+  stripLocalSecrets();
+  applySecureFragments(data.content);
+  refreshSecureViews();
+  return true;
+}
+
 async function loadRevealState(){
   try {
     const res = await supaStorage.get('reveal-status', true);
@@ -12303,6 +12377,9 @@ loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
 });
 loadClockState().then(() => { renderClock(); });
+// Secure per-player content (Stage 2): no-op unless a token is stored. When on,
+// strips baked-in secrets and applies only this token's server-authorised data.
+hydrateSecureContent();
 loadContentOverrides().then(() => {
   if(currentView === 'station' && cur){ renderDetail(); }
   if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
