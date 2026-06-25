@@ -44,11 +44,14 @@ const PLAYER_SAFE = {
   area: new Set(['label','sub','tag','tagBg','tagColor','ac','read','conn','ship']),
   // galaxy systems (GALAXY_NODES): map position + public lore
   node: new Set(['id','name','label','x','y','faction','connections','desc','systemId']),
+  // body-surface locations (BASE_LOCATIONS): everything except the two referee hints
+  location: new Set(['id','name','surface','sx','sy','color','isStation','interiorId','elevatorTo','tag','desc']),
 };
 const REFEREE_FIELDS = {
   body: new Set(['refNote','hook','npcs','checks','events','rsr','refnotes']),
   area: new Set(['desc','rsr','npcs','checks','events','refnotes','refNote','hook']),
   node: new Set(['refNote','refnotes','npcs','checks','hook']),
+  location: new Set(['refNote','hook']),
 };
 // Fields whose current render gating disagrees with their assigned audience —
 // reported so the referee knows the migration FIXES a current leak.
@@ -143,6 +146,20 @@ function run() {
   // 3. Galaxy nodes
   const nodes = evalLiteral(extractConst(src, 'GALAXY_NODES'));
   nodes.forEach(n => classifyRecord('node', n, `node.${n.id}`));
+
+  // 4. Body-surface locations (BASE_LOCATIONS: system → body → [locations])
+  const locations = evalLiteral(extractConst(src, 'BASE_LOCATIONS'));
+  for (const [sysId, bodies] of Object.entries(locations)) {
+    for (const [bodyId, locs] of Object.entries(bodies)) {
+      locs.forEach(loc => classifyRecord('location', loc, `loc.${sysId}.${bodyId}.${loc.id}`));
+    }
+  }
+
+  // 5. Referee event timeline (TIMED_EVENTS): the whole array is GM-only, stored
+  // as one atomic referee fragment (a player token never receives it).
+  const timed = evalLiteral(extractConst(src, 'TIMED_EVENTS'));
+  fragments.push({ path: 'timed_events', audience: 'referee', value: timed });
+  report.push({ path: 'timed_events', audience: 'referee', reason: 'whole array — GM-only event log' });
 
   // ── Write outputs ──
   mkdirSync(outDir, { recursive: true });

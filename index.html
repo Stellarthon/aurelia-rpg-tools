@@ -7237,6 +7237,7 @@ const REDACT_FIELDS = {
   body: ['refNote','hook','npcs','checks','events','rsr','refnotes'],
   area: ['desc','rsr','npcs','checks','events','refnotes','refNote','hook'],
   node: ['refNote','refnotes','npcs','checks','hook'],
+  location: ['refNote','hook'],
 };
 function stripLocalSecrets(){
   try {
@@ -7246,6 +7247,9 @@ function stripLocalSecrets(){
       if(a.subs) Object.values(a.subs).forEach(s => REDACT_FIELDS.area.forEach(f => delete s[f]));
     });
     if(typeof GALAXY_NODES !== 'undefined') GALAXY_NODES.forEach(n => REDACT_FIELDS.node.forEach(f => { delete n[f]; }));
+    if(typeof BASE_LOCATIONS !== 'undefined') Object.values(BASE_LOCATIONS).forEach(bodies =>
+      Object.values(bodies).forEach(locs => locs.forEach(l => REDACT_FIELDS.location.forEach(f => { delete l[f]; }))));
+    if(typeof TIMED_EVENTS !== 'undefined') TIMED_EVENTS.length = 0; // whole GM timeline
   } catch(e){ console.error('stripLocalSecrets failed', e); }
 }
 function applySecureFragments(content){
@@ -7256,6 +7260,15 @@ function applySecureFragments(content){
     else if(p[0] === 'area' && MAIN[p[1]]){
       if(p[2] === 'sub'){ MAIN[p[1]].subs = MAIN[p[1]].subs || {}; MAIN[p[1]].subs[p[3]] = Object.assign(MAIN[p[1]].subs[p[3]] || {}, v); }
       else Object.assign(MAIN[p[1]], v);
+    }
+    else if(p[0] === 'loc' && typeof BASE_LOCATIONS !== 'undefined'){
+      // loc.<sys>.<body>.<locId> → merge into that location record
+      const arr = BASE_LOCATIONS[p[1]] && BASE_LOCATIONS[p[1]][p[2]];
+      const rec = Array.isArray(arr) && arr.find(l => l.id === p[3]);
+      if(rec) Object.assign(rec, v);
+    }
+    else if(frag.path === 'timed_events' && typeof TIMED_EVENTS !== 'undefined' && Array.isArray(v)){
+      TIMED_EVENTS.length = 0; v.forEach(e => TIMED_EVENTS.push(e)); // restore GM timeline
     }
   }
 }

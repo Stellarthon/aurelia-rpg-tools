@@ -30,6 +30,8 @@ const REDACT = {
   BASE_BODIES_AUROS: ['refNote', 'hook', 'npcs', 'checks', 'events', 'rsr', 'refnotes'],
   MAIN:              ['desc', 'rsr', 'npcs', 'checks', 'events', 'refnotes', 'refNote', 'hook'],
   GALAXY_NODES:      ['refNote', 'refnotes', 'npcs', 'checks', 'hook'],
+  BASE_LOCATIONS:    ['refNote', 'hook'],   // nested system → body → [locations]
+  TIMED_EVENTS:      '*',                    // whole array is GM-only → ships as []
 };
 
 // Locate the value literal after `const NAME = `, bracket-matching past strings.
@@ -104,20 +106,26 @@ const REF_FIELD_RE = /\b(npcs|checks|refnotes|refNote|rsr|events|hook):/;
 const edits = [];
 let strippedFieldCount = 0;
 
+const countAndStrip = (rec, fields) => { for (const f of fields) if (rec[f] !== undefined) strippedFieldCount++; stripFields(rec, fields); };
+
 for (const [name, fields] of Object.entries(REDACT)) {
   const span = valueSpan(src, name);
   const value = evalLiteral(span.text);
   const before = JSON.stringify(value).length;
-  if (name === 'MAIN') {
-    for (const area of Object.values(value)) {
-      for (const f of fields) if (area[f] !== undefined) strippedFieldCount++;
-      stripFields(area, fields);
-    }
-  } else {
-    value.forEach(rec => { for (const f of fields) if (rec[f] !== undefined) strippedFieldCount++; });
-    stripFields(value, fields);
+  let outValue = value;
+  if (fields === '*') {                                   // whole array is GM-only → []
+    strippedFieldCount += Array.isArray(value) ? value.length : 0;
+    outValue = [];
+  } else if (name === 'MAIN') {                            // object: { areaId: area{…, subs} }
+    Object.values(value).forEach(area => countAndStrip(area, fields));
+  } else if (name === 'BASE_LOCATIONS') {                  // object: { sys: { body: [locations] } }
+    for (const bodies of Object.values(value))
+      for (const locs of Object.values(bodies))
+        locs.forEach(loc => countAndStrip(loc, fields));
+  } else {                                                 // flat array of records
+    value.forEach(rec => countAndStrip(rec, fields));
   }
-  const serialized = JSON.stringify(value, null, 2);
+  const serialized = JSON.stringify(outValue, null, 2);
   edits.push({ name, start: span.start, end: span.end, serialized, before, after: serialized.length });
 }
 
