@@ -2156,6 +2156,61 @@ input#ui-scale-range{
   border-radius:5px;padding:10px;font-size:12px;cursor:pointer;font-family:monospace
 }
 #pw-error{color:#d45050;font-size:10px;margin-top:8px;min-height:14px}
+#pw-db-link{
+  display:block;width:100%;margin-top:12px;background:none;border:none;
+  color:var(--tx1);font-size:10px;font-family:monospace;cursor:pointer;
+  text-decoration:underline;opacity:.7
+}
+#pw-db-link:hover{opacity:1;color:var(--accentGold)}
+
+/* ── Database (bring-your-own Supabase) settings ── */
+#db-gate{
+  position:fixed;inset:0;background:rgba(5,8,16,.86);z-index:320;
+  display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto
+}
+#db-gate.hidden{display:none}
+#db-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  padding:24px;max-width:440px;width:100%;text-align:left;max-height:92vh;overflow:auto
+}
+#db-card h3{color:var(--accentGold);font-size:14px;margin-bottom:8px;font-family:monospace;letter-spacing:1px}
+#db-card p{color:var(--tx1);font-size:11px;margin-bottom:14px;line-height:1.5}
+#db-active{
+  font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);
+  border:.5px solid var(--bd0);border-radius:5px;padding:8px 10px;margin-bottom:14px;
+  word-break:break-all;line-height:1.5
+}
+#db-active b{color:var(--tx0)}
+.db-lbl{display:block;color:var(--tx1);font-size:10px;font-family:monospace;letter-spacing:.5px;margin-bottom:5px}
+#db-url,#db-key{
+  width:100%;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;
+  color:var(--tx0);font-size:12px;padding:9px;outline:none;margin-bottom:12px;font-family:monospace
+}
+#db-url:focus,#db-key:focus{border-color:var(--accentGold)}
+#db-status{font-size:10px;font-family:monospace;min-height:16px;margin-bottom:10px;line-height:1.4}
+#db-status.ok{color:#4CAF50}
+#db-status.err{color:#d45050}
+#db-status.pending{color:var(--tx1)}
+#db-actions,#db-actions2{display:flex;gap:8px;margin-bottom:8px}
+#db-card button:not(#db-copy){
+  flex:1;border-radius:5px;padding:9px;font-size:11px;cursor:pointer;font-family:monospace;
+  background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0)
+}
+#db-save{background:var(--bgI)!important;color:var(--txI)!important;border-color:var(--txI)!important}
+#db-card button:not(#db-copy):hover{border-color:var(--accentGold)}
+#db-sql{margin-top:12px;border-top:.5px solid var(--bd0);padding-top:12px}
+#db-sql summary{color:var(--accentGold);font-size:11px;font-family:monospace;cursor:pointer;margin-bottom:8px}
+#db-sql p{font-size:10px}
+#db-sql-text{
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;padding:10px;
+  font-size:10px;color:var(--tx0);white-space:pre;overflow-x:auto;line-height:1.45;margin-bottom:8px
+}
+#db-copy{
+  background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:5px;
+  padding:7px 12px;font-size:10px;cursor:pointer;font-family:monospace
+}
+#db-copy:hover{border-color:var(--accentGold)}
+#conn-pill.has-db-settings{cursor:pointer}
 
 /* ── Player refresh button (iOS home-screen apps suspend setInterval, so
      players need a manual way to pull fresh reveal state) ── */
@@ -2380,8 +2435,56 @@ input#ui-scale-range{
     <input type="password" id="pw-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
     <button id="pw-submit" onclick="checkPassword()">Enter</button>
     <div id="pw-error"></div>
+    <button id="pw-db-link" type="button" onclick="openDbSettings()">Use your own database</button>
   </div>
 </div>
+
+<!-- ── Database settings (bring-your-own Supabase) ──
+     Lets a referee point this device at their own Supabase project instead of
+     the shared canonical campaign DB. Override is per-device (localStorage). -->
+<div id="db-gate" class="hidden">
+  <div id="db-card">
+    <h3>DATABASE</h3>
+    <p>Point this device at your own Supabase project. Players you invite enter the
+       same two values below. Planet textures always load from the shared library —
+       you only host the campaign data table.</p>
+    <div id="db-active"></div>
+    <label class="db-lbl" for="db-url">Project URL</label>
+    <input type="text" id="db-url" placeholder="https://xxxxxxxx.supabase.co" autocomplete="off" spellcheck="false">
+    <label class="db-lbl" for="db-key">Publishable (anon) key</label>
+    <input type="text" id="db-key" placeholder="sb_publishable_… or eyJ…" autocomplete="off" spellcheck="false">
+    <div id="db-status"></div>
+    <div id="db-actions">
+      <button id="db-test" type="button" onclick="testDbSettings()">Test connection</button>
+      <button id="db-save" type="button" onclick="saveDbSettings()">Save &amp; reload</button>
+    </div>
+    <div id="db-actions2">
+      <button id="db-reset" type="button" onclick="resetDbSettings()">Reset to shared DB</button>
+      <button id="db-close" type="button" onclick="closeDbSettings()">Close</button>
+    </div>
+    <details id="db-sql">
+      <summary>First time? Set up your project (one SQL snippet)</summary>
+      <p>Create a free project at supabase.com, open the <b>SQL Editor</b>, paste this, and Run.
+         Then copy your Project URL and publishable key from <b>Project Settings ▸ API</b>.</p>
+      <pre id="db-sql-text">-- Aurelia RPG Tools — campaign data table
+create table if not exists aurelia_state (
+  key        text primary key,
+  value      text,
+  updated_at timestamptz default now()
+);
+
+alter table aurelia_state enable row level security;
+
+-- Same honour-system posture as the shared DB: the publishable key may read
+-- and write campaign state. (Spoiler control is client-side, not enforced here.)
+create policy "aurelia_state read"  on aurelia_state for select using (true);
+create policy "aurelia_state write" on aurelia_state for insert with check (true);
+create policy "aurelia_state update" on aurelia_state for update using (true) with check (true);</pre>
+      <button id="db-copy" type="button" onclick="copyDbSql()">Copy SQL</button>
+    </details>
+  </div>
+</div>
+
 <div id="root">
   <!-- ── View transition overlay ── -->
   <div id="view-transition"></div>
@@ -2443,7 +2546,7 @@ input#ui-scale-range{
     <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly" style="display:none"></button>
     <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows" style="display:none"></button>
     <!-- ── Shared-sync status pill (offline hardening) — updated by updateConnPill() ── -->
-    <div id="conn-pill" class="cp-live" title="Shared sync — Live"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
+    <div id="conn-pill" class="cp-live has-db-settings" title="Shared sync — Live" onclick="openDbSettings()"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
     <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
       <span class="pm-label">Traveller View</span>
       <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
@@ -6880,9 +6983,147 @@ function buildQuickAddList(){
 // This is acceptable here since the table only ever holds reveal flags and
 // notes text — never referee-only content (see note above).
 
-const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
-const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
+// ── Database config (canonical defaults + per-referee override) ──────────────
+// The constants below are the canonical Aurelia campaign project. A referee can
+// point the app at their OWN Supabase project via Settings ▸ Database (the gear
+// on the sync pill, or the link on the access gate). When overridden, only the
+// aurelia_state DATA table is swapped — planet-surface textures always load from
+// the canonical public bucket (see TEXTURE_BASE below) so referees never have to
+// re-host the globe assets. Override lives in localStorage on the referee's
+// device; saving reloads the app so every boot loader re-reads from the new DB.
+const DEFAULT_SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
+const DB_CONFIG_KEY = 'aurelia_db_config';
+
+// Read the active DB config — a saved {url,key} override, or the canonical pair.
+function loadDbConfig(){
+  try {
+    const raw = localStorage.getItem(DB_CONFIG_KEY);
+    if(raw){
+      const c = JSON.parse(raw);
+      if(c && c.url && c.key){
+        return { url: String(c.url).trim().replace(/\/+$/, ''), key: String(c.key).trim(), custom: true };
+      }
+    }
+  } catch(e){ /* malformed — fall through to defaults */ }
+  return { url: DEFAULT_SUPABASE_URL, key: DEFAULT_SUPABASE_KEY, custom: false };
+}
+
+// Live endpoint vars — re-derived by applyDbConfig(). `let` (not const) so a
+// saved override takes effect; every adapter call reads these at call time.
+let SUPABASE_URL, SUPABASE_KEY, SUPABASE_REST, DB_IS_CUSTOM;
+function applyDbConfig(){
+  const c = loadDbConfig();
+  SUPABASE_URL = c.url;
+  SUPABASE_KEY = c.key;
+  SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
+  DB_IS_CUSTOM = c.custom;
+}
+applyDbConfig();
+
+// ── Database settings modal wiring ───────────────────────────────────────────
+function openDbSettings(){
+  const cfg = loadDbConfig();
+  const card = document.getElementById('db-active');
+  if(card){
+    card.innerHTML = cfg.custom
+      ? `Currently using <b>your own database</b>:<br>${escForAttr(cfg.url)}`
+      : `Currently using the <b>shared campaign database</b>. Enter your own project below to switch this device.`;
+  }
+  const urlIn = document.getElementById('db-url');
+  const keyIn = document.getElementById('db-key');
+  if(urlIn) urlIn.value = cfg.custom ? cfg.url : '';
+  if(keyIn) keyIn.value = cfg.custom ? cfg.key : '';
+  setDbStatus('', '');
+  document.getElementById('db-gate').classList.remove('hidden');
+}
+function closeDbSettings(){ document.getElementById('db-gate').classList.add('hidden'); }
+function setDbStatus(msg, cls){
+  const el = document.getElementById('db-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = cls || '';
+}
+function readDbInputs(){
+  const url = (document.getElementById('db-url').value || '').trim().replace(/\/+$/, '');
+  const key = (document.getElementById('db-key').value || '').trim();
+  return { url, key };
+}
+// Lightweight reachability probe against the override's aurelia_state table.
+async function testDbSettings(){
+  const { url, key } = readDbInputs();
+  if(!/^https?:\/\/.+/.test(url) || !key){
+    setDbStatus('Enter a valid project URL and key first.', 'err'); return false;
+  }
+  setDbStatus('Testing…', 'pending');
+  try {
+    const res = await fetch(`${url}/rest/v1/aurelia_state?select=key&limit=1`, {
+      headers: { 'apikey': key, 'Authorization': 'Bearer ' + key }
+    });
+    if(res.ok){ setDbStatus('Connected — table found. Ready to save.', 'ok'); return true; }
+    if(res.status === 404 || res.status === 400){
+      setDbStatus('Reached the project, but the aurelia_state table is missing. Run the setup SQL below.', 'err');
+    } else if(res.status === 401 || res.status === 403){
+      setDbStatus('Reached the project, but the key was rejected. Check the publishable key.', 'err');
+    } else {
+      setDbStatus('Unexpected response (HTTP ' + res.status + ').', 'err');
+    }
+    return false;
+  } catch(e){
+    setDbStatus('Could not reach that URL. Check the project URL.', 'err');
+    return false;
+  }
+}
+async function saveDbSettings(){
+  const { url, key } = readDbInputs();
+  if(!/^https?:\/\/.+/.test(url) || !key){
+    setDbStatus('Enter a valid project URL and key first.', 'err'); return;
+  }
+  const ok = await testDbSettings();
+  if(!ok) return; // testDbSettings already surfaced why
+  try {
+    localStorage.setItem(DB_CONFIG_KEY, JSON.stringify({ url, key }));
+    // Stale cache/queue belong to the previous DB — clear them so the new
+    // project loads clean rather than rendering the old campaign's state.
+    clearDbScopedLocalState();
+    setDbStatus('Saved. Reloading…', 'ok');
+    setTimeout(() => location.reload(), 400);
+  } catch(e){
+    setDbStatus('Could not save settings (localStorage blocked).', 'err');
+  }
+}
+function resetDbSettings(){
+  try {
+    localStorage.removeItem(DB_CONFIG_KEY);
+    clearDbScopedLocalState();
+  } catch(e){}
+  setDbStatus('Reset to the shared database. Reloading…', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+// Drop the write-through cache and outbound queue (they're keyed to whichever DB
+// wrote them) when switching projects, so one campaign's state never leaks into
+// another's. Identity/notes-private keys are left alone — they're per-device.
+function clearDbScopedLocalState(){
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(CACHE_PREFIX) || k === SYNC_QUEUE_KEY)
+      .forEach(k => localStorage.removeItem(k));
+  } catch(e){}
+}
+function copyDbSql(){
+  const txt = document.getElementById('db-sql-text').textContent;
+  const done = () => { const b = document.getElementById('db-copy'); if(b){ const o = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => b.textContent = o, 1500); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done, done);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta); done();
+  }
+}
+// Minimal HTML-attr escaper for echoing the saved URL back into the modal.
+function escForAttr(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // ── Hosted planet-surface globe textures ────────────────────────────────────
 // Pre-rendered lit globe PNGs in the public Supabase Storage bucket "globes".
@@ -6892,14 +7133,19 @@ const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
 // resolves it to the encoded public URL. Resolution order:
 //   body.textureUrl (full URL escape hatch) > '__none__' (force procedural) >
 //   body.texture (explicit catalog file) > auto-match by planet type.
-const TEXTURE_BASE = SUPABASE_URL + '/storage/v1/object/public/globes/';
+// Pinned to the CANONICAL project, never the referee's override: the globe PNGs
+// live in the canonical public "globes" bucket, so a referee on their own DB
+// still gets the shared texture library for free (nothing to re-upload).
+const TEXTURE_BASE = DEFAULT_SUPABASE_URL + '/storage/v1/object/public/globes/';
 let textureCatalog = []; // filenames in the globes bucket, loaded at runtime
 
 async function loadTextureCatalog(){
   try {
-    const res = await fetch(SUPABASE_URL + '/storage/v1/object/list/globes', {
+    // Textures always come from the canonical project (see TEXTURE_BASE), so list
+    // its bucket with the canonical creds even when the data table is overridden.
+    const res = await fetch(DEFAULT_SUPABASE_URL + '/storage/v1/object/list/globes', {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      headers: { 'apikey': DEFAULT_SUPABASE_KEY, 'Authorization': 'Bearer ' + DEFAULT_SUPABASE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
     if(!res.ok) return;
@@ -7103,7 +7349,8 @@ function updateConnPill(){
     icon = '○'; text = 'Offline';
   }
   pill.innerHTML = `<span class="cp-dot">${icon}</span><span class="cp-txt">${text}</span>`;
-  pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()}`;
+  const dbLabel = DB_IS_CUSTOM ? 'your database' : 'shared database';
+  pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()} · ${dbLabel} (click to change)`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
