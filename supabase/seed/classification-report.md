@@ -6,8 +6,8 @@
 
 ## Summary
 
-- Fragments: **113** (`all`: 83, `referee`: 30)
-- Fields classified: **820**
+- Fragments: **128** (`all`: 90, `referee`: 38)
+- Fields classified: **894**
 - **FAIL-CLOSED defaults (unrecognised → hidden — confirm these): 0**
 
 ## Current-render leaks this migration fixes
@@ -688,3 +688,62 @@ _None — every field matched the classification table._
 - `node.havens-gate.label`
 - `node.havens-gate.connections`
 - `node.havens-gate.desc`
+- `loc.auros.aurelia.station.id`
+- `loc.auros.aurelia.station.name`
+- `loc.auros.aurelia.station.surface`
+- `loc.auros.aurelia.station.sx`
+- `loc.auros.aurelia.station.sy`
+- `loc.auros.aurelia.station.color`
+- `loc.auros.aurelia.station.isStation`
+- `loc.auros.aurelia.station.interiorId`
+- `loc.auros.aurelia.station.elevatorTo`
+- `loc.auros.aurelia.station.tag`
+- `loc.auros.aurelia.station.desc`
+- `loc.auros.aurelia.capitol.id`
+- `loc.auros.aurelia.capitol.name`
+- `loc.auros.aurelia.capitol.surface`
+- `loc.auros.aurelia.capitol.sx`
+- `loc.auros.aurelia.capitol.sy`
+- `loc.auros.aurelia.capitol.color`
+- `loc.auros.aurelia.capitol.tag`
+- `loc.auros.aurelia.capitol.desc`
+- `loc.auros.aurelia.cradle.id`
+- `loc.auros.aurelia.cradle.name`
+- `loc.auros.aurelia.cradle.surface`
+- `loc.auros.aurelia.cradle.sx`
+- `loc.auros.aurelia.cradle.sy`
+- `loc.auros.aurelia.cradle.color`
+- `loc.auros.aurelia.cradle.tag`
+- `loc.auros.aurelia.cradle.desc`
+- `loc.auros.aurelia.hegemony-base.id`
+- `loc.auros.aurelia.hegemony-base.name`
+- `loc.auros.aurelia.hegemony-base.surface`
+- `loc.auros.aurelia.hegemony-base.sx`
+- `loc.auros.aurelia.hegemony-base.sy`
+- `loc.auros.aurelia.hegemony-base.color`
+- `loc.auros.aurelia.hegemony-base.tag`
+- `loc.auros.aurelia.hegemony-base.desc`
+- `loc.auros.aurelia.spire-range.id`
+- `loc.auros.aurelia.spire-range.name`
+- `loc.auros.aurelia.spire-range.surface`
+- `loc.auros.aurelia.spire-range.sx`
+- `loc.auros.aurelia.spire-range.sy`
+- `loc.auros.aurelia.spire-range.color`
+- `loc.auros.aurelia.spire-range.tag`
+- `loc.auros.aurelia.spire-range.desc`
+- `loc.auros.aurelia.omnisynth.id`
+- `loc.auros.aurelia.omnisynth.name`
+- `loc.auros.aurelia.omnisynth.surface`
+- `loc.auros.aurelia.omnisynth.sx`
+- `loc.auros.aurelia.omnisynth.sy`
+- `loc.auros.aurelia.omnisynth.color`
+- `loc.auros.aurelia.omnisynth.tag`
+- `loc.auros.aurelia.omnisynth.desc`
+- `loc.auros.aurelia.underdeck.id`
+- `loc.auros.aurelia.underdeck.name`
+- `loc.auros.aurelia.underdeck.surface`
+- `loc.auros.aurelia.underdeck.sx`
+- `loc.auros.aurelia.underdeck.sy`
+- `loc.auros.aurelia.underdeck.color`
+- `loc.auros.aurelia.underdeck.tag`
+- `loc.auros.aurelia.underdeck.desc`
