@@ -4167,6 +4167,12 @@ const GALAXY_NODES = [
   }
 ];
 
+// Snapshot each node's ORIGINAL lore connections before the live jump-lane
+// overlay (GX_LANES) overwrites `connections` further down. The economy sim
+// trades along these established commercial routes — independent of whatever
+// jump lanes the party has actually surveyed.
+GALAXY_NODES.forEach(n => { n._loreLinks = Array.isArray(n.connections) ? n.connections.slice() : []; });
+
 // Lookup map by galaxy-node id.
 const GX_MAP = {};
 GALAXY_NODES.forEach(s => GX_MAP[s.id] = s);
@@ -13615,17 +13621,17 @@ window.ECON = (function(){
   // list them in cons or they double-count. Numbers are balanced so total supply
   // ≥ total demand for every good (system sits near equilibrium; shocks deviate it).
   const DEF = {
-    cypress:        { prod:{'Common Consumables':240}, cons:{'Common Manufactured':6}, safW:1 },   // breadbasket
+    cypress:        { prod:{'Common Consumables':300}, cons:{'Common Manufactured':6}, safW:1 },   // breadbasket
     'the-garden':   { prod:{'Common Consumables':45},  cons:{'Common Manufactured':3} },           // Congregation farm
     bastion:        { prod:{'Common Consumables':55},  cons:{'Common Manufactured':8,'Advanced Electronics':2} }, // Elysium Prime
-    erebus:         { prod:{'Common Ore':170},         cons:{'Common Consumables':6,'Common Manufactured':2} },
+    erebus:         { prod:{'Common Ore':130},         cons:{'Common Consumables':6,'Common Manufactured':2} },
     'profit-margin':{ prod:{'Common Ore':100,'Scrap':120}, cons:{'Common Consumables':8} },
     graveyard:      { prod:{'Scrap':260},              cons:{'Common Consumables':4} },            // salvage
     'elysium-prime':{ prod:{'Common Ore':40},          cons:{'Common Consumables':3} },            // Vanguard's End mine
-    kronos:         { prod:{'Common Electronics':75,'Common Manufactured':40}, cons:{'Common Consumables':15}, safW:1.5 }, // Kronos Prime
+    kronos:         { prod:{'Common Electronics':90,'Common Manufactured':40}, cons:{'Common Consumables':15}, safW:1.5 }, // Kronos Prime
     castor:         { prod:{'Common Manufactured':60}, cons:{'Common Consumables':8} },             // forge-world
     'the-anvil':    { prod:{'Common Manufactured':40}, cons:{'Common Consumables':4} },             // shipyards
-    vesta:          { prod:{'Common Electronics':20},  cons:{'Common Consumables':10} },            // Vestalia
+    vesta:          { prod:{'Common Electronics':25},  cons:{'Common Consumables':10} },            // Vestalia
     sol:            { prod:{'Advanced Electronics':18},
                       cons:{'Common Consumables':60,'Common Manufactured':25,'Advanced Electronics':15}, safW:4 },
     aurelia:        { prod:{'Advanced Electronics':20},
@@ -13652,7 +13658,8 @@ window.ECON = (function(){
     });
     Object.keys(worlds).forEach(id=>{
       const n = nodeOf(id);
-      ((n&&n.connections)||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
+      // _loreLinks = original lore trade routes (n.connections is the live jump-lane overlay, often empty)
+      (((n&&n._loreLinks)||(n&&n.connections))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
     });
   }
 
@@ -13665,6 +13672,13 @@ window.ECON = (function(){
     const rate = (w.cons[good]||0) + recipeDraw(w, good);
     return Math.max((w.store[good]||0), rate * (w.safW||2)) + (w.prod[good]||0);  // +~1wk finished-goods buffer so producers ship surplus, not 100%
   }
+  // Weekly demand (final + recipe draw) and the reorder "order-up-to" level. The
+  // pipeline term covers goods in transit so stock rests near safety instead of
+  // sawtoothing to zero while a long-lead shipment is still inbound.
+  const PIPELINE_WK = 4;   // reorder target = safety + this much demand, so on-hand rests at the safety buffer AFTER the lead-time pipeline is accounted for (most leads are 1–4 jumps). The per-tick cap + neediest-first sort below stop this from becoming a run on producers.
+  function demandFor(w, good){ return (w.cons[good]||0) + recipeDraw(w, good); }
+  function orderUpTo(w, good){ const d = demandFor(w, good); return safety(w, good) + d*PIPELINE_WK; }
+  function stress(w){ let m = Infinity; for(const g of SIM_GOODS){ const s = safety(w,g); if(s>0 && demandFor(w,g)>0) m = Math.min(m, stk(w.id,g)/s); } return m; }  // lowest cover ratio — neediest worlds replenish first
 
   function dist(src, blk){
     const D = { [src]:0 }, q = [src];
@@ -13676,7 +13690,7 @@ window.ECON = (function(){
     buildTopology();
     const stock = {};
     Object.values(worlds).forEach(w=>{ stock[w.id]={};
-      SIM_GOODS.forEach(g=>{ const s = safety(w,g); if(s>0 || w.prod[g]) stock[w.id][g] = Math.round(s*1.15); }); });
+      SIM_GOODS.forEach(g=>{ const s = orderUpTo(w,g); if(s>0 || w.prod[g]) stock[w.id][g] = Math.round(s); }); });  // seed full (incl. pipeline) so there's no cold-start scramble
     return { week: curWeek(), active:false, stock, transit:[], shocks:[], log:[] };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
@@ -13704,7 +13718,8 @@ window.ECON = (function(){
     Object.values(worlds).forEach(w=>{
       for(const g in w.prod){
         const cap = w.prod[g] * outputFactor(w.id, g);
-        const r = GOODS[g].recipe; let made = cap;
+        const storeCap = safety(w,g) + w.prod[g]*2;                 // idle when warehouses are full — no infinite hoarding, so a producer shock actually bites
+        const r = GOODS[g].recipe; let made = Math.min(cap, Math.max(0, storeCap - stk(w.id,g)));
         if(r) for(const inp in r) made = Math.min(made, stk(w.id,inp)/r[inp]);
         made = Math.max(0, made);
         if(r) for(const inp in r) setStk(w.id,inp, stk(w.id,inp)-made*r[inp]);
@@ -13716,25 +13731,27 @@ window.ECON = (function(){
     Object.values(worlds).forEach(w=>{ for(const g of SIM_GOODS){
       if(stk(w.id,g)<0) log(week, `${w.label}: ${g} shortfall`); setStk(w.id,g, stk(w.id,g)); } });
 
-    Object.values(worlds).forEach(w=>{
+    // replenishment — order-up-to, multi-source (nearest first), in-transit aware
+    const incoming = {};
+    state.transit.forEach(t=>{ if(!incoming[t.to]) incoming[t.to]={}; incoming[t.to][t.good]=(incoming[t.to][t.good]||0)+t.qty; });
+    Object.values(worlds).sort((a,b)=> stress(a)-stress(b)).forEach(w=>{   // neediest worlds get first claim on producer surplus
       if(blk[w.id]) return;
-      const needs = {};
-      SIM_GOODS.forEach(g=>{ const need = safety(w,g) - stk(w.id,g); if(need>0 && (w.cons[g]||recipeDraw(w,g))) needs[g]=need; });
-      const goodsNeeded = Object.keys(needs); if(!goodsNeeded.length) return;
       const D = dist(w.id, blk);
-      goodsNeeded.forEach(g=>{
-        let best=null, bd=Infinity;
-        Object.values(worlds).forEach(p=>{
-          if(p.id===w.id || blk[p.id] || !p.prod[g]) return;
-          if(embargoed(w.id,p.id)) return;
-          const surplus = stk(p.id,g) - safety(p,g); if(surplus<=0) return;
-          const dd = D[p.id]; if(dd==null) return; if(dd<bd){ bd=dd; best=p; }
-        });
-        if(!best) return;
-        const qty = Math.min(needs[g], Math.max(0, stk(best.id,g)-safety(best,g)), 60);
-        if(qty<=0) return;
-        setStk(best.id,g, stk(best.id,g)-qty);
-        state.transit.push({ good:g, qty:Math.round(qty*100)/100, from:best.id, to:w.id, eta: week + Math.max(1,bd) });
+      SIM_GOODS.forEach(g=>{
+        const d = demandFor(w,g); if(d<=0) return;
+        const have = stk(w.id,g) + ((incoming[w.id]||{})[g]||0);
+        let need = Math.min(orderUpTo(w,g) - have, d*3);          // cap per-tick pull so no world hoards / drains a producer in one tick
+        if(need < d*0.5) return;                                  // hysteresis — skip trivial top-ups
+        const prods = Object.values(worlds).filter(p=> p.id!==w.id && !blk[p.id] && p.prod[g] && D[p.id]!=null && !embargoed(w.id,p.id))
+                        .sort((a,b)=> D[a.id]-D[b.id]);
+        for(const p of prods){
+          if(need<=0) break;
+          const surplus = stk(p.id,g) - safety(p,g); if(surplus<=0) continue;
+          const qty = Math.min(need, surplus); if(qty<=0) continue;
+          setStk(p.id,g, stk(p.id,g)-qty);
+          state.transit.push({ good:g, qty:Math.round(qty*100)/100, from:p.id, to:w.id, eta: week + Math.max(1,D[p.id]) });
+          need -= qty;
+        }
       });
     });
     state.week = week;
