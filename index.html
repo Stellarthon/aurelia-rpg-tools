@@ -4445,7 +4445,12 @@ const HX = (function(){
         const score=(b.hook?100:0)+u.pop; if(score>bestScore){bestScore=score;best={uwp:u,body:b};} }); return best; }catch(e){ return null; } }
   function portOf(s){ const real=realMainWorld(s.systemId); if(real) return real.uwp.port;
     if(PORT_OVERRIDE[s.label]!=null) return PORT_OVERRIDE[s.label]; return s.deep?'X':'C'; }
-  function fuelAt(s){ const p=portOf(s); return (p==='A'||p==='B')?'refined':(p==='X'?'none':'unrefined'); }
+  // Dead regions — The Vast and the Archon Collective run no commercial trade
+  // and no refuelling infrastructure, so their systems never offer fuel or a
+  // market regardless of any surveyed starport class.
+  const NO_MARKET_FACS={ vast:1, archon:1 };
+  function hasMarket(s){ return !!s && !NO_MARKET_FACS[s.fac]; }
+  function fuelAt(s){ if(s&&NO_MARKET_FACS[s.fac]) return 'none'; const p=portOf(s); return (p==='A'||p==='B')?'refined':(p==='X'?'none':'unrefined'); }
   const FUEL_INFO={ refined:{c:'#3f9d5a',t:'Refined fuel'}, unrefined:{c:'#caa83b',t:'Unrefined (skim)'}, none:{c:'#b23a3a',t:'No fuel'} };
 
   // ── UWP + trade (MgT2e). Prefer the real surveyed UWP; else generate deterministically. ──
@@ -4514,9 +4519,27 @@ const HX = (function(){
     if(a>=1e3) return 'Cr'+(n/1e3).toFixed(1).replace(/\.0$/,'')+'k'; return 'Cr'+n; }
   function bestDM(dm,codes){ let m=0; for(const c of codes) if(dm[c]!=null) m=Math.max(m,dm[c]); return m; }
   const AVG_ROLL=10.5;
-  function tradeOpportunities(src,dst){ const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
+  // ── Living market ──────────────────────────────────────────────────────────
+  // Every system carries its own supply/demand quirk, and the whole market
+  // drifts with the Imperial calendar so prices are never static. `mktPressure`
+  // is a signed modifier on a good's local trade roll:
+  //    + = locally abundant → cheaper to BUY here, weaker demand to SELL here
+  //    − = locally scarce    → dearer to buy here, strong demand to sell here
+  // Trade codes (the lore) still drive the bulk of each price via bestDM(); this
+  // only layers a bounded, seeded wobble on top, so results stay lore-accurate
+  // while differing system-to-system and week-to-week. Seeds are deterministic,
+  // so every device computes the same prices for the same Imperial week.
+  function imperialWeek(){ return (typeof imperialDate!=='undefined'&&typeof imperialOrdinal==='function')?Math.floor(imperialOrdinal(imperialDate)/7):0; }
+  function seedScore(tag){ const r=mulberry(hashStr(tag)); return Math.round(r()*4)-2; }   // −2..+2
+  function mktPressure(sys,goodName){ const key=(sys.id||sys.label||'')+'|'+goodName;
+    const quirk=seedScore('mkt-bias|'+key);                       // persistent per system+good (the randomised supply/demand)
+    const flux =seedScore('mkt-flux|'+key+'|'+imperialWeek());    // shifts each Imperial week (calendar fluctuation)
+    return clamp(quirk+flux,-4,4); }
+  function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
+    const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
-      const buyRoll=AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker, sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker;
+      const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker+mktPressure(src,g.name),
+            sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-mktPressure(dst,g.name);
       const buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
       out.push({good:g.name,buyP,sellP,profit:sellP-buyP}); });
     return out.sort((a,b)=>b.profit-a.profit); }
@@ -4533,6 +4556,17 @@ const HX = (function(){
     cargoHold=Math.max(0,Number(ss.cargoHold!=null?ss.cargoHold:30)); broker=clamp(Number(ss.broker!=null?ss.broker:2),0,6);
     origin=BY_ID[ss.locationId]||BY_ID['aurelia']||SYS[0];
     if(!selected||!BY_ID[selected.id]) selected=origin; }
+
+  // ── Visited systems — gate market intel so players can't price-scout worlds
+  //    they have never been to. The current location and home port always count;
+  //    past jump destinations are back-filled from the log; the referee can
+  //    reveal a system manually (e.g. arrival handled in narration).
+  function visitedSet(){ const ss=(typeof shipState!=='undefined')?shipState:{};
+    const set=new Set(Array.isArray(ss.visited)?ss.visited:[]);
+    if(ss.locationId) set.add(ss.locationId); set.add('aurelia');
+    if(Array.isArray(ss.jumpLog)) ss.jumpLog.forEach(e=>{ const m=SYS.find(x=>disp(x)===e.to); if(m) set.add(m.id); });
+    return set; }
+  function isVisited(s){ return !!s && visitedSet().has(s.id); }
 
   // ── Pixel projection (flat-top axial → screen) ──
   function axialPx(q,r){ return { x:RPX*1.5*q, y:RPX*Math.sqrt(3)*(r+q/2) }; }
@@ -4652,6 +4686,8 @@ const HX = (function(){
     if(typeof shipState!=='undefined'){
       shipState.fuel=Math.max(0,Math.round(plan.endTank)); shipState.locationId=to.id; shipState.origin=disp(to);
       shipState.destination=''; shipState.jumpParsecs=0;
+      shipState.visited=Array.isArray(shipState.visited)?shipState.visited:[];
+      if(!shipState.visited.includes(to.id)) shipState.visited.push(to.id);   // arriving reveals the destination's market to players
       shipState.jumpLog=Array.isArray(shipState.jumpLog)?shipState.jumpLog:[];
       shipState.jumpLog.unshift({ date:(typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?formatImperial(imperialDate):''),
         from:disp(from), to:disp(to), weeks, burn:Math.round(plan.total), refuels:plan.refuels, events:fired.map(e=>({title:e.title,note:e.note||''})) });
@@ -4660,6 +4696,14 @@ const HX = (function(){
       if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
     refresh();
     toast(`Jumped <b>${eh(disp(from))} → ${eh(disp(to))}</b> · ${weeks} wk`+(fired.length?` · <span style="color:#caa83b">${fired.length} event${fired.length>1?'s':''}!</span>`:''));
+  }
+  function markVisited(id){
+    if(!ref()){ toast('Referee only.'); return; }
+    if(typeof shipState==='undefined') return;
+    shipState.visited=Array.isArray(shipState.visited)?shipState.visited:[];
+    if(!shipState.visited.includes(id)) shipState.visited.push(id);
+    if(typeof saveShipState==='function') saveShipState();
+    refresh(); toast('System marked visited — its market is now visible to players.');
   }
   function refuelHere(){
     if(!ref()){ toast('Referee only.'); return; }
@@ -4730,12 +4774,20 @@ const HX = (function(){
         if(plan.strandedAt==null && ref()) html+=`<div class="hx-btn-row"><button class="hx-act-btn primary" onclick="hxExecuteJump()">⚡ Execute jump · ${jumps} wk</button></div>`;
         else if(plan.strandedAt==null) html+=`<div class="hx-small" style="margin-top:6px">Referee executes jumps. You can plan freely.</div>`;
       }
-      const ops=tradeOpportunities(origin,s).filter(o=>o.profit>0).slice(0,4);
       html+=`<div class="hx-sec-lbl">Speculative Cargo → ${eh(disp(s))}</div>`;
-      if(!ops.length) html+=`<div class="hx-small">No profitable cargo from ${eh(disp(origin))} on this leg (Broker-${broker}).</div>`;
-      else { ops.forEach(o=>{ html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name">${eh(o.good)}</span><span class="d">${kCr(o.buyP)} → ${kCr(o.sellP)} · <b style="color:#3f9d5a">+${kCr(o.profit)}/t</b></span></div>`; });
-        const best=ops[0]; html+=`<div class="hx-kv"><span class="k">Best load · ${eh(best.good)} × ${cargoHold}t</span><span class="v" style="color:#3f9d5a">+${kCr(best.profit*cargoHold)}</span></div>`;
-        html+=`<div class="hx-small" style="color:var(--tx1);margin-top:4px">Estimate at average roll + Broker-${broker}; play rolls 3D6 per buy/sell.</div>`; }
+      const srcMkt=hasMarket(origin), dstMkt=hasMarket(s);
+      if(!srcMkt||!dstMkt){ const dead=!srcMkt?origin:s, df=FAC[dead.fac];
+        html+=`<div class="hx-small">No open market — ${eh((df&&df.name)||'this region')} keeps no commercial trade or refuelling at ${eh(disp(dead))}.</div>`; }
+      else if(!ref() && !isVisited(s)){
+        html+=`<div class="hx-small">○ Market data sealed — cargo prices for ${eh(disp(s))} appear only once the party has called there in person.</div>`; }
+      else { const ops=tradeOpportunities(origin,s).filter(o=>o.profit>0).slice(0,4);
+        if(!ops.length) html+=`<div class="hx-small">No profitable cargo from ${eh(disp(origin))} this week (Broker-${broker}).</div>`;
+        else { ops.forEach(o=>{ html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name">${eh(o.good)}</span><span class="d">${kCr(o.buyP)} → ${kCr(o.sellP)} · <b style="color:#3f9d5a">+${kCr(o.profit)}/t</b></span></div>`; });
+          const best=ops[0]; html+=`<div class="hx-kv"><span class="k">Best load · ${eh(best.good)} × ${cargoHold}t</span><span class="v" style="color:#3f9d5a">+${kCr(best.profit*cargoHold)}</span></div>`;
+          html+=`<div class="hx-small" style="color:var(--tx1);margin-top:4px">Prices as of ${eh(typeof formatImperial==='function'?formatImperial(imperialDate):'now')} (Broker-${broker}); they drift week to week. Play rolls 3D6 per buy/sell.</div>`; } }
+      if(ref() && (srcMkt&&dstMkt)){ html+= isVisited(s)
+        ? `<div class="hx-small" style="color:#4caf82;margin-top:4px">✓ Party has called here — market visible to players.</div>`
+        : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
     }
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
       html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>`;
@@ -4801,6 +4853,7 @@ const HX = (function(){
   window.hxResetView=()=>fitView();
   window.hxExecuteJump=executeJump;
   window.hxRefuelHere=refuelHere;
+  window.hxMarkVisited=markVisited;
   window.hxSelectByKey=k=>{ const s=BY_KEY[k]; if(s) selectSys(s); };
 
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, get origin(){ return origin; } };
@@ -10836,6 +10889,7 @@ let shipState = {
   cargoHold: 30,         // speculative-cargo capacity (tons) for the trade planner
   broker: 2,             // Broker skill for trade price estimates (0–6)
   jumpLog: [],           // captain's log: [{date,from,to,weeks,burn,refuels,events}]
+  visited: [],           // galaxy-node ids the party has physically called at — gates market/trade intel from players until they've been there
   // ── Combat stats (Phase 1 — additive; lazy-default merged on load) ─────────
   // These extend the sheet with the numerics MgT2e *core* space combat needs.
   // They are dormant until the combat module reads them; existing rows simply
