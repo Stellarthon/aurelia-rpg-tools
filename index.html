@@ -404,27 +404,7 @@ textarea{font-family:var(--font)}
 #galaxy-wrap{display:flex;width:100%;height:100%;overflow:hidden;min-height:0}
 #galaxy-canvas{flex:1;min-width:0;background:#04060e;overflow:hidden;position:relative;cursor:grab;user-select:none;-webkit-user-select:none}
 #galaxy-canvas.panning{cursor:grabbing}
-#gx-svg{position:absolute;top:0;left:0;width:1800px;height:1060px;transform-origin:0 0}
 #galaxy-detail{width:360px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);display:flex;flex-direction:column;overflow:hidden}
-#galaxy-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
-#galaxy-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
-#galaxy-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
-#galaxy-db{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}
-.gx-node text{pointer-events:none}
-#gx-title{position:absolute;bottom:14px;left:14px;font-size:17px;font-weight:700;letter-spacing:5px;color:var(--tx0);text-transform:uppercase;pointer-events:none;opacity:0.6;font-family:monospace}
-#gx-zoom{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:10}
-#gx-zoom .zoom-btn{width:34px;height:34px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0);border-radius:6px;color:var(--tx1);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-#gx-zoom .zoom-btn:hover{color:var(--accentGold);border-color:var(--accentGold)}
-#gx-legend{position:absolute;top:10px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
-#gx-legend .leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
-#gx-legend .leg-row:last-child{margin-bottom:0}
-#gx-legend .leg-swatch{width:20px;height:9px;border-radius:2px;flex-shrink:0;opacity:0.7}
-/* Galaxy detail panel reuses the system-detail content classes (.sg/.s-sec/.s-desc). */
-#galaxy-db .sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin:10px 0;font-size:11px}
-#galaxy-db .sg-l{color:var(--tx1)}#galaxy-db .sg-v{color:var(--tx0)}
-#galaxy-db .s-sec{margin-top:14px}
-#galaxy-db .s-sec-lbl{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;border-bottom:.5px solid var(--bd2);padding-bottom:3px}
-#galaxy-db .s-desc{font-size:12px;line-height:1.65;color:var(--tx0)}
 /* Blank-system prompt (shown in #sys-overview for unsurveyed systems). */
 .blank-sys-card{border:1px dashed var(--bd0);border-radius:8px;padding:16px 14px;text-align:center;margin-top:6px}
 .blank-sys-icon{font-size:26px;margin-bottom:6px}
@@ -1151,6 +1131,29 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #rep-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
 #rep-btn:hover{background:var(--bd0);color:var(--tx0)}
 #rep-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+
+/* ── Funds panel (mirrors #rep-wrap) ── */
+#funds-wrap{position:fixed;top:54px;right:0;width:340px;height:470px;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:280px;min-height:160px;max-width:92vw;max-height:86vh}
+#funds-wrap.panel-collapsed{height:auto!important;min-height:0}
+#funds-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#funds-header:active{cursor:grabbing}
+#funds-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#funds-toggle{font-size:10px;color:var(--tx1)}
+#funds-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+#funds-body.collapsed{display:none}
+#funds-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.fund-card{background:var(--bg2);border:.5px solid var(--bd0);border-radius:7px;padding:10px 11px}
+.fund-big{font-size:20px;font-weight:700;color:var(--accentGold);font-family:monospace;line-height:1.2}
+.fund-lbl{font-size:9px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);margin-bottom:3px}
+.fund-row{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.fund-inp{width:96px;background:var(--bg1);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);font-family:monospace;font-size:12px;padding:6px 8px}
+.fund-note{flex:1;min-width:90px;background:var(--bg1);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);font-size:11px;padding:6px 8px}
+.fund-purse{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--bd2);font-size:12px;color:var(--tx0)}
+.fund-purse:last-child{border-bottom:none}
+.fund-log{font-size:10px;color:var(--tx1);padding:4px 0;border-bottom:.5px solid var(--bd2);line-height:1.55}
+.fund-log .amt-pos{color:#4CAF50;font-family:monospace;font-weight:700}
+.fund-log .amt-neg{color:#d45050;font-family:monospace;font-weight:700}
+@media(max-width:640px){#funds-wrap{right:0;top:54px;width:312px;height:420px}}
 @media(max-width:640px){#rep-wrap{right:0;top:54px;width:312px;height:420px}}
 
 /* ── Oracle (rumour & encounter generators) panel ── */
@@ -2198,6 +2201,90 @@ input#ui-scale-range{
     font-size:16px;padding:6px;width:52px;min-height:30px
   }
 }
+/* ════════════════════════════════════════════════════════════════════════════
+   HEX-JUMP GALAXY ENGINE — styles (absorbed from hex_jump_prototype.html)
+   All selectors are hx-* namespaced so they cannot clash with or restyle the
+   rest of the app. Reuses the shared dark-theme CSS vars; the galaxy canvas is
+   pinned dark in both themes (same rationale as the orrery/station panels).
+   ════════════════════════════════════════════════════════════════════════════ */
+#hx-map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-moz-user-select:none}
+#hx-map.hx-dragging{cursor:grabbing}
+.hx-hex{fill:none;stroke:#141b2b;stroke-width:.6}
+.hx-hex.reach{fill:rgba(0,229,255,0.07);stroke:rgba(0,229,255,0.22)}
+.hx-hex.reach1{fill:rgba(0,229,255,0.16)}
+.hx-hex.fuelreach{fill:rgba(212,168,67,0.15);stroke:rgba(212,168,67,0.32)}
+.hx-range-lbl{font-family:var(--mono,monospace);font-size:9px;font-weight:700;fill:var(--accentGold);letter-spacing:.5px;paint-order:stroke;stroke:#04060e;stroke-width:3px;stroke-linejoin:round}
+.hx-lane{stroke:#00cc88;stroke-width:1;stroke-dasharray:5,4;opacity:.30;fill:none}
+.hx-route{stroke:var(--accentGold);stroke-width:2;opacity:.9;fill:none}
+.hx-route-bad{stroke:#ff5a4d;stroke-width:2;opacity:.95;fill:none;stroke-dasharray:5,4}
+.hx-fuel-warn{font-family:var(--mono,monospace);font-size:10px;font-weight:700;fill:#ff5a4d;letter-spacing:.4px;paint-order:stroke;stroke:#04060e;stroke-width:3px;stroke-linejoin:round}
+.hx-strand-dot{fill:none;stroke:#ff5a4d;stroke-width:1.5}
+.hx-star-dot{stroke:#04060e;stroke-width:1;cursor:pointer}
+.hx-star-lbl{font-family:var(--mono,monospace);font-size:8.5px;fill:#aeb6c8;pointer-events:none;letter-spacing:.3px;display:none}
+.hx-star-lbl.dim{fill:#5b6479}
+.hx-star-lbl.pin{display:block}
+#hx-map.hx-lblzoom .hx-star-lbl{display:block}
+.hx-ring{fill:none;stroke:#1c2740;stroke-width:.6;stroke-dasharray:2,5}
+.hx-ring-lbl{font-family:var(--mono,monospace);font-size:8px;fill:#3a4763}
+#hx-title{position:absolute;bottom:12px;left:14px;font-size:14px;font-weight:700;letter-spacing:4px;color:var(--tx0);text-transform:uppercase;pointer-events:none;opacity:.5;font-family:var(--mono,monospace)}
+#hx-lane-toggle,#hx-terr-toggle,#hx-range-toggle,#hx-fuel-toggle{position:absolute;right:12px;font-size:9px;font-family:var(--mono,monospace);letter-spacing:1px;background:rgba(14,18,30,.92);border-radius:6px;padding:7px 12px;text-transform:uppercase;z-index:10;cursor:pointer}
+#hx-lane-toggle{top:10px;border:.5px solid #00cc88;color:#00cc88}
+#hx-lane-toggle.off{border-color:var(--bd0,#2e3347);color:var(--tx1)}
+#hx-terr-toggle{top:42px;border:.5px solid var(--accentGold);color:var(--accentGold)}
+#hx-terr-toggle.off{border-color:var(--bd0,#2e3347);color:var(--tx1)}
+#hx-range-toggle{top:74px;border:.5px solid var(--bd0,#2e3347);color:var(--tx1)}
+#hx-range-toggle.on{border-color:var(--accentGold);color:var(--accentGold)}
+#hx-fuel-toggle{top:106px;border:.5px solid #3f9d5a;color:#3f9d5a}
+#hx-fuel-toggle.off{border-color:var(--bd0,#2e3347);color:var(--tx1)}
+#hx-toast{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);background:rgba(14,18,30,.96);border:.5px solid var(--accentGold);border-radius:8px;padding:9px 14px;color:var(--tx0);font-size:12px;font-family:var(--mono,monospace);z-index:30;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
+#hx-toast.show{opacity:1}
+#hx-legend{position:absolute;top:10px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
+.hx-leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
+.hx-leg-row:last-child{margin-bottom:0}
+.hx-leg-sw{width:16px;height:12px;border-radius:2px;flex-shrink:0;opacity:.85}
+#hx-zoom{position:absolute;bottom:12px;right:12px;display:flex;flex-direction:column;gap:5px;z-index:10}
+.hx-zoom-btn{width:32px;height:32px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx1);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.hx-zoom-btn:hover{color:var(--accentGold);border-color:var(--accentGold)}
+#hx-phead{padding:14px 16px 10px;border-bottom:.5px solid var(--bd1,#252a3a);flex-shrink:0}
+#hx-ptitle{font-size:13px;font-weight:700;letter-spacing:1px;color:var(--tx0)}
+#hx-pdate{font-family:var(--mono,monospace);font-size:12px;color:var(--accentGold);letter-spacing:1px;font-weight:700}
+#hx-psub{font-size:9px;color:var(--tx1);font-family:var(--mono,monospace);letter-spacing:1px;text-transform:uppercase;margin-top:3px}
+#hx-pbody{flex:1;overflow-y:auto;padding:14px 16px;-webkit-overflow-scrolling:touch}
+.hx-sec-lbl{font-size:9px;color:var(--tx1);font-family:var(--mono,monospace);letter-spacing:2px;text-transform:uppercase;margin:16px 0 7px;border-bottom:.5px solid var(--bd2);padding-bottom:4px}
+.hx-sec-lbl:first-child{margin-top:0}
+.hx-ship-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.hx-jbtns{display:flex;gap:4px}
+.hx-jbtn{width:30px;height:30px;border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx1);font-family:var(--mono,monospace);font-size:13px;font-weight:700;background:var(--bg1,#181c27);cursor:pointer}
+.hx-jbtn.on{background:#0a3a44;border-color:#00e5ff;color:#00e5ff}
+.hx-jbtn:disabled{opacity:.55;cursor:not-allowed}
+.hx-tnage{width:64px;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx0);font-family:var(--mono,monospace);font-size:12px;padding:6px 7px}
+.hx-tnage:disabled{opacity:.6;cursor:not-allowed}
+.hx-small{font-size:10px;color:var(--tx1);line-height:1.5}
+.hx-mono{font-family:var(--mono,monospace)}
+.hx-kv{display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--bd2)}
+.hx-kv .k{color:var(--tx1)}
+.hx-kv .v{color:var(--tx0);font-family:var(--mono,monospace);text-align:right}
+.hx-tag{display:inline-block;font-size:8px;font-family:var(--mono,monospace);letter-spacing:.5px;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:.5px solid;margin-top:4px}
+.hx-reach-item{display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:5px 0;border-bottom:.5px solid var(--bd2);cursor:pointer}
+.hx-reach-item:hover{color:var(--accentGold)}
+.hx-reach-item .d{font-family:var(--mono,monospace);color:var(--tx1);white-space:nowrap}
+.hx-reach-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hx-btn-row{display:flex;gap:6px;margin:10px 0}
+.hx-act-btn{flex:1;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx0);font-size:11px;font-family:var(--mono,monospace);padding:8px;letter-spacing:.5px;cursor:pointer}
+.hx-act-btn:hover{border-color:var(--accentGold);color:var(--accentGold)}
+.hx-act-btn.primary{background:#0a3a44;border-color:#00e5ff;color:#00e5ff}
+.hx-route-leg{font-size:10px;font-family:var(--mono,monospace);color:var(--tx1);padding:3px 0;display:flex;gap:6px}
+.hx-route-leg b{color:var(--tx0)}
+.hx-note{font-size:10px;color:var(--tx1);line-height:1.55;background:var(--bg1,#181c27);border:.5px solid var(--bd2);border-radius:6px;padding:9px 11px;margin-top:8px}
+.hx-warn{color:#ddaa44}
+#hx-pbody details{margin-top:6px}
+#hx-pbody summary{font-size:10px;font-family:var(--mono,monospace);color:var(--tx1);cursor:pointer;letter-spacing:.5px}
+#hx-pbody summary:hover{color:var(--tx0)}
+.hx-dup{font-size:10px;color:var(--tx1);padding:4px 0;border-bottom:.5px solid var(--bd2);line-height:1.4}
+.hx-dup b{color:#ddaa44}
+.hx-log-item{font-size:11px;color:var(--tx1);padding:5px 0;border-bottom:.5px solid var(--bd2);line-height:1.5}
+.hx-log-item b{color:var(--tx0)}
+.hx-log-event{color:#caa83b;font-size:10px;padding:2px 0 0 12px}
 </style>
 </head>
 <body>
@@ -2258,6 +2345,7 @@ input#ui-scale-range{
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
+    <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
     <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
     <!-- Clock edit popover -->
@@ -2287,89 +2375,66 @@ input#ui-scale-range{
   <div id="view-galaxy" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
     <div id="galaxy-wrap">
       <div id="galaxy-canvas">
-    <svg id="gx-svg" viewBox="0 0 1800 1060" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="gx-node-glow">
-          <feGaussianBlur stdDeviation="2.5" result="b"/>
-          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      <rect width="1800" height="1060" fill="#04060e"/>
-      <g id="gx-bg-stars"></g>
-
-      <!-- Faction territory blobs -->
-      <path d="M 230,60 C 290,40 380,55 400,100 C 420,145 410,175 380,200 C 360,215 370,250 340,275 C 310,300 270,310 250,290 C 220,265 195,245 190,210 C 185,175 195,150 210,125 C 220,105 215,75 230,60 Z" fill="#6a0a0a" opacity="0.52"/>
-      <path d="M 380,60 C 440,35 560,45 620,80 C 680,115 695,155 670,190 C 650,218 620,230 590,240 C 555,252 520,265 480,258 C 440,250 400,235 375,210 C 350,185 345,155 355,125 C 362,100 360,78 380,60 Z" fill="#520a78" opacity="0.55"/>
-      <path d="M 290,490 C 330,455 390,445 440,460 C 490,475 530,505 545,545 C 560,585 550,625 520,648 C 495,668 460,672 425,660 C 395,648 370,640 350,618 C 325,592 310,565 300,540 C 290,515 278,510 290,490 Z" fill="#8a0808" opacity="0.52"/>
-      <path d="M 580,360 C 620,335 680,330 730,345 C 780,360 820,385 835,425 C 850,462 845,505 820,535 C 800,560 775,575 745,582 C 710,590 670,588 638,572 C 605,555 578,528 562,495 C 545,460 545,425 558,395 C 566,378 573,370 580,360 Z" fill="#600808" opacity="0.48"/>
-      <path d="M 980,130 C 1030,100 1130,110 1200,150 C 1265,185 1290,235 1280,290 C 1270,340 1240,370 1200,390 C 1165,408 1120,415 1080,408 C 1040,400 1005,380 980,350 C 955,320 940,280 942,240 C 944,200 955,158 980,130 Z" fill="#08105a" opacity="0.58"/>
-      <path d="M 885,508 C 930,488 1000,495 1060,515 C 1120,535 1165,558 1180,605 C 1195,650 1185,700 1150,725 C 1120,748 1070,750 1035,748 C 1005,746 975,740 952,725 C 928,710 910,688 895,665 C 878,640 872,612 875,582 C 878,552 870,520 885,508 Z" fill="#3a3808" opacity="0.52"/>
-
-      <!-- Faction labels -->
-      <text x="245" y="130" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,245,130)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
-      <text x="218" y="158" font-size="22" font-weight="700" fill="#cc3333" opacity="0.55" font-family="monospace" letter-spacing="2" transform="rotate(-25,218,158)" stroke="#04060e" stroke-width="3" paint-order="stroke">FRONTIER</text>
-      <text x="440" y="120" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,440,120)" stroke="#04060e" stroke-width="3" paint-order="stroke">SANHEDRIN</text>
-      <text x="460" y="148" font-size="22" font-weight="700" fill="#aa55ee" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-10,460,148)" stroke="#04060e" stroke-width="3" paint-order="stroke">CULT</text>
-      <text x="330" y="520" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,330,520)" stroke="#04060e" stroke-width="3" paint-order="stroke">RED STAR</text>
-      <text x="318" y="554" font-size="26" font-weight="700" fill="#ee2222" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(-5,318,554)" stroke="#04060e" stroke-width="3" paint-order="stroke">COLLECTIVE</text>
-      <text x="608" y="400" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,608,400)" stroke="#04060e" stroke-width="3" paint-order="stroke">TERRAN</text>
-      <text x="588" y="436" font-size="28" font-weight="700" fill="#cc2222" opacity="0.45" font-family="monospace" letter-spacing="1" transform="rotate(12,588,436)" stroke="#04060e" stroke-width="3" paint-order="stroke">HEGEMONY</text>
-      <text x="985" y="190" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,985,190)" stroke="#04060e" stroke-width="3" paint-order="stroke">OMNISYNTH</text>
-      <text x="975" y="228" font-size="28" font-weight="700" fill="#3355cc" opacity="0.50" font-family="monospace" letter-spacing="1" transform="rotate(-10,975,228)" stroke="#04060e" stroke-width="3" paint-order="stroke">INDUSTRIES</text>
-      <text x="952" y="580" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,952,580)" stroke="#04060e" stroke-width="3" paint-order="stroke">VESTALIAN</text>
-      <text x="942" y="608" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,942,608)" stroke="#04060e" stroke-width="3" paint-order="stroke">CONTINUITY</text>
-      <text x="948" y="636" font-size="20" font-weight="700" fill="#8a9922" opacity="0.55" font-family="monospace" letter-spacing="1" transform="rotate(5,948,636)" stroke="#04060e" stroke-width="3" paint-order="stroke">GOVERNMENT</text>
-      <text x="95" y="520" font-size="14" font-weight="700" fill="#557788" opacity="0.4" font-family="monospace" letter-spacing="2" transform="rotate(90,95,520)">THE GHOST REEF</text>
-
-      <!-- Jump lanes — rendered by JS from the connections data (single source of truth) -->
-      <g id="gx-lanes"></g>
-
-      <!-- Systems rendered by JS -->
-      <g id="gx-systems"></g>
-    </svg>
-        <div id="gx-title">The Orion Arm</div>
-        <div id="gx-zoom">
-          <button class="zoom-btn" onclick="gxZoom(1.2)">+</button>
-          <button class="zoom-btn" onclick="gxZoom(0.83)">−</button>
-          <button class="zoom-btn" onclick="gxResetView()" style="font-size:11px">⌂</button>
-        </div>
-        <div id="gx-legend">
-          <div class="leg-row"><div class="leg-swatch" style="background:#6a0a0a"></div>Terran Frontier</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#520a78"></div>Sanhedrin Cult</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#8a0808"></div>Red Star Collective</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#600808"></div>Terran Hegemony</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#08105a"></div>OmniSynth Industries</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#3a3808"></div>Vestalian Continuity Gov.</div>
-          <div class="leg-row"><div class="leg-swatch" style="background:#1a2030;border:1px solid #334"></div>Independent</div>
-        </div>
+    <!-- ══ HEX-JUMP GALAXY (active layer) — rendered by the HX engine in <script> ══ -->
+    <svg id="hx-map" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="hx-legend">
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:#f4d35e"></span>Jump origin</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:rgba(0,229,255,0.5)"></span>In jump range</div>
+      <div class="hx-leg-row" id="hx-leg-lane"><span class="hx-leg-sw" style="background:#00cc88;opacity:.7"></span>Jump lane (−15% fuel)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px solid #3f9d5a;border-radius:50%;width:11px;height:11px"></span>Refined fuel (A/B)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px solid #caa83b;border-radius:50%;width:11px;height:11px"></span>Unrefined skim (C/D/E)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px dashed #b23a3a;border-radius:50%;width:11px;height:11px"></span>No fuel (port X)</div>
+    </div>
+    <div id="hx-title">The Orion Arm · Hex Navigation</div>
+    <div id="hx-toast"></div>
+    <button id="hx-lane-toggle" onclick="hxToggleLanes()">Lanes: ON</button>
+    <button id="hx-terr-toggle" onclick="hxToggleTerr()">Territories: ON</button>
+    <button id="hx-range-toggle" onclick="hxToggleRange()">Fuel range: OFF</button>
+    <button id="hx-fuel-toggle" onclick="hxToggleFuel()">Fuel: ON</button>
+    <div id="hx-zoom">
+      <button class="hx-zoom-btn" onclick="hxZoomBy(1.25)">+</button>
+      <button class="hx-zoom-btn" onclick="hxZoomBy(0.8)">−</button>
+      <button class="hx-zoom-btn" title="Reset view" onclick="hxResetView()">⊚</button>
+    </div>
       </div><!-- end galaxy-canvas -->
 
       <div id="galaxy-detail">
-        <div id="galaxy-dh">
-          <div id="galaxy-dname">THE ORION ARM</div>
-          <div id="galaxy-dtype">Select a system to inspect</div>
-        </div>
-        <div id="galaxy-db">
-          <div id="galaxy-overview">
-            <div style="color:var(--tx1);font-size:12px;line-height:1.65;margin-bottom:14px">
-              The Orion Arm spans hundreds of inhabited systems across six major faction territories.
-              The Archon Collective observes from beyond the charted boundaries.<br><br>
-              <span style="color:var(--accentGold)">Tap any system</span> to inspect it, then
-              <span style="color:var(--accentGold)">View close up</span> to drill into its worlds.
-              A <span style="color:#4caf82">green dot</span> marks a surveyed system.
-            </div>
-            <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">Faction Territories</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6a0a0a;border:.5px solid #ff8888;margin-right:8px;vertical-align:middle"></span>Terran Frontier</td></tr>
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#520a78;border:.5px solid #cc88ff;margin-right:8px;vertical-align:middle"></span>Sanhedrin Cult</td></tr>
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8a0808;border:.5px solid #ff6666;margin-right:8px;vertical-align:middle"></span>Red Star Collective</td></tr>
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#600808;border:.5px solid #00e5ff;margin-right:8px;vertical-align:middle"></span>Terran Hegemony</td></tr>
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#08105a;border:.5px solid #6699ff;margin-right:8px;vertical-align:middle"></span>OmniSynth Industries</td></tr>
-              <tr><td style="padding:5px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a3808;border:.5px solid #aadd44;margin-right:8px;vertical-align:middle"></span>Vestalian Continuity Gov.</td></tr>
-              <tr><td style="padding:5px 0;color:var(--tx0)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a2030;border:.5px solid #668899;margin-right:8px;vertical-align:middle"></span>Independent / Ghost Reef</td></tr>
-            </table>
+        <div id="hx-phead">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div id="hx-ptitle">JUMP PLOTTER</div>
+            <div id="hx-pdate" title="Imperial date (DDD-YYYY)">001-1105</div>
           </div>
-          <div id="galaxy-sys-detail" style="display:none"></div>
+          <div id="hx-psub">Hex-grid navigation · 1 hex = 1 parsec</div>
+        </div>
+        <div id="hx-pbody">
+          <div class="hx-sec-lbl">Your Ship</div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Jump drive</span>
+            <div class="hx-jbtns" id="hx-jbtns"></div>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Hull</span>
+            <input class="hx-tnage" id="hx-tonnage" type="number" min="10" step="10">
+            <span class="hx-small">tons → fuel = 10% × jump</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Fuel tank</span>
+            <input class="hx-tnage" id="hx-fuelmax" type="number" min="10" step="10">
+            <span class="hx-small">tons capacity</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Fuel aboard</span>
+            <input class="hx-tnage" id="hx-fuelaboard" type="number" min="0" step="1">
+            <span class="hx-small">tons now</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Cargo hold</span>
+            <input class="hx-tnage" id="hx-cargohold" type="number" min="0" step="5">
+            <span class="hx-small">t · Broker</span>
+            <input class="hx-tnage" id="hx-broker" type="number" min="0" max="6" step="1" style="width:42px">
+          </div>
+          <div class="hx-note" id="hx-origin-note"></div>
+          <div id="hx-sel-block"></div>
         </div>
       </div>
     </div>
@@ -2842,6 +2907,16 @@ input#ui-scale-range{
     <div class="panel-resize-handle" id="rep-resize"></div>
   </div>
 
+  <!-- ── Funds panel — party account + character purses (all players) ── -->
+  <div id="funds-wrap" class="hidden">
+    <div id="funds-header" onclick="toggleFundsCollapse()">
+      <span id="funds-title-lbl">💰 FUNDS</span>
+      <span id="funds-toggle">▼</span>
+    </div>
+    <div id="funds-body"></div>
+    <div class="panel-resize-handle" id="funds-resize"></div>
+  </div>
+
   <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
   <div id="gen-wrap" class="hidden ref-only">
     <div id="gen-header" onclick="toggleGenCollapse()">
@@ -2986,6 +3061,7 @@ const GALAXY_FACTIONS = {
   vast:       { name:'The Vast',                             color:'#8855cc' },
   independent:{ name:'Independent',                         color:'#66bbaa' },
   contested:  { name:'Independent (Contested)',              color:'#ddaa44' },
+  uncharted:  { name:'Uncharted',                            color:'#9fb0c8' },
 };
 
 const NODE_COLOR = '#00e5ff';
@@ -3335,9 +3411,6 @@ gxRebuildLanes();
 // or random UWP generation. Lanes/connections are read-only here (V1) — the
 // orion file's lane/flag/design-editing layer is intentionally not ported.
 
-let gxInited = false;       // star field + nodes rendered once
-let gxViewReady = false;    // initial zoom-to-fit done
-let gxSelectedId = null;    // currently selected galaxy node
 let gxLinkMode = false;     // armed while adding a jump lane (Design Mode)
 let gxLinkOrigin = null;    // first system picked while linking
 
@@ -3356,22 +3429,6 @@ async function saveGalaxyLanes(){
   catch(e){ console.error('Galaxy lane save failed', e); }
 }
 
-// Re-apply the cyan selection ring after a structural redraw (gxRenderSystems
-// replaces the node group's innerHTML, which drops the appended ring).
-function gxApplySelRing(){
-  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
-  if(!gxSelectedId) return;
-  const sys = GX_MAP[gxSelectedId]; if(!sys) return;
-  const node = document.querySelector(`#gx-systems [data-id="${gxSelectedId}"]`);
-  if(!node) return;
-  const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
-  ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
-  ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
-  ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
-  ring.setAttribute('class','gx-sel-ring');
-  node.appendChild(ring);
-}
-
 // ── Add / remove lanes (Design Mode, referee only) ──
 function gxAddLane(a, b){
   if(a === b){ showToast('Pick a different destination'); return; }
@@ -3382,8 +3439,7 @@ function gxAddLane(a, b){
   if(di >= 0) gxLaneDeletions.splice(di, 1);   // un-delete a previously removed base lane
   else if(!gxLaneAdditions.includes(k)) gxLaneAdditions.push(k);
   gxRebuildLanes(); saveGalaxyLanes();
-  gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  if(typeof HX!=='undefined') HX.refresh();   // redraw the hex galaxy after a lane edit
   showToast('Jump lane added');
 }
 function gxRemoveLane(k){
@@ -3394,8 +3450,7 @@ function gxRemoveLane(k){
   if(ai >= 0) gxLaneAdditions.splice(ai, 1);    // a session addition — just drop it
   else if(!gxLaneDeletions.includes(k)) gxLaneDeletions.push(k); // tombstone a base lane
   gxRebuildLanes(); saveGalaxyLanes();
-  gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  if(typeof HX!=='undefined') HX.refresh();   // redraw the hex galaxy after a lane edit
   showToast('Jump lane removed');
 }
 // Arm/cancel lane-add mode, then complete it on the next node tap.
@@ -3403,11 +3458,11 @@ function gxArmLink(originId){
   if(!designModeOn || !isReferee()) return;
   gxLinkMode = true; gxLinkOrigin = originId || null;
   showToast('Tap a destination system to link');
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  if(typeof HX!=='undefined') HX.refresh();   // reflect link-mode in the hex panel
 }
 function gxCancelLink(){
   gxLinkMode = false; gxLinkOrigin = null;
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+  if(typeof HX!=='undefined') HX.refresh();   // reflect link-mode in the hex panel
 }
 function gxLinkPick(id){
   if(!gxLinkOrigin){ gxLinkOrigin = id; return; }
@@ -3416,269 +3471,520 @@ function gxLinkPick(id){
   gxAddLane(origin, id);
 }
 
-// ── Star field (seeded, reproducible) ──────────────────────────────────────
-function gxSeedStars(){
-  const g = document.getElementById('gx-bg-stars'); if(!g) return;
-  let h = '';
-  let seed = 42;
-  function rng(){ seed = (seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/0xffffffff; }
-  const bands = [
-    {cx:200,cy:900,rx:650,ry:220,rot:-28,fill:'#112244',op:0.28},
-    {cx:600,cy:650,rx:700,ry:180,rot:-28,fill:'#0d1a33',op:0.32},
-    {cx:950,cy:420,rx:700,ry:200,rot:-28,fill:'#0d1a33',op:0.30},
-    {cx:1350,cy:180,rx:650,ry:190,rot:-28,fill:'#112244',op:0.26},
-    {cx:300,cy:600,rx:500,ry:120,rot:-18,fill:'#192840',op:0.16},
-    {cx:900,cy:280,rx:500,ry:110,rot:-18,fill:'#192840',op:0.15},
-    {cx:780,cy:530,rx:280,ry:100,rot:-28,fill:'#1a2a50',op:0.22},
-    {cx:780,cy:530,rx:130,ry:50,rot:-28,fill:'#2a3a60',op:0.20},
+// ═══════════════════════════════════════════════════════════════════════════
+// GALAXY MAP — HEX-JUMP ENGINE  (absorbed from hex_jump_prototype.html)
+// ═══════════════════════════════════════════════════════════════════════════
+// The native galaxy layer. Single source of truth, no private copies:
+//   • Systems ← GALAXY_NODES   (faction-clustered onto a hex grid; "View close
+//                               up" still drills via enterSystem)
+//   • Lanes   ← GX_LANES       (host's editable jump-lane overlay; lane jumps
+//                               get the surveyed-route fuel discount; design-mode
+//                               add/remove preserved)
+//   • Ship    ← shipState      (fuel / fuelMax / tonnage / jumpRating / cargoHold
+//                               / broker / locationId / jumpLog) — read AND write
+//   • Date    ← imperialDate   (a jump calls advanceImperial(weeks*7))
+// Everything is hx-* namespaced; the whole engine is an IIFE exposing window.HX
+// plus a few window.hx* onclick shims, so nothing leaks into the host globals.
+// Executing a jump / refuelling / editing ship stats is referee-gated (matches
+// updateShipField + advanceImperial); players get a live read-only planner.
+const HX = (function(){
+  // ── Astrometry reference (real J2000 distances, ly) — joined to GALAXY_NODES
+  //    by star name. Used ONLY for the "real distance from Sol" readout and to
+  //    pack each faction's nearest worlds closest to its anchor. The MAP layout
+  //    is hand-clustered by faction (political clarity over real distance).
+  const LY = { 'Sol':0,'Alpha Centauri':4.37,"Barnard's Star":5.96,'Wolf 359':7.86,
+    'Lalande 21185':8.31,'Sirius':8.66,'Luyten 726-8':8.79,'Ross 154':9.70,'Ross 248':10.30,
+    'Epsilon Eridani':10.48,'Lacaille 9352':10.74,'Ross 128':11.01,'61 Cygni':11.40,'Procyon':11.46,
+    'Groombridge 34':11.62,'Epsilon Indi':11.87,'Tau Ceti':11.91,"Luyten's Star":12.36,
+    "Kapteyn's Star":12.83,'Wolf 294':14.80,'Gliese 674':14.81,'Gliese 876':15.24,'Gliese 832':16.16,
+    '82 Eridani':19.71,'36 Ophiuchi':19.50,'Eta Cassiopeiae':19.42,'Gliese 581':20.40,'Gliese 555':20.40,
+    'Gliese 754':19.30,'HD 219134':21.34,'Gliese 667':23.20,'Vega':25.04,'Beta Comae':29.95,
+    'Pollux':33.78,'TRAPPIST-1':40.66,'Castor':51.00,'Ursae Majoris':29.65,'Gliese 505':35.83,
+    'Gliese 563':87.90,'Gliese 706':36.20,'Gliese 710':62.25,'Gliese 693':19.21,'Gliese 777':52.20,
+    'Gliese 806':39.35,'Gliese 293':26.64,'Hyades Cluster':153.0,'Gliese 445':17.55 };
+  const LY_PER_PC=3.261564;
+  function lyOf(name){ if(!name) return null; if(LY[name]!=null) return LY[name];
+    const base=name.replace(/\s+[A-Za-z]{1,2}$/,'').trim(); return LY[base]!=null?LY[base]:null; }
+  function pcOf(name){ const ly=lyOf(name); return ly==null?null:ly/LY_PER_PC; }
+  function ehexVal(c){ if(c==null) return 0; if(/[0-9]/.test(c)) return +c;
+    const u=String(c).toUpperCase().charCodeAt(0); return (u>=65&&u<=90)?(u-55):0; }
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const disp=s=>String((s&&(s.label||s.star))||'').replace(' ★','');
+  const eh=s=>(typeof escHtml==='function'?escHtml(String(s)):String(s));
+  function ref(){ return typeof isReferee!=='function' || isReferee(); }
+
+  // ── Hex math (flat-top axial, 1 hex = 1 parsec) ──
+  function hexDist(a,b){return (Math.abs(a.q-b.q)+Math.abs(a.r-b.r)+Math.abs(a.q+a.r-b.q-b.r))/2;}
+  const DIRS=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+  function spiral(cx,cy,maxR){ const out=[{q:cx,r:cy}];
+    for(let rad=1;rad<=maxR;rad++){ let h={q:cx+DIRS[4][0]*rad,r:cy+DIRS[4][1]*rad};
+      for(let side=0;side<6;side++) for(let i=0;i<rad;i++){ out.push({q:h.q,r:h.r}); h={q:h.q+DIRS[side][0],r:h.r+DIRS[side][1]}; } }
+    return out; }
+
+  // ── Build hex systems from GALAXY_NODES, hand-clustered by faction ──
+  const FACTION_ANCHOR={ hegemony:[0,0], contested:[4,-2], sanhedrin:[7,-4], omnisynth:[4,-6],
+    uhc:[4,4], archon:[9,3], vast:[1,7], rsc:[-6,0] };
+  const IND_POCKETS=[[-8,3],[-5,6],[-2,9],[6,5],[10,-1],[-3,-4]];
+  const FAC_ORDER=['hegemony','sanhedrin','omnisynth','uhc','contested','rsc','archon','vast'];
+  function isDeep(n){ return /deep space|mobile|uncharted nebula/i.test(n.name||''); }
+  const SYS=(typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).map(n=>({ id:n.id, systemId:n.systemId||n.id,
+    star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[],
+    pc:pcOf(n.name), deep:isDeep(n), campaign:true, q:null, r:null }));
+  const occupied=new Set();
+  function clusterFaction(fac){ const a=FACTION_ANCHOR[fac]||[0,0], sp=spiral(a[0],a[1],9);
+    const members=SYS.filter(x=>x.fac===fac).sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc));
+    let i=0; members.forEach(m=>{ while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
+      const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; i++; }); }
+  FAC_ORDER.forEach(clusterFaction);
+  SYS.filter(x=>x.fac==='independent').sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc)).forEach((m,idx)=>{
+    const a=IND_POCKETS[idx%IND_POCKETS.length], sp=spiral(a[0],a[1],3);
+    let i=0; while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
+    const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; });
+  const sp0=spiral(0,0,28); let _j=0;
+  SYS.filter(x=>x.q==null).forEach(m=>{ while(_j<sp0.length&&occupied.has(sp0[_j].q+','+sp0[_j].r))_j++;
+    const h=sp0[_j]||{q:0,r:0}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; _j++; });
+
+  // ── (A) Uncharted frontier: real nearby stars with no campaign identity. Any
+  //    star in the catalogue NOT already claimed by a GALAXY_NODES system becomes
+  //    a non-drillable "uncharted" waypoint, dropped into the largest remaining
+  //    void by a farthest-point fill so it bridges the faction blobs and modest
+  //    jump drives can island-hop across borders (mirrors the prototype). ──
+  const STAR_CATALOG=[
+    {name:'Sol',ly:0},{name:'Alpha Centauri',ly:4.37},{name:"Barnard's Star",ly:5.96},
+    {name:'Wolf 359',ly:7.86},{name:'Lalande 21185',ly:8.31},{name:'Sirius',ly:8.66},
+    {name:'Luyten 726-8',ly:8.79},{name:'Ross 154',ly:9.70},{name:'Ross 248',ly:10.30},
+    {name:'Epsilon Eridani',ly:10.48},{name:'Lacaille 9352',ly:10.74},{name:'Ross 128',ly:11.01},
+    {name:'EZ Aquarii',ly:11.27},{name:'61 Cygni',ly:11.40},{name:'Procyon',ly:11.46},
+    {name:'Struve 2398',ly:11.49},{name:'Groombridge 34',ly:11.62},{name:'Epsilon Indi',ly:11.87},
+    {name:'DX Cancri',ly:11.83},{name:'Tau Ceti',ly:11.91},{name:'Gliese 1061',ly:11.99},
+    {name:'YZ Ceti',ly:12.13},{name:"Luyten's Star",ly:12.36},{name:"Teegarden's Star",ly:12.50},
+    {name:"Kapteyn's Star",ly:12.83},{name:'Lacaille 8760',ly:12.95},{name:'Kruger 60',ly:13.15},
+    {name:'Wolf 1061',ly:14.05},{name:'Wolf 294',ly:14.80},{name:'Gliese 674',ly:14.81},
+    {name:'Gliese 876',ly:15.24},{name:'Gliese 832',ly:16.16},{name:'40 Eridani',ly:16.26},
+    {name:'70 Ophiuchi',ly:16.59},{name:'Altair',ly:16.73},{name:'Gliese 445',ly:17.55},
+    {name:'Gliese 526',ly:17.60},{name:'Gliese 682',ly:16.33},{name:'Sigma Draconis',ly:18.80},
+    {name:'Gliese 229',ly:18.79},{name:'36 Ophiuchi',ly:19.50},{name:'Eta Cassiopeiae',ly:19.42},
+    {name:'82 Eridani',ly:19.71},{name:'Delta Pavonis',ly:19.92},{name:'Gliese 581',ly:20.40},
+    {name:'Gliese 555',ly:20.40},{name:'Gliese 754',ly:19.30},{name:'HD 219134',ly:21.34},
+    {name:'Gliese 667',ly:23.20},{name:'Vega',ly:25.04},{name:'Fomalhaut',ly:25.13},
+    {name:'Beta Comae',ly:29.95},{name:'Pollux',ly:33.78},{name:'TRAPPIST-1',ly:40.66},
+    {name:'Castor',ly:51.00},{name:'Ursae Majoris',ly:29.65},{name:'Gliese 505',ly:35.83},
+    {name:'Gliese 563',ly:87.90},{name:'Gliese 706',ly:36.20},{name:'Gliese 710',ly:62.25},
+    {name:'Gliese 693',ly:19.21},{name:'Gliese 777',ly:52.20},{name:'Gliese 806',ly:39.35},
+    {name:'Gliese 293',ly:26.64},{name:'Hyades Cluster',ly:153.0},
+    {name:'Gliese 412',ly:15.83},{name:'AD Leonis',ly:16.20},{name:'Gliese 687',ly:14.79},
+    {name:'Gliese 1245',ly:15.20},{name:'Wolf 1055',ly:19.30},{name:'Groombridge 1618',ly:15.89},
+    {name:'Stein 2051',ly:18.00},{name:'Gliese 205',ly:18.61},{name:'Gliese 570',ly:19.00},
+    {name:'Gliese 783',ly:19.62},{name:'Xi Bootis',ly:21.90},{name:'61 Virginis',ly:27.90},
+    {name:'p Eridani',ly:26.62},{name:'107 Piscium',ly:24.40},
   ];
-  bands.forEach(b => h += `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" fill="${b.fill}" opacity="${b.op}" transform="rotate(${b.rot},${b.cx},${b.cy})"/>`);
-  const nebulae = [
-    {cx:150,cy:780,rx:220,ry:110,rot:-15,fill:'#2233aa',op:0.05},
-    {cx:1150,cy:140,rx:260,ry:100,rot:20,fill:'#553399',op:0.06},
-    {cx:600,cy:200,rx:180,ry:80,rot:8,fill:'#aa4422',op:0.04},
-    {cx:1400,cy:700,rx:200,ry:90,rot:-10,fill:'#225533',op:0.05},
-    {cx:450,cy:500,rx:300,ry:80,rot:-25,fill:'#112255',op:0.07},
-    {cx:1050,cy:850,rx:220,ry:100,rot:5,fill:'#331155',op:0.05},
+  const baseStar=n=>String(n||'').replace(/\s+[A-Za-z]{1,2}$/,'').trim();
+  const slug=n=>String(n).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  const campStars=new Set(); SYS.forEach(s=>{ campStars.add(baseStar(s.star)); campStars.add(String(s.star||'').trim()); });
+  const UNCH=STAR_CATALOG
+    .filter(c=>!campStars.has(baseStar(c.name)) && !campStars.has(c.name.trim()))
+    .map(c=>({ id:'unchart-'+slug(c.name), systemId:null, star:c.name, label:c.name, fac:'uncharted',
+      connections:[], pc:(c.ly!=null?c.ly/LY_PER_PC:null), deep:false, campaign:false, uncharted:true, q:null, r:null }));
+  (function fillNeutral(){
+    const placed=SYS.filter(x=>x.q!=null); if(!placed.length) return;
+    let mnQ=99,mxQ=-99,mnR=99,mxR=-99;
+    placed.forEach(s=>{mnQ=Math.min(mnQ,s.q);mxQ=Math.max(mxQ,s.q);mnR=Math.min(mnR,s.r);mxR=Math.max(mxR,s.r);});
+    const cands=[]; for(let q=mnQ-1;q<=mxQ+1;q++) for(let r=mnR-1;r<=mxR+1;r++) if(!occupied.has(q+','+r)) cands.push({q,r});
+    const pts=placed.slice();
+    UNCH.forEach(m=>{ let best=null,bestD=-1;
+      cands.forEach(c=>{ if(occupied.has(c.q+','+c.r)) return; let md=99;
+        for(const p of pts){ const d=hexDist(c,p); if(d<md) md=d; } if(md>bestD){ bestD=md; best=c; } });
+      if(!best) best=spiral(0,0,40).find(h=>!occupied.has(h.q+','+h.r))||{q:0,r:0};
+      occupied.add(best.q+','+best.r); m.q=best.q; m.r=best.r; pts.push(m); SYS.push(m); });
+  })();
+
+  const BY_KEY={}; SYS.forEach(s=>BY_KEY[s.q+','+s.r]=s);
+  const BY_ID={};  SYS.forEach(s=>BY_ID[s.id]=s);
+
+  // ── Lanes ← the host's editable GX_LANES overlay (with surveyed-route discount) ──
+  const LANE_FUEL_FACTOR=0.85;
+  function laneEdges(){ const out=[]; if(typeof GX_LANES==='undefined') return out;
+    GX_LANES.forEach(k=>{ const parts=k.split('|'), sa=BY_ID[parts[0]], sb=BY_ID[parts[1]];
+      if(sa&&sb&&sa!==sb) out.push({a:sa,b:sb,len:hexDist(sa,sb),key:k}); }); return out; }
+  function onLane(a,b){ return typeof GX_LANES!=='undefined' && typeof gxLaneKey==='function'
+    && GX_LANES.has(gxLaneKey(a.id,b.id)); }
+
+  // ── Refuelling: starport class (A/B refined, C/D/E unrefined, X none).
+  //    Prefer the real surveyed main-world UWP[0]; else a label override; else default.
+  const PORT_OVERRIDE={ 'Aurelia ★':'B','Watchtower':'B','Vega':'A','Castor':'B','Alpha Centauri':'B',
+    'Kronos Prime':'B','The Anvil':'B','Terminus':'B','Avalon':'B','Vestalia':'B','The Hammer':'B','The Forge':'B',
+    "Haven's Gate":'D','Ophion Prime':'D','Dust':'D','Erebus':'D','Freeport Omega':'D',
+    'Silent Night':'X','The Echo':'X','The Mausoleum':'X','Zephyria Prime':'X','Threshold':'X','Echo':'X','The Watch':'X','The Fade':'X' };
+  function parseUwp(str){ if(!str||str==='—') return null; const raw=String(str).replace('-','').toUpperCase();
+    if(raw.length<8||!/[A-EX]/.test(raw[0])) return null;
+    return { port:raw[0], size:ehexVal(raw[1]),atmo:ehexVal(raw[2]),hydro:ehexVal(raw[3]),
+      pop:ehexVal(raw[4]),gov:ehexVal(raw[5]),law:ehexVal(raw[6]),tl:ehexVal(raw[7]) }; }
+  function realMainWorld(systemId){ if(!systemId) return null;   // uncharted waypoints have no surveyed system — never borrow another's bodies
+    try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(systemId):[])||[];
+      let best=null,bestScore=-1; bodies.forEach(b=>{ if(b.isStar) return; const u=parseUwp(b.uwpString); if(!u) return;
+        const score=(b.hook?100:0)+u.pop; if(score>bestScore){bestScore=score;best={uwp:u,body:b};} }); return best; }catch(e){ return null; } }
+  function portOf(s){ const real=realMainWorld(s.systemId); if(real) return real.uwp.port;
+    if(PORT_OVERRIDE[s.label]!=null) return PORT_OVERRIDE[s.label]; return s.deep?'X':'C'; }
+  function fuelAt(s){ const p=portOf(s); return (p==='A'||p==='B')?'refined':(p==='X'?'none':'unrefined'); }
+  const FUEL_INFO={ refined:{c:'#3f9d5a',t:'Refined fuel'}, unrefined:{c:'#caa83b',t:'Unrefined (skim)'}, none:{c:'#b23a3a',t:'No fuel'} };
+
+  // ── UWP + trade (MgT2e). Prefer the real surveyed UWP; else generate deterministically. ──
+  function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function mulberry(seed){ return function(){ seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function eHex(n){ n=clamp(Math.round(n),0,33); return n<10?String(n):String.fromCharCode(55+n); }
+  function uwpOf(s){ if(s._uwp) return s._uwp;
+    const real=realMainWorld(s.systemId); if(real){ s._uwp=real.uwp; return real.uwp; }
+    const r=mulberry(hashStr(s.star||s.label)), d6=()=>1+Math.floor(r()*6), twoD=()=>d6()+d6();
+    const core=['hegemony','omnisynth','uhc','sanhedrin'].includes(s.fac), port=portOf(s);
+    if(s.deep){ const u={port,size:0,atmo:0,hydro:0,pop:r()<.5?1:2,gov:0,law:0,tl:core?12:10}; s._uwp=u; return u; }
+    const size=clamp(twoD()-2,0,10);
+    const atmo=clamp(twoD()-7+size,0,15);
+    let hydro=twoD()-7+size; if(atmo<=1||atmo>=10) hydro-=4; hydro=clamp(hydro,0,10);
+    let pop=clamp(twoD()-2,0,12); pop=core?clamp(pop+1,0,12):pop;
+    const gov=clamp(twoD()-7+pop,0,15), law=clamp(twoD()-7+gov,0,15);
+    const portTL={A:6,B:4,C:2,D:0,E:0,X:-4}[port]||0, tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
+    const tl=clamp(Math.max(twoD()-7+portTL+(core?2:0)+(pop>=9?1:0),tlFloor),0,15);
+    const u={port,size,atmo,hydro,pop,gov,law,tl}; s._uwp=u; return u; }
+  function uwpStr(s){ const u=uwpOf(s); return u.port+eHex(u.size)+eHex(u.atmo)+eHex(u.hydro)+eHex(u.pop)+eHex(u.gov)+eHex(u.law)+'-'+eHex(u.tl); }
+  function tradeCodes(s){ const u=uwpOf(s), c=[], {size,atmo,hydro,pop,gov,law,tl}=u;
+    if(atmo>=4&&atmo<=9&&hydro>=4&&hydro<=8&&pop>=5&&pop<=7) c.push('Ag');
+    if(size===0&&atmo===0&&hydro===0) c.push('As');
+    if(pop===0&&gov===0&&law===0) c.push('Ba');
+    if(atmo>=2&&hydro===0) c.push('De');
+    if(atmo>=10&&hydro>=1) c.push('Fl');
+    if([6,7,8].includes(size)&&[5,6,8].includes(atmo)&&hydro>=5&&hydro<=7) c.push('Ga');
+    if(pop>=9) c.push('Hi');
+    if(tl>=12) c.push('Ht');
+    if(atmo<=1&&hydro>=1) c.push('Ic');
+    if([0,1,2,4,7,9].includes(atmo)&&pop>=9) c.push('In');
+    if(pop>=1&&pop<=3) c.push('Lo');
+    if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
+    if(pop>=4&&pop<=6) c.push('Ni');
+    if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
+    if([6,8].includes(atmo)&&pop>=6&&pop<=8&&gov>=4&&gov<=9) c.push('Ri');
+    if(atmo===0) c.push('Va');
+    if(hydro===10) c.push('Wa');
+    return c; }
+  const TRADE_GOODS=[
+    {name:'Common Electronics',base:20000,buy:{In:2,Ht:3,Ri:1},sell:{Ni:2,Lo:1,Po:1},avail:'all'},
+    {name:'Common Industrial',base:10000,buy:{Na:2,In:5},sell:{Na:3,Ag:2},avail:'all'},
+    {name:'Common Manufactured',base:20000,buy:{Na:2,In:5},sell:{Na:3,Hi:2},avail:'all'},
+    {name:'Common Raw Materials',base:5000,buy:{Ag:3,Ga:2},sell:{In:2,Po:2},avail:'all'},
+    {name:'Common Consumables',base:2000,buy:{Ag:3,Wa:2,Ga:1},sell:{Hi:1,In:2,As:1,Fl:1},avail:'all'},
+    {name:'Common Ore',base:1000,buy:{As:4},sell:{In:3,Ni:1},avail:'all'},
+    {name:'Advanced Electronics',base:100000,buy:{In:2,Ht:3},sell:{Ni:1,Ri:2,As:3},avail:['In','Ht']},
+    {name:'Biochemicals',base:50000,buy:{Ag:1,Wa:2},sell:{In:2},avail:['Ag','Wa']},
+    {name:'Crystals & Gems',base:20000,buy:{As:2,De:1,Ic:1},sell:{In:3,Ri:2},avail:['As','De','Ic']},
+    {name:'Cybernetics',base:250000,buy:{Ht:1},sell:{As:1,Ic:1,Ri:2},avail:['Ht']},
+    {name:'Luxury Goods',base:200000,buy:{Hi:1},sell:{Ri:4},avail:['Hi']},
+    {name:'Medical Supplies',base:50000,buy:{Ht:1,Hi:1},sell:{In:2,Po:1,Ri:1},avail:['Ht','Hi']},
+    {name:'Petrochemicals',base:10000,buy:{De:2,Fl:1,Ic:1,Wa:1},sell:{In:3,Ag:1},avail:['De','Fl','Ic','Wa']},
+    {name:'Pharmaceuticals',base:100000,buy:{As:2,Hi:1,Wa:1},sell:{Ri:2,Lo:1},avail:['As','Hi','Wa']},
+    {name:'Precious Metals',base:50000,buy:{As:3,De:1,Ic:2,Fl:1},sell:{Ri:3,In:1,Ht:1},avail:['As','De','Ic','Fl']},
+    {name:'Radioactives',base:1000000,buy:{As:2,Lo:2},sell:{In:3,Ht:1},avail:['As','Lo']},
+    {name:'Spices',base:6000,buy:{De:2},sell:{Hi:2,Ri:3,Po:3},avail:['De']},
+    {name:'Textiles',base:3000,buy:{Ag:7},sell:{Hi:3,Na:2},avail:['Ag','Ni']},
+    {name:'Wood',base:1000,buy:{Ag:6},sell:{Ri:2,In:1},avail:['Ag','Ga']},
   ];
-  nebulae.forEach(n => h += `<ellipse cx="${n.cx}" cy="${n.cy}" rx="${n.rx}" ry="${n.ry}" fill="${n.fill}" opacity="${n.op}" transform="rotate(${n.rot},${n.cx},${n.cy})"/>`);
-  h += `<ellipse cx="750" cy="520" rx="500" ry="55" fill="#050810" opacity="0.18" transform="rotate(-28,750,520)"/>`;
-  h += `<ellipse cx="400" cy="730" rx="350" ry="40" fill="#050810" opacity="0.12" transform="rotate(-22,400,730)"/>`;
-  for(let i=0;i<3000;i++){
-    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
-    h += `<circle cx="${x}" cy="${y}" r="0.35" fill="#ccd8ee" opacity="${(0.10+rng()*0.25).toFixed(2)}"/>`;
-  }
-  for(let i=0;i<2200;i++){
-    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
-    const sz=rng(); const r=sz<0.7?0.45:sz<0.92?0.7:0.95;
-    const cr=rng();
-    const fill=cr<0.08?'#ffddbb':cr<0.15?'#ffeedd':cr<0.22?'#bbddff':cr<0.28?'#ddeeff':'#ffffff';
-    h += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${(0.25+rng()*0.65).toFixed(2)}"/>`;
-  }
-  for(let i=0;i<2500;i++){
-    const t=rng(); const bx=t*1900-50; const by=1060-t*820+(rng()-0.5)*320;
-    if(bx<0||bx>1800||by<0||by>1060) continue;
-    const r=rng()<0.06?0.7:0.3;
-    const fill=rng()<0.2?'#aaccff':'#e8eeff';
-    h += `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${r}" fill="${fill}" opacity="${(0.12+rng()*0.50).toFixed(2)}"/>`;
-  }
-  const clusters=[{cx:320,cy:820,spread:90,count:140,col:'#ddeeff'},{cx:1250,cy:300,spread:110,count:160,col:'#eeeeff'},{cx:680,cy:180,spread:75,count:100,col:'#ffeedd'}];
-  clusters.forEach(cl=>{ for(let i=0;i<cl.count;i++){
-    const angle=rng()*Math.PI*2, dist=rng()*rng()*cl.spread;
-    const x=(cl.cx+Math.cos(angle)*dist).toFixed(1), y=(cl.cy+Math.sin(angle)*dist).toFixed(1);
-    h += `<circle cx="${x}" cy="${y}" r="${rng()<0.1?0.8:0.4}" fill="${cl.col}" opacity="${(0.30+rng()*0.60).toFixed(2)}"/>`;
-  }});
-  g.innerHTML = h;
-}
+  const PURCHASE_PCT=[3.0,2.5,2.0,1.75,1.5,1.35,1.25,1.20,1.15,1.10,1.05,1.00,0.95,0.90,0.85,0.80,0.75,0.70,0.65,0.60,0.55,0.50,0.45,0.40,0.35,0.30,0.25,0.20,0.15];
+  const SALE_PCT=[0.10,0.20,0.30,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,1.00,1.10,1.20,1.30,1.40,1.50,1.60,1.75,2.00,2.50,3.00,3.50,4.00,5.00,6.00];
+  function priceMult(arr,roll){ const i=clamp(Math.round(roll)+3,0,arr.length-1); return arr[i]; }
+  function kCr(n){ n=Math.round(n); const a=Math.abs(n);
+    if(a>=1e6) return 'Cr'+(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M';
+    if(a>=1e3) return 'Cr'+(n/1e3).toFixed(1).replace(/\.0$/,'')+'k'; return 'Cr'+n; }
+  function bestDM(dm,codes){ let m=0; for(const c of codes) if(dm[c]!=null) m=Math.max(m,dm[c]); return m; }
+  const AVG_ROLL=10.5;
+  function tradeOpportunities(src,dst){ const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
+    TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
+      const buyRoll=AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker, sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker;
+      const buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      out.push({good:g.name,buyP,sellP,profit:sellP-buyP}); });
+    return out.sort((a,b)=>b.profit-a.profit); }
 
-// ── Render jump lanes + nodes ──────────────────────────────────────────────
-function gxRenderLanes(){
-  const g = document.getElementById('gx-lanes'); if(!g) return;
-  const editing = designModeOn && isReferee();
-  let h = '';
-  GX_LANES.forEach(k => {
-    const [a,b] = k.split('|');
-    const sa = GX_MAP[a], sb = GX_MAP[b];
-    if(!sa || !sb) return;
-    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="${editing ? '#c0506e' : '#1d4a66'}" stroke-width="${editing ? '1.1' : '0.7'}" opacity="${editing ? '0.8' : '0.55'}"/>`;
-    // In Design Mode each lane gets a fat transparent hit-line so it's easy to
-    // tap to remove. Nodes render in a later <g>, so node taps win over lanes.
-    if(editing){
-      h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="transparent" stroke-width="6" style="cursor:pointer" onclick="gxRemoveLane('${k}')"/>`;
-    }
-  });
-  g.innerHTML = h;
-}
+  // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
+  let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
+  let origin=null, selected=null;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, dragMoved=false;
+  let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
+  const RPX=26, LABEL_ZOOM_F=1.3;
+  function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
+    jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
+    fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
+    cargoHold=Math.max(0,Number(ss.cargoHold!=null?ss.cargoHold:30)); broker=clamp(Number(ss.broker!=null?ss.broker:2),0,6);
+    origin=BY_ID[ss.locationId]||BY_ID['aurelia']||SYS[0];
+    if(!selected||!BY_ID[selected.id]) selected=origin; }
 
-function gxIsHub(sys){ return (sys.systemId === 'auros') || (sys.id === 'aurelia'); }
+  // ── Pixel projection (flat-top axial → screen) ──
+  function axialPx(q,r){ return { x:RPX*1.5*q, y:RPX*Math.sqrt(3)*(r+q/2) }; }
+  function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
+  function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+  function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg) svg.classList.toggle('hx-lblzoom',labelsVisible()); }
 
-function gxRenderSystems(){
-  const g = document.getElementById('gx-systems'); if(!g) return;
-  let h = '';
-  GALAXY_NODES.forEach(sys => {
-    const hub = gxIsHub(sys), r = hub?7:5;
-    const lbl = escHtml((sys.label||sys.name).replace(' ★',''));
-    // Surveyed = the linked system has at least one body (authored or generated).
-    const sid = sys.systemId || sys.id;
-    const surveyed = effectiveBodies(sid).length > 0;
-    h += `<g class="gx-node" data-id="${sys.id}" onclick="gxOnNodeClick('${sys.id}')" style="cursor:pointer">
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r+9}" fill="transparent"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r+4}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.7" opacity="0.3"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r}" fill="#050810" stroke="${NODE_COLOR}" stroke-width="1.1" filter="url(#gx-node-glow)"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${hub?3.5:2}" fill="${NODE_COLOR}" opacity="0.95"/>
-      ${hub?`<circle cx="${sys.x}" cy="${sys.y}" r="${r+7}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.6" opacity="0.4" stroke-dasharray="3,3"/>`:''}
-      ${surveyed?`<circle cx="${sys.x+r+1}" cy="${sys.y-r-1}" r="1.8" fill="#4caf82"/>`:''}
-      <text x="${sys.x+r+5}" y="${sys.y+3}" font-size="${hub?9:7.5}" fill="${NODE_COLOR}"
-            font-family="'Courier New',monospace" letter-spacing="0.3" opacity="0.9"
-            stroke="#04060e" stroke-width="2" paint-order="stroke">${lbl}</text>
-    </g>`;
-  });
-  g.innerHTML = h;
-}
-
-function gxEnsureRendered(){
-  if(gxInited) return;
-  gxSeedStars();
-  gxRenderLanes();
-  gxRenderSystems();
-  gxAttachPanZoom();
-  gxInited = true;
-}
-
-// ── Pan & zoom ─────────────────────────────────────────────────────────────
-let gxScale=1, gxTx=0, gxTy=0, gxDragging=false, gxLastX=0, gxLastY=0, gxPanZoomAttached=false;
-function gxApplyT(){
-  const svg = document.getElementById('gx-svg');
-  if(svg) svg.style.transform = `translate(${gxTx}px,${gxTy}px) scale(${gxScale})`;
-}
-function gxZoom(f,cx,cy){
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  const r = canvas.getBoundingClientRect();
-  const px = (cx==null?r.width/2:cx-r.left), py = (cy==null?r.height/2:cy-r.top);
-  const ns = Math.max(0.25, Math.min(4, gxScale*f));
-  const ratio = ns/gxScale;
-  gxTx = px-ratio*(px-gxTx); gxTy = py-ratio*(py-gxTy); gxScale = ns; gxApplyT();
-}
-function gxResetView(){
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  const r = canvas.getBoundingClientRect();
-  if(!r.width || !r.height) return;
-  gxScale = Math.min(r.width/1800, r.height/1060)*0.92;
-  gxTx = (r.width-1800*gxScale)/2; gxTy = (r.height-1060*gxScale)/2; gxApplyT();
-  gxViewReady = true;
-}
-function gxAttachPanZoom(){
-  if(gxPanZoomAttached) return;
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  let gxDownEmpty=false, gxDownX=0, gxDownY=0, gxMoved=false; // for click-empty-to-deselect
-  canvas.addEventListener('pointerdown', e=>{
-    // A press that starts on empty space (not a node/lane/control) is either a
-    // pan or, if it doesn't move, a click that deselects the current system.
-    gxDownEmpty = !(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')||(e.target.closest && e.target.closest('#gx-lanes')));
-    gxDownX=e.clientX; gxDownY=e.clientY; gxMoved=false;
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
-    gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
-    canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener('pointermove', e=>{
-    if(Math.abs(e.clientX-gxDownX)>4 || Math.abs(e.clientY-gxDownY)>4) gxMoved=true;
-    if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT();
-  });
-  canvas.addEventListener('pointerup', ()=>{
-    gxDragging=false; canvas.classList.remove('panning');
-    // Clean tap on empty space → deselect (or cancel an armed lane link).
-    if(gxDownEmpty && !gxMoved){
-      if(gxLinkMode) gxCancelLink();
-      else if(gxSelectedId) gxDeselect();
-    }
-    gxDownEmpty=false;
-  });
-  canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
-  let lastDist=null;
-  canvas.addEventListener('touchmove', e=>{
-    if(e.touches.length===2){
-      e.preventDefault();
-      const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-      const d=Math.sqrt(dx*dx+dy*dy);
-      if(lastDist) gxZoom(d/lastDist,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);
-      lastDist=d;
-    }
-  }, {passive:false});
-  canvas.addEventListener('touchend', ()=>lastDist=null);
-  gxPanZoomAttached = true;
-}
-
-// ── Selection + detail panel ───────────────────────────────────────────────
-// In Design Mode link mode, a node tap builds a lane; otherwise it toggles the
-// selection (tap a selected system again to deselect it).
-function gxOnNodeClick(id){
-  if(designModeOn && isReferee() && gxLinkMode){ gxLinkPick(id); return; }
-  if(gxSelectedId === id){ gxDeselect(); return; }
-  gxSelectSystem(id);
-}
-
-// Clear the current selection and return the detail panel to the overview.
-function gxDeselect(){
-  gxSelectedId = null;
-  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
-  const nameEl = document.getElementById('galaxy-dname');
-  if(nameEl){ nameEl.textContent = 'THE ORION ARM'; nameEl.style.color = ''; }
-  const dt = document.getElementById('galaxy-dtype');
-  if(dt) dt.textContent = 'Select a system to inspect';
-  const ov = document.getElementById('galaxy-overview'); if(ov) ov.style.display = 'block';
-  const det = document.getElementById('galaxy-sys-detail'); if(det){ det.style.display = 'none'; det.innerHTML = ''; }
-}
-
-function gxSelectSystem(id){
-  const sys = GX_MAP[id]; if(!sys) return;
-  gxSelectedId = id;
-  gxApplySelRing();
-  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
-  const nameEl = document.getElementById('galaxy-dname');
-  nameEl.textContent = (sys.label||sys.name).replace(' ★','').toUpperCase();
-  nameEl.style.color = f.color;
-  document.getElementById('galaxy-dtype').textContent = sys.name + ' · ' + f.name;
-  document.getElementById('galaxy-overview').style.display='none';
-  document.getElementById('galaxy-sys-detail').style.display='block';
-  gxUpdateDetail(id);
-}
-
-function gxUpdateDetail(id){
-  const sys = GX_MAP[id]; if(!sys) return;
-  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
-  const sid = sys.systemId || sys.id;
-  const bodyCount = effectiveBodies(sid).length;
-  const det = document.getElementById('galaxy-sys-detail');
-  let html = '';
-
-  // Primary action — drill into the system close-up (the orrery).
-  html += `<button class="view-close-btn" onclick="enterSystem('${sid}')">⊙ View close up of ${escHtml((sys.label||sys.name).replace(' ★',''))}</button>`;
-  html += `<div style="font-size:10px;color:${bodyCount?'#4caf82':'var(--txW)'};font-family:monospace;margin:-4px 0 10px">${bodyCount? '✓ Surveyed — '+bodyCount+' bodies charted' : '○ Unsurveyed — no system data yet'}</div>`;
-
-  html += `<div class="sg">
-    <div class="sg-l">Faction</div><div class="sg-v" style="color:${f.color}">${escHtml(f.name)}</div>
-    <div class="sg-l">Star designation</div><div class="sg-v">${escHtml(sys.name)}</div>
-    <div class="sg-l">Jump connections</div><div class="sg-v">${(sys.connections||[]).length}</div>
-  </div>`;
-
-  html += `<div class="s-sec">
-    <div class="s-sec-lbl">Overview</div>
-    <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
-  </div>`;
-
-  const laneEditing = designModeOn && isReferee();
-  html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
-  if((sys.connections||[]).length){
-    sys.connections.forEach(cid => {
-      const c = GX_MAP[cid]; if(!c) return;
-      const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
-      const trash = laneEditing
-        ? `<button onclick="event.stopPropagation();gxRemoveLane('${gxLaneKey(id,cid)}')" title="Remove this jump lane" style="margin-left:8px;background:none;border:none;color:#c0506e;cursor:pointer;font-size:12px;flex-shrink:0">🗑</button>`
-        : '';
-      html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-        <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
-        <span style="font-size:12px;color:var(--tx0)">${escHtml((c.label||c.name).replace(' ★',''))}</span>
-        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>${trash}
-      </div>`;
+  // ── Render ──
+  function render(){ if(!svg||!origin) return;
+    svg.innerHTML='';
+    const g=NS('g',{id:'hx-scene',transform:`translate(${view.x},${view.y}) scale(${view.scale})`});
+    svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible());
+    const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+    const range=showRange?fuelReach():null;
+    if(showTerr){ const tg=NS('g',{}); g.appendChild(tg); const byFac={};
+      SYS.forEach(s=>{ if(s.fac==='independent'||s.fac==='uncharted'||!FAC[s.fac]) return; (byFac[s.fac]=byFac[s.fac]||[]).push(s); });
+      Object.keys(byFac).forEach(f=>{ const fac=FAC[f]; const pts=byFac[f].map(s=>axialPx(s.q,s.r));
+        const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
+        let rad=0; pts.forEach(p=>rad=Math.max(rad,Math.hypot(p.x-cx,p.y-cy))); rad+=RPX*1.5;
+        tg.appendChild(NS('circle',{cx,cy,r:rad,fill:fac.color,'fill-opacity':0.07,stroke:fac.color,'stroke-opacity':0.3,'stroke-width':1,'stroke-dasharray':'5,5'}));
+        const lab=NS('text',{x:cx,y:cy-rad+12,'text-anchor':'middle',fill:fac.color,'fill-opacity':0.55,'font-family':'monospace','font-size':9.5,'font-weight':700,'letter-spacing':1.2});
+        lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); }); }
+    let minQ=99,maxQ=-99,minR=99,maxR=-99;
+    SYS.forEach(s=>{minQ=Math.min(minQ,s.q);maxQ=Math.max(maxQ,s.q);minR=Math.min(minR,s.r);maxR=Math.max(maxR,s.r);});
+    const hexLayer=NS('g',{}); g.appendChild(hexLayer);
+    for(let q=minQ-2;q<=maxQ+2;q++) for(let r=minR-2;r<=maxR+2;r++){
+      const cell={q,r}, dist=hexDist(cell,origin), p=axialPx(q,r); let cls='hx-hex';
+      if(range){ if(range.reach.has(q+','+r)) cls+=' fuelreach'; }
+      else if(dist>=1&&dist<=jumpRating) cls+= dist===1?' reach reach1':' reach';
+      hexLayer.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),class:cls})); }
+    const op=axialPx(origin.q,origin.r);
+    [5,10,15].forEach(h=>{ g.appendChild(NS('circle',{cx:op.x,cy:op.y,r:h*Math.sqrt(3)*RPX,class:'hx-ring'}));
+      const t=NS('text',{x:op.x,y:op.y-h*Math.sqrt(3)*RPX+11,class:'hx-ring-lbl','text-anchor':'middle'}); t.textContent=h+' hex'; g.appendChild(t); });
+    if(showLanes){ const editing=(typeof designModeOn!=='undefined'&&designModeOn&&ref());
+      const laneLayer=NS('g',{}); g.appendChild(laneLayer);
+      laneEdges().forEach(L=>{ const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
+        const flyable=L.len<=jumpRating||onLane(L.a,L.b), touches=(L.a===origin||L.b===origin);
+        const line=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-lane'});
+        if(flyable){ line.setAttribute('stroke-dasharray','none'); line.setAttribute('opacity',touches?'0.95':'0.5'); }
+        else { line.setAttribute('opacity',touches?'0.55':'0.18'); }
+        if(touches) line.setAttribute('stroke-width','1.6'); laneLayer.appendChild(line);
+        if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
+          hit.addEventListener('click',ev=>{ ev.stopPropagation(); if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
+    if(selected&&selected!==origin){ const route=bestRoute(origin,selected);
+      if(route&&route.length>1){ const plan=fuelPlan(route);
+        for(let i=0;i<route.length-1;i++){ const pa=axialPx(route[i].q,route[i].r),pb=axialPx(route[i+1].q,route[i+1].r);
+          g.appendChild(NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:plan.legs[i].ok?'hx-route':'hx-route-bad'})); }
+        for(let i=0;i<route.length-1;i++){ if(plan.legs[i].refuel){ const sp=route[i], pp=axialPx(sp.q,sp.r);
+          const t=NS('text',{x:pp.x,y:pp.y-9,'text-anchor':'middle','font-size':'11'}); t.textContent='⛽'; g.appendChild(t); } }
+        if(plan.strandedAt!=null){ const sp=route[plan.strandedAt], p=axialPx(sp.q,sp.r);
+          g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:8,class:'hx-strand-dot'}));
+          const t=NS('text',{x:p.x,y:p.y+22,'text-anchor':'middle',class:'hx-fuel-warn'}); t.textContent='⚠ STRANDED'; g.appendChild(t); } } }
+    SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=(FAC[s.fac]||{color:'#9fb0c8'}).color;
+      const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
+      if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
+        if(fa==='none') ring.setAttribute('stroke-dasharray','2,2'); g.appendChild(ring); }
+      if(isOrigin) g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:9,fill:'none',stroke:'#f4d35e','stroke-width':1.5,opacity:.8}));
+      if(range&&s===range.farthest){ g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:9,fill:'none',stroke:'#D4A843','stroke-width':1.5,opacity:.95}));
+        const ml=NS('text',{x:p.x,y:p.y+20,'text-anchor':'middle',class:'hx-range-lbl'}); ml.textContent='◆ MAX RANGE'; g.appendChild(ml); }
+      let marker;
+      if(s.deep){ const z=isOrigin?5:4; marker=NS('polygon',{points:`${p.x},${p.y-z} ${p.x+z},${p.y} ${p.x},${p.y+z} ${p.x-z},${p.y}`,
+        fill:isOrigin?'#f4d35e':'#04060e',stroke:isOrigin?'#f4d35e':col,'stroke-width':1.3,class:'hx-star-dot'}); }
+      else marker=NS('circle',{cx:p.x,cy:p.y,r:isOrigin?5:4,fill:isOrigin?'#f4d35e':col,class:'hx-star-dot'});
+      if(isSel&&!isOrigin){ marker.setAttribute('stroke','#fff'); marker.setAttribute('stroke-width','1.5'); }
+      if(!inRange) marker.setAttribute('opacity','0.3'); marker.style.cursor='pointer';
+      marker.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return;
+        if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof gxLinkMode!=='undefined'&&gxLinkMode){ if(typeof gxLinkPick==='function') gxLinkPick(s.id); return; }
+        selectSys(s); });
+      g.appendChild(marker);
+      const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
+      if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
+      if(!(isOrigin||isSel)){ marker.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); marker.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
     });
-  } else {
-    html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
   }
-  html += `</div>`;
 
-  // ── Design Mode — jump-lane editing ──
-  if(laneEditing){
-    const linking = gxLinkMode && gxLinkOrigin === id;
-    html += `<div class="s-sec" style="border-top:.5px dashed var(--bd0);margin-top:4px;padding-top:10px">
-      <div class="s-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>
-      ${linking
-        ? `<button class="view-close-btn" style="background:#2a0c1a;border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button>`
-        : `<button class="view-close-btn" onclick="gxArmLink('${id}')">+ Add jump lane from here</button>`}
-      <div style="font-size:10px;color:var(--tx1);margin-top:2px">Tap any jump lane on the map, or a 🗑 above, to remove it.</div>
-    </div>`;
+  // ── Fuel / routing ──
+  // (B) A jump lane counts as a SINGLE max-rating jump regardless of map distance,
+  //     so lore connections are always flyable. Its fuel/reach distance is capped
+  //     to the jump rating; off-lane hops keep their true hex distance.
+  function jumpDist(a,b){ const h=hexDist(a,b); return onLane(a,b)?Math.min(h,jumpRating):h; }
+  function legFuel(a,b){ const base=0.1*tonnage*jumpDist(a,b); return onLane(a,b)?base*LANE_FUEL_FACTOR:base; }
+  function fuelPlan(route){ let tank=Math.min(fuelAboard,fuelMax), strandedAt=null, reason='', refuels=0, total=0; const legs=[];
+    for(let i=0;i<route.length-1;i++){ const here=route[i], f=legFuel(here,route[i+1]); total+=f;
+      const canRefuel=strandedAt===null && i>0 && fuelAt(here)!=='none'; if(canRefuel){ tank=fuelMax; refuels++; }
+      const ok=strandedAt===null && tank>=f-1e-6; if(ok) tank-=f; else if(strandedAt===null){ strandedAt=i; reason=(fuelMax<f-1e-6)?'tanksize':'dry'; }
+      legs.push({fuel:f,ok,refuel:canRefuel}); }
+    return { legs, strandedAt, reason, refuels, total, endTank:tank }; }
+  function dijkstra(from){ const cost={}, prev={}, done={};
+    SYS.forEach(s=>cost[s.q+','+s.r]=Infinity); cost[from.q+','+from.r]=0;
+    while(true){ let u=null,ud=Infinity; SYS.forEach(s=>{const k=s.q+','+s.r; if(!done[k]&&cost[k]<ud){ud=cost[k];u=s;}});
+      if(!u) break; done[u.q+','+u.r]=true;
+      SYS.forEach(v=>{ if(v===u||done[v.q+','+v.r]) return; const h=hexDist(u,v); if(h<1||jumpDist(u,v)>jumpRating) return;
+        const nd=cost[u.q+','+u.r]+legFuel(u,v); if(nd<cost[v.q+','+v.r]){ cost[v.q+','+v.r]=nd; prev[v.q+','+v.r]=u; } }); }
+    return {cost,prev}; }
+  function routeFrom(prev,from,to){ const path=[to]; let cur=to; while(cur!==from){ cur=prev[cur.q+','+cur.r]; if(!cur) return null; path.unshift(cur); } return path; }
+  function bestRoute(from,to){ if(from===to) return [from]; const {cost,prev}=dijkstra(from);
+    if(cost[to.q+','+to.r]===Infinity) return null; return routeFrom(prev,from,to); }
+  function fuelReach(){ const {cost,prev}=dijkstra(origin); const reach=new Set(); let farthest=null,fd=-1,fjumps=0,fcost=0;
+    SYS.forEach(s=>{ if(s===origin||cost[s.q+','+s.r]===Infinity) return; const path=routeFrom(prev,origin,s); if(!path) return;
+      if(fuelPlan(path).strandedAt===null){ reach.add(s.q+','+s.r); const d=hexDist(s,origin); if(d>fd){ fd=d; farthest=s; fjumps=path.length-1; fcost=cost[s.q+','+s.r]; } } });
+    return { reach, count:reach.size, farthest, farthestCost:fcost, farthestJumps:fjumps }; }
+
+  // ── Campaign-action helpers (referee-gated) ──
+  let toastTimer=null;
+  function toast(msg){ const t=document.getElementById('hx-toast'); if(!t) return; t.innerHTML=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),4500); }
+  function executeJump(){
+    if(!ref()){ toast('Referee executes jumps — you can plan freely.'); return; }
+    if(!selected||selected===origin) return;
+    const route=bestRoute(origin,selected); if(!route){ toast('No route.'); return; }
+    const plan=fuelPlan(route);
+    if(plan.strandedAt!=null){ toast('⚠ Route strands at '+eh(disp(route[plan.strandedAt]))+' — cannot jump.'); return; }
+    const from=origin, to=selected, weeks=route.length-1; let fired=[];
+    if(typeof imperialDate!=='undefined'&&typeof advanceImperial==='function'&&typeof imperialOrdinal==='function'){
+      const startOrd=imperialOrdinal(imperialDate); advanceImperial(weeks*7); const endOrd=imperialOrdinal(imperialDate);
+      fired=((typeof campaignEvents!=='undefined'&&campaignEvents)||[]).filter(e=>{ const o=imperialOrdinal(e); return o>startOrd&&o<=endOrd; }); }
+    if(typeof shipState!=='undefined'){
+      shipState.fuel=Math.max(0,Math.round(plan.endTank)); shipState.locationId=to.id; shipState.origin=disp(to);
+      shipState.destination=''; shipState.jumpParsecs=0;
+      shipState.jumpLog=Array.isArray(shipState.jumpLog)?shipState.jumpLog:[];
+      shipState.jumpLog.unshift({ date:(typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?formatImperial(imperialDate):''),
+        from:disp(from), to:disp(to), weeks, burn:Math.round(plan.total), refuels:plan.refuels, events:fired.map(e=>({title:e.title,note:e.note||''})) });
+      if(shipState.jumpLog.length>40) shipState.jumpLog.length=40;
+      if(typeof saveShipState==='function') saveShipState();
+      if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
+    refresh();
+    toast(`Jumped <b>${eh(disp(from))} → ${eh(disp(to))}</b> · ${weeks} wk`+(fired.length?` · <span style="color:#caa83b">${fired.length} event${fired.length>1?'s':''}!</span>`:''));
   }
-  det.innerHTML = html;
-}
+  function refuelHere(){
+    if(!ref()){ toast('Referee only.'); return; }
+    if(fuelAt(origin)==='none'){ toast('No fuel here.'); return; }
+    if(typeof shipState!=='undefined'){ shipState.fuel=fuelMax; if(typeof saveShipState==='function') saveShipState();
+      if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
+    refresh(); toast(`Refuelled at <b>${eh(disp(origin))}</b> — tank ${fuelMax}t.`);
+  }
+  function selectSys(s){ selected=s;
+    if(typeof shipState!=='undefined'&&s){ shipState.destination=(s===origin)?'':disp(s); shipState.jumpParsecs=(s===origin)?0:jumpDist(origin,s);
+      if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
+    refresh(); }
+
+  // ── Right panel ──
+  function renderDate(){ const el=document.getElementById('hx-pdate'); if(el&&typeof imperialDate!=='undefined'&&typeof formatImperial==='function') el.textContent=formatImperial(imperialDate); }
+  function renderJBtns(){ const c=document.getElementById('hx-jbtns'); if(!c) return; c.innerHTML='';
+    for(let j=1;j<=6;j++){ const b=document.createElement('button'); b.className='hx-jbtn'+(j===jumpRating?' on':''); b.textContent='J'+j; b.disabled=!ref();
+      b.onclick=()=>{ if(!ref()) return; jumpRating=j; if(typeof shipState!=='undefined'){ shipState.jumpRating=j; if(typeof saveShipState==='function') saveShipState();
+        if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); } refresh(); }; c.appendChild(b); } }
+  function renderOriginNote(){ const el=document.getElementById('hx-origin-note'); if(!el||!origin) return; const rg=fuelReach();
+    el.innerHTML=`Location: <b style="color:#f4d35e">${eh(disp(origin))}</b> (${origin.deep?'deep space':eh(origin.star)}). `+
+      `A <b style="color:#00e5ff">Jump-${jumpRating}</b> drive reaches any system within ${jumpRating} hex${jumpRating>1?'es':''} in one ~1-week jump.`+
+      `<br><b style="color:#D4A843">Range</b> on ${fuelAboard.toFixed(0)}/${fuelMax.toFixed(0)}t + refuelling: <b>${rg.count}</b> system${rg.count===1?'':'s'}`+
+      (rg.farthest?` — farthest <b>${eh(disp(rg.farthest))}</b> (${rg.farthestJumps} jump${rg.farthestJumps===1?'':'s'})`:'')+'.'; }
+  function renderSel(){ const el=document.getElementById('hx-sel-block'); if(!el) return;
+    if(!selected||!origin){ el.innerHTML=''; return; }
+    const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+    const s=selected, fac=FAC[s.fac]||{name:'Independent',color:'#9fb0c8'}, dHex=hexDist(s,origin); let html='';
+    html+=`<div class="hx-sec-lbl">Selected System</div>`;
+    html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
+    html+=`<div class="hx-small hx-mono" style="margin-top:2px">${s.deep?'Deep space — no fixed stellar position':eh(s.star)}</div>`;
+    html+=`<span class="hx-tag" style="color:${fac.color};border-color:${fac.color}">${eh(fac.name)}</span>`;
+    if(s.uncharted) html+=`<div class="hx-small" style="color:var(--tx1);margin:-2px 0 6px">○ Uncharted — no charted worlds; estimated data only</div>`;
+    else {
+      html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="enterSystem('${s.systemId}')">⊙ View close up of ${eh(disp(s))}</button></div>`;
+      const surveyed=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[]).length>0;
+      html+=`<div class="hx-small" style="color:${surveyed?'#4caf82':'var(--tx1)'};margin:-4px 0 6px">${surveyed?'✓ Surveyed':'○ Unsurveyed — estimated data'}</div>`;
+    }
+    if(!s.deep && s.pc!=null) html+=`<div class="hx-kv"><span class="k">Real distance from Sol <span style="opacity:.6">(ref)</span></span><span class="v">${s.pc.toFixed(2)} pc</span></div>`;
+    html+=`<div class="hx-kv"><span class="k">Hex (q,r)</span><span class="v">${s.q}, ${s.r}</span></div>`;
+    const selFuel=fuelAt(s);
+    html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
+    html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
+    const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    if(s===origin){
+      html+=`<div class="hx-kv"><span class="k">Status</span><span class="v" style="color:#f4d35e">◆ Current location${typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?' · '+formatImperial(imperialDate):''}</span></div>`;
+      if(fuelAt(s)!=='none' && fuelAboard<fuelMax && ref())
+        html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxRefuelHere()">⛽ Refuel to ${fuelMax}t · ${FUEL_INFO[fuelAt(s)].t}</button></div>`;
+    }
+    if(s!==origin){
+      html+=`<div class="hx-sec-lbl">From ${eh(disp(origin))}</div>`;
+      html+=`<div class="hx-kv"><span class="k">Jump distance</span><span class="v">${dHex} hex / ${dHex} pc</span></div>`;
+      const route=bestRoute(origin,s);
+      if(!route){ html+=`<div class="hx-note hx-warn">Unreachable with a Jump-${jumpRating} drive — no chain of ≤${jumpRating}-pc hops connects these. Needs a longer-legged ship or an intermediate stop.</div>`; }
+      else { const plan=fuelPlan(route), jumps=route.length-1; let base=0, legsHtml='';
+        for(let i=0;i<jumps;i++){ const a=route[i],b=route[i+1], lane=onLane(a,b), ld=jumpDist(a,b), lf=plan.legs[i].fuel, ok=plan.legs[i].ok, rf=plan.legs[i].refuel; base+=0.1*tonnage*ld;
+          legsHtml+=`<div class="hx-route-leg" style="${ok?'':'color:#ff5a4d'}">▸ <b>${eh(disp(a))}</b>${rf?' <span style="color:#3f9d5a">⛽</span>':''} → <b>${eh(disp(b))}</b> · ${ld} pc · ${lf.toFixed(0)} t${lane?' <span style="color:#00cc88">⟢ lane −15%</span>':''}${ok?'':' ✖ dry'}</div>`; }
+        const saved=base-plan.total, head=jumps===1?(onLane(origin,s)?'Direct, 1 jump · on lane':'Direct, 1 jump'):`${jumps} jumps`;
+        html+=`<div class="hx-kv"><span class="k">${jumps===1?'Reachable':'Cheapest route'}</span><span class="v" style="color:${jumps===1?'#00e5ff':'#ddaa44'}">${head}</span></div>`;
+        html+=`<div class="hx-kv"><span class="k">Total burn / time</span><span class="v">${plan.total.toFixed(0)} t · ${jumps} week${jumps>1?'s':''}</span></div>`;
+        html+=`<div class="hx-kv"><span class="k">Tank</span><span class="v">${Math.min(fuelAboard,fuelMax).toFixed(0)} / ${fuelMax.toFixed(0)} t${plan.refuels?` · ${plan.refuels} refuel${plan.refuels>1?'s':''} ⛽`:''}</span></div>`;
+        if(saved>0.5) html+=`<div class="hx-kv"><span class="k">Saved via lanes</span><span class="v" style="color:#00cc88">−${saved.toFixed(0)} t</span></div>`;
+        if(plan.strandedAt!=null){ const sp=route[plan.strandedAt], nx=route[plan.strandedAt+1], f=plan.legs[plan.strandedAt].fuel;
+          const msg=plan.reason==='tanksize'?`the ${hexDist(sp,nx)}-pc jump to <b>${eh(disp(nx))}</b> needs <b>${f.toFixed(0)} t</b> but a full tank only holds ${fuelMax.toFixed(0)} t. Fit a bigger tank, or route via shorter hops.`:`the ship arrives dry and <b>${eh(disp(sp))}</b> (port ${portOf(sp)}) has <b>no fuel</b>. The next jump needs ${f.toFixed(0)} t. Re-route through a fuelled system.`;
+          html+=`<div class="hx-note" style="border-color:#ff5a4d;color:#ffa39c"><b style="color:#ff5a4d">⚠ STRANDED at ${eh(disp(sp))}.</b> ${msg}</div>`; }
+        else html+=`<div class="hx-kv"><span class="k">Feasible</span><span class="v" style="color:#00cc88">${plan.refuels?`yes — ${plan.refuels} refuel stop${plan.refuels>1?'s':''}`:'yes, on one tank'}</span></div>`;
+        html+=`<details open><summary>Route (Jump-${jumpRating})</summary>${legsHtml}</details>`;
+        if(plan.strandedAt==null && ref()) html+=`<div class="hx-btn-row"><button class="hx-act-btn primary" onclick="hxExecuteJump()">⚡ Execute jump · ${jumps} wk</button></div>`;
+        else if(plan.strandedAt==null) html+=`<div class="hx-small" style="margin-top:6px">Referee executes jumps. You can plan freely.</div>`;
+      }
+      const ops=tradeOpportunities(origin,s).filter(o=>o.profit>0).slice(0,4);
+      html+=`<div class="hx-sec-lbl">Speculative Cargo → ${eh(disp(s))}</div>`;
+      if(!ops.length) html+=`<div class="hx-small">No profitable cargo from ${eh(disp(origin))} on this leg (Broker-${broker}).</div>`;
+      else { ops.forEach(o=>{ html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name">${eh(o.good)}</span><span class="d">${kCr(o.buyP)} → ${kCr(o.sellP)} · <b style="color:#3f9d5a">+${kCr(o.profit)}/t</b></span></div>`; });
+        const best=ops[0]; html+=`<div class="hx-kv"><span class="k">Best load · ${eh(best.good)} × ${cargoHold}t</span><span class="v" style="color:#3f9d5a">+${kCr(best.profit*cargoHold)}</span></div>`;
+        html+=`<div class="hx-small" style="color:var(--tx1);margin-top:4px">Estimate at average roll + Broker-${broker}; play rolls 3D6 per buy/sell.</div>`; }
+    }
+    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
+      html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>`;
+      html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
+        : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${origin.id}')">+ Add jump lane from ${eh(disp(origin))}</button></div>`;
+      html+=`<div class="hx-small">Tap a lane on the map to remove it.</div>`; }
+    const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
+    if(fromLanes.length){ html+=`<div class="hx-sec-lbl">Lanes from ${eh(disp(origin))} · ${fromLanes.length}</div>`;
+      fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
+    const reach=SYS.filter(x=>x!==origin&&hexDist(x,origin)>=1&&hexDist(x,origin)<=jumpRating).sort((a,b)=>hexDist(a,origin)-hexDist(b,origin));
+    html+=`<div class="hx-sec-lbl">In range of ${eh(disp(origin))} · ${reach.length}</div>`;
+    if(!reach.length) html+=`<div class="hx-small">Nothing within Jump-${jumpRating}. Increase the jump drive or move.</div>`;
+    reach.forEach(x=>{ const dh=hexDist(x,origin), lane=onLane(x,origin); html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${x.q},${x.r}')"><span class="hx-reach-name" style="${lane?'color:#00cc88':''}">${lane?'⟢ ':''}${eh(disp(x))}</span><span class="d">${dh} pc · ${legFuel(x,origin).toFixed(0)}t</span></div>`; });
+    const log=(typeof shipState!=='undefined'&&Array.isArray(shipState.jumpLog))?shipState.jumpLog:[];
+    if(log.length){ html+=`<div class="hx-sec-lbl">Captain's Log · ${log.length}</div>`;
+      log.slice(0,8).forEach(e=>{ html+=`<div class="hx-log-item"><b>${eh(e.date||'')}</b> · ${eh(e.from||'')} → <b>${eh(e.to||'')}</b> · ${e.weeks||0} wk · ${e.burn||0}t`+(e.refuels?` · ${e.refuels}⛽`:'')+`</div>`;
+        (e.events||[]).forEach(ev=>html+=`<div class="hx-log-event">▸ <b style="color:#caa83b">${eh(ev.title||'')}</b>${ev.note?' — '+eh(ev.note):''}</div>`); }); }
+    el.innerHTML=html;
+  }
+
+  // ── Ship-stat inputs (shared with shipState) ──
+  function bindInputs(){ [['hx-tonnage','tonnage'],['hx-fuelmax','fuelMax'],['hx-fuelaboard','fuel'],['hx-cargohold','cargoHold'],['hx-broker','broker']].forEach(pair=>{
+    const id=pair[0], field=pair[1], elx=document.getElementById(id); if(!elx) return;
+    elx.addEventListener('input',()=>{ if(!ref()){ syncInputs(); return; } let v=Math.max(0,Number(elx.value)||0); if(field==='broker') v=clamp(v,0,6);
+      if(typeof shipState!=='undefined'){ shipState[field]=v; if(typeof saveShipState==='function') saveShipState();
+        if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
+      readShared(); renderOriginNote(); render(); renderSel(); }); }); }
+  function syncInputs(){ const r=ref(); const set=(id,val)=>{const e=document.getElementById(id); if(e){ if(document.activeElement!==e) e.value=val; e.disabled=!r; }};
+    set('hx-tonnage',tonnage); set('hx-fuelmax',fuelMax); set('hx-fuelaboard',Math.round(fuelAboard)); set('hx-cargohold',cargoHold); set('hx-broker',broker); }
+
+  // ── Pan / zoom (transform-only — no DOM rebuild) ──
+  function zoomBy(f){ view.scale=clamp(view.scale*f,0.3,4); applyTransform(); }
+  function fitView(){ if(!svg) return; const rect=svg.getBoundingClientRect(); if(!rect.width||!rect.height){ render(); return; }
+    let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9; SYS.forEach(s=>{const p=axialPx(s.q,s.r); minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
+    const pad=70, cw=(maxX-minX)+pad*2, ch=(maxY-minY)+pad*2;
+    view.scale=clamp(Math.min(rect.width/cw,rect.height/ch),0.3,1.6); fitScale=view.scale;
+    view.x=rect.width/2-((minX+maxX)/2)*view.scale; view.y=rect.height/2-((minY+maxY)/2)*view.scale; fitted=true; render(); }
+  function bindPanZoom(){ if(!svg) return; let drag=null, lastDist=null;
+    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; dragMoved=false; svg.classList.add('hx-dragging'); });
+    svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<4) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
+    window.addEventListener('pointerup',()=>{ drag=null; if(svg) svg.classList.remove('hx-dragging'); });
+    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); },{passive:false});
+    svg.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist) zoomBy(d/lastDist); lastDist=d; } },{passive:false});
+    svg.addEventListener('touchend',()=>lastDist=null); }
+
+  function refresh(){ readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); }
+
+  // ── Lifecycle hooks (enter/exit driven by goGalaxy + navBack) ──
+  function ensure(){ if(built) return; svg=document.getElementById('hx-map'); if(!svg) return;
+    bindPanZoom(); bindInputs(); if(!resizeBound){ window.addEventListener('resize',onResize); resizeBound=true; } built=true; }
+  function enter(){ ensure(); if(!svg) return; readShared(); refresh();
+    if(!fitted) requestAnimationFrame(()=>requestAnimationFrame(()=>{ if(svg) fitView(); renderSel(); })); }
+  function onResize(){ if(typeof currentView!=='undefined'&&currentView!=='galaxy') return; if(!built||!svg) return; render(); }
+  function selectById(id){ ensure(); const s=BY_ID[id]; if(s) selected=s; readShared(); refresh(); }
+  function externalRefresh(){ if(!built||!svg){ return; } readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); }
+
+  // ── window onclick shims (referenced by inline handlers / overlay buttons) ──
+  window.hxToggleLanes=()=>{ showLanes=!showLanes; const b=document.getElementById('hx-lane-toggle'); if(b){ b.textContent='Lanes: '+(showLanes?'ON':'OFF'); b.classList.toggle('off',!showLanes); } render(); };
+  window.hxToggleTerr =()=>{ showTerr=!showTerr; const b=document.getElementById('hx-terr-toggle'); if(b){ b.textContent='Territories: '+(showTerr?'ON':'OFF'); b.classList.toggle('off',!showTerr); } render(); };
+  window.hxToggleRange=()=>{ showRange=!showRange; const b=document.getElementById('hx-range-toggle'); if(b){ b.textContent='Fuel range: '+(showRange?'ON':'OFF'); b.classList.toggle('on',showRange); } render(); };
+  window.hxToggleFuel =()=>{ showFuel=!showFuel; const b=document.getElementById('hx-fuel-toggle'); if(b){ b.textContent='Fuel: '+(showFuel?'ON':'OFF'); b.classList.toggle('off',!showFuel); } render(); };
+  window.hxZoomBy=f=>zoomBy(f);
+  window.hxResetView=()=>fitView();
+  window.hxExecuteJump=executeJump;
+  window.hxRefuelHere=refuelHere;
+  window.hxSelectByKey=k=>{ const s=BY_KEY[k]; if(s) selectSys(s); };
+
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, get origin(){ return origin; } };
+})();
 
 // ── Top-level galaxy view ──────────────────────────────────────────────────
 function goGalaxy(){
@@ -3692,11 +3998,7 @@ function goGalaxy(){
     document.getElementById('hdr-title').textContent = 'THE ORION ARM';
     document.getElementById('breadcrumb').innerHTML = '';
     updateBackBtn();
-    gxEnsureRendered();
-    gxRenderLanes();   // reflect any lane edits + design-mode treatment
-    gxRenderSystems(); // refresh surveyed dots
-    gxApplySelRing();  // restore the selection ring (gxRenderSystems drops it)
-    requestAnimationFrame(() => { if(!gxViewReady) gxResetView(); });
+    HX.enter();        // hex-jump galaxy layer: read shared state, render, fit
   });
 }
 
@@ -7112,7 +7414,7 @@ async function pollRevealState(){
   // fetch is a no-op that leaves in-memory state intact, never an overwrite with
   // empty defaults that would wipe the screen. Each block keeps its own try/catch
   // so one malformed value can't abort the rest.
-  const POLL_KEYS = ['reveal-status','station-clock','content-overrides',
+  const POLL_KEYS = ['reveal-status','station-clock','content-overrides','funds',
     'content-additions','content-deletions','quest-log','ship-state',
     'imperial-date','campaign-events','discovery-log','reputation'];
   const batch = await supaStorage.getMany(POLL_KEYS);
@@ -7183,6 +7485,7 @@ async function pollRevealState(){
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
+        if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); // live fuel/location on the hex map
       }
     }
   } catch(e){ /* malformed value — skip this key */ }
@@ -7195,6 +7498,18 @@ async function pollRevealState(){
         imperialDate = fresh;
         renderImperialDate();
         if(calPanelOpen) renderCalendarPanel();
+        if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); // live date on the hex plotter
+      }
+    }
+  } catch(e){ /* malformed value — skip this key */ }
+
+  // Party funds — players see deposits / withdrawals / referee grants live
+  try {
+    if(V['funds'] != null){
+      const fresh = JSON.parse(V['funds']);
+      if(JSON.stringify(fresh) !== JSON.stringify(funds)){
+        funds = fresh;
+        if(fundsPanelOpen) renderFundsPanel();
       }
     }
   } catch(e){ /* malformed value — skip this key */ }
@@ -7840,9 +8155,9 @@ function navigateToSearchResult(nav){
     if(needsSwitch) goSystem();
     setTimeout(() => selectBody(nav.bodyId), needsSwitch ? 220 : 0);
   } else if(nav.view === 'galaxy'){
-    // Jump to the Orion Arm starmap and open the matched system's detail panel.
+    // Jump to the hex galaxy layer and select the matched system.
     if(needsSwitch) goGalaxy();
-    setTimeout(() => { gxEnsureRendered(); gxSelectSystem(nav.galaxyId); }, needsSwitch ? 240 : 0);
+    setTimeout(() => { HX.ensure(); HX.selectById(nav.galaxyId); }, needsSwitch ? 240 : 0);
   }
 }
 
@@ -8955,8 +9270,7 @@ function refreshDesignAffordances(){
   // detail panel gains/loses the lane-editing controls. Any armed link is void.
   if(!designModeOn){ gxLinkMode = false; gxLinkOrigin = null; }
   if(currentView === 'galaxy'){
-    if(typeof gxRenderLanes === 'function'){ gxRenderLanes(); gxRenderSystems(); gxApplySelRing(); }
-    if(gxSelectedId) gxUpdateDetail(gxSelectedId);
+    if(typeof HX!=='undefined') HX.refresh();   // lanes gain/lose their editable treatment
   }
 }
 
@@ -9648,6 +9962,14 @@ let shipState = {
   origin: 'Aurelia',
   destination: '',
   jumpParsecs: 0,      // distance to destination, parsecs
+  // ── Hex-jump navigation (shared with the galaxy layer) ──
+  // Single source of truth for cross-layer travel state. The hex galaxy map
+  // reads these and writes them back on a jump; players see the change via the
+  // ship-state poll. (The Imperial date lives in `imperialDate`, advanced on jump.)
+  locationId: 'aurelia', // current galaxy-node id the party occupies (drives `origin`)
+  cargoHold: 30,         // speculative-cargo capacity (tons) for the trade planner
+  broker: 2,             // Broker skill for trade price estimates (0–6)
+  jumpLog: [],           // captain's log: [{date,from,to,weeks,burn,refuels,events}]
   // ── Critical hits — severity 0..6 per system ──
   crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 },
   // ── Weapons & combat loadout (sheet page 1) — repeating-row tables ──
@@ -10547,6 +10869,97 @@ const REP_BANDS = [ // [minInclusive, label, colour]
 ];
 function repBand(s){ for(const [min, label, color] of REP_BANDS){ if(s >= min) return {label, color}; } return {label:'At War', color:'#d45050'}; }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTY FUNDS & CHARACTER PURSES
+// ═══════════════════════════════════════════════════════════════════════════
+// A shared party fund every character can pay into / draw from, plus a personal
+// purse per character. One shared blob under key `funds` (synced like reputation);
+// every change is logged with the Imperial date + actor. Players see the party
+// fund and their own purse; the referee sees and adjusts everyone's. (This adds
+// the finances the character sheet deliberately left out — money lives here, in
+// one place, so it's the obvious hook for the future station/outpost buy-sell.)
+let funds = { party: 0, purses: {}, log: [] };
+let fundsPanelOpen = false, fundsCollapsed = false;
+async function loadFunds(){ try { const r = await supaStorage.get('funds', true); if(r.value != null) funds = Object.assign(funds, JSON.parse(r.value)); } catch(e){} }
+async function saveFunds(){ try { await supaStorage.set('funds', JSON.stringify(funds), true); } catch(e){ console.error('Funds save failed:', e); } }
+function fundActor(){ return isReferee() ? 'Referee' : (myIdentity || 'Unknown'); }
+function purseOf(name){ return Number(funds.purses[name]) || 0; }
+function fmtCr(n){ return 'Cr' + (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
+function fundsLog(target, amount, note){ funds.log.unshift(Object.assign(imperialNow(), { by: fundActor(), target, amount, note: note || '' })); funds.log = funds.log.slice(0, 50); }
+function fundsAmt(){ const v = parseInt((document.getElementById('fund-amt') || {}).value, 10); return isFinite(v) ? Math.abs(v) : 0; }
+function fundsNote(){ const e = document.getElementById('fund-note'); return e ? e.value.trim() : ''; }
+
+function toggleFundsPanel(){
+  fundsPanelOpen = !fundsPanelOpen;
+  const w = document.getElementById('funds-wrap'), b = document.getElementById('funds-btn');
+  w.classList.toggle('hidden', !fundsPanelOpen);
+  if(b) b.classList.toggle('panel-open', fundsPanelOpen);
+  if(fundsPanelOpen) renderFundsPanel();
+}
+function toggleFundsCollapse(){
+  if(document.getElementById('funds-header').dataset.suppressClick === '1') return;
+  fundsCollapsed = !fundsCollapsed;
+  document.getElementById('funds-toggle').textContent = fundsCollapsed ? '▲' : '▼';
+  document.getElementById('funds-body').classList.toggle('collapsed', fundsCollapsed);
+  document.getElementById('funds-wrap').classList.toggle('panel-collapsed', fundsCollapsed);
+}
+
+// ── Operations (all log + save) ──
+function depositToParty(){ const a = fundsAmt(); if(a <= 0) return;
+  if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) - a;
+  funds.party = (Number(funds.party) || 0) + a;
+  fundsLog('party', a, (myIdentity ? 'Deposit from ' + myIdentity : 'Added to fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
+  saveFunds(); renderFundsPanel(); }
+function withdrawFromParty(){ const a = fundsAmt(); if(a <= 0) return;
+  funds.party = (Number(funds.party) || 0) - a;
+  if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) + a;
+  fundsLog('party', -a, (myIdentity ? 'Withdrawn by ' + myIdentity : 'Drawn from fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
+  saveFunds(); renderFundsPanel(); }
+function adjustMyPurse(sign){ const a = fundsAmt(); if(a <= 0 || !myIdentity) return;
+  funds.purses[myIdentity] = purseOf(myIdentity) + sign * a;
+  fundsLog(myIdentity, sign * a, fundsNote() || (sign > 0 ? 'Income' : 'Spending'));
+  saveFunds(); renderFundsPanel(); }
+function refAdjustParty(sign){ const a = fundsAmt(); if(a <= 0) return;
+  funds.party = (Number(funds.party) || 0) + sign * a;
+  fundsLog('party', sign * a, fundsNote() || (sign > 0 ? 'Referee grant' : 'Referee charge'));
+  saveFunds(); renderFundsPanel(); }
+function refAdjustPurse(name, sign){ const a = fundsAmt(); if(a <= 0) return;
+  funds.purses[name] = purseOf(name) + sign * a;
+  fundsLog(name, sign * a, fundsNote() || (sign > 0 ? 'Paid by referee' : 'Charged by referee'));
+  saveFunds(); renderFundsPanel(); }
+
+function renderFundsPanel(){
+  const body = document.getElementById('funds-body'); if(!body) return;
+  const ref = isReferee(), me = myIdentity;
+  let h = `<div class="fund-row"><input id="fund-amt" class="fund-inp" type="number" min="0" step="100" placeholder="Cr amount"><input id="fund-note" class="fund-note" placeholder="note (optional)"></div>`;
+  // Party fund — visible to all
+  h += `<div class="fund-card"><div class="fund-lbl">Party Fund · shared</div><div class="fund-big">${fmtCr(funds.party)}</div>
+    <div class="fund-row"><button class="disc-mini" onclick="depositToParty()">▲ Deposit</button><button class="disc-mini" onclick="withdrawFromParty()">▼ Withdraw</button>`;
+  if(ref) h += `<button class="disc-mini" onclick="refAdjustParty(1)">+ Grant</button><button class="disc-mini" onclick="refAdjustParty(-1)">− Charge</button>`;
+  h += `</div></div>`;
+  // My purse — visible to the player
+  if(me){
+    h += `<div class="fund-card"><div class="fund-lbl">${escQH(me)} · your purse</div><div class="fund-big">${fmtCr(purseOf(me))}</div>
+      <div class="fund-row"><button class="disc-mini" onclick="adjustMyPurse(1)">+ Income</button><button class="disc-mini" onclick="adjustMyPurse(-1)">− Spend</button></div></div>`;
+  }
+  // All purses — referee only
+  if(ref){
+    h += `<div class="fund-lbl" style="margin-top:2px">Character purses</div><div class="fund-card">`;
+    KNOWN_CHARACTERS.forEach(n => { const safe = n.replace(/'/g, "\\'");
+      h += `<div class="fund-purse"><span>${escQH(n)}</span><span style="display:flex;gap:6px;align-items:center"><b style="font-family:monospace;color:var(--tx0)">${fmtCr(purseOf(n))}</b>
+        <button class="disc-mini" onclick="refAdjustPurse('${safe}',1)">+</button><button class="disc-mini" onclick="refAdjustPurse('${safe}',-1)">−</button></span></div>`; });
+    h += `</div>`;
+  }
+  // Ledger — party entries to all; purse entries to that player + referee
+  const vis = funds.log.filter(e => ref || e.target === 'party' || e.target === me);
+  h += `<div class="fund-lbl" style="margin-top:2px">Ledger</div>`;
+  if(!vis.length){ h += `<div class="cal-empty">No transactions yet.</div>`; }
+  else { h += vis.slice(0, 20).map(e =>
+    `<div class="fund-log"><span class="${e.amount >= 0 ? 'amt-pos' : 'amt-neg'}">${e.amount >= 0 ? '+' : '−'}${fmtCr(Math.abs(e.amount))}</span> · ${e.target === 'party' ? 'Party' : escQH(e.target)} · <span style="opacity:.6">${formatImperial(e)}</span><br>${escQH(e.note)} <span style="opacity:.5">(${escQH(e.by)})</span></div>`
+  ).join(''); }
+  body.innerHTML = h;
+}
+
 let reputation = {
   factions: [
     {id:'hegemony',  name:'Hegemony',                standing:-1},
@@ -10977,6 +11390,7 @@ makePanelResizable('cal-wrap');
 makePanelDraggable('disc-wrap', 'disc-header');
 makePanelResizable('disc-wrap');
 makePanelDraggable('rep-wrap', 'rep-header');
+makePanelDraggable('funds-wrap', 'funds-header');
 makePanelResizable('rep-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');
 makePanelResizable('gen-wrap');
@@ -10990,13 +11404,11 @@ updateConnPill();             // paint initial sync status; markOnline/Offline k
 if(queueLength()) flushQueue(); // push anything parked from a previous offline session
 
 // ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
-if(typeof gxEnsureRendered === 'function'){
-  gxEnsureRendered();
-  gxRenderSystems();
+if(typeof HX !== 'undefined'){
   document.getElementById('hdr-title').textContent = 'THE ORION ARM';
   document.getElementById('breadcrumb').innerHTML = '';
   updateBackBtn();
-  requestAnimationFrame(() => requestAnimationFrame(gxResetView));
+  HX.enter();   // hex-jump galaxy layer; reads shipState/imperialDate once they load
 }
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
@@ -11011,7 +11423,7 @@ loadBodyStores().then(() => {
   // Rebuild the system view so any added/removed/edited bodies appear
   if(typeof buildOrrery === 'function') buildOrrery();
   // Refresh galaxy "surveyed" markers once shared body data has loaded.
-  if(currentView === 'galaxy' && typeof gxRenderSystems === 'function') gxRenderSystems();
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
   if(currentView === 'system' && selectedBody){
     // If the selected body was deleted while away, fall back to overview
     if(getBodies().find(b => b.id === selectedBody)) selectBody(selectedBody);
@@ -11030,11 +11442,8 @@ loadLocationStores().then(() => {
   }
 });
 loadGalaxyLanes().then(() => {
-  // Redraw lanes + connection counts once the shared lane overlay has loaded.
-  if(currentView === 'galaxy'){
-    gxRenderLanes(); gxRenderSystems(); gxApplySelRing();
-    if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-  }
+  // Redraw lanes once the shared lane overlay has loaded.
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
 });
 loadTextureCatalog().then(() => {
   // Re-render any view that draws textures once the catalog (and thus auto-by-type
@@ -11043,13 +11452,14 @@ loadTextureCatalog().then(() => {
   if(typeof buildOrrery === 'function') buildOrrery();
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
-loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); });
+loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 renderImperialDate(); // show default immediately, then refresh once loaded
-loadImperialDate().then(() => renderImperialDate());
+loadImperialDate().then(() => { renderImperialDate(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
+loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
