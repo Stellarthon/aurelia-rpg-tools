@@ -1383,6 +1383,17 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #gen-btn:hover{background:var(--bd0);color:var(--tx0)}
 #gen-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#gen-wrap{right:0;top:54px;width:312px}}
+#econ-wrap{position:fixed;top:54px;right:0;width:372px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:120px;max-width:94vw;max-height:86vh}
+#econ-wrap.hidden{display:none}
+#econ-wrap.panel-collapsed{height:auto!important;min-height:0}
+#econ-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;border-bottom:.5px solid var(--bd0)}
+#econ-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+#econ-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#econ-body.hidden{display:none}
+#econ-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#econ-btn:hover{background:var(--bd0);color:var(--tx0)}
+#econ-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+@media(max-width:640px){#econ-wrap{right:0;top:54px;width:330px}}
 
 /* ── Quest editor modal ── */
 #quest-edit-modal{
@@ -2533,6 +2544,7 @@ input#ui-scale-range{
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
+    <button id="econ-btn" class="ref-only" onclick="toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
@@ -3126,6 +3138,16 @@ input#ui-scale-range{
     </div>
     <div id="rep-body"></div>
     <div class="panel-resize-handle" id="rep-resize"></div>
+  </div>
+
+  <!-- ── Living Economy console — referee-only (Level-2 stocks/flows sim) ── -->
+  <div id="econ-wrap" class="hidden ref-only">
+    <div id="econ-header" onclick="toggleEconCollapse()">
+      <span id="econ-title-lbl">📈 LIVING ECONOMY</span>
+      <span id="econ-toggle">▼</span>
+    </div>
+    <div id="econ-body"></div>
+    <div class="panel-resize-handle" id="econ-resize"></div>
   </div>
 
   <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
@@ -4532,6 +4554,9 @@ const HX = (function(){
   function imperialWeek(){ return (typeof imperialDate!=='undefined'&&typeof imperialOrdinal==='function')?Math.floor(imperialOrdinal(imperialDate)/7):0; }
   function seedScore(tag){ const r=mulberry(hashStr(tag)); return Math.round(r()*4)-2; }   // −2..+2
   function mktPressure(sys,goodName){ const key=(sys.id||sys.label||'')+'|'+goodName;
+    // When the Level-2 sim is live and tracks this world+good, real stockpiles
+    // drive the price (scarcity = dearer). Otherwise fall back to seeded noise.
+    try { if(window.ECON && ECON.active()){ const sp=ECON.pressure(sys.id,goodName); if(sp!=null) return clamp(sp,-4,4); } } catch(e){}
     const quirk=seedScore('mkt-bias|'+key);                       // persistent per system+good (the randomised supply/demand)
     const flux =seedScore('mkt-flux|'+key+'|'+imperialWeek());    // shifts each Imperial week (calendar fluctuation)
     return clamp(quirk+flux,-4,4); }
@@ -12646,6 +12671,9 @@ function setImperialFromInputs(){
 function afterDateChange(){
   renderImperialDate();
   if(calPanelOpen) renderCalendarPanel();
+  if(typeof ECON!=='undefined'){ try { ECON.syncToDate(); } catch(e){}   // economy ticks in lockstep with the Imperial week
+    if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+    if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); }
   saveImperialDate();
 }
 
@@ -13548,6 +13576,274 @@ loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 loadGalaxyLanes().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIVING ECONOMY — Level 2 stocks/flows/lead-times engine  (window.ECON)
+// ───────────────────────────────────────────────────────────────────────────
+// Self-contained. Reads globals GALAXY_NODES / GALAXY_FACTIONS / imperialDate /
+// imperialOrdinal / isReferee / supaStorage. The ONLY hook into the existing
+// market is mktPressure() (HX module), which blends ECON.pressure() when the sim
+// is active and falls back to the old seeded noise otherwise — so if the engine
+// is off, or throws, nothing changes for players.
+//
+// Tick = 1 Imperial week. Goods are made by recipe (conservation); worlds hold
+// stockpiles with a safety threshold; trade moves goods producer→consumer with a
+// lead time = jump distance, so shocks ripple instead of teleport.
+// ═══════════════════════════════════════════════════════════════════════════
+window.ECON = (function(){
+  const NO_MARKET = { vast:1, archon:1 };
+
+  // ── Goods graph (BoM). Keyed to the real TRADE_GOODS names so the sim drives
+  //    the prices players already see. Recipe = inputs consumed per 1 output;
+  //    raws have no recipe (extraction). 'Scrap' is an internal input, untraded. ──
+  const GOODS = {
+    'Common Ore':          { tier:0 },                                              // raw (mined)
+    'Scrap':               { tier:0, internal:true },                               // raw (salvaged)
+    'Common Consumables':  { tier:0 },                                              // food (grown)
+    'Common Electronics':  { tier:1, recipe:{ 'Common Ore':1, 'Scrap':1 } },        // component
+    'Common Manufactured': { tier:1, recipe:{ 'Common Ore':1, 'Scrap':1 } },
+    'Advanced Electronics':{ tier:2, recipe:{ 'Common Electronics':2 } },           // high-tech
+  };
+  const SIM_GOODS = Object.keys(GOODS);
+
+  // ── World economic profiles (kt/week). prod = output capacity; cons = demand
+  //    (final + non-recipe needs). safW = weeks-of-cover safety stock. Keyed by
+  //    GALAXY_NODES id (ids are scrambled vs labels — see comments). Unlisted
+  //    market worlds get a light consumer default so the whole map stays alive. ──
+  // cons = FINAL demand only (food for population + finished goods consumed).
+  // Recipe inputs (ore/scrap/components) are auto-imported via recipeDraw — never
+  // list them in cons or they double-count. Numbers are balanced so total supply
+  // ≥ total demand for every good (system sits near equilibrium; shocks deviate it).
+  const DEF = {
+    cypress:        { prod:{'Common Consumables':240}, cons:{'Common Manufactured':6}, safW:1 },   // breadbasket
+    'the-garden':   { prod:{'Common Consumables':45},  cons:{'Common Manufactured':3} },           // Congregation farm
+    bastion:        { prod:{'Common Consumables':55},  cons:{'Common Manufactured':8,'Advanced Electronics':2} }, // Elysium Prime
+    erebus:         { prod:{'Common Ore':170},         cons:{'Common Consumables':6,'Common Manufactured':2} },
+    'profit-margin':{ prod:{'Common Ore':100,'Scrap':120}, cons:{'Common Consumables':8} },
+    graveyard:      { prod:{'Scrap':260},              cons:{'Common Consumables':4} },            // salvage
+    'elysium-prime':{ prod:{'Common Ore':40},          cons:{'Common Consumables':3} },            // Vanguard's End mine
+    kronos:         { prod:{'Common Electronics':75,'Common Manufactured':40}, cons:{'Common Consumables':15}, safW:1.5 }, // Kronos Prime
+    castor:         { prod:{'Common Manufactured':60}, cons:{'Common Consumables':8} },             // forge-world
+    'the-anvil':    { prod:{'Common Manufactured':40}, cons:{'Common Consumables':4} },             // shipyards
+    vesta:          { prod:{'Common Electronics':20},  cons:{'Common Consumables':10} },            // Vestalia
+    sol:            { prod:{'Advanced Electronics':18},
+                      cons:{'Common Consumables':60,'Common Manufactured':25,'Advanced Electronics':15}, safW:4 },
+    aurelia:        { prod:{'Advanced Electronics':20},
+                      cons:{'Common Consumables':120,'Common Manufactured':40,'Advanced Electronics':12}, safW:3 },
+    avalon:         { prod:{'Advanced Electronics':8}, cons:{'Common Consumables':8,'Common Manufactured':4} },
+    warehouse:      { prod:{}, cons:{}, store:{'Common Consumables':200}, safW:8 },                // strategic food cache
+  };
+  const DEFAULT = { prod:{}, cons:{'Common Consumables':2,'Common Manufactured':1}, safW:2 };
+
+  let worlds = null, adj = null, state = null;
+
+  function nodeOf(id){ return (typeof GALAXY_NODES!=='undefined') ? GALAXY_NODES.find(n=>n.id===id) : null; }
+  function isMarket(n){ return n && !NO_MARKET[n.faction]; }
+  function curWeek(){ try { return Math.floor(imperialOrdinal(imperialDate)/7); } catch(e){ return 0; } }
+
+  function buildTopology(){
+    worlds = {}; adj = {};
+    (typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).forEach(n=>{
+      if(!isMarket(n)) return;
+      const d = DEF[n.id] || DEFAULT;
+      worlds[n.id] = { id:n.id, label:n.label||n.name, fac:n.faction,
+                       prod:d.prod||{}, cons:d.cons||{}, safW:d.safW||2, store:d.store||{} };
+      adj[n.id] = [];
+    });
+    Object.keys(worlds).forEach(id=>{
+      const n = nodeOf(id);
+      ((n&&n.connections)||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
+    });
+  }
+
+  function recipeDraw(w, good){
+    let n = 0;
+    for(const out in w.prod){ const r = GOODS[out] && GOODS[out].recipe; if(r && r[good]) n += r[good]*w.prod[out]; }
+    return n;
+  }
+  function safety(w, good){
+    const rate = (w.cons[good]||0) + recipeDraw(w, good);
+    return Math.max((w.store[good]||0), rate * (w.safW||2)) + (w.prod[good]||0);  // +~1wk finished-goods buffer so producers ship surplus, not 100%
+  }
+
+  function dist(src, blk){
+    const D = { [src]:0 }, q = [src];
+    while(q.length){ const u = q.shift(); for(const v of adj[u]){ if(D[v]==null && !blk[v]){ D[v]=D[u]+1; q.push(v); } } }
+    return D;
+  }
+
+  function freshState(){
+    buildTopology();
+    const stock = {};
+    Object.values(worlds).forEach(w=>{ stock[w.id]={};
+      SIM_GOODS.forEach(g=>{ const s = safety(w,g); if(s>0 || w.prod[g]) stock[w.id][g] = Math.round(s*1.15); }); });
+    return { week: curWeek(), active:false, stock, transit:[], shocks:[], log:[] };
+  }
+  function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
+  function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
+  function setStk(id,g,v){ if(!state.stock[id]) state.stock[id]={}; state.stock[id][g]=Math.max(0,Math.round(v*100)/100); }
+  function log(week, text){ state.log.unshift({week,text}); if(state.log.length>80) state.log.length=80; }
+
+  function outputFactor(id, good){
+    let f = 1;
+    state.shocks.forEach(s=>{ if(s.kind==='output' && s.target===id && (s.good==='*'||s.good===good)) f*=s.factor; });
+    return f;
+  }
+  function blocked(){ const b={}; state.shocks.forEach(s=>{ if(s.kind==='block') b[s.target]=1; }); return b; }
+  function embargoed(a,b){
+    return state.shocks.some(s=> s.kind==='embargo' &&
+      ((s.facA===worlds[a].fac && s.facB===worlds[b].fac) || (s.facB===worlds[a].fac && s.facA===worlds[b].fac)));
+  }
+
+  function step(week){
+    state.shocks = state.shocks.filter(s=> s.until==null || s.until>=week);
+    const blk = blocked();
+    const land = []; state.transit = state.transit.filter(t=>{ if(t.eta<=week){ land.push(t); return false; } return true; });
+    land.forEach(t=> setStk(t.to,t.good, stk(t.to,t.good)+t.qty));
+
+    Object.values(worlds).forEach(w=>{
+      for(const g in w.prod){
+        const cap = w.prod[g] * outputFactor(w.id, g);
+        const r = GOODS[g].recipe; let made = cap;
+        if(r) for(const inp in r) made = Math.min(made, stk(w.id,inp)/r[inp]);
+        made = Math.max(0, made);
+        if(r) for(const inp in r) setStk(w.id,inp, stk(w.id,inp)-made*r[inp]);
+        setStk(w.id,g, stk(w.id,g)+made);
+      }
+      for(const g in w.cons) setStk(w.id,g, stk(w.id,g) - w.cons[g]);
+    });
+
+    Object.values(worlds).forEach(w=>{ for(const g of SIM_GOODS){
+      if(stk(w.id,g)<0) log(week, `${w.label}: ${g} shortfall`); setStk(w.id,g, stk(w.id,g)); } });
+
+    Object.values(worlds).forEach(w=>{
+      if(blk[w.id]) return;
+      const needs = {};
+      SIM_GOODS.forEach(g=>{ const need = safety(w,g) - stk(w.id,g); if(need>0 && (w.cons[g]||recipeDraw(w,g))) needs[g]=need; });
+      const goodsNeeded = Object.keys(needs); if(!goodsNeeded.length) return;
+      const D = dist(w.id, blk);
+      goodsNeeded.forEach(g=>{
+        let best=null, bd=Infinity;
+        Object.values(worlds).forEach(p=>{
+          if(p.id===w.id || blk[p.id] || !p.prod[g]) return;
+          if(embargoed(w.id,p.id)) return;
+          const surplus = stk(p.id,g) - safety(p,g); if(surplus<=0) return;
+          const dd = D[p.id]; if(dd==null) return; if(dd<bd){ bd=dd; best=p; }
+        });
+        if(!best) return;
+        const qty = Math.min(needs[g], Math.max(0, stk(best.id,g)-safety(best,g)), 60);
+        if(qty<=0) return;
+        setStk(best.id,g, stk(best.id,g)-qty);
+        state.transit.push({ good:g, qty:Math.round(qty*100)/100, from:best.id, to:w.id, eta: week + Math.max(1,bd) });
+      });
+    });
+    state.week = week;
+  }
+
+  function advance(weeks){ ensure(); const target = state.week + Math.max(1, Math.round(weeks));
+    for(let wk=state.week+1; wk<=target; wk++) step(wk); save(); }
+  function syncToDate(){ ensure(); const now=curWeek();
+    if(now>state.week && state.active){ for(let wk=state.week+1; wk<=now; wk++) step(wk); save(); }
+    else if(now!==state.week){ state.week=now; } }
+
+  function pressure(id, good){
+    if(!state || !state.active || !worlds || !worlds[id] || GOODS[good]==null) return null;
+    const w = worlds[id]; if(!(w.cons[good]||w.prod[good]||recipeDraw(w,good))) return null;
+    const s = safety(w,good); if(s<=0) return null;
+    return Math.max(-4, Math.min(4, Math.round((stk(id,good)/s - 1)*4)));
+  }
+
+  async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
+    if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
+  function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log }), true); } catch(e){} }
+  function reset(){ state = freshState(); state.active=true; save(); }
+
+  const PRESETS = [
+    { id:'raid',     label:'Pirate raid — Erebus ore', kind:'output', target:'erebus', good:'Common Ore', factor:0.7, weeks:6 },
+    { id:'blockade', label:'Blockade — Alpha Centauri', kind:'block',  target:'pollux', weeks:6 },
+    { id:'cypress',  label:'Cypress automation failure', kind:'output', target:'cypress', good:'Common Consumables', factor:0.2, weeks:8 },
+    { id:'embargo',  label:'Hegemony / OmniSynth embargo', kind:'embargo', facA:'hegemony', facB:'omnisynth', weeks:8 },
+    { id:'museum',   label:'Strike — The Museum (food SPOF)', kind:'block', target:'the-museum', weeks:6 },
+  ];
+  function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s); save(); }
+  function cancel(i){ state.shocks.splice(i,1); save(); }
+
+  return {
+    GOODS, SIM_GOODS, PRESETS,
+    ensure, advance, syncToDate, pressure, fire, cancel, reset, load, save,
+    get state(){ ensure(); return state; },
+    worlds(){ ensure(); return worlds; },
+    active(){ return !!(state && state.active); },
+    setActive(v){ ensure(); state.active=!!v; if(v) state.week=curWeek(); save(); },
+    coverWeeks(id,g){ ensure(); const w=worlds[id]; if(!w) return null; const rate=(w.cons[g]||0)+recipeDraw(w,g); return rate>0? stk(id,g)/rate : null; },
+    stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
+  };
+})();
+
+// ── Living Economy — referee console (panel + render) ───────────────────────
+let econPanelOpen = false, econCollapsed = false;
+const ECON_WATCH = ['erebus','profit-margin','graveyard','kronos','the-anvil','castor','cypress','the-garden','bastion','sol','aurelia','vesta','avalon','warehouse'];
+
+function toggleEconPanel(){
+  if(typeof isReferee==='function' && !isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  econPanelOpen = !econPanelOpen;
+  const w=document.getElementById('econ-wrap'), b=document.getElementById('econ-btn');
+  if(w) w.classList.toggle('hidden', !econPanelOpen);
+  if(b) b.classList.toggle('panel-open', econPanelOpen);
+  if(econPanelOpen) renderEconPanel();
+}
+function toggleEconCollapse(){
+  econCollapsed=!econCollapsed;
+  const t=document.getElementById('econ-toggle'); if(t) t.textContent=econCollapsed?'▲':'▼';
+  const b=document.getElementById('econ-body'); if(b) b.classList.toggle('hidden', econCollapsed);
+}
+function econFireById(id){ const p=ECON.PRESETS.find(x=>x.id===id); if(p){ ECON.fire(p); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); } }
+function econStep(n){ ECON.advance(n); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econToggleActive(){ ECON.setActive(!ECON.active()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econReset(){ if(confirm('Reset the economy to seeded starting stocks?')){ ECON.reset(); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); } }
+function econCancelShock(i){ ECON.cancel(i); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+
+function renderEconPanel(){
+  const body=document.getElementById('econ-body'); if(!body) return;
+  if(typeof ECON==='undefined'){ body.innerHTML='<div style="padding:10px;color:var(--tx1)">Engine not loaded.</div>'; return; }
+  const st=ECON.state, on=ECON.active(), wk=st.week;
+  const btn=(label,fn,extra)=>`<button onclick="${fn}" style="background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;margin:2px ${extra||''}">${label}</button>`;
+  let h='';
+  h+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<span style="font-size:11px;color:var(--tx1)">Sim</span>`;
+  h+=btn(on?'● ON':'○ OFF', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
+  h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
+  h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
+  h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Economy also advances when you move the Imperial calendar. Steps here preview cascades without moving the campaign date.</span>`;
+  h+=`</div>`;
+  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Fire a disruption</div>`;
+  ECON.PRESETS.forEach(p=> h+=btn('⚡ '+p.label, `econFireById('${p.id}')`) );
+  if(st.shocks.length){ h+=`<div style="font-size:11px;color:var(--tx1);margin:6px 0 3px">Active shocks</div>`;
+    st.shocks.forEach((s,i)=>{ const ttl=(s.until!=null)?` · ends wk ${s.until}`:'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
+  h+=`</div>`;
+  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Stockpiles — weeks of cover · price effect</div>`;
+  h+=`<table style="width:100%;border-collapse:collapse;font-size:11px">`;
+  ECON_WATCH.forEach(id=>{ const w=ECON.worlds()[id]; if(!w) return;
+    let tg=null, tc=Infinity;
+    ECON.SIM_GOODS.forEach(g=>{ if(ECON.GOODS[g].internal) return; const cov=ECON.coverWeeks(id,g); if(cov!=null && cov<tc){ tc=cov; tg=g; } });
+    if(tg==null) return;
+    const p=ECON.pressure(id,tg);
+    const pc = p==null?'#8aa':(p<0?'#e87a7a':(p>0?'#7ec98f':'#9fb0c8'));
+    const ptxt = p==null?'—':(p<0?`▲ dearer (${p})`:(p>0?`▼ cheaper (+${p})`:'steady'));
+    const cc = tc<1?'#e87a7a':(tc<2?'#e0b24a':'#9fb0c8');
+    h+=`<tr style="border-top:1px solid var(--bd0)"><td style="padding:3px 4px;color:var(--tx0)">${w.label}</td><td style="padding:3px 4px;color:var(--tx1)">${tg.replace('Common ','')}</td><td style="padding:3px 4px;text-align:right;color:${cc}">${tc.toFixed(1)} wk</td><td style="padding:3px 4px;text-align:right;color:${pc}">${ptxt}</td></tr>`;
+  });
+  h+=`</table></div>`;
+  h+=`<div style="padding:8px 10px"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Cascade log</div>`;
+  if(!st.log.length) h+=`<div style="font-size:11px;color:var(--tx1)">No shortages yet — fire a shock and step the sim.</div>`;
+  else st.log.slice(0,24).forEach(e=> h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0">wk ${e.week} · ${e.text}</div>`);
+  h+=`</div>`;
+  body.innerHTML=h;
+}
+
+ECON.load().then(() => { if(econPanelOpen) renderEconPanel(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
