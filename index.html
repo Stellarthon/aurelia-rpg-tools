@@ -4298,341 +4298,6 @@ async function saveRouteBlocks(){
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
-// The active manual block for a lane (null when none or kill-switch off).
-function gxRouteBlock(a, b){
-  if(!routeBlocks.enabled) return null;
-  return routeBlocks.blocks[gxLaneKey(a, b)] || null;
-}
-// Can the ship currently make a single jump? (J-drive present + fuel for 1 jump.)
-function gxShipCanJump(){
-  const r = Number(shipState.jumpRating) || 0;
-  if(r < 1) return false;
-  const need = +(0.1 * (Number(shipState.tonnage) || 0)).toFixed(1); // one J-1 jump's fuel
-  return (Number(shipState.fuel) || 0) >= need;
-}
-// Is the soft out-of-range advisory currently in force? (global, ship-derived)
-function gxAdvisoryActive(){ return !gxShipCanJump(); }
-// Does the current viewer see route restrictions? Nav crew + referee only.
-function gxSeesRoutes(){ return canSee(SHIP_NAV_AUDIENCE); }
-
-function toggleRouteKillSwitch(){
-  if(!isReferee()) return;
-  routeBlocks.enabled = !routeBlocks.enabled;
-  saveRouteBlocks();
-  gxRenderLanes();
-  gxRenderRouteControl();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-// Toggle a manual block on the lane between the selected system and a neighbour.
-function toggleRouteBlock(a, b){
-  if(!isReferee()) return;
-  const k = gxLaneKey(a, b);
-  if(routeBlocks.blocks[k]) delete routeBlocks.blocks[k];
-  else routeBlocks.blocks[k] = { reason: '', explain: true };
-  saveRouteBlocks();
-  gxRenderLanes();
-  gxRenderRouteControl();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-function setRouteBlockReason(a, b, reason){
-  if(!isReferee()) return;
-  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
-  blk.reason = reason;
-  saveRouteBlocks();
-  gxRenderLanes();
-}
-function toggleRouteBlockExplain(a, b){
-  if(!isReferee()) return;
-  const blk = routeBlocks.blocks[gxLaneKey(a, b)]; if(!blk) return;
-  blk.explain = !blk.explain;
-  saveRouteBlocks();
-  gxRenderLanes();
-  if(gxSelectedId) gxUpdateDetail(gxSelectedId);
-}
-
-// Referee kill-switch + status, injected into the galaxy overview panel.
-function gxRenderRouteControl(){
-  const el = document.getElementById('gx-route-ctl'); if(!el) return;
-  if(!isReferee()){ el.innerHTML = ''; return; }
-  const on = routeBlocks.enabled;
-  const n = Object.keys(routeBlocks.blocks).length;
-  el.innerHTML = `<div class="gx-route-ctl-box">
-    <div class="gx-route-ctl-row">
-      <span>🚧 Route blocking — ${on ? '<b style="color:#d45050">ARMED</b>' : '<b style="color:var(--tx1)">off</b>'}</span>
-      <div class="theme-toggle ${on?'on':''}" role="switch" tabindex="0" aria-checked="${on}"
-           title="${on ? 'Blocks active — tap to disarm all' : 'Blocks inert — tap to arm'}"
-           onclick="toggleRouteKillSwitch()"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRouteKillSwitch();}"><div class="theme-toggle-knob"></div></div>
-    </div>
-    <div class="gx-route-ctl-hint">${n} lane${n===1?'':'s'} blocked. Select a system to set blocks on its jump connections.${gxAdvisoryActive()?' <span style="color:#e0a040">Ship cannot currently jump — all lanes show out-of-range (amber).</span>':''}</div>
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// GALAXY MAP — ENGINE  (ported from orion_arm_map_v4, namespaced gx*)
-// ═══════════════════════════════════════════════════════════════════════════
-// The Orion Arm starmap is the app's landing view. Nodes are star systems;
-// "View Close Up" drills into the generic per-system orrery (enterSystem),
-// which reads effectiveBodies(systemId) exactly like Auros. Unsurveyed systems
-// (empty base + no additions) show a blank-system prompt offering manual entry
-// or random UWP generation. Lanes/connections are read-only here (V1) — the
-// orion file's lane/flag/design-editing layer is intentionally not ported.
-
-let gxInited = false;       // star field + nodes rendered once
-let gxViewReady = false;    // initial zoom-to-fit done
-let gxSelectedId = null;    // currently selected galaxy node
-
-// ── Star field (seeded, reproducible) ──────────────────────────────────────
-function gxSeedStars(){
-  const g = document.getElementById('gx-bg-stars'); if(!g) return;
-  let h = '';
-  let seed = 42;
-  function rng(){ seed = (seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/0xffffffff; }
-  const bands = [
-    {cx:200,cy:900,rx:650,ry:220,rot:-28,fill:'#112244',op:0.28},
-    {cx:600,cy:650,rx:700,ry:180,rot:-28,fill:'#0d1a33',op:0.32},
-    {cx:950,cy:420,rx:700,ry:200,rot:-28,fill:'#0d1a33',op:0.30},
-    {cx:1350,cy:180,rx:650,ry:190,rot:-28,fill:'#112244',op:0.26},
-    {cx:300,cy:600,rx:500,ry:120,rot:-18,fill:'#192840',op:0.16},
-    {cx:900,cy:280,rx:500,ry:110,rot:-18,fill:'#192840',op:0.15},
-    {cx:780,cy:530,rx:280,ry:100,rot:-28,fill:'#1a2a50',op:0.22},
-    {cx:780,cy:530,rx:130,ry:50,rot:-28,fill:'#2a3a60',op:0.20},
-  ];
-  bands.forEach(b => h += `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" fill="${b.fill}" opacity="${b.op}" transform="rotate(${b.rot},${b.cx},${b.cy})"/>`);
-  const nebulae = [
-    {cx:150,cy:780,rx:220,ry:110,rot:-15,fill:'#2233aa',op:0.05},
-    {cx:1150,cy:140,rx:260,ry:100,rot:20,fill:'#553399',op:0.06},
-    {cx:600,cy:200,rx:180,ry:80,rot:8,fill:'#aa4422',op:0.04},
-    {cx:1400,cy:700,rx:200,ry:90,rot:-10,fill:'#225533',op:0.05},
-    {cx:450,cy:500,rx:300,ry:80,rot:-25,fill:'#112255',op:0.07},
-    {cx:1050,cy:850,rx:220,ry:100,rot:5,fill:'#331155',op:0.05},
-  ];
-  nebulae.forEach(n => h += `<ellipse cx="${n.cx}" cy="${n.cy}" rx="${n.rx}" ry="${n.ry}" fill="${n.fill}" opacity="${n.op}" transform="rotate(${n.rot},${n.cx},${n.cy})"/>`);
-  h += `<ellipse cx="750" cy="520" rx="500" ry="55" fill="#050810" opacity="0.18" transform="rotate(-28,750,520)"/>`;
-  h += `<ellipse cx="400" cy="730" rx="350" ry="40" fill="#050810" opacity="0.12" transform="rotate(-22,400,730)"/>`;
-  for(let i=0;i<3000;i++){
-    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
-    h += `<circle cx="${x}" cy="${y}" r="0.35" fill="#ccd8ee" opacity="${(0.10+rng()*0.25).toFixed(2)}"/>`;
-  }
-  for(let i=0;i<2200;i++){
-    const x=(rng()*1800).toFixed(1), y=(rng()*1060).toFixed(1);
-    const sz=rng(); const r=sz<0.7?0.45:sz<0.92?0.7:0.95;
-    const cr=rng();
-    const fill=cr<0.08?'#ffddbb':cr<0.15?'#ffeedd':cr<0.22?'#bbddff':cr<0.28?'#ddeeff':'#ffffff';
-    h += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${(0.25+rng()*0.65).toFixed(2)}"/>`;
-  }
-  for(let i=0;i<2500;i++){
-    const t=rng(); const bx=t*1900-50; const by=1060-t*820+(rng()-0.5)*320;
-    if(bx<0||bx>1800||by<0||by>1060) continue;
-    const r=rng()<0.06?0.7:0.3;
-    const fill=rng()<0.2?'#aaccff':'#e8eeff';
-    h += `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${r}" fill="${fill}" opacity="${(0.12+rng()*0.50).toFixed(2)}"/>`;
-  }
-  const clusters=[{cx:320,cy:820,spread:90,count:140,col:'#ddeeff'},{cx:1250,cy:300,spread:110,count:160,col:'#eeeeff'},{cx:680,cy:180,spread:75,count:100,col:'#ffeedd'}];
-  clusters.forEach(cl=>{ for(let i=0;i<cl.count;i++){
-    const angle=rng()*Math.PI*2, dist=rng()*rng()*cl.spread;
-    const x=(cl.cx+Math.cos(angle)*dist).toFixed(1), y=(cl.cy+Math.sin(angle)*dist).toFixed(1);
-    h += `<circle cx="${x}" cy="${y}" r="${rng()<0.1?0.8:0.4}" fill="${cl.col}" opacity="${(0.30+rng()*0.60).toFixed(2)}"/>`;
-  }});
-  g.innerHTML = h;
-}
-
-// ── Render jump lanes + nodes ──────────────────────────────────────────────
-function gxRenderLanes(){
-  const g = document.getElementById('gx-lanes'); if(!g) return;
-  const seesRoutes = gxSeesRoutes();
-  const advisory = seesRoutes && gxAdvisoryActive();
-  let h = '';
-  GX_LANES.forEach(k => {
-    const [a,b] = k.split('|');
-    const sa = GX_MAP[a], sb = GX_MAP[b];
-    if(!sa || !sb) return;
-    const blk = seesRoutes ? gxRouteBlock(a,b) : null;
-    let stroke = '#1d4a66', w = '0.7', op = '0.55', dash = '', title = '';
-    if(blk){
-      stroke = '#d45050'; w = '1.3'; op = '0.9'; dash = ' stroke-dasharray="4,3"';
-      const showReason = isReferee() || blk.explain;
-      title = (showReason && blk.reason) ? blk.reason : 'Route unavailable';
-    } else if(advisory){
-      stroke = '#e0a040'; w = '0.9'; op = '0.7'; dash = ' stroke-dasharray="2,3"';
-      title = 'Out of range — ship cannot currently jump';
-    }
-    h += `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="${stroke}" stroke-width="${w}" opacity="${op}"${dash}>${title?`<title>${escHtml(title)}</title>`:''}</line>`;
-    if(blk){
-      const mx = (sa.x+sb.x)/2, my = (sa.y+sb.y)/2;
-      h += `<g pointer-events="none"><circle cx="${mx}" cy="${my}" r="3.4" fill="#1a0808" stroke="#d45050" stroke-width="0.8"/><text x="${mx}" y="${my+2.1}" font-size="5" fill="#d45050" text-anchor="middle" font-family="monospace">✕</text></g>`;
-    }
-  });
-  g.innerHTML = h;
-}
-
-function gxIsHub(sys){ return (sys.systemId === 'auros') || (sys.id === 'aurelia'); }
-
-function gxRenderSystems(){
-  const g = document.getElementById('gx-systems'); if(!g) return;
-  let h = '';
-  GALAXY_NODES.forEach(sys => {
-    const hub = gxIsHub(sys), r = hub?7:5;
-    const lbl = escHtml((sys.label||sys.name).replace(' ★',''));
-    // Surveyed = the linked system has at least one body (authored or generated).
-    const sid = sys.systemId || sys.id;
-    const surveyed = effectiveBodies(sid).length > 0;
-    h += `<g class="gx-node" data-id="${sys.id}" onclick="gxOnNodeClick('${sys.id}')" style="cursor:pointer">
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r+9}" fill="transparent"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r+4}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.7" opacity="0.3"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${r}" fill="#050810" stroke="${NODE_COLOR}" stroke-width="1.1" filter="url(#gx-node-glow)"/>
-      <circle cx="${sys.x}" cy="${sys.y}" r="${hub?3.5:2}" fill="${NODE_COLOR}" opacity="0.95"/>
-      ${hub?`<circle cx="${sys.x}" cy="${sys.y}" r="${r+7}" fill="none" stroke="${NODE_COLOR}" stroke-width="0.6" opacity="0.4" stroke-dasharray="3,3"/>`:''}
-      ${surveyed?`<circle cx="${sys.x+r+1}" cy="${sys.y-r-1}" r="1.8" fill="#4caf82"/>`:''}
-      <text x="${sys.x+r+5}" y="${sys.y+3}" font-size="${hub?9:7.5}" fill="${NODE_COLOR}"
-            font-family="'Courier New',monospace" letter-spacing="0.3" opacity="0.9"
-            stroke="#04060e" stroke-width="2" paint-order="stroke">${lbl}</text>
-    </g>`;
-  });
-  g.innerHTML = h;
-}
-
-function gxEnsureRendered(){
-  if(gxInited) return;
-  gxSeedStars();
-  gxRenderLanes();
-  gxRenderSystems();
-  gxAttachPanZoom();
-  gxInited = true;
-}
-
-// ── Pan & zoom ─────────────────────────────────────────────────────────────
-let gxScale=1, gxTx=0, gxTy=0, gxDragging=false, gxLastX=0, gxLastY=0, gxPanZoomAttached=false;
-function gxApplyT(){
-  const svg = document.getElementById('gx-svg');
-  if(svg) svg.style.transform = `translate(${gxTx}px,${gxTy}px) scale(${gxScale})`;
-}
-function gxZoom(f,cx,cy){
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  const r = canvas.getBoundingClientRect();
-  const px = (cx==null?r.width/2:cx-r.left), py = (cy==null?r.height/2:cy-r.top);
-  const ns = Math.max(0.25, Math.min(4, gxScale*f));
-  const ratio = ns/gxScale;
-  gxTx = px-ratio*(px-gxTx); gxTy = py-ratio*(py-gxTy); gxScale = ns; gxApplyT();
-}
-function gxResetView(){
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  const r = canvas.getBoundingClientRect();
-  if(!r.width || !r.height) return;
-  gxScale = Math.min(r.width/1800, r.height/1060)*0.92;
-  gxTx = (r.width-1800*gxScale)/2; gxTy = (r.height-1060*gxScale)/2; gxApplyT();
-  gxViewReady = true;
-}
-function gxAttachPanZoom(){
-  if(gxPanZoomAttached) return;
-  const canvas = document.getElementById('galaxy-canvas'); if(!canvas) return;
-  canvas.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.gx-node')||e.target.closest('#gx-zoom')||e.target.closest('#gx-legend')) return;
-    gxDragging=true; gxLastX=e.clientX; gxLastY=e.clientY;
-    canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener('pointermove', e=>{ if(!gxDragging) return; gxTx+=e.clientX-gxLastX; gxTy+=e.clientY-gxLastY; gxLastX=e.clientX; gxLastY=e.clientY; gxApplyT(); });
-  canvas.addEventListener('pointerup', ()=>{ gxDragging=false; canvas.classList.remove('panning'); });
-  canvas.addEventListener('wheel', e=>{ e.preventDefault(); gxZoom(e.deltaY<0?1.12:0.89, e.clientX, e.clientY); }, {passive:false});
-  let lastDist=null;
-  canvas.addEventListener('touchmove', e=>{
-    if(e.touches.length===2){
-      e.preventDefault();
-      const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-      const d=Math.sqrt(dx*dx+dy*dy);
-      if(lastDist) gxZoom(d/lastDist,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);
-      lastDist=d;
-    }
-  }, {passive:false});
-  canvas.addEventListener('touchend', ()=>lastDist=null);
-  gxPanZoomAttached = true;
-}
-
-// ── Selection + detail panel ───────────────────────────────────────────────
-function gxOnNodeClick(id){ gxSelectSystem(id); }
-
-function gxSelectSystem(id){
-  const sys = GX_MAP[id]; if(!sys) return;
-  document.querySelectorAll('.gx-sel-ring').forEach(e=>e.remove());
-  gxSelectedId = id;
-  const node = document.querySelector(`#gx-systems [data-id="${id}"]`);
-  if(node){
-    const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    ring.setAttribute('cx',sys.x); ring.setAttribute('cy',sys.y); ring.setAttribute('r','15');
-    ring.setAttribute('fill','none'); ring.setAttribute('stroke','#00e5ff');
-    ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.7');
-    ring.setAttribute('class','gx-sel-ring');
-    node.appendChild(ring);
-  }
-  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
-  const nameEl = document.getElementById('galaxy-dname');
-  nameEl.textContent = (sys.label||sys.name).replace(' ★','').toUpperCase();
-  nameEl.style.color = f.color;
-  document.getElementById('galaxy-dtype').textContent = sys.name + ' · ' + f.name;
-  document.getElementById('galaxy-overview').style.display='none';
-  document.getElementById('galaxy-sys-detail').style.display='block';
-  gxUpdateDetail(id);
-}
-
-function gxUpdateDetail(id){
-  const sys = GX_MAP[id]; if(!sys) return;
-  const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent', color:'var(--accentGold)'};
-  const sid = sys.systemId || sys.id;
-  const bodyCount = effectiveBodies(sid).length;
-  const det = document.getElementById('galaxy-sys-detail');
-  let html = '';
-
-  // Primary action — drill into the system close-up (the orrery).
-  html += `<button class="view-close-btn" onclick="enterSystem('${sid}')">⊙ View close up of ${escHtml((sys.label||sys.name).replace(' ★',''))}</button>`;
-  html += `<div style="font-size:10px;color:${bodyCount?'#4caf82':'var(--txW)'};font-family:monospace;margin:-4px 0 10px">${bodyCount? '✓ Surveyed — '+bodyCount+' bodies charted' : '○ Unsurveyed — no system data yet'}</div>`;
-
-  html += `<div class="sg">
-    <div class="sg-l">Faction</div><div class="sg-v" style="color:${f.color}">${escHtml(f.name)}</div>
-    <div class="sg-l">Star designation</div><div class="sg-v">${escHtml(sys.name)}</div>
-    <div class="sg-l">Jump connections</div><div class="sg-v">${(sys.connections||[]).length}</div>
-  </div>`;
-
-  html += `<div class="s-sec">
-    <div class="s-sec-lbl">Overview</div>
-    <div class="s-desc">${escHtml(sys.desc||'No data available.')}</div>
-  </div>`;
-
-  const seesRoutes = gxSeesRoutes(), ref = isReferee(), advisory = seesRoutes && gxAdvisoryActive();
-  html += `<div class="s-sec"><div class="s-sec-lbl">Jump Connections</div>`;
-  if(ref) html += `<div style="font-size:9px;color:var(--tx1);font-family:monospace;margin:-2px 0 6px">Referee: block / unblock a lane below. ${routeBlocks.enabled ? 'Blocking ARMED.' : 'Blocking is OFF (kill-switch).'}</div>`;
-  if((sys.connections||[]).length){
-    sys.connections.forEach(cid => {
-      const c = GX_MAP[cid]; if(!c) return;
-      const cf = GALAXY_FACTIONS[c.faction] || {color:'var(--tx1)'};
-      const blk = seesRoutes ? gxRouteBlock(id, cid) : null;
-      html += `<div onclick="gxSelectSystem('${cid}')" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--bg2);cursor:pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-        <span style="width:7px;height:7px;border-radius:50%;background:${cf.color};flex-shrink:0;display:inline-block"></span>
-        <span style="font-size:12px;color:${blk?'#d45050':'var(--tx0)'}">${blk?'⛔ ':''}${escHtml((c.label||c.name).replace(' ★',''))}</span>
-        <span style="font-size:9px;color:var(--tx1);font-family:monospace;margin-left:auto">${escHtml(c.name)}</span>
-      </div>`;
-      if(ref){
-        html += `<div class="gx-conn-ctl">
-          <button class="disc-mini${blk?' del':''}" onclick="toggleRouteBlock('${id}','${cid}')">${blk?'Unblock':'Block'}</button>`;
-        if(blk){
-          html += `<input class="gx-conn-reason" placeholder="Reason (e.g. Hegemony interdiction)" value="${escAttr(blk.reason||'')}" onchange="setRouteBlockReason('${id}','${cid}',this.value)">
-            <button class="disc-mini" title="Toggle whether nav crew see the reason" onclick="toggleRouteBlockExplain('${id}','${cid}')">${blk.explain?'👁 reason shown':'🚫 reason hidden'}</button>`;
-        }
-        html += `</div>`;
-      } else if(blk){
-        const showReason = blk.explain && blk.reason;
-        html += `<div class="gx-conn-status blocked">⛔ ${showReason ? escHtml(blk.reason) : 'Route unavailable'}</div>`;
-      } else if(advisory){
-        html += `<div class="gx-conn-status adv">⚠ Out of range — insufficient fuel/jump</div>`;
-      }
-    });
-  } else {
-    html += `<div style="font-size:11px;color:var(--tx1);padding:4px 0">No jump connections.</div>`;
-  }
-  html += `</div>`;
-  det.innerHTML = html;
-}
-
-// ── Top-level galaxy view ──────────────────────────────────────────────────
 // ═══ GALAXY MAP — HEX-JUMP ENGINE (ported onto main; replaces the Orion render layer) ═══
 const HX = (function(){
   // ── Astrometry reference (real J2000 distances, ly) — joined to GALAXY_NODES
@@ -8406,9 +8071,7 @@ function applyIdentityClass(){
 // Re-render the surfaces whose content depends on role/identity (galaxy route
 // styling) when the viewer's role or identity changes.
 function refreshRoleGatedViews(){
-  if(currentView === 'galaxy' && typeof gxRenderLanes === 'function'){
-    gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); if(typeof HX!=='undefined') HX.refresh();
-  }
+  if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
 }
 
 // ── Secure content (per-player redaction client · Stage 2) ───────────────────
@@ -8501,7 +8164,7 @@ function applySecureFragments(content){
 }
 function refreshSecureViews(){
   try {
-    if(currentView === 'galaxy' && typeof gxRenderSystems === 'function') gxRenderSystems(); if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+    if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
     else if(currentView === 'system'){ buildOrrery(); if(selectedBody) selectBody(selectedBody); }
     else if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
     else if(currentView === 'station' && cur){ renderTabs(); renderDetail(); }
@@ -8682,7 +8345,7 @@ async function pollRevealState(){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
         // Fuel/jump changes can flip the out-of-range advisory — refresh lanes.
-        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); if(typeof HX!=='undefined') HX.refresh(); }
+        if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -8695,7 +8358,7 @@ async function pollRevealState(){
       const normRB = { enabled: freshRB.enabled !== false, blocks: freshRB.blocks || {} };
       if(JSON.stringify(normRB) !== JSON.stringify(routeBlocks)){
         routeBlocks = normRB;
-        if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); if(gxSelectedId) gxUpdateDetail(gxSelectedId); if(typeof HX!=='undefined') HX.refresh(); }
+        if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -13764,12 +13427,11 @@ updateConnPill();             // paint initial sync status; markOnline/Offline k
 if(queueLength()) flushQueue(); // push anything parked from a previous offline session
 
 // ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
-if(typeof gxEnsureRendered === 'function'){
-  if(typeof HX !== 'undefined') HX.enter();
+if(typeof HX !== 'undefined'){
+  HX.enter();
   document.getElementById('hdr-title').textContent = 'THE ORION ARM';
   document.getElementById('breadcrumb').innerHTML = '';
   updateBackBtn();
-  requestAnimationFrame(() => requestAnimationFrame(gxResetView));
 }
 loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
@@ -13788,7 +13450,7 @@ loadBodyStores().then(() => {
   // Rebuild the system view so any added/removed/edited bodies appear
   if(typeof buildOrrery === 'function') buildOrrery();
   // Refresh galaxy "surveyed" markers once shared body data has loaded.
-  if(currentView === 'galaxy' && typeof gxRenderSystems === 'function') gxRenderSystems(); if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+  if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
   if(currentView === 'system' && selectedBody){
     // If the selected body was deleted while away, fall back to overview
     if(getBodies().find(b => b.id === selectedBody)) selectBody(selectedBody);
@@ -13823,7 +13485,7 @@ loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 loadGalaxyLanes().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
-loadRouteBlocks().then(() => { if(currentView === 'galaxy'){ gxRenderLanes(); gxRenderRouteControl(); } });
+loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
