@@ -13256,6 +13256,37 @@ const RUMOUR_TEMPLATES = {
 };
 const RUMOUR_RELIABILITY = ['Reliable','Likely true','Unconfirmed','Probably false'];
 
+// ── Market rumours: TRUE intel drawn from the living economy (ECON.intel) ──────
+// Maps the sim's clinical good names to evocative dockside terms, and holds the
+// rumour phrasings per signal kind. These rumours are tagged 'Reliable' because
+// they are literally true at generation time — a player who acts on them profits.
+const GOOD_FLAVOR = {
+  'Common Consumables':'foodstuffs','Common Ore':'raw ore','Common Electronics':'electronics components',
+  'Common Manufactured':'machine parts','Advanced Electronics':'high-tech components'
+};
+const MARKET_RUMOUR = {
+  shock_output: [
+    'Word on the docks: the {good} coming out of {place} has slowed to a trickle. Somebody knows why — and they’re already buying.',
+    'They say production of {good} at {place} has been hit hard. It won’t stay cheap for long.'
+  ],
+  shock_block: [
+    'The lanes around {place} are choked — nothing’s moving through, and shelves downstream are starting to empty.',
+    'Hard word from {place}: the route is shut. Whatever rides that lane is about to get dear.'
+  ],
+  shock_embargo: [
+    'Trade between {place} has frozen solid. The brokers who saw it coming are already repositioned.'
+  ],
+  shortage: [
+    'Stockpiles of {good} are running thin around {place}. Prices there won’t hold where they are.',
+    'A buyer at {place} is quietly paying over the odds for {good}. That tells you everything.',
+    'If you’re holding {good}, {place} is where to sell it — and soon.'
+  ],
+  glut: [
+    'There’s more {good} sitting at {place} than anyone can move. Cheap now — won’t last once word spreads.',
+    '{place} is awash in {good}. A sharp trader buys low here before the surplus clears.'
+  ]
+};
+
 const ENCOUNTER_TABLES = {
   space: ['An unmarked ship matches your vector and holds at distance.','A distress beacon pulses nearby — genuine, or bait.','A customs interceptor orders you to cut thrust for inspection.','A debris field hides a salvageable, and probably claimed, wreck.','A free trader hails, offering an off-manifest cargo swap.'],
   port:  ['A dockside argument escalates near your berth — one party is armed.','A fixer drops into the seat across from you with a job and a warning.','Port authority flags a discrepancy in your paperwork.','A face from a crew member’s past is three tables over.','Someone tries to fix a tracker to your hull during the night cycle.'],
@@ -13274,7 +13305,33 @@ let genCollapsed = false;
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
 
+function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
+// Build a TRUE rumour from the living economy's current intel, or null if the sim
+// is off / nothing is moving. Biased toward the sharpest few signals so the most
+// newsworthy shock or shortage usually surfaces.
+function pickMarketRumour(){
+  if(!(window.ECON && ECON.active())) return null;
+  let items; try { items = ECON.intel(); } catch(e){ return null; }
+  if(!items || !items.length) return null;
+  const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
+  const key = item.kind === 'shock'
+    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : 'shock_block')
+    : (item.kind === 'glut' ? 'glut' : 'shortage');
+  const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
+  const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
+  return { kind:'rumour', text, faction:null, reliability:'Reliable', source:'market' };
+}
+// Referee-triggered: deliberately pull the strongest current market signal.
+function generateMarketRumour(){
+  const m = pickMarketRumour();
+  oracleResult = m || { kind:'rumour', text:'The markets are calm — no strong signal moving right now.', faction:null, reliability:'Unconfirmed', source:'market' };
+  renderOraclePanel();
+}
+
 function generateRumour(){
+  // Organic hook: ~30% of the time, surface a TRUE signal from the living economy
+  // instead of a flavour template — when the sim is active and something is moving.
+  if(Math.random() < 0.3){ const m = pickMarketRumour(); if(m){ oracleResult = m; renderOraclePanel(); return; } }
   const facs = reputation.factions || [];
   let faction = null;
   if(facs.length){ // weight by |standing| — louder factions when relations are extreme
@@ -13349,9 +13406,10 @@ function renderOraclePanel(){
   if(oracleResult){
     if(oracleResult.kind === 'rumour'){
       const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
+      const mkt = oracleResult.source === 'market' ? `<span class="gen-tag" style="color:var(--accentGold)" title="Drawn from the living economy — true at the time it was generated">📈 market</span>` : '';
       resultHTML = `<div class="gen-result">
         <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
-        <div class="gen-meta">${fac}<span class="gen-tag">${oracleResult.reliability}</span>
+        <div class="gen-meta">${mkt}${fac}<span class="gen-tag">${oracleResult.reliability}</span>
           <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>
           <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
       </div>`;
@@ -13372,6 +13430,7 @@ function renderOraclePanel(){
     ${resultHTML}
     <div class="gen-sec-title">Rumour</div>
     <button class="gen-go" onclick="generateRumour()">🎲 Generate rumour</button>
+    <button class="gen-go" onclick="generateMarketRumour()" title="Pull a TRUE rumour straight from the living economy's current shortages & shocks">📈 Market whisper</button>
     <div class="gen-sec-title">Encounter</div>
     <div class="gen-row-lbl">Where</div><div class="gen-opts">${whereOpts}</div>
     <div class="gen-row-lbl">Danger</div><div class="gen-opts">${dangerOpts}</div>
@@ -13822,9 +13881,35 @@ window.ECON = (function(){
   function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s); save(); }
   function cancel(i){ state.shocks.splice(i,1); save(); }
 
+  function facName(id){ return (''+id).replace(/(^|[-_ ])(\w)/g, (m,a,b)=>(a?' ':'')+b.toUpperCase()).trim(); }
+  // Current newsworthy economic signals, for the Oracle to turn into TRUE rumours:
+  // active shocks (with their origin world+good) and the sharpest shortages/gluts.
+  // Ranked shocks-first, then by deviation magnitude. Empty when the sim is off/quiet.
+  function intel(){
+    ensure();
+    if(!state || !state.active) return [];
+    const out = [];
+    state.shocks.forEach(s=>{
+      let label;
+      if(s.target && worlds[s.target]) label = worlds[s.target].label;
+      else if(s.kind==='embargo') label = facName(s.facA)+' & '+facName(s.facB);
+      else label = s.target || 'the lanes';
+      out.push({ kind:'shock', shock:s.kind, world:s.target||null, label, good:s.good||null });
+    });
+    const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
+    Object.keys(worlds).forEach(id=>{ goods.forEach(g=>{
+      const p = pressure(id,g); if(p==null) return;
+      if(p<=-2) out.push({ kind:'shortage', world:id, label:worlds[id].label, good:g, pressure:p });
+      else if(p>=3) out.push({ kind:'glut', world:id, label:worlds[id].label, good:g, pressure:p });
+    }); });
+    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:1;
+      if(r(a)!==r(b)) return r(a)-r(b); return Math.abs(b.pressure||4)-Math.abs(a.pressure||4); });
+    return out;
+  }
+
   return {
     GOODS, SIM_GOODS, PRESETS,
-    ensure, advance, syncToDate, pressure, fire, cancel, reset, load, save,
+    ensure, advance, syncToDate, pressure, intel, fire, cancel, reset, load, save,
     get state(){ ensure(); return state; },
     worlds(){ ensure(); return worlds; },
     active(){ return !!(state && state.active); },
