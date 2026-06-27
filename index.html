@@ -4686,16 +4686,43 @@ const HX = (function(){
   // so every device computes the same prices for the same Imperial week.
   function imperialWeek(){ return (typeof imperialDate!=='undefined'&&typeof imperialOrdinal==='function')?Math.floor(imperialOrdinal(imperialDate)/7):0; }
   function seedScore(tag){ const r=mulberry(hashStr(tag)); return Math.round(r()*4)-2; }   // −2..+2
+  // ── Simple (default) economy ────────────────────────────────────────────────
+  // A pure, deterministic price pressure derived STATICALLY from each world's
+  // produces/demands profile — no simulation, no stepping, no logistics. Reads the
+  // SAME data the full sim uses (ECON.effectiveProfile → DEF table layered with the
+  // Design-Mode "Production & Consumption" overrides), so editing a world's economy
+  // once drives BOTH modes. Same sign convention as mktPressure:
+  //    produces the good          → +  (local glut → cheaper to buy / weaker to sell)
+  //    demands it (and makes none) → −  (local scarcity → dearer to buy / stronger to sell)
+  //    neither                     → 0  (+ a trivial deterministic ±1 wobble for texture)
+  // Magnitude scales crudely with how strongly the world makes/uses it (dedicated vs
+  // incidental). Clamped to the same ±4 band so it composes with the trade-code DMs.
+  function simpleMag(rate){ rate=+rate||0; if(rate<=0) return 0; return rate>=40?3 : rate>=10?2 : 1; }
+  function simplePressure(worldId, goodName){
+    let p = 0;
+    try {
+      if(window.ECON && ECON.effectiveProfile){
+        const prof = ECON.effectiveProfile(worldId);
+        if(prof){
+          const prod = (prof.prod && prof.prod[goodName]) || 0;
+          let demand = (prof.cons && prof.cons[goodName]) || 0;
+          try { const ai = ECON.autoInputsOf(prof.prod||{}); demand += (ai[goodName]||0); } catch(e){}   // recipe inputs the world auto-draws are genuine demand
+          if(prod > 0) p = simpleMag(prod);            // produces it → glut → positive
+          else if(demand > 0) p = -simpleMag(demand);  // imports it → scarcity → negative
+        }
+      }
+    } catch(e){}
+    if(p === 0) p = clamp(seedScore('simple|'+(worldId||'')+'|'+goodName), -1, 1);   // tiny deterministic texture, no time component
+    return clamp(p, -4, 4);
+  }
   function mktPressure(sys,goodName){ const key=(sys.id||sys.label||'')+'|'+goodName;
-    // When the Level-2 sim is live and tracks this world+good, real stockpiles
-    // drive the price (scarcity = dearer). Otherwise fall back to seeded noise.
+    // FULL-simulation mode (referee opt-in): live stockpiles drive the price
+    // (scarcity = dearer). A light ±1 seeded texture lets steady prices breathe
+    // week-to-week without overriding the sim signal.
     try { if(window.ECON && ECON.active()){ const sp=ECON.pressure(sys.id,goodName);
-      // Sim is the spine; layer a light ±1 seeded texture so steady prices still
-      // breathe week-to-week and world-to-world without overriding the sim signal.
       if(sp!=null){ const tex=seedScore('mkt-tex|'+key+'|'+imperialWeek())*0.5; return clamp(Math.round(sp+tex),-4,4); } } } catch(e){}
-    const quirk=seedScore('mkt-bias|'+key);                       // persistent per system+good (the randomised supply/demand)
-    const flux =seedScore('mkt-flux|'+key+'|'+imperialWeek());    // shifts each Imperial week (calendar fluctuation)
-    return clamp(quirk+flux,-4,4); }
+    // SIMPLE mode (default), or a good the sim doesn't track: static produces/demands.
+    return simplePressure(sys.id||sys.label, goodName); }
   function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
     const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
@@ -13906,9 +13933,10 @@ loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'und
 // ───────────────────────────────────────────────────────────────────────────
 // Self-contained. Reads globals GALAXY_NODES / GALAXY_FACTIONS / imperialDate /
 // imperialOrdinal / isReferee / supaStorage. The ONLY hook into the existing
-// market is mktPressure() (HX module), which blends ECON.pressure() when the sim
-// is active and falls back to the old seeded noise otherwise — so if the engine
-// is off, or throws, nothing changes for players.
+// market is mktPressure() (HX module), which uses ECON.pressure() when the FULL
+// sim is active (referee opt-in) and otherwise reads the SIMPLE static produces/
+// demands model (simplePressure(), the default) — so prices stay coherent whether
+// or not the sim is running, and if the engine throws nothing changes for players.
 //
 // Tick = 1 Imperial week. Goods are made by recipe (conservation); worlds hold
 // stockpiles with a safety threshold; trade moves goods producer→consumer with a
@@ -14070,10 +14098,13 @@ window.ECON = (function(){
     const stock = {}; Object.keys(base).forEach(id=>{ stock[id] = Object.assign({}, base[id]); });
     const wk = curWeek();
     const transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
-    // active:true → the living economy is ON by default. A referee who explicitly
-    // toggles it off persists active:false to the shared econ-state row, which
-    // overrides this on load; the default only applies when no state is saved yet.
-    return { week: wk, active:true, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
+    // active:false → a fresh campaign defaults to the SIMPLE economy (static per-world
+    // produces/demands pricing via simplePressure(); no stepping, no logistics). The
+    // referee opts INTO the full multi-tier simulation with the Living-economy toggle,
+    // which persists active:true to the shared econ-state row. NB a persisted row's
+    // active flag overrides this default on load (Object.assign(freshState(),parsed)),
+    // so existing campaigns keep whatever mode they saved until the referee toggles.
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -14303,7 +14334,7 @@ window.ECON = (function(){
     if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
     supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
-  function reset(){ state = freshState(); state.active=true; save(); }
+  function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive; save(); }   // reseed stock; keep the current Simple/Full mode
 
   const PRESETS = [
     { id:'raid',     label:'Pirate raid — Erebus ore', kind:'output', target:'erebus', good:'Common Ore', factor:0.7, weeks:6 },
@@ -14806,11 +14837,15 @@ function renderEconPanel(){
   const btn=(label,fn,extra)=>`<button onclick="${fn}" style="background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;margin:2px ${extra||''}">${label}</button>`;
   let h='';
   h+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-  h+=`<span style="font-size:11px;color:var(--tx1)">Sim</span>`;
-  h+=btn(on?'● ON':'○ OFF', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
-  h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
-  h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
-  h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Economy also advances when you move the Imperial calendar. Steps here preview cascades without moving the campaign date.</span>`;
+  h+=`<span style="font-size:11px;color:var(--tx1)">Living economy</span>`;
+  h+=btn(on?'⚙ Full simulation':'◐ Simple (default)', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'background:#3a3320;border-color:#9d8a3f;color:#eadfbf');
+  if(on){
+    h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
+    h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
+    h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Full mode: the multi-tier sim steps every Imperial week and when you advance the calendar. Steps here preview cascades without moving the campaign date. Click the toggle to switch back to Simple.</span>`;
+  } else {
+    h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Simple mode: prices come straight from each world's <b>Produces / Demands</b> profile (edit it in Design Mode) — no stepping, no logistics. Producers sell their good cheaper; importers pay more. Switch to <b>Full simulation</b> for the deep stocks/flows model with shocks, convoys &amp; cargo runs (the controls below).</span>`;
+  }
   h+=`</div>`;
   // The economy now trades over the JUMP-LANE network — flag any market worlds cut off from it.
   { let disc=[]; try{ disc=ECON.disconnected(); }catch(e){}
