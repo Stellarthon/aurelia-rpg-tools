@@ -4701,6 +4701,17 @@ const HX = (function(){
   };
   const gShort = g => (g||'').replace('Common ','');
   const tradeGoods = new Set();   // which goods' flows are drawn (empty = none); toggled from the legend grid
+  // Shortest path over the always-flyable commercial (lore) routes — the graph the
+  // economy actually trades along. Used to route a convoy when no surveyed jump-lane
+  // route exists, so it follows established lanes instead of cutting across open space.
+  function lorePath(fromId, toId){
+    const M = (typeof GX_MAP!=='undefined') ? GX_MAP : null; if(!M||!M[fromId]||!M[toId]) return null;
+    const links = id => { const n=M[id]; return (n&&(n._loreLinks||n.connections))||[]; };
+    const prev={}; prev[fromId]=fromId; const q=[fromId];
+    while(q.length){ const u=q.shift(); if(u===toId) break; links(u).forEach(v=>{ if(M[v] && !(v in prev)){ prev[v]=u; q.push(v); } }); }
+    if(!(toId in prev)) return null;
+    const path=[toId]; let c=toId; while(c!==fromId){ c=prev[c]; path.unshift(c); } return path;
+  }
   function drawTrade(layer){
     if(typeof window.ECON==='undefined' || !ECON.active()) return;
     let st; try{ st=ECON.state; }catch(e){ return; }
@@ -4727,15 +4738,25 @@ const HX = (function(){
         flowG.appendChild(NS('polygon',{points:`${x2},${y2} ${x2-ux*6-uy*3.4},${y2-uy*6+ux*3.4} ${x2-ux*6+uy*3.4},${y2-uy*6-ux*3.4}`,fill:col,opacity:0.75,'pointer-events':'none'}));
       });
     }
-    // 2) Trader convoys — a ship marker along each agent's route + cargo/destination label.
+    // 2) Trader convoys — route each along the fuel-optimal JUMP-LANE path (not a straight
+    //    line), draw that multi-hop polyline, and place the ship marker along it by progress.
     const week=st.week;
     ((ECON.agents&&ECON.agents())||[]).forEach(a=>{ if(!a.route) return;
       const f=BY_ID[a.route.from], t=BY_ID[a.route.to]; if(!f||!t) return;
-      const pf=axialPx(f.q,f.r), pt=axialPx(t.q,t.r);
-      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.1,Math.min(0.9,(week-a.route.began)/(a.route.eta-a.route.began)));
-      const x=pf.x+(pt.x-pf.x)*pr, y=pf.y+(pt.y-pf.y)*pr, z=4.2;
-      const gg=NS('g',{'pointer-events':'none'});
-      gg.appendChild(NS('line',{x1:pf.x,y1:pf.y,x2:pt.x,y2:pt.y,stroke:'#f4d35e','stroke-width':0.7,opacity:0.28,'stroke-dasharray':'2,3'}));
+      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.06,Math.min(0.94,(week-a.route.began)/(a.route.eta-a.route.began)));
+      let nodes=null; try{ nodes=bestRoute(f,t); }catch(e){}
+      let pts;
+      if(nodes && nodes.length>1) pts=nodes.map(n=>axialPx(n.q,n.r));                      // surveyed jump-lane, fuel-optimal
+      else { const idp=lorePath(a.route.from,a.route.to);                                  // else the always-flyable commercial routes
+        if(idp && idp.length>1) pts=idp.map(id=>BY_ID[id]).filter(Boolean).map(n=>axialPx(n.q,n.r)); }
+      if(!pts || pts.length<2) pts=[axialPx(f.q,f.r), axialPx(t.q,t.r)];                    // last resort: direct
+      // walk the polyline to the progress point
+      const seg=[]; let total=0; for(let i=0;i<pts.length-1;i++){ const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y); seg.push(d); total+=d; }
+      let x=pts[0].x, y=pts[0].y;
+      if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
+        const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
+      const z=4.2, gg=NS('g',{'pointer-events':'none'});
+      gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:'#f4d35e','stroke-width':0.8,opacity:0.3,'stroke-dasharray':'2,3'}));
       gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:'#f4d35e',stroke:'#04060e','stroke-width':1}));
       const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
       gg.appendChild(lbl);
