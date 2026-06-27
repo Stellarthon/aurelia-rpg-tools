@@ -4562,7 +4562,10 @@ const HX = (function(){
   function mktPressure(sys,goodName){ const key=(sys.id||sys.label||'')+'|'+goodName;
     // When the Level-2 sim is live and tracks this world+good, real stockpiles
     // drive the price (scarcity = dearer). Otherwise fall back to seeded noise.
-    try { if(window.ECON && ECON.active()){ const sp=ECON.pressure(sys.id,goodName); if(sp!=null) return clamp(sp,-4,4); } } catch(e){}
+    try { if(window.ECON && ECON.active()){ const sp=ECON.pressure(sys.id,goodName);
+      // Sim is the spine; layer a light ±1 seeded texture so steady prices still
+      // breathe week-to-week and world-to-world without overriding the sim signal.
+      if(sp!=null){ const tex=seedScore('mkt-tex|'+key+'|'+imperialWeek())*0.5; return clamp(Math.round(sp+tex),-4,4); } } } catch(e){}
     const quirk=seedScore('mkt-bias|'+key);                       // persistent per system+good (the randomised supply/demand)
     const flux =seedScore('mkt-flux|'+key+'|'+imperialWeek());    // shifts each Imperial week (calendar fluctuation)
     return clamp(quirk+flux,-4,4); }
@@ -13686,12 +13689,25 @@ window.ECON = (function(){
     return D;
   }
 
+  // Settle the seeded (full) stock forward a few weeks with no shocks to find each
+  // world+good's natural resting level — the reference pressure() reads deviation
+  // from. Runs on a scratch copy so it touches neither the live state nor the clock,
+  // and is deterministic (fixed profiles/topology) → identical baseline everywhere.
+  function settleBaseline(seedStock){
+    const prev = state;
+    state = { week:0, active:false, stock: JSON.parse(JSON.stringify(seedStock)), transit:[], shocks:[], log:[] };
+    for(let i=1;i<=16;i++) step(i);
+    const base = state.stock;
+    state = prev;
+    return base;
+  }
+
   function freshState(){
     buildTopology();
     const stock = {};
     Object.values(worlds).forEach(w=>{ stock[w.id]={};
       SIM_GOODS.forEach(g=>{ const s = orderUpTo(w,g); if(s>0 || w.prod[g]) stock[w.id][g] = Math.round(s); }); });  // seed full (incl. pipeline) so there's no cold-start scramble
-    return { week: curWeek(), active:false, stock, transit:[], shocks:[], log:[] };
+    return { week: curWeek(), active:false, stock, transit:[], shocks:[], log:[], base: settleBaseline(stock) };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -13763,11 +13779,23 @@ window.ECON = (function(){
     if(now>state.week && state.active){ for(let wk=state.week+1; wk<=now; wk++) step(wk); save(); }
     else if(now!==state.week){ state.week=now; } }
 
+  // Price pressure = signed deviation of current stock from this world+good's own
+  // settled equilibrium (state.base). 0 = at its normal level (steady baseline for
+  // every world regardless of how high or low it naturally rests); negative = drawn
+  // down below normal → dearer; positive = glutted above normal → cheaper. A shock
+  // that thins a buffer reads as real dearness immediately, propagating down a trade
+  // spine and decaying with distance, so the sim "moves" at the player trade console.
+  // Self-calibrating from the deterministic baseline → identical prices on every device.
   function pressure(id, good){
     if(!state || !state.active || !worlds || !worlds[id] || GOODS[good]==null) return null;
     const w = worlds[id]; if(!(w.cons[good]||w.prod[good]||recipeDraw(w,good))) return null;
-    const s = safety(w,good); if(s<=0) return null;
-    return Math.max(-4, Math.min(4, Math.round((stk(id,good)/s - 1)*4)));
+    const ref = (state.base && state.base[id] && state.base[id][good]) || 0;
+    // Only price worlds that hold a real working stock of this good (≥~1wk of normal
+    // cover). Isolated frontier worlds the trade network never reaches settle to ~nothing
+    // — they aren't a market in the sim's goods, so they keep riding the existing seeded
+    // noise (return null) instead of reading a phantom permanent crisis.
+    if(ref < Math.max(1, demandFor(w,good))) return null;
+    return Math.max(-4, Math.min(4, Math.round((stk(id,good)/ref - 1)*8)));
   }
 
   async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
