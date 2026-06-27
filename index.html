@@ -13907,9 +13907,40 @@ window.ECON = (function(){
     return out;
   }
 
+  // A logged party cargo run nudges the marginal price: buying good G at `from`
+  // tightens it there, selling at `to` eases it there. Modelled in price-NOTCH space
+  // (1 notch = ref/8 of stock, since pressure = (stk/ref−1)*8) so a player-scale hold
+  // registers despite the kt-scale sim. Destination relief is amplified by how short
+  // it already is — running relief into a crisis matters most — and every effect is
+  // capped so a single run can't erase a shortage or crash a source.
+  const TONS_PER_NOTCH = 300;   // tons ≈ one price notch into a balanced market (tunable game-feel knob)
+  function refOf(id, good){ return (state.base && state.base[id] && state.base[id][good]) || (worlds[id] ? safety(worlds[id],good) : 0); }
+  function applyRun(from, good, to, tons){
+    ensure();
+    if(!state || GOODS[good]==null) return { ok:false, msg:'Pick a tracked good' };
+    tons = Math.max(0, Math.round(+tons||0)); if(tons<=0) return { ok:false, msg:'Enter a tonnage' };
+    if(from===to) return { ok:false, msg:'From and To must differ' };
+    const W = tons / TONS_PER_NOTCH, moves = [];
+    if(to && worlds[to]){
+      const refD = refOf(to,good), pB = pressure(to,good), shortfall = (pB!=null && pB<0) ? -pB : 0;
+      const notches = Math.min(W * (1 + shortfall*0.6), 2);          // shortage-amplified, capped
+      if(refD>0 && notches>0){ setStk(to,good, stk(to,good) + notches*refD/8);
+        moves.push({ label:worlds[to].label, dir:'eased', notches:+notches.toFixed(2) }); }
+    }
+    if(from && worlds[from]){
+      const refS = refOf(from,good), notches = Math.min(W*0.5, 1);   // pulling supply out, smaller + capped
+      if(refS>0 && notches>0){ setStk(from,good, Math.max(0, stk(from,good) - notches*refS/8));
+        moves.push({ label:worlds[from].label, dir:'tightened', notches:+notches.toFixed(2) }); }
+    }
+    const fl = from&&worlds[from]?worlds[from].label:'—', tl = to&&worlds[to]?worlds[to].label:'—';
+    log(state.week, `Cargo run · ${tons}t ${good.replace('Common ','')} ${fl}→${tl}`);
+    save();
+    return { ok:true, moves };
+  }
+
   return {
     GOODS, SIM_GOODS, PRESETS,
-    ensure, advance, syncToDate, pressure, intel, fire, cancel, reset, load, save,
+    ensure, advance, syncToDate, pressure, intel, applyRun, fire, cancel, reset, load, save,
     get state(){ ensure(); return state; },
     worlds(){ ensure(); return worlds; },
     active(){ return !!(state && state.active); },
@@ -13921,6 +13952,7 @@ window.ECON = (function(){
 
 // ── Living Economy — referee console (panel + render) ───────────────────────
 let econPanelOpen = false, econCollapsed = false;
+let econRunSel = { from:'cypress', good:'Common Consumables', to:'aurelia', tons:30 };   // sticky cargo-run form
 const ECON_WATCH = ['erebus','profit-margin','graveyard','kronos','the-anvil','castor','cypress','the-garden','bastion','sol','aurelia','vesta','avalon','warehouse'];
 
 function toggleEconPanel(){
@@ -13941,6 +13973,20 @@ function econStep(n){ ECON.advance(n); renderEconPanel(); if(currentView==='gala
 function econToggleActive(){ ECON.setActive(!ECON.active()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 function econReset(){ if(confirm('Reset the economy to seeded starting stocks?')){ ECON.reset(); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); } }
 function econCancelShock(i){ ECON.cancel(i); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econApplyRun(){
+  econRunSel = {
+    from: document.getElementById('econ-run-from').value,
+    good: document.getElementById('econ-run-good').value,
+    to:   document.getElementById('econ-run-to').value,
+    tons: document.getElementById('econ-run-tons').value
+  };
+  const r = ECON.applyRun(econRunSel.from, econRunSel.good, econRunSel.to, econRunSel.tons);
+  if(typeof showToast==='function'){
+    if(r && r.ok){ const m = r.moves.map(x=>`${x.label} ${x.dir}`).join(' · '); showToast('Cargo run applied' + (m?' — '+m:' (no effect)')); }
+    else showToast((r&&r.msg)||'Run failed','error');
+  }
+  renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
 
 function renderEconPanel(){
   const body=document.getElementById('econ-body'); if(!body) return;
@@ -13961,6 +14007,21 @@ function renderEconPanel(){
     st.shocks.forEach((s,i)=>{ const ttl=(s.until!=null)?` · ends wk ${s.until}`:'';
       h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
   h+=`</div>`;
+  // Cargo run — players move the marginal price by hauling goods world→world
+  { const wopts = Object.values(ECON.worlds()).sort((a,b)=>a.label.localeCompare(b.label));
+    const wsel = (sel)=> wopts.map(w=>`<option value="${w.id}"${w.id===sel?' selected':''}>${escQH(w.label)}</option>`).join('');
+    const gsel = ECON.SIM_GOODS.filter(g=>!ECON.GOODS[g].internal).map(g=>`<option value="${g}"${g===econRunSel.good?' selected':''}>${g.replace('Common ','')}</option>`).join('');
+    const ist='background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:5px;padding:3px 4px;font-size:11px';
+    h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+    h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Cargo run — move the margin</div>`;
+    h+=`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">`;
+    h+=`<select id="econ-run-good" style="${ist}">${gsel}</select>`;
+    h+=`<span style="font-size:11px;color:var(--tx1)">from</span><select id="econ-run-from" style="${ist}">${wsel(econRunSel.from)}</select>`;
+    h+=`<span style="font-size:11px;color:var(--tx1)">to</span><select id="econ-run-to" style="${ist}">${wsel(econRunSel.to)}</select>`;
+    h+=`<input id="econ-run-tons" type="number" min="0" step="5" value="${econRunSel.tons}" style="${ist};width:62px" title="Tons hauled"> <span style="font-size:11px;color:var(--tx1)">t</span>`;
+    h+=`<button onclick="econApplyRun()" style="background:#1d3a4a;border:1px solid #3f7d9d;color:#bfe0ea;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">🚚 Apply run</button>`;
+    h+=`</div><div style="font-size:10px;color:var(--tx1);margin-top:4px">Buying tightens the source, selling eases the destination — relief into a shortage moves price most. Capped per run.</div>`;
+    h+=`</div>`; }
   h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Stockpiles — weeks of cover · price effect</div>`;
   h+=`<table style="width:100%;border-collapse:collapse;font-size:11px">`;
   ECON_WATCH.forEach(id=>{ const w=ECON.worlds()[id]; if(!w) return;
