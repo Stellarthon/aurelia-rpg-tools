@@ -5721,6 +5721,10 @@ const ORR_COS = Math.cos(ORR_TILT), ORR_SIN = Math.sin(ORR_TILT);
 // Max belt dots that ANIMATE per orrery render (across all belts). Excess dots
 // draw static — bounds per-frame compositor cost on dense/multi-belt systems.
 const ORR_ANIM_DOT_BUDGET = 180;
+// Max belt dots DRAWN per orrery render (across all belts). Beyond this we stop
+// emitting dots entirely, so a system with many/dense belts can't balloon the DOM
+// to thousands of <circle>s. The visual field stays full at typical densities.
+const ORR_DOT_BUDGET = 700;
 const ORR_INNER_A = 75;    // semi-major of orbit slot 1
 const ORR_OUTER_A = 435;   // semi-major of the outermost slot
 const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
@@ -5753,7 +5757,18 @@ function seedFromString(str){
 }
 function lcgNext(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
 
+// Coalesce rebuilds: the player poll, design-mode edits, and several view paths
+// can all call buildOrrery() in a burst. Re-stringifying the whole SVG each time is
+// the hot path, so collapse a burst into ONE rebuild on the next animation frame.
+// (selectBody renders its detail panel from separate DOM, so a one-frame-late SVG
+// is imperceptible and safe.)
+let _orreryRaf = 0;
 function buildOrrery(){
+  if(_orreryRaf) return;
+  if(typeof requestAnimationFrame !== 'function'){ buildOrreryNow(); return; }
+  _orreryRaf = requestAnimationFrame(() => { _orreryRaf = 0; buildOrreryNow(); });
+}
+function buildOrreryNow(){
   const svg = document.getElementById("orrery-svg");
   if(!svg) return;
   const W=800, H=500;
@@ -5815,11 +5830,15 @@ function buildOrrery(){
       <stop offset="0%" stop-color="#0d1a35"/>
       <stop offset="100%" stop-color="#070a10"/>
     </radialGradient>`;
-  // A shading gradient for every non-star, non-belt body (generic — works for
-  // referee-added bodies as well as the original ones).
+  // A shading gradient per non-star, non-belt body — but keyed by COLOUR, so N
+  // bodies sharing a colour share ONE gradient def instead of emitting one apiece.
+  const gradIds = {}; let gradSeq = 0;
+  const gradId = (color) => { const c = color || '#888'; if(!(c in gradIds)) gradIds[c] = 'pg-'+(gradSeq++); return gradIds[c]; };
+  const seenGrad = {};
   bodies.forEach(b => {
     if(b.isStar || isBeltBody(b)) return;
-    html += `<radialGradient id="pg-${b.id}" cx="65%" cy="30%" r="75%">
+    const id = gradId(b.color); if(seenGrad[id]) return; seenGrad[id] = 1;
+    html += `<radialGradient id="${id}" cx="65%" cy="30%" r="75%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
       <stop offset="35%" stop-color="${b.color}" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000820" stop-opacity="0.45"/>
@@ -5867,15 +5886,23 @@ function buildOrrery(){
   // not GPU-composited, so hundreds of them melt frame rate on tablet hardware.
   // Cap how many dots ANIMATE (across all belts) — the rest render identically
   // but static. Visual density is unchanged; the jitter is imperceptible anyway.
-  let animBudget = ORR_ANIM_DOT_BUDGET;
+  // When motion is off (prefers-reduced-motion or the referee's animations toggle),
+  // emit every belt dot static — no vibe class, no per-dot animation timing. The CSS
+  // already neutralises .ast then, but skipping the work keeps the markup lean too.
+  const motionOff = (typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+                 || (typeof rootEl!=='undefined' && rootEl && rootEl.classList.contains('anim-off'));
+  let animBudget = motionOff ? 0 : ORR_ANIM_DOT_BUDGET;
+  let dotBudget = ORR_DOT_BUDGET;                    // total drawn dots across all belts
   bodies.forEach(b => {
     if(!isBeltBody(b) || !b.orbitPos) return;
     const [va, vb] = orbitAxes(b.orbitPos, maxP);
     const col = b.color || '#8B7355';
     const density = Math.max(20, Math.min(600, b.beltDensity || 160));
+    const draw = Math.max(0, Math.min(density, dotBudget));   // cull once the global budget is spent
+    dotBudget -= draw;
     const VIBE = ['va','vb','vc','vd','ve','vf','vg','vh'];
     let rng = seedFromString(b.id || 'belt');
-    for(let i=0;i<density;i++){
+    for(let i=0;i<draw;i++){
       rng = lcgNext(rng); const arcFrac = (rng % 10000) / 10000;
       rng = lcgNext(rng); const radialJitter = ((rng % 10000) / 10000 - 0.5) * 0.28;
       rng = lcgNext(rng); const dotSize = 0.7 + (rng % 10000)/10000 * 1.8;
@@ -5917,7 +5944,7 @@ function buildOrrery(){
   planets.forEach(b => {
     const [px,py] = orbitPoint(...orbitAxes(b.orbitPos, maxP), ORR_PLANET_T);
     const r = b.displayRadius || 7;
-    const gid = `pg-${b.id}`;
+    const gid = gradId(b.color);
     if(selectedBody===b.id) html += `<circle cx="${px}" cy="${py}" r="${r+7}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
     html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
@@ -5979,7 +6006,7 @@ function buildOrrery(){
       const mr = 4;
       html += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="${m.color}" ${m.decoration==='dim'?'opacity="0.4"':''} data-body="${m.id}" class="body-node" style="cursor:pointer"/>`;
-      const gid = `pg-${m.id}`;
+      const gid = gradId(m.color);
       const tUrlM = textureUrlFor(m);
       if(tUrlM){
         const tm = escAttr(tUrlM);
