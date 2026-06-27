@@ -144,8 +144,6 @@ textarea{font-family:var(--font)}
 .npc-row-del:hover{color:#d45050}
 .npc-row-add{font-size:10px;font-family:monospace;color:#9B59B6;background:transparent;border:1px dashed #9B59B6;border-radius:5px;padding:6px;cursor:pointer;width:100%;margin-top:4px}
 .npc-gen-hint{font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:14px}
-.npc-ai-status{font-size:11px;color:var(--tx1);font-style:italic;margin-top:10px;min-height:16px}
-.npc-ai-status.error{color:#d45050;font-style:normal}
 .npc-preview{background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:12px;margin-top:12px}
 .npc-preview-name{font-size:14px;font-weight:700;color:#9B59B6}
 .npc-preview-role{font-size:11px;color:var(--tx1);margin-bottom:8px}
@@ -3004,7 +3002,6 @@ input#ui-scale-range{
       <div class="npc-creator-tabs">
         <button class="npc-creator-tab on" id="npc-tab-manual" onclick="setNpcCreatorMode('manual')">✍ Manual</button>
         <button class="npc-creator-tab" id="npc-tab-random" onclick="setNpcCreatorMode('random')">🎲 Random</button>
-        <button class="npc-creator-tab" id="npc-tab-ai" onclick="setNpcCreatorMode('ai')">✨ AI</button>
       </div>
       <div id="npc-creator-body"></div>
     </div>
@@ -15412,7 +15409,7 @@ function closeNpcCreator(){
 
 function setNpcCreatorMode(mode){
   npcCreatorMode = mode;
-  ['manual','random','ai'].forEach(m => {
+  ['manual','random'].forEach(m => {
     const tab = document.getElementById('npc-tab-'+m);
     if(tab) tab.classList.toggle('on', m === mode);
   });
@@ -15431,8 +15428,6 @@ function renderNpcCreatorBody(){
     body.innerHTML = renderManualForm(areaLabel);
   } else if(npcCreatorMode === 'random'){
     body.innerHTML = renderRandomPanel(areaLabel);
-  } else if(npcCreatorMode === 'ai'){
-    body.innerHTML = renderAiPanel(areaLabel);
   }
 }
 
@@ -15522,72 +15517,7 @@ function rollRandomNpc(){
   renderNpcCreatorBody();
 }
 
-// ── AI panel ───────────────────────────────────────────────────────────────
-function renderAiPanel(areaLabel){
-  const d = npcCreatorDraft;
-  const preview = d ? renderNpcPreview(d) : '';
-  return `
-    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(areaLabel)}</b>. Describe the NPC you want (a phrase is enough) and the AI will write one that fits the Aurelia setting — Hegemony-controlled station, RSR undercurrent, copper-tinted world.</div>
-    <div class="npc-form-row">
-      <label class="npc-form-lbl">Prompt</label>
-      <textarea class="npc-form-textarea" id="npc-ai-prompt" placeholder="e.g. a jittery dockworker who owes money to the wrong people">${d && d._prompt ? escHtml(d._prompt) : ''}</textarea>
-    </div>
-    <div style="text-align:center">
-      <button class="npc-creator-btn primary" id="npc-ai-gen-btn" onclick="generateAiNpc()">✨ Generate NPC</button>
-    </div>
-    <div class="npc-ai-status" id="npc-ai-status"></div>
-    <div id="npc-ai-preview">${preview}</div>
-    ${d ? `<div class="npc-creator-footer">
-      <button class="npc-creator-btn" onclick="closeNpcCreator()">Cancel</button>
-      <button class="npc-creator-btn" onclick="editDraftInManual()">✍ Tweak first</button>
-      <button class="npc-creator-btn primary" onclick="saveDraftNpc()">Add this NPC</button>
-    </div>` : ''}`;
-}
-
-async function generateAiNpc(){
-  const promptEl = document.getElementById('npc-ai-prompt');
-  const status = document.getElementById('npc-ai-status');
-  const btn = document.getElementById('npc-ai-gen-btn');
-  const userPrompt = (promptEl ? promptEl.value : '').trim();
-  if(!userPrompt){ status.textContent = 'Describe the NPC first.'; status.classList.add('error'); return; }
-  status.classList.remove('error');
-  status.textContent = 'Generating…';
-  if(btn) btn.disabled = true;
-
-  const areaLabel = MAIN[cur] ? (curSub && MAIN[cur].subs && MAIN[cur].subs[curSub] ? MAIN[cur].subs[curSub].label : MAIN[cur].label) : '';
-
-  const sys = "You are generating an NPC for a Traveller 2nd Edition tabletop RPG campaign set on Aurelia Orbital Station — a Hegemony-controlled station orbiting a copper-tinted jewel world. There is an underground resistance (the RSR) and corporate interests (OmniSynth). Respond with ONLY a JSON object, no markdown, no preamble. Schema: {\"name\":string, \"role\":string (short, includes location like '" + areaLabel + "'), \"stats\":{\"STR\":int,\"DEX\":int,\"END\":int,\"INT\":int,\"EDU\":int,\"SOC\":int} (each 2-12, rolled like 2D6), \"skills\":string (comma-separated, e.g. 'Admin 2, Persuade 1'), \"rows\":[[label,text],...] (3-4 referee-facing detail rows like Manner, Wants, Hook, On the ship — concise, evocative, setting-appropriate)}. Keep it grounded and usable at the table.";
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        system: sys,
-        messages: [{ role: "user", content: "NPC to generate: " + userPrompt }]
-      })
-    });
-    if(!response.ok) throw new Error('API returned ' + response.status);
-    const data = await response.json();
-    let text = (data.content || []).map(c => c.type === 'text' ? c.text : '').join('').trim();
-    text = text.replace(/```json/gi,'').replace(/```/g,'').trim();
-    const npc = JSON.parse(text);
-    // Validate shape
-    if(!npc.name || !npc.stats){ throw new Error('Malformed NPC'); }
-    npc._prompt = userPrompt;
-    npcCreatorDraft = npc;
-    status.textContent = '';
-    renderNpcCreatorBody();
-  } catch(err){
-    status.classList.add('error');
-    status.textContent = 'Generation failed: ' + (err.message || 'unknown error') + '. Try again or use Manual/Random.';
-    if(btn) btn.disabled = false;
-  }
-}
-
-// ── Shared preview + save for random/AI drafts ─────────────────────────────
+// ── Shared preview + save for random drafts ────────────────────────────────
 function renderNpcPreview(npc){
   const stats = Object.entries(npc.stats||{}).map(([k,v]) => `${k} ${v}`).join('  ');
   const rows = (npc.rows||[]).map(r => `<div class="npc-preview-row"><b>${escHtml(r[0])}:</b> ${escHtml(r[1])}</div>`).join('');
@@ -15604,7 +15534,6 @@ function renderNpcPreview(npc){
 async function saveDraftNpc(){
   if(!npcCreatorDraft){ return; }
   const npc = { ...npcCreatorDraft };
-  delete npc._prompt;
   if(!npc.name){ showToast('NPC needs a name', 'error'); return; }
   await commitNewNpc(npc);
   closeNpcCreator();
