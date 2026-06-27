@@ -13280,6 +13280,10 @@ const MARKET_RUMOUR = {
     'The {place} has clamped down on {good} across its territory — supply is drying up and the price is climbing.',
     'Word is the {place} is restricting {good}. Whoever holds stock beyond their reach is sitting pretty.'
   ],
+  shock_tariff: [
+    'The {place} has slapped a tariff on {good} imports — it’s getting pricey behind their borders, and cheap outside them.',
+    'A {place} import tariff is choking {good} at the frontier. Brokers who can run it past customs stand to clean up.'
+  ],
   shortage: [
     'Stockpiles of {good} are running thin around {place}. Prices there won’t hold where they are.',
     'A buyer at {place} is quietly paying over the odds for {good}. That tells you everything.',
@@ -13319,7 +13323,7 @@ function pickMarketRumour(){
   if(!items || !items.length) return null;
   const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
   const key = item.kind === 'shock'
-    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : 'shock_block')
+    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
   const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
   const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
@@ -13783,7 +13787,7 @@ window.ECON = (function(){
     // active:true → the living economy is ON by default. A referee who explicitly
     // toggles it off persists active:false to the shared econ-state row, which
     // overrides this on load; the default only applies when no state is saved yet.
-    return { week: wk, active:true, stock, transit, shocks:[], log:[], base, agents: freshAgents(), tradersOn:true };
+    return { week: wk, active:true, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -13803,6 +13807,16 @@ window.ECON = (function(){
   function embargoed(a,b){
     return state.shocks.some(s=> s.kind==='embargo' &&
       ((s.facA===worlds[a].fac && s.facB===worlds[b].fac) || (s.facB===worlds[a].fac && s.facA===worlds[b].fac)));
+  }
+  // Tariff: a faction taxes cross-border IMPORTS of a good, so only a fraction gets
+  // through (the rest is priced out — kept at source). Softer than an embargo; the
+  // tariffing faction's worlds go short of the good while it piles up abroad.
+  function tariffMult(fromId, toId, good){
+    const tf = worlds[toId]&&worlds[toId].fac, ff = worlds[fromId]&&worlds[fromId].fac;
+    if(!tf || ff===tf) return 1;            // only bites cross-border imports INTO the tariffing faction
+    let m = 1;
+    state.shocks.forEach(s=>{ if(s.kind==='tariff' && s.faction===tf && (s.good==='*'||s.good===good)) m*=s.factor; });
+    return m;
   }
 
   // ── Level-3 trader agents (Independents) ──────────────────────────────────
@@ -13855,6 +13869,7 @@ window.ECON = (function(){
       const buyUnit=agentUnitPrice(best.g,best.b.p);
       let qty=Math.min(AGENT_CAP_QTY,best.b.room,best.s.room);
       if(buyUnit>0) qty=Math.min(qty,Math.floor(a.cap/buyUnit));
+      qty*=tariffMult(best.b.id,best.s.id,best.g);                    // tariff prices the convoy down at the border
       qty=Math.round(qty*100)/100; if(qty<0.5) return;
       setStk(best.b.id,best.g, stk(best.b.id,best.g)-qty); a.cap-=qty*buyUnit;
       state.transit.push({ good:best.g, qty, from:best.b.id, to:best.s.id, eta:week+Math.max(1,best.dist), agent:a.id });
@@ -13921,9 +13936,11 @@ window.ECON = (function(){
         for(const p of prods){
           if(need<=0) break;
           const surplus = stk(p.id,g) - safety(p,g); if(surplus<=0) continue;
-          const qty = Math.min(need, surplus); if(qty<=0) continue;
+          let qty = Math.min(need, surplus); if(qty<=0) continue;
+          qty *= tariffMult(p.id, w.id, g);                          // import tariff prices out part of the shipment
+          qty = Math.round(qty*100)/100; if(qty<=0) continue;
           setStk(p.id,g, stk(p.id,g)-qty);
-          state.transit.push({ good:g, qty:Math.round(qty*100)/100, from:p.id, to:w.id, eta: week + Math.max(1,D[p.id]) });
+          state.transit.push({ good:g, qty, from:p.id, to:w.id, eta: week + Math.max(1,D[p.id]) });
           need -= qty;
         }
       });
@@ -13960,7 +13977,7 @@ window.ECON = (function(){
   async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
     if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
   function reset(){ state = freshState(); state.active=true; save(); }
 
   const PRESETS = [
@@ -13977,8 +13994,13 @@ window.ECON = (function(){
     { id:'dockers',  label:'🚢 Dockworkers’ strike — The Warehouse', kind:'block', target:'warehouse', weeks:5 },
     // ── Politics: a faction-wide crackdown restricting a good across its space ──
     { id:'crackdown',label:'⚖ Hegemony crackdown — high-tech', kind:'crackdown', faction:'hegemony', good:'Advanced Electronics', factor:0.2, weeks:6 },
+    { id:'tariff',   label:'⚖ Hegemony import tariff — electronics', kind:'tariff', faction:'hegemony', good:'Common Electronics', factor:0.4, weeks:6 },
   ];
-  function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s); save(); }
+  function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s);
+    if(!state.history) state.history=[];
+    state.history.unshift({ label:s.label||s.kind, kind:s.kind, beganWk:state.week, endsWk:s.until });   // dated campaign timeline
+    if(state.history.length>40) state.history.length=40;
+    save(); }
   function cancel(i){ state.shocks.splice(i,1); save(); }
 
   function facName(id){ return (''+id).replace(/(^|[-_ ])(\w)/g, (m,a,b)=>(a?' ':'')+b.toUpperCase()).trim(); }
@@ -13991,7 +14013,7 @@ window.ECON = (function(){
     const out = [];
     state.shocks.forEach(s=>{
       let label;
-      if(s.kind==='crackdown') label = facName(s.faction);
+      if(s.kind==='crackdown' || s.kind==='tariff') label = facName(s.faction);
       else if(s.target && worlds[s.target]) label = worlds[s.target].label;
       else if(s.kind==='embargo') label = facName(s.facA)+' & '+facName(s.facB);
       else label = s.target || 'the lanes';
@@ -14167,6 +14189,18 @@ function renderEconPanel(){
     });
     h+=`<div style="font-size:10px;color:var(--tx1);margin-top:4px">Idle at baseline; they swarm to arbitrage shock-driven price gaps, easing shortages as they go.</div>`;
     h+=`</div>`; }
+  // Economic history — fired shocks as a dated campaign timeline
+  { const hist = ECON.state.history || [];
+    if(hist.length){
+      const dt = wk=>{ try{ return formatImperial(ordinalToImperial(wk*7)); }catch(e){ return 'wk '+wk; } };
+      h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Economic history</div>`;
+      hist.slice(0,12).forEach(e=>{
+        const active = e.endsWk==null || e.endsWk>=st.week;
+        const span = e.endsWk!=null ? `${dt(e.beganWk)} → ${dt(e.endsWk)}` : `${dt(e.beganWk)} → ongoing`;
+        h+=`<div style="font-size:11px;padding:1px 0;color:${active?'#e8a0a0':'#9fb0c8'}">${active?'⚡':'·'} ${escQH(e.label)} <span style="color:var(--tx1);font-size:10px">${span}</span></div>`;
+      });
+      h+=`</div>`;
+    } }
   h+=`<div style="padding:8px 10px"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Cascade log</div>`;
   if(!st.log.length) h+=`<div style="font-size:11px;color:var(--tx1)">No shortages yet — fire a shock and step the sim.</div>`;
   else st.log.slice(0,24).forEach(e=> h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0">wk ${e.week} · ${e.text}</div>`);
