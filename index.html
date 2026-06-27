@@ -144,8 +144,6 @@ textarea{font-family:var(--font)}
 .npc-row-del:hover{color:#d45050}
 .npc-row-add{font-size:10px;font-family:monospace;color:#9B59B6;background:transparent;border:1px dashed #9B59B6;border-radius:5px;padding:6px;cursor:pointer;width:100%;margin-top:4px}
 .npc-gen-hint{font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:14px}
-.npc-ai-status{font-size:11px;color:var(--tx1);font-style:italic;margin-top:10px;min-height:16px}
-.npc-ai-status.error{color:#d45050;font-style:normal}
 .npc-preview{background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:12px;margin-top:12px}
 .npc-preview-name{font-size:14px;font-weight:700;color:#9B59B6}
 .npc-preview-role{font-size:11px;color:var(--tx1);margin-bottom:8px}
@@ -3004,7 +3002,6 @@ input#ui-scale-range{
       <div class="npc-creator-tabs">
         <button class="npc-creator-tab on" id="npc-tab-manual" onclick="setNpcCreatorMode('manual')">✍ Manual</button>
         <button class="npc-creator-tab" id="npc-tab-random" onclick="setNpcCreatorMode('random')">🎲 Random</button>
-        <button class="npc-creator-tab" id="npc-tab-ai" onclick="setNpcCreatorMode('ai')">✨ AI</button>
       </div>
       <div id="npc-creator-body"></div>
     </div>
@@ -4461,6 +4458,87 @@ async function saveRouteBlocks(){
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
+// ═══ WORLD GENERATOR — one rules-correct MgT2e UWP + trade-code engine ═══════
+// Single source of truth shared by BOTH the galaxy map (HX.uwpOf — seeded,
+// per-device-deterministic) and the Add-Body / system auto-generators (Math.random).
+// Pass any rng()->[0,1); callers supply a seeded rng for reproducible map output.
+// Trade codes + uwpStr read fields flexibly so both the HX shape ({port,atmo,tl})
+// and the body-modal shape ({starport,atm,tech}) work unchanged.
+const WGEN = (function(){
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  function hashStr(s){ s=String(s); let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function mulberry(seed){ return function(){ seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function seededRng(str){ return mulberry(hashStr(str)); }
+  // Traveller extended hex: 0-9 then A.. skipping I and O (canonical).
+  const EHEX='0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  function ehex(n){ return EHEX[clamp(Math.round(n),0,EHEX.length-1)]; }
+  function d6(rng){ return 1 + Math.floor((rng||Math.random)()*6); }
+  function roll2d6(rng){ return d6(rng) + d6(rng); }
+  function genStarport(rng){ const r=roll2d6(rng); return r<=4?'E':r<=6?'D':r<=8?'C':r<=10?'B':'A'; }
+  // Tech Level: 1D + DMs (starport/size/atmo/hydro/pop/gov) — MgT2e RAW.
+  function genTechLevel(rng, starport, size, atm, hydro, pop, gov){
+    let dm=0;
+    dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
+    if(size<=1) dm+=2; else if(size<=4) dm+=1;
+    if(atm<=3 || atm>=10) dm+=1;
+    if(hydro===9) dm+=1; else if(hydro===10) dm+=2;
+    if(pop>=1 && pop<=5) dm+=1; else if(pop===9) dm+=2; else if(pop>=10) dm+=4;
+    if(gov===0 || gov===5) dm+=1; else if(gov===7) dm+=2; else if(gov>=13) dm-=2;
+    return clamp(d6(rng)+dm, 0, 33);
+  }
+  // Generate a UWP. opts:{ rng, port, core, deep, tlFloor }.
+  //  rng     — defaults Math.random; pass a seeded rng for reproducible output.
+  //  port    — fixed starport (map worlds derive it from faction); omitted → rolled.
+  //  core    — +1 pop and a +2 tech bump for high-civilisation core worlds (map only).
+  //  deep    — minimal deep-space outpost profile (map only).
+  //  tlFloor — minimum tech level (map starports imply a floor).
+  // Returns { port, size, atmo, hydro, pop, gov, law, tl } (UWP order).
+  function genUWP(opts){
+    opts = opts || {};
+    const rng = opts.rng || Math.random;
+    const port = opts.port || genStarport(rng);
+    if(opts.deep){ return { port, size:0, atmo:0, hydro:0, pop: rng()<.5?1:2, gov:0, law:0, tl: opts.core?12:10 }; }
+    const size = clamp(roll2d6(rng)-2, 0, 10);
+    const atmo = size===0 ? 0 : clamp(roll2d6(rng)-7+size, 0, 15);
+    let hydro;
+    if(size<=1) hydro=0;
+    else { let dm=0; if(atmo<=1||atmo>=10) dm-=4; hydro = clamp(roll2d6(rng)-7+atmo+dm, 0, 10); }   // hydro DM keys off ATMOSPHERE (RAW), not size
+    let pop = clamp(roll2d6(rng)-2, 0, 12); if(opts.core) pop = clamp(pop+1, 0, 12);
+    const gov = pop===0 ? 0 : clamp(roll2d6(rng)-7+pop, 0, 15);
+    const law = pop===0 ? 0 : clamp(roll2d6(rng)-7+gov, 0, 15);
+    let tl = pop===0 ? 0 : genTechLevel(rng, port, size, atmo, hydro, pop, gov);
+    if(opts.core) tl = clamp(tl+2, 0, 33);
+    if(opts.tlFloor!=null) tl = clamp(Math.max(tl, opts.tlFloor), 0, 33);
+    return { port, size, atmo, hydro, pop, gov, law, tl };
+  }
+  // Field-flexible accessors so both UWP shapes work.
+  const fAtm = u => (u.atmo!=null?u.atmo:u.atm)|0, fTl = u => (u.tl!=null?u.tl:u.tech)|0, fPort = u => u.port||u.starport;
+  function uwpStr(u){ return fPort(u)+ehex(u.size)+ehex(fAtm(u))+ehex(u.hydro)+ehex(u.pop)+ehex(u.gov)+ehex(u.law)+'-'+ehex(fTl(u)); }
+  // Canonical MgT2e trade codes (single source of truth).
+  function tradeCodes(u){
+    const c=[], size=u.size|0, atmo=fAtm(u), hydro=u.hydro|0, pop=u.pop|0, gov=u.gov|0, law=u.law|0, tl=fTl(u);
+    if(atmo>=4&&atmo<=9 && hydro>=4&&hydro<=8 && pop>=5&&pop<=7) c.push('Ag');
+    if(size===0&&atmo===0&&hydro===0) c.push('As');
+    if(pop===0&&gov===0&&law===0) c.push('Ba');
+    if(atmo>=2&&hydro===0) c.push('De');
+    if(atmo>=10&&hydro>=1) c.push('Fl');
+    if(size>=6&&size<=8 && [5,6,8].includes(atmo) && hydro>=5&&hydro<=7) c.push('Ga');
+    if(pop>=9) c.push('Hi');
+    if(tl>=12) c.push('Ht');                                           // High-Tech: TL ≥ 12
+    if(atmo<=1&&hydro>=1) c.push('Ic');
+    if([0,1,2,4,7,9,10,11,12].includes(atmo) && pop>=9) c.push('In'); // Industrial: canonical atmo set
+    if(pop>=1&&pop<=3) c.push('Lo');
+    if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
+    if(pop>=4&&pop<=6) c.push('Ni');
+    if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
+    if([6,8].includes(atmo) && pop>=6&&pop<=8 && gov>=4&&gov<=9) c.push('Ri');
+    if(atmo===0) c.push('Va');
+    if(hydro===10) c.push('Wa');
+    return c;
+  }
+  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes };
+})();
+
 // ═══ GALAXY MAP — HEX-JUMP ENGINE (ported onto main; replaces the Orion render layer) ═══
 const HX = (function(){
   // ── Astrometry reference (real J2000 distances, ly) — joined to GALAXY_NODES
@@ -4611,40 +4689,19 @@ const HX = (function(){
   // ── UWP + trade (MgT2e). Prefer the real surveyed UWP; else generate deterministically. ──
   function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
   function mulberry(seed){ return function(){ seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-  function eHex(n){ n=clamp(Math.round(n),0,33); return n<10?String(n):String.fromCharCode(55+n); }
+  function eHex(n){ return WGEN.ehex(n); }
+  // Uncharted worlds get a deterministic UWP from the shared rules-correct generator,
+  // seeded on the star name so every device produces the same world. Surveyed worlds
+  // (realMainWorld) keep their authored UWP. Faction core worlds run high-tech; the
+  // starport implies a tech floor.
   function uwpOf(s){ if(s._uwp) return s._uwp;
     const real=realMainWorld(s.systemId); if(real){ s._uwp=real.uwp; return real.uwp; }
-    const r=mulberry(hashStr(s.star||s.label)), d6=()=>1+Math.floor(r()*6), twoD=()=>d6()+d6();
     const core=['hegemony','omnisynth','uhc','sanhedrin'].includes(s.fac), port=portOf(s);
-    if(s.deep){ const u={port,size:0,atmo:0,hydro:0,pop:r()<.5?1:2,gov:0,law:0,tl:core?12:10}; s._uwp=u; return u; }
-    const size=clamp(twoD()-2,0,10);
-    const atmo=clamp(twoD()-7+size,0,15);
-    let hydro=twoD()-7+size; if(atmo<=1||atmo>=10) hydro-=4; hydro=clamp(hydro,0,10);
-    let pop=clamp(twoD()-2,0,12); pop=core?clamp(pop+1,0,12):pop;
-    const gov=clamp(twoD()-7+pop,0,15), law=clamp(twoD()-7+gov,0,15);
-    const portTL={A:6,B:4,C:2,D:0,E:0,X:-4}[port]||0, tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
-    const tl=clamp(Math.max(twoD()-7+portTL+(core?2:0)+(pop>=9?1:0),tlFloor),0,15);
-    const u={port,size,atmo,hydro,pop,gov,law,tl}; s._uwp=u; return u; }
-  function uwpStr(s){ const u=uwpOf(s); return u.port+eHex(u.size)+eHex(u.atmo)+eHex(u.hydro)+eHex(u.pop)+eHex(u.gov)+eHex(u.law)+'-'+eHex(u.tl); }
-  function tradeCodes(s){ const u=uwpOf(s), c=[], {size,atmo,hydro,pop,gov,law,tl}=u;
-    if(atmo>=4&&atmo<=9&&hydro>=4&&hydro<=8&&pop>=5&&pop<=7) c.push('Ag');
-    if(size===0&&atmo===0&&hydro===0) c.push('As');
-    if(pop===0&&gov===0&&law===0) c.push('Ba');
-    if(atmo>=2&&hydro===0) c.push('De');
-    if(atmo>=10&&hydro>=1) c.push('Fl');
-    if([6,7,8].includes(size)&&[5,6,8].includes(atmo)&&hydro>=5&&hydro<=7) c.push('Ga');
-    if(pop>=9) c.push('Hi');
-    if(tl>=12) c.push('Ht');
-    if(atmo<=1&&hydro>=1) c.push('Ic');
-    if([0,1,2,4,7,9].includes(atmo)&&pop>=9) c.push('In');
-    if(pop>=1&&pop<=3) c.push('Lo');
-    if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
-    if(pop>=4&&pop<=6) c.push('Ni');
-    if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
-    if([6,8].includes(atmo)&&pop>=6&&pop<=8&&gov>=4&&gov<=9) c.push('Ri');
-    if(atmo===0) c.push('Va');
-    if(hydro===10) c.push('Wa');
-    return c; }
+    const tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
+    const u=WGEN.genUWP({ rng:WGEN.seededRng(s.star||s.label), port, core, deep:s.deep, tlFloor });
+    s._uwp=u; return u; }
+  function uwpStr(s){ return WGEN.uwpStr(uwpOf(s)); }
+  function tradeCodes(s){ return WGEN.tradeCodes(uwpOf(s)); }
   const TRADE_GOODS=[
     {name:'Common Electronics',base:20000,buy:{In:2,Ht:3,Ri:1},sell:{Ni:2,Lo:1,Po:1},avail:'all'},
     {name:'Common Industrial',base:10000,buy:{Na:2,In:5},sell:{Na:3,Ag:2},avail:'all'},
@@ -4686,16 +4743,43 @@ const HX = (function(){
   // so every device computes the same prices for the same Imperial week.
   function imperialWeek(){ return (typeof imperialDate!=='undefined'&&typeof imperialOrdinal==='function')?Math.floor(imperialOrdinal(imperialDate)/7):0; }
   function seedScore(tag){ const r=mulberry(hashStr(tag)); return Math.round(r()*4)-2; }   // −2..+2
+  // ── Simple (default) economy ────────────────────────────────────────────────
+  // A pure, deterministic price pressure derived STATICALLY from each world's
+  // produces/demands profile — no simulation, no stepping, no logistics. Reads the
+  // SAME data the full sim uses (ECON.effectiveProfile → DEF table layered with the
+  // Design-Mode "Production & Consumption" overrides), so editing a world's economy
+  // once drives BOTH modes. Same sign convention as mktPressure:
+  //    produces the good          → +  (local glut → cheaper to buy / weaker to sell)
+  //    demands it (and makes none) → −  (local scarcity → dearer to buy / stronger to sell)
+  //    neither                     → 0  (+ a trivial deterministic ±1 wobble for texture)
+  // Magnitude scales crudely with how strongly the world makes/uses it (dedicated vs
+  // incidental). Clamped to the same ±4 band so it composes with the trade-code DMs.
+  function simpleMag(rate){ rate=+rate||0; if(rate<=0) return 0; return rate>=40?3 : rate>=10?2 : 1; }
+  function simplePressure(worldId, goodName){
+    let p = 0;
+    try {
+      if(window.ECON && ECON.effectiveProfile){
+        const prof = ECON.effectiveProfile(worldId);
+        if(prof){
+          const prod = (prof.prod && prof.prod[goodName]) || 0;
+          let demand = (prof.cons && prof.cons[goodName]) || 0;
+          try { const ai = ECON.autoInputsOf(prof.prod||{}); demand += (ai[goodName]||0); } catch(e){}   // recipe inputs the world auto-draws are genuine demand
+          if(prod > 0) p = simpleMag(prod);            // produces it → glut → positive
+          else if(demand > 0) p = -simpleMag(demand);  // imports it → scarcity → negative
+        }
+      }
+    } catch(e){}
+    if(p === 0) p = clamp(seedScore('simple|'+(worldId||'')+'|'+goodName), -1, 1);   // tiny deterministic texture, no time component
+    return clamp(p, -4, 4);
+  }
   function mktPressure(sys,goodName){ const key=(sys.id||sys.label||'')+'|'+goodName;
-    // When the Level-2 sim is live and tracks this world+good, real stockpiles
-    // drive the price (scarcity = dearer). Otherwise fall back to seeded noise.
+    // FULL-simulation mode (referee opt-in): live stockpiles drive the price
+    // (scarcity = dearer). A light ±1 seeded texture lets steady prices breathe
+    // week-to-week without overriding the sim signal.
     try { if(window.ECON && ECON.active()){ const sp=ECON.pressure(sys.id,goodName);
-      // Sim is the spine; layer a light ±1 seeded texture so steady prices still
-      // breathe week-to-week and world-to-world without overriding the sim signal.
       if(sp!=null){ const tex=seedScore('mkt-tex|'+key+'|'+imperialWeek())*0.5; return clamp(Math.round(sp+tex),-4,4); } } } catch(e){}
-    const quirk=seedScore('mkt-bias|'+key);                       // persistent per system+good (the randomised supply/demand)
-    const flux =seedScore('mkt-flux|'+key+'|'+imperialWeek());    // shifts each Imperial week (calendar fluctuation)
-    return clamp(quirk+flux,-4,4); }
+    // SIMPLE mode (default), or a good the sim doesn't track: static produces/demands.
+    return simplePressure(sys.id||sys.label, goodName); }
   function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
     const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
@@ -5637,6 +5721,10 @@ const ORR_COS = Math.cos(ORR_TILT), ORR_SIN = Math.sin(ORR_TILT);
 // Max belt dots that ANIMATE per orrery render (across all belts). Excess dots
 // draw static — bounds per-frame compositor cost on dense/multi-belt systems.
 const ORR_ANIM_DOT_BUDGET = 180;
+// Max belt dots DRAWN per orrery render (across all belts). Beyond this we stop
+// emitting dots entirely, so a system with many/dense belts can't balloon the DOM
+// to thousands of <circle>s. The visual field stays full at typical densities.
+const ORR_DOT_BUDGET = 700;
 const ORR_INNER_A = 75;    // semi-major of orbit slot 1
 const ORR_OUTER_A = 435;   // semi-major of the outermost slot
 const ORR_AXIS_RATIO = 0.4; // semi-minor / semi-major
@@ -5669,7 +5757,18 @@ function seedFromString(str){
 }
 function lcgNext(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
 
+// Coalesce rebuilds: the player poll, design-mode edits, and several view paths
+// can all call buildOrrery() in a burst. Re-stringifying the whole SVG each time is
+// the hot path, so collapse a burst into ONE rebuild on the next animation frame.
+// (selectBody renders its detail panel from separate DOM, so a one-frame-late SVG
+// is imperceptible and safe.)
+let _orreryRaf = 0;
 function buildOrrery(){
+  if(_orreryRaf) return;
+  if(typeof requestAnimationFrame !== 'function'){ buildOrreryNow(); return; }
+  _orreryRaf = requestAnimationFrame(() => { _orreryRaf = 0; buildOrreryNow(); });
+}
+function buildOrreryNow(){
   const svg = document.getElementById("orrery-svg");
   if(!svg) return;
   const W=800, H=500;
@@ -5731,11 +5830,15 @@ function buildOrrery(){
       <stop offset="0%" stop-color="#0d1a35"/>
       <stop offset="100%" stop-color="#070a10"/>
     </radialGradient>`;
-  // A shading gradient for every non-star, non-belt body (generic — works for
-  // referee-added bodies as well as the original ones).
+  // A shading gradient per non-star, non-belt body — but keyed by COLOUR, so N
+  // bodies sharing a colour share ONE gradient def instead of emitting one apiece.
+  const gradIds = {}; let gradSeq = 0;
+  const gradId = (color) => { const c = color || '#888'; if(!(c in gradIds)) gradIds[c] = 'pg-'+(gradSeq++); return gradIds[c]; };
+  const seenGrad = {};
   bodies.forEach(b => {
     if(b.isStar || isBeltBody(b)) return;
-    html += `<radialGradient id="pg-${b.id}" cx="65%" cy="30%" r="75%">
+    const id = gradId(b.color); if(seenGrad[id]) return; seenGrad[id] = 1;
+    html += `<radialGradient id="${id}" cx="65%" cy="30%" r="75%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
       <stop offset="35%" stop-color="${b.color}" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000820" stop-opacity="0.45"/>
@@ -5783,15 +5886,23 @@ function buildOrrery(){
   // not GPU-composited, so hundreds of them melt frame rate on tablet hardware.
   // Cap how many dots ANIMATE (across all belts) — the rest render identically
   // but static. Visual density is unchanged; the jitter is imperceptible anyway.
-  let animBudget = ORR_ANIM_DOT_BUDGET;
+  // When motion is off (prefers-reduced-motion or the referee's animations toggle),
+  // emit every belt dot static — no vibe class, no per-dot animation timing. The CSS
+  // already neutralises .ast then, but skipping the work keeps the markup lean too.
+  const motionOff = (typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+                 || (typeof rootEl!=='undefined' && rootEl && rootEl.classList.contains('anim-off'));
+  let animBudget = motionOff ? 0 : ORR_ANIM_DOT_BUDGET;
+  let dotBudget = ORR_DOT_BUDGET;                    // total drawn dots across all belts
   bodies.forEach(b => {
     if(!isBeltBody(b) || !b.orbitPos) return;
     const [va, vb] = orbitAxes(b.orbitPos, maxP);
     const col = b.color || '#8B7355';
     const density = Math.max(20, Math.min(600, b.beltDensity || 160));
+    const draw = Math.max(0, Math.min(density, dotBudget));   // cull once the global budget is spent
+    dotBudget -= draw;
     const VIBE = ['va','vb','vc','vd','ve','vf','vg','vh'];
     let rng = seedFromString(b.id || 'belt');
-    for(let i=0;i<density;i++){
+    for(let i=0;i<draw;i++){
       rng = lcgNext(rng); const arcFrac = (rng % 10000) / 10000;
       rng = lcgNext(rng); const radialJitter = ((rng % 10000) / 10000 - 0.5) * 0.28;
       rng = lcgNext(rng); const dotSize = 0.7 + (rng % 10000)/10000 * 1.8;
@@ -5833,7 +5944,7 @@ function buildOrrery(){
   planets.forEach(b => {
     const [px,py] = orbitPoint(...orbitAxes(b.orbitPos, maxP), ORR_PLANET_T);
     const r = b.displayRadius || 7;
-    const gid = `pg-${b.id}`;
+    const gid = gradId(b.color);
     if(selectedBody===b.id) html += `<circle cx="${px}" cy="${py}" r="${r+7}" fill="${b.color}" opacity="0.2" pointer-events="none"/>`;
     html += `<circle cx="${px}" cy="${py}" r="${r+4}" fill="${b.color}" opacity="0.07" pointer-events="none"/>`;
     html += `<g id="anim-planet-${b.id}" data-orbit="${b.orbitPos}" data-base-t="${ORR_PLANET_T}">`;
@@ -5895,7 +6006,7 @@ function buildOrrery(){
       const mr = 4;
       html += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="#555566" stroke-width="0.5" opacity="0.5" pointer-events="none"/>`;
       html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr}" fill="${m.color}" ${m.decoration==='dim'?'opacity="0.4"':''} data-body="${m.id}" class="body-node" style="cursor:pointer"/>`;
-      const gid = `pg-${m.id}`;
+      const gid = gradId(m.color);
       const tUrlM = textureUrlFor(m);
       if(tUrlM){
         const tm = escAttr(tUrlM);
@@ -6772,6 +6883,7 @@ async function saveLocationFromForm(){
 
 // ── Commit / edit / delete / restore ──
 async function commitNewLocation(d){
+  recordDesignUndo('Add location "' + (d.name||'') + '"');
   const bodyId = d.bodyId;
   const loc = {
     id: 'loc-add-' + Date.now() + '-' + Math.floor(Math.random()*1000),
@@ -6816,6 +6928,7 @@ async function writeLocationFields(locId, bodyId, fields){
 async function commitLocationEdit(locId, d){
   const found = findLocation(locId);
   if(!found){ showToast('Location not found','error'); return; }
+  recordDesignUndo('Edit location "' + (d.name||'') + '"');
   const fields = {
     name: d.name, type: d.type || '', color: d.color || '#4A90D9',
     tag: d.tag || '', hook: !!d.hook,
@@ -6833,6 +6946,7 @@ async function deleteLocation(locId){
   const found = findLocation(locId);
   if(!found) return;
   if(!confirm(`Remove "${found.loc.name}"? You can restore it from "Show Removed Items".`)) return;
+  recordDesignUndo('Delete location "' + (found.loc.name||'') + '"');
   const bodyId = found.bodyId;
   if(!locationDeletions[currentSystemId]) locationDeletions[currentSystemId] = {};
   if(isAddedLocation(currentSystemId, locId)){
@@ -9765,6 +9879,16 @@ function renderRefereeMenu(){
       <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Campaign Backup</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();exportCampaign()">
+      <span class="settings-row-label">⬇ Export Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">JSON →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();importCampaign()">
+      <span class="settings-row-label">⬆ Import Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
+    </div>
+    <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
 }
 
@@ -9782,8 +9906,20 @@ function closeDesignMenu(){
 function renderDesignMenu(){
   const card = document.getElementById('design-menu-card');
   if(!card) return;
+  const undoN = designUndoStack.length, redoN = designRedoStack.length;
+  const lastUndo = undoN ? designUndoStack[undoN-1].label : '';
+  const lastRedo = redoN ? designRedoStack[redoN-1].label : '';
   card.innerHTML = `
     <div class="settings-section-lbl">Design Tools</div>
+    <div class="settings-row" style="cursor:${undoN?'pointer':'default'};opacity:${undoN?1:0.45}" ${undoN?'onclick="designUndo()"':''}>
+      <span class="settings-row-label">↶ Undo${undoN?' — '+escHtml(lastUndo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${undoN}/${DESIGN_UNDO_LIMIT}</span>
+    </div>
+    <div class="settings-row" style="cursor:${redoN?'pointer':'default'};opacity:${redoN?1:0.45}" ${redoN?'onclick="designRedo()"':''}>
+      <span class="settings-row-label">↷ Redo${redoN?' — '+escHtml(lastRedo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${redoN}</span>
+    </div>
+    <div class="archon-divider"></div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -9802,6 +9938,125 @@ function refreshOpenMenus(){
   if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
   if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
   if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Bounded undo / redo for Design Mode ─────────────────────────────────────
+// Design edits/deletes (bodies, locations, economy profiles) mutate in-memory
+// state that's mirrored to Supabase. Rather than invert each op, we SNAPSHOT the
+// whole design state before a change and restore it on undo (redo re-applies the
+// later state). Bounded to DESIGN_UNDO_LIMIT steps and in-memory only (not persisted).
+const DESIGN_UNDO_LIMIT = 20;
+let designUndoStack = [], designRedoStack = [];
+function snapshotDesign(){
+  const clone = o => JSON.parse(JSON.stringify(o||{}));
+  return {
+    bodyAdditions: clone(bodyAdditions), bodyDeletions: clone(bodyDeletions), bodyPropertyOverrides: clone(bodyPropertyOverrides),
+    locationAdditions: clone(locationAdditions), locationDeletions: clone(locationDeletions), locationPropertyOverrides: clone(locationPropertyOverrides),
+    econProfiles: (typeof ECON!=='undefined' && ECON.exportProfiles) ? ECON.exportProfiles() : null,
+  };
+}
+async function restoreDesign(snap){
+  bodyAdditions = snap.bodyAdditions; bodyDeletions = snap.bodyDeletions; bodyPropertyOverrides = snap.bodyPropertyOverrides;
+  locationAdditions = snap.locationAdditions; locationDeletions = snap.locationDeletions; locationPropertyOverrides = snap.locationPropertyOverrides;
+  await saveBodyAdditions(); await saveBodyDeletions(); await saveBodyPropertyOverrides();
+  await saveLocationAdditions(); await saveLocationDeletions(); await saveLocationPropertyOverrides();
+  if(snap.econProfiles!=null && typeof ECON!=='undefined' && ECON.importProfiles) ECON.importProfiles(snap.econProfiles);
+  // Re-render whatever view is on screen so the restored state shows immediately.
+  if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
+  else if(currentView === 'body' && selectedBody){ if(getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
+  else if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+  if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+  refreshOpenMenus();
+}
+// Call BEFORE a design mutation, capturing the pre-change state under a label.
+function recordDesignUndo(label){
+  designUndoStack.push({ label: label || 'change', snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  designRedoStack = [];                 // a fresh edit invalidates the redo branch
+  refreshOpenMenus();
+}
+async function designUndo(){
+  if(!isReferee()) return;
+  if(!designUndoStack.length){ if(typeof showToast==='function') showToast('Nothing to undo','info'); return; }
+  const entry = designUndoStack.pop();
+  designRedoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designRedoStack.length > DESIGN_UNDO_LIMIT) designRedoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Undid: ' + entry.label);
+}
+async function designRedo(){
+  if(!isReferee()) return;
+  if(!designRedoStack.length){ if(typeof showToast==='function') showToast('Nothing to redo','info'); return; }
+  const entry = designRedoStack.pop();
+  designUndoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Redid: ' + entry.label);
+}
+
+// ── Campaign export / import (referee-only backup & sharing) ─────────────────
+// The whole campaign is just key/value rows in the shared Supabase table, so a
+// backup is a JSON dump of those rows. Export pulls every campaign row (skipping
+// per-device private notes + local cache keys); import writes them back through
+// supaStorage.set and reloads so every loader re-reads the restored state.
+const CAMPAIGN_EXPORT_VERSION = 1;
+async function exportCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  if(typeof showToast==='function') showToast('Exporting campaign…','info');
+  let rows;
+  try {
+    const res = await fetch(`${SUPABASE_REST}?select=key,value&limit=10000`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    rows = await res.json();
+  } catch(e){
+    if(typeof showToast==='function') showToast('Export failed — could not reach the campaign store ('+(e.message||'offline')+')','error');
+    return;
+  }
+  const keys = {};
+  (Array.isArray(rows)?rows:[]).forEach(r => {
+    if(!r || r.key==null) return;
+    if(/^note-private-/.test(r.key)) return;       // per-device personal notes — not shared campaign state
+    keys[r.key] = r.value;
+  });
+  const blob = { app:'archon-gambit', kind:'campaign', version:CAMPAIGN_EXPORT_VERSION,
+    exportedAt:new Date().toISOString(), count:Object.keys(keys).length, keys };
+  const json = JSON.stringify(blob, null, 2);
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  a.download = `archon-gambit-campaign-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} }, 4000);
+  if(typeof showToast==='function') showToast(`Exported ${blob.count} campaign key${blob.count===1?'':'s'}`);
+}
+function importCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if(!file) return;
+    let blob;
+    try { blob = JSON.parse(await file.text()); }
+    catch(e){ if(typeof showToast==='function') showToast('Import failed — not valid JSON','error'); return; }
+    const keys = blob && blob.keys;
+    if(!keys || typeof keys!=='object' || Array.isArray(keys)){
+      if(typeof showToast==='function') showToast('Import failed — no campaign keys in this file','error'); return; }
+    const names = Object.keys(keys);
+    if(!names.length){ if(typeof showToast==='function') showToast('Import failed — file has no keys','error'); return; }
+    if(!confirm(`Import ${names.length} campaign key${names.length===1?'':'s'} from "${file.name}"?\n\nThis OVERWRITES the current shared campaign — galaxy edits, codex, funds, economy, ship state, quests, and more. It cannot be undone. Continue?`)) return;
+    if(typeof showToast==='function') showToast('Importing campaign…','info');
+    let ok=0, fail=0;
+    for(const k of names){
+      const v = keys[k];
+      const r = await supaStorage.set(k, v==null?'':String(v), true);
+      if(r && r.ok) ok++; else fail++;
+    }
+    if(typeof showToast==='function') showToast(`Imported ${ok} key${ok===1?'':'s'}${fail?` (${fail} queued offline)`:''} — reloading…`);
+    setTimeout(()=>location.reload(), 900);
+  };
+  input.click();
 }
 
 // ── Ambient-animation + orbital-ring toggles ──────────────────────────────
@@ -13906,9 +14161,10 @@ loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'und
 // ───────────────────────────────────────────────────────────────────────────
 // Self-contained. Reads globals GALAXY_NODES / GALAXY_FACTIONS / imperialDate /
 // imperialOrdinal / isReferee / supaStorage. The ONLY hook into the existing
-// market is mktPressure() (HX module), which blends ECON.pressure() when the sim
-// is active and falls back to the old seeded noise otherwise — so if the engine
-// is off, or throws, nothing changes for players.
+// market is mktPressure() (HX module), which uses ECON.pressure() when the FULL
+// sim is active (referee opt-in) and otherwise reads the SIMPLE static produces/
+// demands model (simplePressure(), the default) — so prices stay coherent whether
+// or not the sim is running, and if the engine throws nothing changes for players.
 //
 // Tick = 1 Imperial week. Goods are made by recipe (conservation); worlds hold
 // stockpiles with a safety threshold; trade moves goods producer→consumer with a
@@ -14070,10 +14326,13 @@ window.ECON = (function(){
     const stock = {}; Object.keys(base).forEach(id=>{ stock[id] = Object.assign({}, base[id]); });
     const wk = curWeek();
     const transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
-    // active:true → the living economy is ON by default. A referee who explicitly
-    // toggles it off persists active:false to the shared econ-state row, which
-    // overrides this on load; the default only applies when no state is saved yet.
-    return { week: wk, active:true, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
+    // active:false → a fresh campaign defaults to the SIMPLE economy (static per-world
+    // produces/demands pricing via simplePressure(); no stepping, no logistics). The
+    // referee opts INTO the full multi-tier simulation with the Living-economy toggle,
+    // which persists active:true to the shared econ-state row. NB a persisted row's
+    // active flag overrides this default on load (Object.assign(freshState(),parsed)),
+    // so existing campaigns keep whatever mode they saved until the referee toggles.
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -14243,10 +14502,41 @@ window.ECON = (function(){
     state.week = week;
   }
 
+  // Max weeks we will step one-at-a-time to catch the sim up to the live calendar.
+  // A persisted week can lag the Imperial calendar by tens of thousands of weeks
+  // (year 1105 ≈ week 57,617; a real saved row hit 179,197). Looping step() over
+  // that gap froze the tab for tens of seconds (~0.32 ms/step). Bigger gaps snap to
+  // a freshly-settled resting baseline instead — coherent prices, fixed cost. ~5 yrs.
+  const MAX_CATCHUP = 260;
+  // Re-establish a coherent steady state at `wk` WITHOUT stepping every intervening
+  // week. Re-seeds stock to each world+good's settled resting level (same baseline
+  // machinery freshState uses) and rebases the in-flight pipeline to `wk`, while
+  // preserving campaign-level fields (active flag, agent roster + banked profit,
+  // timeline, traders setting). After this stock == base, so pressures read ~0.
+  function reseedTo(wk){
+    ensure();
+    const seed = {};
+    Object.values(worlds).forEach(w=>{ seed[w.id]={};
+      SIM_GOODS.forEach(g=>{ const s=orderUpTo(w,g); if(s>0||w.prod[g]) seed[w.id][g]=Math.round(s); }); });
+    const settled = settleBaseline(seed);
+    const base = settled.stock;
+    const stock = {}; Object.keys(base).forEach(id=>{ stock[id]=Object.assign({},base[id]); });
+    state.base = base;
+    state.stock = stock;
+    state.transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
+    state.shocks = (state.shocks||[]).filter(s=> s.until==null || s.until>=wk);   // long-expired shocks drop
+    (state.agents||[]).forEach(a=>{ a.route=null; });                            // in-flight convoys would have landed ages ago
+    state.week = wk;
+  }
   function advance(weeks){ ensure(); const target = state.week + Math.max(1, Math.round(weeks));
-    for(let wk=state.week+1; wk<=target; wk++) step(wk); save(); }
+    if(target - state.week > MAX_CATCHUP) reseedTo(target);                       // gap too large to step — snap to resting baseline
+    else for(let wk=state.week+1; wk<=target; wk++) step(wk);
+    save(); }
   function syncToDate(){ ensure(); const now=curWeek();
-    if(now>state.week && state.active){ for(let wk=state.week+1; wk<=now; wk++) step(wk); save(); }
+    if(now>state.week && state.active){
+      if(now - state.week > MAX_CATCHUP) reseedTo(now);                           // gap too large to step — snap to resting baseline
+      else for(let wk=state.week+1; wk<=now; wk++) step(wk);
+      save(); }
     else if(now!==state.week){ state.week=now; } }
 
   // Price pressure = signed deviation of current stock from this world+good's own
@@ -14272,7 +14562,7 @@ window.ECON = (function(){
     if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
     supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
-  function reset(){ state = freshState(); state.active=true; save(); }
+  function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive; save(); }   // reseed stock; keep the current Simple/Full mode
 
   const PRESETS = [
     { id:'raid',     label:'Pirate raid — Erebus ore', kind:'output', target:'erebus', good:'Common Ore', factor:0.7, weeks:6 },
@@ -14461,6 +14751,9 @@ window.ECON = (function(){
     resolveChain, chainHasCycle, autoInputsOf, marketImpact, isMarketId,
     effectiveProfile: effectiveProfileOf, defProfile: defProfileOf, setProfile, clearProfile,
     loadProfiles, saveProfiles,
+    // Snapshot / restore the raw designer-profile overrides (for Design-Mode undo).
+    exportProfiles(){ return JSON.parse(JSON.stringify(profiles||{})); },
+    importProfiles(obj){ profiles = obj || {}; worlds = null; adj = null; ensure(); state.base = recomputeBase(); saveProfiles(); save(); },
     get state(){ ensure(); return state; },
     worlds(){ ensure(); return worlds; },
     active(){ return !!(state && state.active); },
@@ -14752,6 +15045,7 @@ function commitEconEditor(){
   if(!econEditDraft||!econEditNodeId) return;
   if(!econDraftValid()){ if(typeof showToast==='function') showToast('Fix invalid rows (rates must be > 0, no duplicates)','error'); return; }
   const maps=econDraftMaps();
+  if(typeof recordDesignUndo==='function') recordDesignUndo('Edit economy — ' + econEditNodeId);
   ECON.setProfile(econEditNodeId, maps.prod, maps.cons);
   if(typeof showToast==='function') showToast('Economy saved — galactic market updated');
   closeEconEditor();
@@ -14761,6 +15055,7 @@ function commitEconEditor(){
 function econEditRevert(){
   if(!econEditNodeId) return;
   if(!confirm('Revert this world to its built-in economy? Your custom production/consumption here will be discarded.')) return;
+  if(typeof recordDesignUndo==='function') recordDesignUndo('Revert economy — ' + econEditNodeId);
   ECON.clearProfile(econEditNodeId);
   if(typeof showToast==='function') showToast('Reverted to the built-in economy');
   closeEconEditor();
@@ -14775,11 +15070,15 @@ function renderEconPanel(){
   const btn=(label,fn,extra)=>`<button onclick="${fn}" style="background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;margin:2px ${extra||''}">${label}</button>`;
   let h='';
   h+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-  h+=`<span style="font-size:11px;color:var(--tx1)">Sim</span>`;
-  h+=btn(on?'● ON':'○ OFF', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
-  h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
-  h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
-  h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Economy also advances when you move the Imperial calendar. Steps here preview cascades without moving the campaign date.</span>`;
+  h+=`<span style="font-size:11px;color:var(--tx1)">Living economy</span>`;
+  h+=btn(on?'⚙ Full simulation':'◐ Simple (default)', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'background:#3a3320;border-color:#9d8a3f;color:#eadfbf');
+  if(on){
+    h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
+    h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
+    h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Full mode: the multi-tier sim steps every Imperial week and when you advance the calendar. Steps here preview cascades without moving the campaign date. Click the toggle to switch back to Simple.</span>`;
+  } else {
+    h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Simple mode: prices come straight from each world's <b>Produces / Demands</b> profile (edit it in Design Mode) — no stepping, no logistics. Producers sell their good cheaper; importers pay more. Switch to <b>Full simulation</b> for the deep stocks/flows model with shocks, convoys &amp; cargo runs (the controls below).</span>`;
+  }
   h+=`</div>`;
   // The economy now trades over the JUMP-LANE network — flag any market worlds cut off from it.
   { let disc=[]; try{ disc=ECON.disconnected(); }catch(e){}
@@ -15346,7 +15645,7 @@ function closeNpcCreator(){
 
 function setNpcCreatorMode(mode){
   npcCreatorMode = mode;
-  ['manual','random','ai'].forEach(m => {
+  ['manual','random'].forEach(m => {
     const tab = document.getElementById('npc-tab-'+m);
     if(tab) tab.classList.toggle('on', m === mode);
   });
@@ -15365,8 +15664,6 @@ function renderNpcCreatorBody(){
     body.innerHTML = renderManualForm(areaLabel);
   } else if(npcCreatorMode === 'random'){
     body.innerHTML = renderRandomPanel(areaLabel);
-  } else if(npcCreatorMode === 'ai'){
-    body.innerHTML = renderAiPanel(areaLabel);
   }
 }
 
@@ -15456,72 +15753,7 @@ function rollRandomNpc(){
   renderNpcCreatorBody();
 }
 
-// ── AI panel ───────────────────────────────────────────────────────────────
-function renderAiPanel(areaLabel){
-  const d = npcCreatorDraft;
-  const preview = d ? renderNpcPreview(d) : '';
-  return `
-    <div class="npc-gen-hint">Adding to <b style="color:var(--tx0)">${escHtml(areaLabel)}</b>. Describe the NPC you want (a phrase is enough) and the AI will write one that fits the Aurelia setting — Hegemony-controlled station, RSR undercurrent, copper-tinted world.</div>
-    <div class="npc-form-row">
-      <label class="npc-form-lbl">Prompt</label>
-      <textarea class="npc-form-textarea" id="npc-ai-prompt" placeholder="e.g. a jittery dockworker who owes money to the wrong people">${d && d._prompt ? escHtml(d._prompt) : ''}</textarea>
-    </div>
-    <div style="text-align:center">
-      <button class="npc-creator-btn primary" id="npc-ai-gen-btn" onclick="generateAiNpc()">✨ Generate NPC</button>
-    </div>
-    <div class="npc-ai-status" id="npc-ai-status"></div>
-    <div id="npc-ai-preview">${preview}</div>
-    ${d ? `<div class="npc-creator-footer">
-      <button class="npc-creator-btn" onclick="closeNpcCreator()">Cancel</button>
-      <button class="npc-creator-btn" onclick="editDraftInManual()">✍ Tweak first</button>
-      <button class="npc-creator-btn primary" onclick="saveDraftNpc()">Add this NPC</button>
-    </div>` : ''}`;
-}
-
-async function generateAiNpc(){
-  const promptEl = document.getElementById('npc-ai-prompt');
-  const status = document.getElementById('npc-ai-status');
-  const btn = document.getElementById('npc-ai-gen-btn');
-  const userPrompt = (promptEl ? promptEl.value : '').trim();
-  if(!userPrompt){ status.textContent = 'Describe the NPC first.'; status.classList.add('error'); return; }
-  status.classList.remove('error');
-  status.textContent = 'Generating…';
-  if(btn) btn.disabled = true;
-
-  const areaLabel = MAIN[cur] ? (curSub && MAIN[cur].subs && MAIN[cur].subs[curSub] ? MAIN[cur].subs[curSub].label : MAIN[cur].label) : '';
-
-  const sys = "You are generating an NPC for a Traveller 2nd Edition tabletop RPG campaign set on Aurelia Orbital Station — a Hegemony-controlled station orbiting a copper-tinted jewel world. There is an underground resistance (the RSR) and corporate interests (OmniSynth). Respond with ONLY a JSON object, no markdown, no preamble. Schema: {\"name\":string, \"role\":string (short, includes location like '" + areaLabel + "'), \"stats\":{\"STR\":int,\"DEX\":int,\"END\":int,\"INT\":int,\"EDU\":int,\"SOC\":int} (each 2-12, rolled like 2D6), \"skills\":string (comma-separated, e.g. 'Admin 2, Persuade 1'), \"rows\":[[label,text],...] (3-4 referee-facing detail rows like Manner, Wants, Hook, On the ship — concise, evocative, setting-appropriate)}. Keep it grounded and usable at the table.";
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        system: sys,
-        messages: [{ role: "user", content: "NPC to generate: " + userPrompt }]
-      })
-    });
-    if(!response.ok) throw new Error('API returned ' + response.status);
-    const data = await response.json();
-    let text = (data.content || []).map(c => c.type === 'text' ? c.text : '').join('').trim();
-    text = text.replace(/```json/gi,'').replace(/```/g,'').trim();
-    const npc = JSON.parse(text);
-    // Validate shape
-    if(!npc.name || !npc.stats){ throw new Error('Malformed NPC'); }
-    npc._prompt = userPrompt;
-    npcCreatorDraft = npc;
-    status.textContent = '';
-    renderNpcCreatorBody();
-  } catch(err){
-    status.classList.add('error');
-    status.textContent = 'Generation failed: ' + (err.message || 'unknown error') + '. Try again or use Manual/Random.';
-    if(btn) btn.disabled = false;
-  }
-}
-
-// ── Shared preview + save for random/AI drafts ─────────────────────────────
+// ── Shared preview + save for random drafts ────────────────────────────────
 function renderNpcPreview(npc){
   const stats = Object.entries(npc.stats||{}).map(([k,v]) => `${k} ${v}`).join('  ');
   const rows = (npc.rows||[]).map(r => `<div class="npc-preview-row"><b>${escHtml(r[0])}:</b> ${escHtml(r[1])}</div>`).join('');
@@ -15538,7 +15770,6 @@ function renderNpcPreview(npc){
 async function saveDraftNpc(){
   if(!npcCreatorDraft){ return; }
   const npc = { ...npcCreatorDraft };
-  delete npc._prompt;
   if(!npc.name){ showToast('NPC needs a name', 'error'); return; }
   await commitNewNpc(npc);
   closeNpcCreator();
@@ -15571,86 +15802,16 @@ const BODY_CLASS_OPTIONS = [
 ];
 const BODY_TAG_OPTIONS = ['','FLAVOUR','ADVENTURE HOOK','CLASSIFIED','RESTRICTED','CAMPAIGN HUB'];
 
-// ── Dice ───────────────────────────────────────────────────────────────────
-function d6(){ return 1 + Math.floor(Math.random()*6); }
-function roll2d6(){ return d6() + d6(); }
-function ehex(n){ // Traveller extended hex: 0-9 then A.. (skips I,O)
-  n = Math.max(0, Math.round(n));
-  const digits = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return n < digits.length ? digits[n] : 'Z';
-}
-function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
-
-// ── UWP generation (Traveller 2e core / World Builder's Handbook) ──────────
-function genStarport(){
-  const r = roll2d6();
-  if(r<=4) return 'E'; // 2-4
-  if(r<=6) return 'D'; // 5-6
-  if(r<=8) return 'C'; // 7-8
-  if(r<=10) return 'B'; // 9-10
-  return 'A'; // 11-12
-}
-function genUWP(){
-  const starport = genStarport();
-  const size = clamp(roll2d6() - 2, 0, 15);
-  let atm;
-  if(size === 0) atm = 0;
-  else atm = clamp(roll2d6() - 7 + size, 0, 15);
-  let hydro;
-  if(size <= 1) hydro = 0;
-  else {
-    let dm = 0;
-    if(atm <= 1 || atm >= 10) dm -= 4;
-    hydro = clamp(roll2d6() - 7 + atm + dm, 0, 10);
-  }
-  const pop = clamp(roll2d6() - 2, 0, 15);
-  let gov = (pop === 0) ? 0 : clamp(roll2d6() - 7 + pop, 0, 15);
-  let law = (pop === 0) ? 0 : clamp(roll2d6() - 7 + gov, 0, 15);
-  const tech = (pop === 0) ? 0 : genTechLevel(starport, size, atm, hydro, pop, gov);
-  return { starport, size, atm, hydro, pop, gov, law, tech };
-}
-// Tech Level: 1d6 + DMs from starport / size / atmosphere / hydro / pop / gov
-function genTechLevel(starport, size, atm, hydro, pop, gov){
-  let dm = 0;
-  // Starport
-  dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
-  // Size
-  if(size <= 1) dm += 2; else if(size <= 4) dm += 1;
-  // Atmosphere
-  if(atm <= 3 || atm >= 10) dm += 1;
-  // Hydrographics
-  if(hydro === 9) dm += 1; else if(hydro === 10) dm += 2;
-  // Population
-  if(pop >= 1 && pop <= 5) dm += 1; else if(pop === 9) dm += 2; else if(pop >= 10) dm += 4;
-  // Government
-  if(gov === 0 || gov === 5) dm += 1; else if(gov === 7) dm += 2; else if(gov >= 13) dm -= 2;
-  return clamp(d6() + dm, 0, 33);
-}
-function uwpToString(u, starport){
-  const sp = starport || u.starport;
-  return `${sp}${ehex(u.size)}${ehex(u.atm)}${ehex(u.hydro)}${ehex(u.pop)}${ehex(u.gov)}${ehex(u.law)}-${ehex(u.tech)}`;
-}
-// Trade codes from the world profile (subset of the standard table)
-function tradeCodes(u){
-  const c = [];
-  const {size,atm,hydro,pop,gov,law} = u;
-  if(atm>=4&&atm<=9 && hydro>=4&&hydro<=8 && pop>=5&&pop<=7) c.push('Ag');
-  if(size===0&&atm===0&&hydro===0) c.push('As');
-  if(pop===0&&gov===0&&law===0) c.push('Ba');
-  if(atm>=2&&hydro===0) c.push('De');
-  if(atm>=10&&hydro>=1) c.push('Fl');
-  if(size>=6&&size<=8 && (atm===5||atm===6||atm===8) && hydro>=5&&hydro<=7) c.push('Ga');
-  if(pop>=9) c.push('Hi');
-  if(['A','B'].includes(u.starport) && atm<=3 && (hydro<=3) && pop>=9) c.push('In');
-  if(pop>=1&&pop<=3) c.push('Lo');
-  if(atm<=3 && hydro<=3 && pop>=6) c.push('Na');
-  if(pop>=4&&pop<=6) c.push('Ni');
-  if(atm>=2&&atm<=5 && hydro<=3) c.push('Po');
-  if((atm===6||atm===8) && pop>=6&&pop<=8 && gov>=4&&gov<=9) c.push('Ri');
-  if(hydro>=10) c.push('Wa');
-  if(atm===0) c.push('Va');
-  return c;
-}
+// ── Dice / UWP — delegate to the shared rules-correct generator (WGEN) ───────
+// The body modal + system auto-generator use the {starport,atm,tech} field shape;
+// genUWP() remaps WGEN's canonical {port,atmo,tl} output to it. roll2d6() is the
+// single global one (above); clamp/ehex/tradeCodes are thin WGEN delegates.
+function clamp(v,lo,hi){ return WGEN.clamp(v,lo,hi); }
+function ehex(n){ return WGEN.ehex(n); }
+function genUWP(){ const u = WGEN.genUWP();
+  return { starport:u.port, size:u.size, atm:u.atmo, hydro:u.hydro, pop:u.pop, gov:u.gov, law:u.law, tech:u.tl }; }
+function uwpToString(u, starport){ return WGEN.uwpStr(starport ? Object.assign({}, u, {port:starport}) : u); }
+function tradeCodes(u){ return WGEN.tradeCodes(u); }
 const UWP_FIELD_LABELS = {
   starport:'Starport', size:'Size', atm:'Atmosphere', hydro:'Hydrographics',
   pop:'Population', gov:'Government', law:'Law Level', tech:'Tech Level'
@@ -15961,14 +16122,14 @@ function rollFullUwp(){
 function rerollUwpField(field){
   if(!bodyCreatorDraft || !bodyCreatorDraft._uwp) return;
   const u = bodyCreatorDraft._uwp;
-  if(field === 'starport') u.starport = genStarport();
-  else if(field === 'size') u.size = clamp(roll2d6()-2,0,15);
+  if(field === 'starport') u.starport = WGEN.genStarport();
+  else if(field === 'size') u.size = clamp(roll2d6()-2,0,10);
   else if(field === 'atm') u.atm = u.size===0?0:clamp(roll2d6()-7+u.size,0,15);
   else if(field === 'hydro'){ let dm=0; if(u.atm<=1||u.atm>=10)dm-=4; u.hydro = u.size<=1?0:clamp(roll2d6()-7+u.atm+dm,0,10); }
-  else if(field === 'pop') u.pop = clamp(roll2d6()-2,0,15);
+  else if(field === 'pop') u.pop = clamp(roll2d6()-2,0,12);
   else if(field === 'gov') u.gov = u.pop===0?0:clamp(roll2d6()-7+u.pop,0,15);
   else if(field === 'law') u.law = u.pop===0?0:clamp(roll2d6()-7+u.gov,0,15);
-  else if(field === 'tech') u.tech = u.pop===0?0:genTechLevel(u.starport,u.size,u.atm,u.hydro,u.pop,u.gov);
+  else if(field === 'tech') u.tech = u.pop===0?0:WGEN.genTechLevel(null,u.starport,u.size,u.atm,u.hydro,u.pop,u.gov);
   renderBodyCreatorBody();
 }
 function ehexToNum(ch){
@@ -16008,6 +16169,7 @@ function uwpToManual(){
 
 // ── Commit / edit / delete ─────────────────────────────────────────────────
 async function commitNewBody(obj){
+  recordDesignUndo('Add body "' + (obj.name||'') + '"');
   obj.id = 'body-add-' + Date.now() + '-' + Math.floor(Math.random()*1000);
   if(!bodyAdditions[currentSystemId]) bodyAdditions[currentSystemId] = [];
   bodyAdditions[currentSystemId].push(obj);
@@ -16043,6 +16205,7 @@ function openBodyEditor(id){
 }
 
 async function commitBodyEdit(id, obj){
+  recordDesignUndo('Edit body "' + (obj.name||'') + '"');
   obj.id = id;
   if(isAddedBody(id)){
     // Edit the addition in place (preserve its npcs/checks/events)
@@ -16088,6 +16251,7 @@ async function deleteBody(id){
   let msg = `Remove "${b.name}"? You can restore it from "Show Removed Items".`;
   if(moons.length) msg = `"${b.name}" has ${moons.length} moon(s) which will no longer have a parent. ` + msg;
   if(!confirm(msg)) return;
+  recordDesignUndo('Delete body "' + (b.name||'') + '"');
   if(isAddedBody(id)){
     const arr = bodyAdditions[currentSystemId] || [];
     const idx = arr.findIndex(x => x.id === id);
@@ -16601,6 +16765,65 @@ kbdLoad();
 loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on-demand in Settings
 renderEventLog();
 renderRsrMarkers();
+
+// ── Accessibility: label icon controls + make click-only rows keyboard-operable ──
+// The UI renders interactive controls as innerHTML strings; hundreds of icon-only
+// buttons and onclick <tr>/<div> rows ship without ARIA. Rather than hand-annotate
+// every call site, enhance the DOM as it renders: derive an aria-label from existing
+// title text for unlabelled / glyph-only controls, and give clickable NON-native
+// elements (tr, div, td, span…) button semantics + Enter/Space activation so they're
+// reachable by keyboard. Semantics only — no styling is changed. SVG nodes (the map /
+// orrery, which can emit hundreds of dots) are deliberately skipped to avoid a tab trap.
+const A11Y_SVG_NS = 'http://www.w3.org/2000/svg';
+const A11Y_NATIVE = { BUTTON:1, A:1, INPUT:1, SELECT:1, TEXTAREA:1, LABEL:1, SUMMARY:1, OPTION:1 };
+function a11yKeyActivate(e){
+  if(e.target !== e.currentTarget) return;                 // let nested controls handle their own keys
+  if(e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+}
+function a11yEnhanceEl(el){
+  if(!el || el.nodeType !== 1 || el.namespaceURI === A11Y_SVG_NS) return;
+  if(el.getAttribute('data-a11y')) return;
+  el.setAttribute('data-a11y','1');
+  // Label glyph-only / unlabelled controls from their tooltip text.
+  if(!el.getAttribute('aria-label') && !el.getAttribute('aria-labelledby')){
+    const txt = (el.textContent || '').trim();
+    const hasWords = /[a-z0-9]/i.test(txt);              // emoji/✕/▲ etc. don't count as an accessible name
+    const imgAlt = el.querySelector && el.querySelector('img[alt]:not([alt=""])');
+    if(!hasWords && !imgAlt){
+      const t = el.getAttribute('title');
+      if(t) el.setAttribute('aria-label', t);
+    }
+  }
+  // Non-native clickable elements: make them focusable + behave like a button.
+  if(!A11Y_NATIVE[el.tagName]){
+    if(!el.hasAttribute('role')) el.setAttribute('role','button');
+    if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+    el.addEventListener('keydown', a11yKeyActivate);
+  }
+}
+function a11yEnhance(root){
+  if(!root || root.nodeType !== 1 || root.namespaceURI === A11Y_SVG_NS) return;
+  if(root.matches && root.matches('[onclick]')) a11yEnhanceEl(root);
+  if(root.querySelectorAll) root.querySelectorAll('[onclick]:not([data-a11y])').forEach(a11yEnhanceEl);
+}
+(function initA11y(){
+  if(typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+  const initial = () => { try { a11yEnhance(document.body); } catch(e){} };
+  if(document.body) initial(); else document.addEventListener('DOMContentLoaded', initial);
+  let queue = [], pending = false;
+  const flush = () => { pending = false; const q = queue; queue = [];
+    q.forEach(n => { try { if(n.isConnected) a11yEnhance(n); } catch(e){} }); };
+  const obs = new MutationObserver(muts => {
+    muts.forEach(m => m.addedNodes && m.addedNodes.forEach(n => {
+      if(n.nodeType === 1 && n.namespaceURI !== A11Y_SVG_NS) queue.push(n); }));
+    if(queue.length && !pending){ pending = true; requestAnimationFrame(flush); }
+  });
+  const start = () => { if(document.body) obs.observe(document.body, { childList:true, subtree:true }); };
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
 </script>
 <script>
 // Register the offline-shell service worker. Secure-context only (https / the
