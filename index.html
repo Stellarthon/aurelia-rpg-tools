@@ -4802,23 +4802,32 @@ const HX = (function(){
     const route=bestRoute(origin,selected); if(!route){ toast('No route.'); return; }
     const plan=fuelPlan(route);
     if(plan.strandedAt!=null){ toast('⚠ Route strands at '+eh(disp(route[plan.strandedAt]))+' — cannot jump.'); return; }
-    const from=origin, to=selected, weeks=route.length-1; let fired=[];
+    // Tabletop pacing: stop at the first refuelling layover so the table can roleplay
+    // the stop, then refuel + Execute again to carry on. Single-tank routes go straight
+    // through. (The first refuel stop has no earlier refuel, so the sub-route's endTank
+    // is the true fuel on arrival — no auto-refuel sneaks in before the pause.)
+    let stopIdx=route.length-1;
+    for(let i=1;i<route.length-1;i++){ if(plan.legs[i].refuel){ stopIdx=i; break; } }
+    const legRoute=route.slice(0,stopIdx+1), legPlan=fuelPlan(legRoute);
+    const from=origin, to=legRoute[legRoute.length-1], weeks=legRoute.length-1, pausing=(to!==selected);
+    let fired=[];
     if(typeof imperialDate!=='undefined'&&typeof advanceImperial==='function'&&typeof imperialOrdinal==='function'){
       const startOrd=imperialOrdinal(imperialDate); advanceImperial(weeks*7); const endOrd=imperialOrdinal(imperialDate);
       fired=((typeof campaignEvents!=='undefined'&&campaignEvents)||[]).filter(e=>{ const o=imperialOrdinal(e); return o>startOrd&&o<=endOrd; }); }
     if(typeof shipState!=='undefined'){
-      shipState.fuel=Math.max(0,Math.round(plan.endTank)); shipState.locationId=to.id; shipState.origin=disp(to);
-      shipState.destination=''; shipState.jumpParsecs=0;
+      shipState.fuel=Math.max(0,Math.round(legPlan.endTank)); shipState.locationId=to.id; shipState.origin=disp(to);
+      shipState.destination=pausing?disp(selected):''; shipState.jumpParsecs=pausing?jumpDist(to,selected):0;
       shipState.visited=Array.isArray(shipState.visited)?shipState.visited:[];
-      if(!shipState.visited.includes(to.id)) shipState.visited.push(to.id);   // arriving reveals the destination's market to players
+      if(!shipState.visited.includes(to.id)) shipState.visited.push(to.id);   // arriving reveals this stop's market to players
       shipState.jumpLog=Array.isArray(shipState.jumpLog)?shipState.jumpLog:[];
       shipState.jumpLog.unshift({ date:(typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?formatImperial(imperialDate):''),
-        from:disp(from), to:disp(to), weeks, burn:Math.round(plan.total), refuels:plan.refuels, events:fired.map(e=>({title:e.title,note:e.note||''})) });
+        from:disp(from), to:disp(to), weeks, burn:Math.round(legPlan.total), refuels:0, events:fired.map(e=>({title:e.title,note:e.note||''})) });
       if(shipState.jumpLog.length>40) shipState.jumpLog.length=40;
       if(typeof saveShipState==='function') saveShipState();
       if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
     refresh();
-    toast(`Jumped <b>${eh(disp(from))} → ${eh(disp(to))}</b> · ${weeks} wk`+(fired.length?` · <span style="color:#caa83b">${fired.length} event${fired.length>1?'s':''}!</span>`:''));
+    if(pausing) toast(`⛽ Arrived at <b>${eh(disp(to))}</b> to refuel · ${weeks} wk. Roleplay the layover, refuel here, then Execute again to continue to <b>${eh(disp(selected))}</b>.`+(fired.length?` · <span style="color:#caa83b">${fired.length} event${fired.length>1?'s':''}!</span>`:''));
+    else toast(`Jumped <b>${eh(disp(from))} → ${eh(disp(to))}</b> · ${weeks} wk`+(fired.length?` · <span style="color:#caa83b">${fired.length} event${fired.length>1?'s':''}!</span>`:''));
   }
   function markVisited(id){
     if(!ref()){ toast('Referee only.'); return; }
@@ -4894,7 +4903,10 @@ const HX = (function(){
           html+=`<div class="hx-note" style="border-color:#ff5a4d;color:#ffa39c"><b style="color:#ff5a4d">⚠ STRANDED at ${eh(disp(sp))}.</b> ${msg}</div>`; }
         else html+=`<div class="hx-kv"><span class="k">Feasible</span><span class="v" style="color:#00cc88">${plan.refuels?`yes — ${plan.refuels} refuel stop${plan.refuels>1?'s':''}`:'yes, on one tank'}</span></div>`;
         html+=`<details open><summary>Route (Jump-${jumpRating})</summary>${legsHtml}</details>`;
-        if(plan.strandedAt==null && ref()) html+=`<div class="hx-btn-row"><button class="hx-act-btn primary" onclick="hxExecuteJump()">⚡ Execute jump · ${jumps} wk</button></div>`;
+        if(plan.strandedAt==null && ref()){
+          let rfi=-1; for(let i=1;i<route.length-1;i++){ if(plan.legs[i].refuel){ rfi=i; break; } }   // first refuel layover — jump pauses there
+          const ejLbl = rfi>0 ? `⚡ Jump to ${eh(disp(route[rfi]))} · ${rfi} wk · ⛽ refuel stop` : `⚡ Execute jump · ${jumps} wk`;
+          html+=`<div class="hx-btn-row"><button class="hx-act-btn primary" onclick="hxExecuteJump()">${ejLbl}</button></div>`; }
         else if(plan.strandedAt==null) html+=`<div class="hx-small" style="margin-top:6px">Referee executes jumps. You can plan freely.</div>`;
       }
       html+=`<div class="hx-sec-lbl">Speculative Cargo → ${eh(disp(s))}</div>`;
