@@ -13864,6 +13864,25 @@ window.ECON = (function(){
     });
   }
 
+  // Convoy raid — intercept a trader's in-flight cargo. The goods are destroyed/stolen
+  // so they never land (the destination is DENIED the relief it was counting on), and
+  // the merchant eats the loss. This is what makes the Independents' routes vulnerable
+  // and the RSC raider threat bite: a referee preys on a specific convoy, and players
+  // who escort one prevent exactly this.
+  function raidConvoy(agentId){
+    ensure();
+    const a = (state.agents||[]).find(x=>x.id===agentId);
+    if(!a || !a.route) return { ok:false, msg:'No active convoy to raid' };
+    const r = a.route;
+    const i = state.transit.findIndex(t=> t.agent===a.id && t.good===r.good && t.from===r.from && t.to===r.to);
+    if(i>=0) state.transit.splice(i,1);            // cargo lost → never lands → destination stays short
+    const loss = Math.round(r.qty * r.buyUnit);    // sunk purchase cost (cap already paid at dispatch)
+    a.profit -= loss; a.raided = (a.raided||0)+1; a.pos = r.from; a.route = null;   // survivor limps home empty
+    log(state.week, `⚔ Convoy raided — ${a.name} lost ${r.qty}kt ${r.good.replace('Common ','')} on ${worlds[r.from]?worlds[r.from].label:r.from}→${worlds[r.to]?worlds[r.to].label:r.to}`);
+    save();
+    return { ok:true, agent:a.name, good:r.good, qty:r.qty, to:(worlds[r.to]?worlds[r.to].label:r.to), loss };
+  }
+
   function step(week){
     state.shocks = state.shocks.filter(s=> s.until==null || s.until>=week);
     const blk = blocked();
@@ -14032,6 +14051,7 @@ window.ECON = (function(){
     agents(){ ensure(); return state.agents||[]; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
+    raidConvoy,
   };
 })();
 
@@ -14073,6 +14093,14 @@ function econApplyRun(){
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
 function econToggleTraders(){ ECON.setTraders(!ECON.tradersOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econRaidConvoy(id){
+  const r = ECON.raidConvoy(id);
+  if(typeof showToast==='function'){
+    if(r&&r.ok) showToast(`⚔ Convoy raided — ${r.agent} lost ${r.qty}kt ${r.good.replace('Common ','')} bound for ${r.to}`,'error');
+    else showToast((r&&r.msg)||'No convoy','error');
+  }
+  renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
 
 function renderEconPanel(){
   const body=document.getElementById('econ-body'); if(!body) return;
@@ -14128,11 +14156,14 @@ function renderEconPanel(){
     h+=btn(on?'● ON':'○ OFF','econToggleTraders()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
     h+=`</div>`;
     ECON.agents().forEach(a=>{
-      const rt = a.route && wl[a.route.from] && wl[a.route.to]
+      const onRoute = a.route && wl[a.route.from] && wl[a.route.to];
+      const rt = onRoute
         ? `<span style="color:#7ec0e0">hauling ${a.route.good.replace('Common ','')} ${escQH(wl[a.route.from].label)}→${escQH(wl[a.route.to].label)} · arr wk ${a.route.eta}</span>`
         : `<span style="color:var(--tx1)">surveying</span>`;
       const pc = a.profit>=0?'#7ec98f':'#e87a7a';
-      h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0;display:flex;justify-content:space-between;gap:10px"><span>${escQH(a.name)} · ${rt}</span><span style="color:${pc};white-space:nowrap">${a.trips} trips · ${money(a.profit)}</span></div>`;
+      const raidBtn = onRoute ? `<button onclick="econRaidConvoy('${a.id}')" title="Intercept this convoy — cargo lost, destination denied relief (RSC raider threat)" style="background:none;border:1px solid #6a2a2a;color:#e8a0a0;border-radius:5px;padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px">⚔ raid</button>` : '';
+      const raided = a.raided ? `<span style="color:#e8a0a0;font-size:10px"> · ${a.raided}⚔</span>` : '';
+      h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0;display:flex;justify-content:space-between;gap:10px;align-items:center"><span>${escQH(a.name)} · ${rt}${raidBtn}</span><span style="color:${pc};white-space:nowrap">${a.trips} trips${raided} · ${money(a.profit)}</span></div>`;
     });
     h+=`<div style="font-size:10px;color:var(--tx1);margin-top:4px">Idle at baseline; they swarm to arbitrage shock-driven price gaps, easing shortages as they go.</div>`;
     h+=`</div>`; }
