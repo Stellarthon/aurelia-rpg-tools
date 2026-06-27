@@ -13752,13 +13752,14 @@ window.ECON = (function(){
   // world+good's natural resting level — the reference pressure() reads deviation
   // from. Runs on a scratch copy so it touches neither the live state nor the clock,
   // and is deterministic (fixed profiles/topology) → identical baseline everywhere.
+  const SETTLE_WK = 16;
   function settleBaseline(seedStock){
     const prev = state;
     state = { week:0, active:false, stock: JSON.parse(JSON.stringify(seedStock)), transit:[], shocks:[], log:[] };
-    for(let i=1;i<=16;i++) step(i);
-    const base = state.stock;
+    for(let i=1;i<=SETTLE_WK;i++) step(i);
+    const result = { stock: state.stock, transit: state.transit };   // resting stock AND the in-flight pipeline that sustains it
     state = prev;
-    return base;
+    return result;
   }
 
   function freshState(){
@@ -13766,15 +13767,19 @@ window.ECON = (function(){
     const seed = {};
     Object.values(worlds).forEach(w=>{ seed[w.id]={};
       SIM_GOODS.forEach(g=>{ const s = orderUpTo(w,g); if(s>0 || w.prod[g]) seed[w.id][g] = Math.round(s); }); });  // full seed (incl. pipeline)
-    const base = settleBaseline(seed);   // settle the full seed to each world+good's resting level
-    // Open the economy AT that resting level so prices start STEADY (deviation 0),
-    // instead of scrambling from a full seed (which reads producers dear / importers
-    // cheap for the first weeks until it settles).
+    const settled = settleBaseline(seed);   // settle the full seed to each world+good's resting level
+    const base = settled.stock;
+    // Open the economy AT that resting level — AND with the in-flight pipeline that
+    // sustains it — so prices start AND stay STEADY (deviation 0). Without seeding the
+    // pipeline, the first weeks' consumption dips stock below base before replenishment
+    // lands, reading as a phantom galaxy-wide shortage. Etas are rebased to the live week.
     const stock = {}; Object.keys(base).forEach(id=>{ stock[id] = Object.assign({}, base[id]); });
+    const wk = curWeek();
+    const transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
     // active:true → the living economy is ON by default. A referee who explicitly
     // toggles it off persists active:false to the shared econ-state row, which
     // overrides this on load; the default only applies when no state is saved yet.
-    return { week: curWeek(), active:true, stock, transit:[], shocks:[], log:[], base };
+    return { week: wk, active:true, stock, transit, shocks:[], log:[], base, agents: freshAgents(), tradersOn:true };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -13790,6 +13795,65 @@ window.ECON = (function(){
   function embargoed(a,b){
     return state.shocks.some(s=> s.kind==='embargo' &&
       ((s.facA===worlds[a].fac && s.facB===worlds[b].fac) || (s.facB===worlds[a].fac && s.facA===worlds[b].fac)));
+  }
+
+  // ── Level-3 trader agents (Independents) ──────────────────────────────────
+  // The VISIBLE, disruptable face of trade: a persistent roster of named profit-
+  // motivated merchants. Each week, idle agents survey for a large standing price
+  // SPREAD (buy a non-producer glut / pressure ≥ +2, sell into a real shortage /
+  // pressure ≤ −2, reachable & not embargoed), haul a bounded cargo on the normal
+  // transit/lead-time system, and bank profit. They sit idle when the market is calm
+  // and swarm during shocks, lighting up emergent routes.
+  // NOTE: economically they are ~NEUTRAL, not a convergence engine — the central
+  // replenishment in step() already converges prices near-optimally, so agents are
+  // deliberately gated (non-producer sources, ≥4 spread) to ADD the living-trader /
+  // Independents layer without competing with logistics or churning recovery. Their
+  // real payoff is legibility + a hook for convoy-escort / raid mechanics (Tier-3 #7).
+  const AGENT_NAMES = ['Vasquez Holdings','The Meridian Run','Okonkwo & Daughters','Calla Drift-Freight','Red Lantern Cartage','Sable Voss Lines'];
+  const AGENT_VALUE = { 'Common Consumables':50,'Common Ore':40,'Common Electronics':300,'Common Manufactured':200,'Advanced Electronics':1200 }; // notional Cr/kt at par
+  const AGENT_START_CAP = 40000, AGENT_CAP_QTY = 12, AGENT_SPREAD_MIN = 4;
+  function agentUnitPrice(good, p){ return (AGENT_VALUE[good]||100) * (1 - (p||0)*0.08); }  // cheaper when glutted (p>0), dearer when short (p<0)
+  function freshAgents(){ return AGENT_NAMES.map((nm,i)=>({ id:'tr'+i, name:nm, cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0 })); }
+
+  function agentsStep(week){
+    if(!state.agents || state.tradersOn===false) return;
+    const blk = blocked(), goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
+    // Pool the imbalanced worlds per good once (cheap — empty at baseline).
+    const pool = {};
+    goods.forEach(g=>{ const sur=[], sho=[];
+      Object.keys(worlds).forEach(id=>{ if(blk[id]) return; const p=pressure(id,g); if(p==null) return;
+        // Source only from NON-producer gluts: consumer worlds that overshot above their
+        // baseline. Producer surplus is already allocated optimally (neediest-first) by
+        // replenishment, so skimming it just misallocates and starves other worlds.
+        if(p>=2 && !worlds[id].prod[g]){ const room=stk(id,g)-refOf(id,g); if(room>0) sur.push({id,p,room}); }
+        else if(p<=-2){ const room=refOf(id,g)-stk(id,g); if(room>0) sho.push({id,p,room}); } });
+      pool[g]={sur,sho}; });
+    // Arrivals: bank profit & reposition (the cargo itself lands via state.transit).
+    state.agents.forEach(a=>{ if(a.route && a.route.eta<=week){
+      const sp=pressure(a.route.to,a.route.good), sellUnit=agentUnitPrice(a.route.good, sp!=null?sp:0);
+      a.cap += a.route.qty*sellUnit; a.profit += Math.round(a.route.qty*(sellUnit-a.route.buyUnit));
+      a.trips++; a.pos=a.route.to; a.route=null; } });
+    // Idle agents pick the best spread/short-haul edge; pool rooms are decremented so
+    // agents spread across opportunities instead of all stacking the same lane.
+    state.agents.forEach(a=>{ if(a.route) return;
+      let best=null;
+      goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
+        P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
+          P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
+            const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
+            const score=spread/Math.max(1,D[s.id]);
+            if(!best||score>best.score) best={b,s,g,dist:D[s.id],score}; }); }); });
+      if(!best) return;
+      const buyUnit=agentUnitPrice(best.g,best.b.p);
+      let qty=Math.min(AGENT_CAP_QTY,best.b.room,best.s.room);
+      if(buyUnit>0) qty=Math.min(qty,Math.floor(a.cap/buyUnit));
+      qty=Math.round(qty*100)/100; if(qty<0.5) return;
+      setStk(best.b.id,best.g, stk(best.b.id,best.g)-qty); a.cap-=qty*buyUnit;
+      state.transit.push({ good:best.g, qty, from:best.b.id, to:best.s.id, eta:week+Math.max(1,best.dist), agent:a.id });
+      a.route={ from:best.b.id, to:best.s.id, good:best.g, qty, buyUnit, eta:week+Math.max(1,best.dist) };
+      a.pos=best.b.id; best.b.room-=qty; best.s.room-=qty;
+      log(week, `${a.name}: ${qty}kt ${best.g.replace('Common ','')} ${worlds[best.b.id].label}→${worlds[best.s.id].label}`);
+    });
   }
 
   function step(week){
@@ -13837,6 +13901,7 @@ window.ECON = (function(){
         }
       });
     });
+    agentsStep(week);            // autonomous Independents arbitrage the resulting price gaps
     state.week = week;
   }
 
@@ -13868,7 +13933,7 @@ window.ECON = (function(){
   async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
     if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
   function reset(){ state = freshState(); state.active=true; save(); }
 
   const PRESETS = [
@@ -13947,6 +14012,9 @@ window.ECON = (function(){
     setActive(v){ ensure(); state.active=!!v; if(v) state.week=curWeek(); save(); },
     coverWeeks(id,g){ ensure(); const w=worlds[id]; if(!w) return null; const rate=(w.cons[g]||0)+recipeDraw(w,g); return rate>0? stk(id,g)/rate : null; },
     stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
+    agents(){ ensure(); return state.agents||[]; },
+    tradersOn(){ ensure(); return state.tradersOn!==false; },
+    setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
   };
 })();
 
@@ -13987,6 +14055,7 @@ function econApplyRun(){
   }
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
+function econToggleTraders(){ ECON.setTraders(!ECON.tradersOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 
 function renderEconPanel(){
   const body=document.getElementById('econ-body'); if(!body) return;
@@ -14035,6 +14104,21 @@ function renderEconPanel(){
     h+=`<tr style="border-top:1px solid var(--bd0)"><td style="padding:3px 4px;color:var(--tx0)">${w.label}</td><td style="padding:3px 4px;color:var(--tx1)">${tg.replace('Common ','')}</td><td style="padding:3px 4px;text-align:right;color:${cc}">${tc.toFixed(1)} wk</td><td style="padding:3px 4px;text-align:right;color:${pc}">${ptxt}</td></tr>`;
   });
   h+=`</table></div>`;
+  // Traders — autonomous Independent merchants arbitraging price gaps
+  { const on=ECON.tradersOn(), wl=ECON.worlds(), money=n=>{ n=Math.round(n); const s=n<0?'−':''; const a=Math.abs(n); return s+(a>=1000?'Cr'+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,'')+'k':'Cr'+a); };
+    h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — Independents</span>`;
+    h+=btn(on?'● ON':'○ OFF','econToggleTraders()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
+    h+=`</div>`;
+    ECON.agents().forEach(a=>{
+      const rt = a.route && wl[a.route.from] && wl[a.route.to]
+        ? `<span style="color:#7ec0e0">hauling ${a.route.good.replace('Common ','')} ${escQH(wl[a.route.from].label)}→${escQH(wl[a.route.to].label)} · arr wk ${a.route.eta}</span>`
+        : `<span style="color:var(--tx1)">surveying</span>`;
+      const pc = a.profit>=0?'#7ec98f':'#e87a7a';
+      h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0;display:flex;justify-content:space-between;gap:10px"><span>${escQH(a.name)} · ${rt}</span><span style="color:${pc};white-space:nowrap">${a.trips} trips · ${money(a.profit)}</span></div>`;
+    });
+    h+=`<div style="font-size:10px;color:var(--tx1);margin-top:4px">Idle at baseline; they swarm to arbitrage shock-driven price gaps, easing shortages as they go.</div>`;
+    h+=`</div>`; }
   h+=`<div style="padding:8px 10px"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Cascade log</div>`;
   if(!st.log.length) h+=`<div style="font-size:11px;color:var(--tx1)">No shortages yet — fire a shock and step the sim.</div>`;
   else st.log.slice(0,24).forEach(e=> h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0">wk ${e.week} · ${e.text}</div>`);
