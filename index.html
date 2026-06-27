@@ -9849,6 +9849,16 @@ function renderRefereeMenu(){
       <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Campaign Backup</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();exportCampaign()">
+      <span class="settings-row-label">⬇ Export Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">JSON →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();importCampaign()">
+      <span class="settings-row-label">⬆ Import Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
+    </div>
+    <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
 }
 
@@ -9886,6 +9896,71 @@ function refreshOpenMenus(){
   if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
   if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
   if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Campaign export / import (referee-only backup & sharing) ─────────────────
+// The whole campaign is just key/value rows in the shared Supabase table, so a
+// backup is a JSON dump of those rows. Export pulls every campaign row (skipping
+// per-device private notes + local cache keys); import writes them back through
+// supaStorage.set and reloads so every loader re-reads the restored state.
+const CAMPAIGN_EXPORT_VERSION = 1;
+async function exportCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  if(typeof showToast==='function') showToast('Exporting campaign…','info');
+  let rows;
+  try {
+    const res = await fetch(`${SUPABASE_REST}?select=key,value&limit=10000`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    rows = await res.json();
+  } catch(e){
+    if(typeof showToast==='function') showToast('Export failed — could not reach the campaign store ('+(e.message||'offline')+')','error');
+    return;
+  }
+  const keys = {};
+  (Array.isArray(rows)?rows:[]).forEach(r => {
+    if(!r || r.key==null) return;
+    if(/^note-private-/.test(r.key)) return;       // per-device personal notes — not shared campaign state
+    keys[r.key] = r.value;
+  });
+  const blob = { app:'archon-gambit', kind:'campaign', version:CAMPAIGN_EXPORT_VERSION,
+    exportedAt:new Date().toISOString(), count:Object.keys(keys).length, keys };
+  const json = JSON.stringify(blob, null, 2);
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  a.download = `archon-gambit-campaign-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} }, 4000);
+  if(typeof showToast==='function') showToast(`Exported ${blob.count} campaign key${blob.count===1?'':'s'}`);
+}
+function importCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if(!file) return;
+    let blob;
+    try { blob = JSON.parse(await file.text()); }
+    catch(e){ if(typeof showToast==='function') showToast('Import failed — not valid JSON','error'); return; }
+    const keys = blob && blob.keys;
+    if(!keys || typeof keys!=='object' || Array.isArray(keys)){
+      if(typeof showToast==='function') showToast('Import failed — no campaign keys in this file','error'); return; }
+    const names = Object.keys(keys);
+    if(!names.length){ if(typeof showToast==='function') showToast('Import failed — file has no keys','error'); return; }
+    if(!confirm(`Import ${names.length} campaign key${names.length===1?'':'s'} from "${file.name}"?\n\nThis OVERWRITES the current shared campaign — galaxy edits, codex, funds, economy, ship state, quests, and more. It cannot be undone. Continue?`)) return;
+    if(typeof showToast==='function') showToast('Importing campaign…','info');
+    let ok=0, fail=0;
+    for(const k of names){
+      const v = keys[k];
+      const r = await supaStorage.set(k, v==null?'':String(v), true);
+      if(r && r.ok) ok++; else fail++;
+    }
+    if(typeof showToast==='function') showToast(`Imported ${ok} key${ok===1?'':'s'}${fail?` (${fail} queued offline)`:''} — reloading…`);
+    setTimeout(()=>location.reload(), 900);
+  };
+  input.click();
 }
 
 // ── Ambient-animation + orbital-ring toggles ──────────────────────────────
