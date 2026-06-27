@@ -6883,6 +6883,7 @@ async function saveLocationFromForm(){
 
 // ── Commit / edit / delete / restore ──
 async function commitNewLocation(d){
+  recordDesignUndo('Add location "' + (d.name||'') + '"');
   const bodyId = d.bodyId;
   const loc = {
     id: 'loc-add-' + Date.now() + '-' + Math.floor(Math.random()*1000),
@@ -6927,6 +6928,7 @@ async function writeLocationFields(locId, bodyId, fields){
 async function commitLocationEdit(locId, d){
   const found = findLocation(locId);
   if(!found){ showToast('Location not found','error'); return; }
+  recordDesignUndo('Edit location "' + (d.name||'') + '"');
   const fields = {
     name: d.name, type: d.type || '', color: d.color || '#4A90D9',
     tag: d.tag || '', hook: !!d.hook,
@@ -6944,6 +6946,7 @@ async function deleteLocation(locId){
   const found = findLocation(locId);
   if(!found) return;
   if(!confirm(`Remove "${found.loc.name}"? You can restore it from "Show Removed Items".`)) return;
+  recordDesignUndo('Delete location "' + (found.loc.name||'') + '"');
   const bodyId = found.bodyId;
   if(!locationDeletions[currentSystemId]) locationDeletions[currentSystemId] = {};
   if(isAddedLocation(currentSystemId, locId)){
@@ -9903,8 +9906,20 @@ function closeDesignMenu(){
 function renderDesignMenu(){
   const card = document.getElementById('design-menu-card');
   if(!card) return;
+  const undoN = designUndoStack.length, redoN = designRedoStack.length;
+  const lastUndo = undoN ? designUndoStack[undoN-1].label : '';
+  const lastRedo = redoN ? designRedoStack[redoN-1].label : '';
   card.innerHTML = `
     <div class="settings-section-lbl">Design Tools</div>
+    <div class="settings-row" style="cursor:${undoN?'pointer':'default'};opacity:${undoN?1:0.45}" ${undoN?'onclick="designUndo()"':''}>
+      <span class="settings-row-label">↶ Undo${undoN?' — '+escHtml(lastUndo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${undoN}/${DESIGN_UNDO_LIMIT}</span>
+    </div>
+    <div class="settings-row" style="cursor:${redoN?'pointer':'default'};opacity:${redoN?1:0.45}" ${redoN?'onclick="designRedo()"':''}>
+      <span class="settings-row-label">↷ Redo${redoN?' — '+escHtml(lastRedo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${redoN}</span>
+    </div>
+    <div class="archon-divider"></div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -9923,6 +9938,60 @@ function refreshOpenMenus(){
   if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
   if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
   if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Bounded undo / redo for Design Mode ─────────────────────────────────────
+// Design edits/deletes (bodies, locations, economy profiles) mutate in-memory
+// state that's mirrored to Supabase. Rather than invert each op, we SNAPSHOT the
+// whole design state before a change and restore it on undo (redo re-applies the
+// later state). Bounded to DESIGN_UNDO_LIMIT steps and in-memory only (not persisted).
+const DESIGN_UNDO_LIMIT = 20;
+let designUndoStack = [], designRedoStack = [];
+function snapshotDesign(){
+  const clone = o => JSON.parse(JSON.stringify(o||{}));
+  return {
+    bodyAdditions: clone(bodyAdditions), bodyDeletions: clone(bodyDeletions), bodyPropertyOverrides: clone(bodyPropertyOverrides),
+    locationAdditions: clone(locationAdditions), locationDeletions: clone(locationDeletions), locationPropertyOverrides: clone(locationPropertyOverrides),
+    econProfiles: (typeof ECON!=='undefined' && ECON.exportProfiles) ? ECON.exportProfiles() : null,
+  };
+}
+async function restoreDesign(snap){
+  bodyAdditions = snap.bodyAdditions; bodyDeletions = snap.bodyDeletions; bodyPropertyOverrides = snap.bodyPropertyOverrides;
+  locationAdditions = snap.locationAdditions; locationDeletions = snap.locationDeletions; locationPropertyOverrides = snap.locationPropertyOverrides;
+  await saveBodyAdditions(); await saveBodyDeletions(); await saveBodyPropertyOverrides();
+  await saveLocationAdditions(); await saveLocationDeletions(); await saveLocationPropertyOverrides();
+  if(snap.econProfiles!=null && typeof ECON!=='undefined' && ECON.importProfiles) ECON.importProfiles(snap.econProfiles);
+  // Re-render whatever view is on screen so the restored state shows immediately.
+  if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
+  else if(currentView === 'body' && selectedBody){ if(getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
+  else if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+  if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+  refreshOpenMenus();
+}
+// Call BEFORE a design mutation, capturing the pre-change state under a label.
+function recordDesignUndo(label){
+  designUndoStack.push({ label: label || 'change', snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  designRedoStack = [];                 // a fresh edit invalidates the redo branch
+  refreshOpenMenus();
+}
+async function designUndo(){
+  if(!isReferee()) return;
+  if(!designUndoStack.length){ if(typeof showToast==='function') showToast('Nothing to undo','info'); return; }
+  const entry = designUndoStack.pop();
+  designRedoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designRedoStack.length > DESIGN_UNDO_LIMIT) designRedoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Undid: ' + entry.label);
+}
+async function designRedo(){
+  if(!isReferee()) return;
+  if(!designRedoStack.length){ if(typeof showToast==='function') showToast('Nothing to redo','info'); return; }
+  const entry = designRedoStack.pop();
+  designUndoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Redid: ' + entry.label);
 }
 
 // ── Campaign export / import (referee-only backup & sharing) ─────────────────
@@ -14682,6 +14751,9 @@ window.ECON = (function(){
     resolveChain, chainHasCycle, autoInputsOf, marketImpact, isMarketId,
     effectiveProfile: effectiveProfileOf, defProfile: defProfileOf, setProfile, clearProfile,
     loadProfiles, saveProfiles,
+    // Snapshot / restore the raw designer-profile overrides (for Design-Mode undo).
+    exportProfiles(){ return JSON.parse(JSON.stringify(profiles||{})); },
+    importProfiles(obj){ profiles = obj || {}; worlds = null; adj = null; ensure(); state.base = recomputeBase(); saveProfiles(); save(); },
     get state(){ ensure(); return state; },
     worlds(){ ensure(); return worlds; },
     active(){ return !!(state && state.active); },
@@ -14973,6 +15045,7 @@ function commitEconEditor(){
   if(!econEditDraft||!econEditNodeId) return;
   if(!econDraftValid()){ if(typeof showToast==='function') showToast('Fix invalid rows (rates must be > 0, no duplicates)','error'); return; }
   const maps=econDraftMaps();
+  if(typeof recordDesignUndo==='function') recordDesignUndo('Edit economy — ' + econEditNodeId);
   ECON.setProfile(econEditNodeId, maps.prod, maps.cons);
   if(typeof showToast==='function') showToast('Economy saved — galactic market updated');
   closeEconEditor();
@@ -14982,6 +15055,7 @@ function commitEconEditor(){
 function econEditRevert(){
   if(!econEditNodeId) return;
   if(!confirm('Revert this world to its built-in economy? Your custom production/consumption here will be discarded.')) return;
+  if(typeof recordDesignUndo==='function') recordDesignUndo('Revert economy — ' + econEditNodeId);
   ECON.clearProfile(econEditNodeId);
   if(typeof showToast==='function') showToast('Reverted to the built-in economy');
   closeEconEditor();
@@ -16095,6 +16169,7 @@ function uwpToManual(){
 
 // ── Commit / edit / delete ─────────────────────────────────────────────────
 async function commitNewBody(obj){
+  recordDesignUndo('Add body "' + (obj.name||'') + '"');
   obj.id = 'body-add-' + Date.now() + '-' + Math.floor(Math.random()*1000);
   if(!bodyAdditions[currentSystemId]) bodyAdditions[currentSystemId] = [];
   bodyAdditions[currentSystemId].push(obj);
@@ -16130,6 +16205,7 @@ function openBodyEditor(id){
 }
 
 async function commitBodyEdit(id, obj){
+  recordDesignUndo('Edit body "' + (obj.name||'') + '"');
   obj.id = id;
   if(isAddedBody(id)){
     // Edit the addition in place (preserve its npcs/checks/events)
@@ -16175,6 +16251,7 @@ async function deleteBody(id){
   let msg = `Remove "${b.name}"? You can restore it from "Show Removed Items".`;
   if(moons.length) msg = `"${b.name}" has ${moons.length} moon(s) which will no longer have a parent. ` + msg;
   if(!confirm(msg)) return;
+  recordDesignUndo('Delete body "' + (b.name||'') + '"');
   if(isAddedBody(id)){
     const arr = bodyAdditions[currentSystemId] || [];
     const idx = arr.findIndex(x => x.id === id);
