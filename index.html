@@ -4915,8 +4915,8 @@ const HX = (function(){
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
       html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>`;
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
-        : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${origin.id}')">+ Add jump lane from ${eh(disp(origin))}</button></div>`;
-      html+=`<div class="hx-small">Tap a lane on the map to remove it.</div>`; }
+        : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`;
+      html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`; }
     const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
     if(fromLanes.length){ html+=`<div class="hx-sec-lbl">Lanes from ${eh(disp(origin))} · ${fromLanes.length}</div>`;
       fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
