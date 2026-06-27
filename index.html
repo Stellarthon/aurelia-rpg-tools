@@ -13276,6 +13276,10 @@ const MARKET_RUMOUR = {
   shock_embargo: [
     'Trade between {place} has frozen solid. The brokers who saw it coming are already repositioned.'
   ],
+  shock_crackdown: [
+    'The {place} has clamped down on {good} across its territory — supply is drying up and the price is climbing.',
+    'Word is the {place} is restricting {good}. Whoever holds stock beyond their reach is sitting pretty.'
+  ],
   shortage: [
     'Stockpiles of {good} are running thin around {place}. Prices there won’t hold where they are.',
     'A buyer at {place} is quietly paying over the odds for {good}. That tells you everything.',
@@ -13315,7 +13319,7 @@ function pickMarketRumour(){
   if(!items || !items.length) return null;
   const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
   const key = item.kind === 'shock'
-    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : 'shock_block')
+    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
   const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
   const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
@@ -13788,7 +13792,11 @@ window.ECON = (function(){
 
   function outputFactor(id, good){
     let f = 1;
-    state.shocks.forEach(s=>{ if(s.kind==='output' && s.target===id && (s.good==='*'||s.good===good)) f*=s.factor; });
+    const fac = worlds[id] && worlds[id].fac;
+    state.shocks.forEach(s=>{
+      if(s.kind==='output' && s.target===id && (s.good==='*'||s.good===good)) f*=s.factor;            // single-world strike / failure
+      else if(s.kind==='crackdown' && s.faction===fac && (s.good==='*'||s.good===good)) f*=s.factor;  // faction-wide crackdown on a good
+    });
     return f;
   }
   function blocked(){ const b={}; state.shocks.forEach(s=>{ if(s.kind==='block') b[s.target]=1; }); return b; }
@@ -13942,6 +13950,14 @@ window.ECON = (function(){
     { id:'cypress',  label:'Cypress automation failure', kind:'output', target:'cypress', good:'Common Consumables', factor:0.2, weeks:8 },
     { id:'embargo',  label:'Hegemony / OmniSynth embargo', kind:'embargo', facA:'hegemony', facB:'omnisynth', weeks:8 },
     { id:'museum',   label:'Strike — The Museum (food SPOF)', kind:'block', target:'the-museum', weeks:6 },
+    // ── Worker strikes (output cuts) — varied worker types & goods ──
+    { id:'miners',   label:'⛏ Miners’ strike — Profit Margin', kind:'output', target:'profit-margin', good:'Common Ore', factor:0.3, weeks:4 },
+    { id:'foundry',  label:'⚙ Foundry strike — Kronos', kind:'output', target:'kronos', good:'Common Electronics', factor:0.3, weeks:5 },
+    { id:'forge',    label:'🔨 Forge strike — Castor', kind:'output', target:'castor', good:'Common Manufactured', factor:0.3, weeks:5 },
+    { id:'farm',     label:'🌾 Farmhands’ walkout — The Garden', kind:'output', target:'the-garden', good:'Common Consumables', factor:0.3, weeks:4 },
+    { id:'dockers',  label:'🚢 Dockworkers’ strike — The Warehouse', kind:'block', target:'warehouse', weeks:5 },
+    // ── Politics: a faction-wide crackdown restricting a good across its space ──
+    { id:'crackdown',label:'⚖ Hegemony crackdown — high-tech', kind:'crackdown', faction:'hegemony', good:'Advanced Electronics', factor:0.2, weeks:6 },
   ];
   function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s); save(); }
   function cancel(i){ state.shocks.splice(i,1); save(); }
@@ -13956,7 +13972,8 @@ window.ECON = (function(){
     const out = [];
     state.shocks.forEach(s=>{
       let label;
-      if(s.target && worlds[s.target]) label = worlds[s.target].label;
+      if(s.kind==='crackdown') label = facName(s.faction);
+      else if(s.target && worlds[s.target]) label = worlds[s.target].label;
       else if(s.kind==='embargo') label = facName(s.facA)+' & '+facName(s.facB);
       else label = s.target || 'the lanes';
       out.push({ kind:'shock', shock:s.kind, world:s.target||null, label, good:s.good||null });
