@@ -4458,6 +4458,87 @@ async function saveRouteBlocks(){
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
+// ═══ WORLD GENERATOR — one rules-correct MgT2e UWP + trade-code engine ═══════
+// Single source of truth shared by BOTH the galaxy map (HX.uwpOf — seeded,
+// per-device-deterministic) and the Add-Body / system auto-generators (Math.random).
+// Pass any rng()->[0,1); callers supply a seeded rng for reproducible map output.
+// Trade codes + uwpStr read fields flexibly so both the HX shape ({port,atmo,tl})
+// and the body-modal shape ({starport,atm,tech}) work unchanged.
+const WGEN = (function(){
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  function hashStr(s){ s=String(s); let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function mulberry(seed){ return function(){ seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function seededRng(str){ return mulberry(hashStr(str)); }
+  // Traveller extended hex: 0-9 then A.. skipping I and O (canonical).
+  const EHEX='0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  function ehex(n){ return EHEX[clamp(Math.round(n),0,EHEX.length-1)]; }
+  function d6(rng){ return 1 + Math.floor((rng||Math.random)()*6); }
+  function roll2d6(rng){ return d6(rng) + d6(rng); }
+  function genStarport(rng){ const r=roll2d6(rng); return r<=4?'E':r<=6?'D':r<=8?'C':r<=10?'B':'A'; }
+  // Tech Level: 1D + DMs (starport/size/atmo/hydro/pop/gov) — MgT2e RAW.
+  function genTechLevel(rng, starport, size, atm, hydro, pop, gov){
+    let dm=0;
+    dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
+    if(size<=1) dm+=2; else if(size<=4) dm+=1;
+    if(atm<=3 || atm>=10) dm+=1;
+    if(hydro===9) dm+=1; else if(hydro===10) dm+=2;
+    if(pop>=1 && pop<=5) dm+=1; else if(pop===9) dm+=2; else if(pop>=10) dm+=4;
+    if(gov===0 || gov===5) dm+=1; else if(gov===7) dm+=2; else if(gov>=13) dm-=2;
+    return clamp(d6(rng)+dm, 0, 33);
+  }
+  // Generate a UWP. opts:{ rng, port, core, deep, tlFloor }.
+  //  rng     — defaults Math.random; pass a seeded rng for reproducible output.
+  //  port    — fixed starport (map worlds derive it from faction); omitted → rolled.
+  //  core    — +1 pop and a +2 tech bump for high-civilisation core worlds (map only).
+  //  deep    — minimal deep-space outpost profile (map only).
+  //  tlFloor — minimum tech level (map starports imply a floor).
+  // Returns { port, size, atmo, hydro, pop, gov, law, tl } (UWP order).
+  function genUWP(opts){
+    opts = opts || {};
+    const rng = opts.rng || Math.random;
+    const port = opts.port || genStarport(rng);
+    if(opts.deep){ return { port, size:0, atmo:0, hydro:0, pop: rng()<.5?1:2, gov:0, law:0, tl: opts.core?12:10 }; }
+    const size = clamp(roll2d6(rng)-2, 0, 10);
+    const atmo = size===0 ? 0 : clamp(roll2d6(rng)-7+size, 0, 15);
+    let hydro;
+    if(size<=1) hydro=0;
+    else { let dm=0; if(atmo<=1||atmo>=10) dm-=4; hydro = clamp(roll2d6(rng)-7+atmo+dm, 0, 10); }   // hydro DM keys off ATMOSPHERE (RAW), not size
+    let pop = clamp(roll2d6(rng)-2, 0, 12); if(opts.core) pop = clamp(pop+1, 0, 12);
+    const gov = pop===0 ? 0 : clamp(roll2d6(rng)-7+pop, 0, 15);
+    const law = pop===0 ? 0 : clamp(roll2d6(rng)-7+gov, 0, 15);
+    let tl = pop===0 ? 0 : genTechLevel(rng, port, size, atmo, hydro, pop, gov);
+    if(opts.core) tl = clamp(tl+2, 0, 33);
+    if(opts.tlFloor!=null) tl = clamp(Math.max(tl, opts.tlFloor), 0, 33);
+    return { port, size, atmo, hydro, pop, gov, law, tl };
+  }
+  // Field-flexible accessors so both UWP shapes work.
+  const fAtm = u => (u.atmo!=null?u.atmo:u.atm)|0, fTl = u => (u.tl!=null?u.tl:u.tech)|0, fPort = u => u.port||u.starport;
+  function uwpStr(u){ return fPort(u)+ehex(u.size)+ehex(fAtm(u))+ehex(u.hydro)+ehex(u.pop)+ehex(u.gov)+ehex(u.law)+'-'+ehex(fTl(u)); }
+  // Canonical MgT2e trade codes (single source of truth).
+  function tradeCodes(u){
+    const c=[], size=u.size|0, atmo=fAtm(u), hydro=u.hydro|0, pop=u.pop|0, gov=u.gov|0, law=u.law|0, tl=fTl(u);
+    if(atmo>=4&&atmo<=9 && hydro>=4&&hydro<=8 && pop>=5&&pop<=7) c.push('Ag');
+    if(size===0&&atmo===0&&hydro===0) c.push('As');
+    if(pop===0&&gov===0&&law===0) c.push('Ba');
+    if(atmo>=2&&hydro===0) c.push('De');
+    if(atmo>=10&&hydro>=1) c.push('Fl');
+    if(size>=6&&size<=8 && [5,6,8].includes(atmo) && hydro>=5&&hydro<=7) c.push('Ga');
+    if(pop>=9) c.push('Hi');
+    if(tl>=12) c.push('Ht');                                           // High-Tech: TL ≥ 12
+    if(atmo<=1&&hydro>=1) c.push('Ic');
+    if([0,1,2,4,7,9,10,11,12].includes(atmo) && pop>=9) c.push('In'); // Industrial: canonical atmo set
+    if(pop>=1&&pop<=3) c.push('Lo');
+    if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
+    if(pop>=4&&pop<=6) c.push('Ni');
+    if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
+    if([6,8].includes(atmo) && pop>=6&&pop<=8 && gov>=4&&gov<=9) c.push('Ri');
+    if(atmo===0) c.push('Va');
+    if(hydro===10) c.push('Wa');
+    return c;
+  }
+  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes };
+})();
+
 // ═══ GALAXY MAP — HEX-JUMP ENGINE (ported onto main; replaces the Orion render layer) ═══
 const HX = (function(){
   // ── Astrometry reference (real J2000 distances, ly) — joined to GALAXY_NODES
@@ -4608,40 +4689,19 @@ const HX = (function(){
   // ── UWP + trade (MgT2e). Prefer the real surveyed UWP; else generate deterministically. ──
   function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
   function mulberry(seed){ return function(){ seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-  function eHex(n){ n=clamp(Math.round(n),0,33); return n<10?String(n):String.fromCharCode(55+n); }
+  function eHex(n){ return WGEN.ehex(n); }
+  // Uncharted worlds get a deterministic UWP from the shared rules-correct generator,
+  // seeded on the star name so every device produces the same world. Surveyed worlds
+  // (realMainWorld) keep their authored UWP. Faction core worlds run high-tech; the
+  // starport implies a tech floor.
   function uwpOf(s){ if(s._uwp) return s._uwp;
     const real=realMainWorld(s.systemId); if(real){ s._uwp=real.uwp; return real.uwp; }
-    const r=mulberry(hashStr(s.star||s.label)), d6=()=>1+Math.floor(r()*6), twoD=()=>d6()+d6();
     const core=['hegemony','omnisynth','uhc','sanhedrin'].includes(s.fac), port=portOf(s);
-    if(s.deep){ const u={port,size:0,atmo:0,hydro:0,pop:r()<.5?1:2,gov:0,law:0,tl:core?12:10}; s._uwp=u; return u; }
-    const size=clamp(twoD()-2,0,10);
-    const atmo=clamp(twoD()-7+size,0,15);
-    let hydro=twoD()-7+size; if(atmo<=1||atmo>=10) hydro-=4; hydro=clamp(hydro,0,10);
-    let pop=clamp(twoD()-2,0,12); pop=core?clamp(pop+1,0,12):pop;
-    const gov=clamp(twoD()-7+pop,0,15), law=clamp(twoD()-7+gov,0,15);
-    const portTL={A:6,B:4,C:2,D:0,E:0,X:-4}[port]||0, tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
-    const tl=clamp(Math.max(twoD()-7+portTL+(core?2:0)+(pop>=9?1:0),tlFloor),0,15);
-    const u={port,size,atmo,hydro,pop,gov,law,tl}; s._uwp=u; return u; }
-  function uwpStr(s){ const u=uwpOf(s); return u.port+eHex(u.size)+eHex(u.atmo)+eHex(u.hydro)+eHex(u.pop)+eHex(u.gov)+eHex(u.law)+'-'+eHex(u.tl); }
-  function tradeCodes(s){ const u=uwpOf(s), c=[], {size,atmo,hydro,pop,gov,law,tl}=u;
-    if(atmo>=4&&atmo<=9&&hydro>=4&&hydro<=8&&pop>=5&&pop<=7) c.push('Ag');
-    if(size===0&&atmo===0&&hydro===0) c.push('As');
-    if(pop===0&&gov===0&&law===0) c.push('Ba');
-    if(atmo>=2&&hydro===0) c.push('De');
-    if(atmo>=10&&hydro>=1) c.push('Fl');
-    if([6,7,8].includes(size)&&[5,6,8].includes(atmo)&&hydro>=5&&hydro<=7) c.push('Ga');
-    if(pop>=9) c.push('Hi');
-    if(tl>=12) c.push('Ht');
-    if(atmo<=1&&hydro>=1) c.push('Ic');
-    if([0,1,2,4,7,9].includes(atmo)&&pop>=9) c.push('In');
-    if(pop>=1&&pop<=3) c.push('Lo');
-    if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
-    if(pop>=4&&pop<=6) c.push('Ni');
-    if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
-    if([6,8].includes(atmo)&&pop>=6&&pop<=8&&gov>=4&&gov<=9) c.push('Ri');
-    if(atmo===0) c.push('Va');
-    if(hydro===10) c.push('Wa');
-    return c; }
+    const tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
+    const u=WGEN.genUWP({ rng:WGEN.seededRng(s.star||s.label), port, core, deep:s.deep, tlFloor });
+    s._uwp=u; return u; }
+  function uwpStr(s){ return WGEN.uwpStr(uwpOf(s)); }
+  function tradeCodes(s){ return WGEN.tradeCodes(uwpOf(s)); }
   const TRADE_GOODS=[
     {name:'Common Electronics',base:20000,buy:{In:2,Ht:3,Ri:1},sell:{Ni:2,Lo:1,Po:1},avail:'all'},
     {name:'Common Industrial',base:10000,buy:{Na:2,In:5},sell:{Na:3,Ag:2},avail:'all'},
@@ -15566,86 +15626,16 @@ const BODY_CLASS_OPTIONS = [
 ];
 const BODY_TAG_OPTIONS = ['','FLAVOUR','ADVENTURE HOOK','CLASSIFIED','RESTRICTED','CAMPAIGN HUB'];
 
-// ── Dice ───────────────────────────────────────────────────────────────────
-function d6(){ return 1 + Math.floor(Math.random()*6); }
-function roll2d6(){ return d6() + d6(); }
-function ehex(n){ // Traveller extended hex: 0-9 then A.. (skips I,O)
-  n = Math.max(0, Math.round(n));
-  const digits = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return n < digits.length ? digits[n] : 'Z';
-}
-function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
-
-// ── UWP generation (Traveller 2e core / World Builder's Handbook) ──────────
-function genStarport(){
-  const r = roll2d6();
-  if(r<=4) return 'E'; // 2-4
-  if(r<=6) return 'D'; // 5-6
-  if(r<=8) return 'C'; // 7-8
-  if(r<=10) return 'B'; // 9-10
-  return 'A'; // 11-12
-}
-function genUWP(){
-  const starport = genStarport();
-  const size = clamp(roll2d6() - 2, 0, 15);
-  let atm;
-  if(size === 0) atm = 0;
-  else atm = clamp(roll2d6() - 7 + size, 0, 15);
-  let hydro;
-  if(size <= 1) hydro = 0;
-  else {
-    let dm = 0;
-    if(atm <= 1 || atm >= 10) dm -= 4;
-    hydro = clamp(roll2d6() - 7 + atm + dm, 0, 10);
-  }
-  const pop = clamp(roll2d6() - 2, 0, 15);
-  let gov = (pop === 0) ? 0 : clamp(roll2d6() - 7 + pop, 0, 15);
-  let law = (pop === 0) ? 0 : clamp(roll2d6() - 7 + gov, 0, 15);
-  const tech = (pop === 0) ? 0 : genTechLevel(starport, size, atm, hydro, pop, gov);
-  return { starport, size, atm, hydro, pop, gov, law, tech };
-}
-// Tech Level: 1d6 + DMs from starport / size / atmosphere / hydro / pop / gov
-function genTechLevel(starport, size, atm, hydro, pop, gov){
-  let dm = 0;
-  // Starport
-  dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
-  // Size
-  if(size <= 1) dm += 2; else if(size <= 4) dm += 1;
-  // Atmosphere
-  if(atm <= 3 || atm >= 10) dm += 1;
-  // Hydrographics
-  if(hydro === 9) dm += 1; else if(hydro === 10) dm += 2;
-  // Population
-  if(pop >= 1 && pop <= 5) dm += 1; else if(pop === 9) dm += 2; else if(pop >= 10) dm += 4;
-  // Government
-  if(gov === 0 || gov === 5) dm += 1; else if(gov === 7) dm += 2; else if(gov >= 13) dm -= 2;
-  return clamp(d6() + dm, 0, 33);
-}
-function uwpToString(u, starport){
-  const sp = starport || u.starport;
-  return `${sp}${ehex(u.size)}${ehex(u.atm)}${ehex(u.hydro)}${ehex(u.pop)}${ehex(u.gov)}${ehex(u.law)}-${ehex(u.tech)}`;
-}
-// Trade codes from the world profile (subset of the standard table)
-function tradeCodes(u){
-  const c = [];
-  const {size,atm,hydro,pop,gov,law} = u;
-  if(atm>=4&&atm<=9 && hydro>=4&&hydro<=8 && pop>=5&&pop<=7) c.push('Ag');
-  if(size===0&&atm===0&&hydro===0) c.push('As');
-  if(pop===0&&gov===0&&law===0) c.push('Ba');
-  if(atm>=2&&hydro===0) c.push('De');
-  if(atm>=10&&hydro>=1) c.push('Fl');
-  if(size>=6&&size<=8 && (atm===5||atm===6||atm===8) && hydro>=5&&hydro<=7) c.push('Ga');
-  if(pop>=9) c.push('Hi');
-  if(['A','B'].includes(u.starport) && atm<=3 && (hydro<=3) && pop>=9) c.push('In');
-  if(pop>=1&&pop<=3) c.push('Lo');
-  if(atm<=3 && hydro<=3 && pop>=6) c.push('Na');
-  if(pop>=4&&pop<=6) c.push('Ni');
-  if(atm>=2&&atm<=5 && hydro<=3) c.push('Po');
-  if((atm===6||atm===8) && pop>=6&&pop<=8 && gov>=4&&gov<=9) c.push('Ri');
-  if(hydro>=10) c.push('Wa');
-  if(atm===0) c.push('Va');
-  return c;
-}
+// ── Dice / UWP — delegate to the shared rules-correct generator (WGEN) ───────
+// The body modal + system auto-generator use the {starport,atm,tech} field shape;
+// genUWP() remaps WGEN's canonical {port,atmo,tl} output to it. roll2d6() is the
+// single global one (above); clamp/ehex/tradeCodes are thin WGEN delegates.
+function clamp(v,lo,hi){ return WGEN.clamp(v,lo,hi); }
+function ehex(n){ return WGEN.ehex(n); }
+function genUWP(){ const u = WGEN.genUWP();
+  return { starport:u.port, size:u.size, atm:u.atmo, hydro:u.hydro, pop:u.pop, gov:u.gov, law:u.law, tech:u.tl }; }
+function uwpToString(u, starport){ return WGEN.uwpStr(starport ? Object.assign({}, u, {port:starport}) : u); }
+function tradeCodes(u){ return WGEN.tradeCodes(u); }
 const UWP_FIELD_LABELS = {
   starport:'Starport', size:'Size', atm:'Atmosphere', hydro:'Hydrographics',
   pop:'Population', gov:'Government', law:'Law Level', tech:'Tech Level'
@@ -15956,14 +15946,14 @@ function rollFullUwp(){
 function rerollUwpField(field){
   if(!bodyCreatorDraft || !bodyCreatorDraft._uwp) return;
   const u = bodyCreatorDraft._uwp;
-  if(field === 'starport') u.starport = genStarport();
-  else if(field === 'size') u.size = clamp(roll2d6()-2,0,15);
+  if(field === 'starport') u.starport = WGEN.genStarport();
+  else if(field === 'size') u.size = clamp(roll2d6()-2,0,10);
   else if(field === 'atm') u.atm = u.size===0?0:clamp(roll2d6()-7+u.size,0,15);
   else if(field === 'hydro'){ let dm=0; if(u.atm<=1||u.atm>=10)dm-=4; u.hydro = u.size<=1?0:clamp(roll2d6()-7+u.atm+dm,0,10); }
-  else if(field === 'pop') u.pop = clamp(roll2d6()-2,0,15);
+  else if(field === 'pop') u.pop = clamp(roll2d6()-2,0,12);
   else if(field === 'gov') u.gov = u.pop===0?0:clamp(roll2d6()-7+u.pop,0,15);
   else if(field === 'law') u.law = u.pop===0?0:clamp(roll2d6()-7+u.gov,0,15);
-  else if(field === 'tech') u.tech = u.pop===0?0:genTechLevel(u.starport,u.size,u.atm,u.hydro,u.pop,u.gov);
+  else if(field === 'tech') u.tech = u.pop===0?0:WGEN.genTechLevel(null,u.starport,u.size,u.atm,u.hydro,u.pop,u.gov);
   renderBodyCreatorBody();
 }
 function ehexToNum(ch){
