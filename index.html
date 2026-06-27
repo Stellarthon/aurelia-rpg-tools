@@ -2439,6 +2439,13 @@ input#ui-scale-range{
 #hx-range-toggle.on{border-color:var(--accentGold);color:var(--accentGold)}
 #hx-fuel-toggle{top:106px;border:.5px solid #3f9d5a;color:#3f9d5a}
 #hx-fuel-toggle.off{border-color:var(--bd0,#2e3347);color:var(--tx1)}
+#hx-trade-toggle{position:absolute;right:12px;top:138px;font-size:9px;font-family:var(--mono,monospace);letter-spacing:1px;background:rgba(14,18,30,.92);border-radius:6px;padding:7px 12px;text-transform:uppercase;z-index:10;cursor:pointer;border:.5px solid var(--bd0,#2e3347);color:var(--tx1)}
+#hx-trade-toggle.on{border-color:#e0c040;color:#e0c040}
+#hx-trade-legend{position:absolute;right:12px;top:170px;background:rgba(14,18,30,.94);border:.5px solid var(--bd0,#2e3347);border-radius:8px;padding:8px 10px;z-index:10;pointer-events:none;font-family:var(--mono,monospace);max-width:150px}
+#hx-trade-legend .hx-tl-h{font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);margin-bottom:5px}
+#hx-trade-legend .hx-tl-row{display:flex;align-items:center;gap:6px;font-size:9.5px;color:var(--tx0);padding:1px 0}
+#hx-trade-legend .hx-tl-sw{width:10px;height:10px;border-radius:2px;flex:none}
+.hx-trade-lbl{font-size:8.5px;fill:#f4d35e;font-family:var(--mono,monospace);font-weight:700;paint-order:stroke;stroke:#04060e;stroke-width:2.4px;stroke-linejoin:round}
 #hx-toast{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);background:rgba(14,18,30,.96);border:.5px solid var(--accentGold);border-radius:8px;padding:9px 14px;color:var(--tx0);font-size:12px;font-family:var(--mono,monospace);z-index:30;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
 #hx-toast.show{opacity:1}
 #hx-legend{position:absolute;top:10px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
@@ -2593,6 +2600,8 @@ input#ui-scale-range{
     <button id="hx-terr-toggle" onclick="hxToggleTerr()">Territories: ON</button>
     <button id="hx-range-toggle" onclick="hxToggleRange()">Fuel range: OFF</button>
     <button id="hx-fuel-toggle" onclick="hxToggleFuel()">Fuel: ON</button>
+    <button id="hx-trade-toggle" onclick="hxToggleTrade()">Trade: OFF</button>
+    <div id="hx-trade-legend" class="hidden"></div>
     <div id="hx-zoom">
       <button class="hx-zoom-btn" onclick="hxZoomBy(1.25)">+</button>
       <button class="hx-zoom-btn" onclick="hxZoomBy(0.8)">−</button>
@@ -4581,7 +4590,7 @@ const HX = (function(){
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
   let origin=null, selected=null;
-  let showLanes=true, showTerr=true, showRange=false, showFuel=true, dragMoved=false;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   const RPX=26, LABEL_ZOOM_F=1.3;
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
@@ -4645,6 +4654,7 @@ const HX = (function(){
         if(touches) line.setAttribute('stroke-width','1.6'); laneLayer.appendChild(line);
         if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
           hit.addEventListener('click',ev=>{ ev.stopPropagation(); if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
+    if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
     if(selected&&selected!==origin){ const route=bestRoute(origin,selected);
       if(route&&route.length>1){ const plan=fuelPlan(route);
         for(let i=0;i<route.length-1;i++){ const pa=axialPx(route[i].q,route[i].r),pb=axialPx(route[i+1].q,route[i+1].r);
@@ -4674,6 +4684,52 @@ const HX = (function(){
       const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
       if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
       if(!(isOrigin||isSel)){ marker.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); marker.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
+    });
+  }
+
+  // ── Living-economy overlay: where goods flow, and where the Independent traders are ──
+  const GOOD_COL = {
+    'Common Consumables':'#5fb87a','Common Ore':'#b07a4a','Common Electronics':'#4a90d9',
+    'Common Manufactured':'#8a9bb5','Advanced Electronics':'#3fd0d0','Precious Metals':'#e0c040',
+    'Radioactives':'#9fd44a','Biochemicals':'#3faf8f','Luxury Goods':'#c060c0','Pharmaceuticals':'#e07090'
+  };
+  const gShort = g => (g||'').replace('Common ','');
+  function drawTrade(layer){
+    if(typeof window.ECON==='undefined' || !ECON.active()) return;
+    let st; try{ st=ECON.state; }catch(e){ return; }
+    // 1) Goods flows — aggregate in-flight shipments per directed lane, colour by the
+    //    dominant good, width by total volume, animated toward the destination.
+    const lanes={};
+    (st.transit||[]).forEach(t=>{ if(!BY_ID[t.from]||!BY_ID[t.to]) return;
+      const k=t.from+'>'+t.to, L=lanes[k]||(lanes[k]={from:t.from,to:t.to,qty:0,goods:{}});
+      L.qty+=t.qty; L.goods[t.good]=(L.goods[t.good]||0)+t.qty; });
+    const flowG=NS('g',{}); layer.appendChild(flowG);
+    Object.values(lanes).forEach(L=>{ if(L.qty<2) return;   // cull negligible background flows
+      const a=BY_ID[L.from], b=BY_ID[L.to], pa=axialPx(a.q,a.r), pb=axialPx(b.q,b.r);
+      const dx=pb.x-pa.x, dy=pb.y-pa.y, len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len;
+      const x1=pa.x+ux*6, y1=pa.y+uy*6, x2=pb.x-ux*8, y2=pb.y-uy*8;
+      const dom=Object.keys(L.goods).sort((p,q)=>L.goods[q]-L.goods[p])[0], col=GOOD_COL[dom]||'#9fb0c8';
+      const w=Math.max(0.8, Math.min(4.5, Math.sqrt(L.qty)/2.4));
+      const ln=NS('line',{x1,y1,x2,y2,stroke:col,'stroke-width':w,'stroke-linecap':'round',opacity:0.55,'stroke-dasharray':'5,5','pointer-events':'stroke'});
+      ln.appendChild(NS('animate',{attributeName:'stroke-dashoffset',from:10,to:0,dur:'0.9s',repeatCount:'indefinite'}));
+      const gl=Object.keys(L.goods).sort((p,q)=>L.goods[q]-L.goods[p]).map(g=>`${gShort(g)} ${Math.round(L.goods[g])}kt`).join(', ');
+      const tt=NS('title',{}); tt.textContent=`${disp(a)} → ${disp(b)}: ${gl}`; ln.appendChild(tt);
+      flowG.appendChild(ln);
+      flowG.appendChild(NS('polygon',{points:`${x2},${y2} ${x2-ux*6-uy*3.4},${y2-uy*6+ux*3.4} ${x2-ux*6+uy*3.4},${y2-uy*6-ux*3.4}`,fill:col,opacity:0.7,'pointer-events':'none'}));
+    });
+    // 2) Trader convoys — a ship marker along each agent's route + cargo/destination label.
+    const week=st.week;
+    ((ECON.agents&&ECON.agents())||[]).forEach(a=>{ if(!a.route) return;
+      const f=BY_ID[a.route.from], t=BY_ID[a.route.to]; if(!f||!t) return;
+      const pf=axialPx(f.q,f.r), pt=axialPx(t.q,t.r);
+      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.1,Math.min(0.9,(week-a.route.began)/(a.route.eta-a.route.began)));
+      const x=pf.x+(pt.x-pf.x)*pr, y=pf.y+(pt.y-pf.y)*pr, z=4.2;
+      const gg=NS('g',{'pointer-events':'none'});
+      gg.appendChild(NS('line',{x1:pf.x,y1:pf.y,x2:pt.x,y2:pt.y,stroke:'#f4d35e','stroke-width':0.7,opacity:0.28,'stroke-dasharray':'2,3'}));
+      gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:'#f4d35e',stroke:'#04060e','stroke-width':1}));
+      const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
+      gg.appendChild(lbl);
+      layer.appendChild(gg);
     });
   }
 
@@ -4883,6 +4939,14 @@ const HX = (function(){
   window.hxToggleTerr =()=>{ showTerr=!showTerr; const b=document.getElementById('hx-terr-toggle'); if(b){ b.textContent='Territories: '+(showTerr?'ON':'OFF'); b.classList.toggle('off',!showTerr); } render(); };
   window.hxToggleRange=()=>{ showRange=!showRange; const b=document.getElementById('hx-range-toggle'); if(b){ b.textContent='Fuel range: '+(showRange?'ON':'OFF'); b.classList.toggle('on',showRange); } render(); };
   window.hxToggleFuel =()=>{ showFuel=!showFuel; const b=document.getElementById('hx-fuel-toggle'); if(b){ b.textContent='Fuel: '+(showFuel?'ON':'OFF'); b.classList.toggle('off',!showFuel); } render(); };
+  window.hxToggleTrade=()=>{ showTrade=!showTrade; const b=document.getElementById('hx-trade-toggle'); if(b){ b.textContent='Trade: '+(showTrade?'ON':'OFF'); b.classList.toggle('on',showTrade); }
+    const lg=document.getElementById('hx-trade-legend');
+    if(lg){ lg.classList.toggle('hidden',!showTrade);
+      if(showTrade){ let h='<div class="hx-tl-h">Goods in transit</div>';
+        Object.keys(GOOD_COL).forEach(g=>{ h+=`<div class="hx-tl-row"><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
+        h+='<div class="hx-tl-row" style="margin-top:4px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader</div>';
+        lg.innerHTML=h; } }
+    render(); };
   window.hxZoomBy=f=>zoomBy(f);
   window.hxResetView=()=>fitView();
   window.hxExecuteJump=executeJump;
@@ -13891,7 +13955,7 @@ window.ECON = (function(){
       qty=Math.round(qty*100)/100; if(qty<0.5) return;
       setStk(best.b.id,best.g, stk(best.b.id,best.g)-qty); a.cap-=qty*buyUnit;
       state.transit.push({ good:best.g, qty, from:best.b.id, to:best.s.id, eta:week+Math.max(1,best.dist), agent:a.id });
-      a.route={ from:best.b.id, to:best.s.id, good:best.g, qty, buyUnit, eta:week+Math.max(1,best.dist) };
+      a.route={ from:best.b.id, to:best.s.id, good:best.g, qty, buyUnit, began:week, eta:week+Math.max(1,best.dist) };
       a.pos=best.b.id; best.b.room-=qty; best.s.room-=qty;
       log(week, `${a.name}: ${qty}kt ${best.g.replace('Common ','')} ${worlds[best.b.id].label}→${worlds[best.s.id].label}`);
     });
