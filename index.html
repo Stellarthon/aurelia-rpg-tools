@@ -13284,6 +13284,10 @@ const MARKET_RUMOUR = {
     'The {place} has slapped a tariff on {good} imports — it’s getting pricey behind their borders, and cheap outside them.',
     'A {place} import tariff is choking {good} at the frontier. Brokers who can run it past customs stand to clean up.'
   ],
+  shock_demand: [
+    'Demand for {good} is surging across {place} — buyers are desperate and the price is spiking.',
+    'A run on {good} has hit {place}. Anyone arriving with a full hold could name their price.'
+  ],
   shortage: [
     'Stockpiles of {good} are running thin around {place}. Prices there won’t hold where they are.',
     'A buyer at {place} is quietly paying over the odds for {good}. That tells you everything.',
@@ -13323,7 +13327,7 @@ function pickMarketRumour(){
   if(!items || !items.length) return null;
   const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
   const key = item.kind === 'shock'
-    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : 'shock_block')
+    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
   const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
   const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
@@ -13679,6 +13683,12 @@ window.ECON = (function(){
     'Common Electronics':  { tier:1, recipe:{ 'Common Ore':1, 'Scrap':1 } },        // component
     'Common Manufactured': { tier:1, recipe:{ 'Common Ore':1, 'Scrap':1 } },
     'Advanced Electronics':{ tier:2, recipe:{ 'Common Electronics':2 } },           // high-tech
+    // ── Deeper graph: two new value chains + a raw, for richer multi-hop cascades ──
+    'Precious Metals':     { tier:0 },                                              // raw (mined, high value)
+    'Radioactives':        { tier:0 },                                              // raw (mined, very high value)
+    'Biochemicals':        { tier:1, recipe:{ 'Common Consumables':1 } },           // refined from agri output
+    'Luxury Goods':        { tier:2, recipe:{ 'Precious Metals':1 } },              // worked precious metals
+    'Pharmaceuticals':     { tier:2, recipe:{ 'Biochemicals':2 } },                 // food → biochem → pharma
   };
   const SIM_GOODS = Object.keys(GOODS);
 
@@ -13691,22 +13701,22 @@ window.ECON = (function(){
   // list them in cons or they double-count. Numbers are balanced so total supply
   // ≥ total demand for every good (system sits near equilibrium; shocks deviate it).
   const DEF = {
-    cypress:        { prod:{'Common Consumables':300}, cons:{'Common Manufactured':6}, safW:1 },   // breadbasket
-    'the-garden':   { prod:{'Common Consumables':45},  cons:{'Common Manufactured':3} },           // Congregation farm
-    bastion:        { prod:{'Common Consumables':55},  cons:{'Common Manufactured':8,'Advanced Electronics':2} }, // Elysium Prime
-    erebus:         { prod:{'Common Ore':130},         cons:{'Common Consumables':6,'Common Manufactured':2} },
-    'profit-margin':{ prod:{'Common Ore':100,'Scrap':120}, cons:{'Common Consumables':8} },
-    graveyard:      { prod:{'Scrap':260},              cons:{'Common Consumables':4} },            // salvage
-    'elysium-prime':{ prod:{'Common Ore':40},          cons:{'Common Consumables':3} },            // Vanguard's End mine
-    kronos:         { prod:{'Common Electronics':90,'Common Manufactured':40}, cons:{'Common Consumables':15}, safW:1.5 }, // Kronos Prime
-    castor:         { prod:{'Common Manufactured':60}, cons:{'Common Consumables':8} },             // forge-world
+    cypress:        { prod:{'Common Consumables':320,'Biochemicals':20}, cons:{'Common Manufactured':6}, safW:1 },   // breadbasket + bio-refinery (+20 food offsets the biochem draw)
+    'the-garden':   { prod:{'Common Consumables':53,'Biochemicals':8},  cons:{'Common Manufactured':3} },           // Congregation farm
+    bastion:        { prod:{'Common Consumables':67,'Biochemicals':12}, cons:{'Common Manufactured':8,'Advanced Electronics':2,'Luxury Goods':2,'Pharmaceuticals':2} }, // Elysium Prime
+    erebus:         { prod:{'Common Ore':130,'Precious Metals':8,'Radioactives':6}, cons:{'Common Consumables':6,'Common Manufactured':2} },
+    'profit-margin':{ prod:{'Common Ore':100,'Scrap':120,'Precious Metals':10}, cons:{'Common Consumables':8} },
+    graveyard:      { prod:{'Scrap':260,'Radioactives':5},              cons:{'Common Consumables':4} },            // salvage + reclaimed isotopes
+    'elysium-prime':{ prod:{'Common Ore':40,'Precious Metals':6},       cons:{'Common Consumables':3} },            // Vanguard's End mine
+    kronos:         { prod:{'Common Electronics':90,'Common Manufactured':40,'Luxury Goods':8}, cons:{'Common Consumables':15,'Radioactives':4,'Pharmaceuticals':2}, safW:1.5 }, // Kronos Prime
+    castor:         { prod:{'Common Manufactured':60,'Luxury Goods':6}, cons:{'Common Consumables':8,'Pharmaceuticals':1} },  // forge-world
     'the-anvil':    { prod:{'Common Manufactured':40}, cons:{'Common Consumables':4} },             // shipyards
-    vesta:          { prod:{'Common Electronics':25},  cons:{'Common Consumables':10} },            // Vestalia
-    sol:            { prod:{'Advanced Electronics':18},
-                      cons:{'Common Consumables':60,'Common Manufactured':25,'Advanced Electronics':15}, safW:4 },
+    vesta:          { prod:{'Common Electronics':25,'Pharmaceuticals':8}, cons:{'Common Consumables':10} },         // Vestalia — electronics + pharma labs
+    sol:            { prod:{'Advanced Electronics':18,'Pharmaceuticals':10},
+                      cons:{'Common Consumables':60,'Common Manufactured':25,'Advanced Electronics':15,'Luxury Goods':3,'Radioactives':3,'Precious Metals':1,'Pharmaceuticals':2}, safW:4 },
     aurelia:        { prod:{'Advanced Electronics':20},
-                      cons:{'Common Consumables':120,'Common Manufactured':40,'Advanced Electronics':12}, safW:3 },
-    avalon:         { prod:{'Advanced Electronics':8}, cons:{'Common Consumables':8,'Common Manufactured':4} },
+                      cons:{'Common Consumables':120,'Common Manufactured':40,'Advanced Electronics':12,'Luxury Goods':6,'Pharmaceuticals':5,'Radioactives':3,'Precious Metals':2}, safW:3 },
+    avalon:         { prod:{'Advanced Electronics':8}, cons:{'Common Consumables':8,'Common Manufactured':4,'Luxury Goods':1,'Pharmaceuticals':1} },
     warehouse:      { prod:{}, cons:{}, store:{'Common Consumables':200}, safW:8 },                // strategic food cache
   };
   const DEFAULT = { prod:{}, cons:{'Common Consumables':2,'Common Manufactured':1}, safW:2 };
@@ -13801,6 +13811,14 @@ window.ECON = (function(){
       if(s.kind==='output' && s.target===id && (s.good==='*'||s.good===good)) f*=s.factor;            // single-world strike / failure
       else if(s.kind==='crackdown' && s.faction===fac && (s.good==='*'||s.good===good)) f*=s.factor;  // faction-wide crackdown on a good
     });
+    return f;
+  }
+  // Demand multiplier: a 'demand' shock (e.g. a plague spiking medical demand) inflates
+  // consumption of a good at a world / across a faction → a fast-biting shortage.
+  function demandFactor(id, good){
+    let f = 1;
+    const fac = worlds[id] && worlds[id].fac;
+    state.shocks.forEach(s=>{ if(s.kind==='demand' && (s.target===id || s.faction===fac) && (s.good==='*'||s.good===good)) f*=s.factor; });
     return f;
   }
   function blocked(){ const b={}; state.shocks.forEach(s=>{ if(s.kind==='block') b[s.target]=1; }); return b; }
@@ -13914,7 +13932,7 @@ window.ECON = (function(){
         if(r) for(const inp in r) setStk(w.id,inp, stk(w.id,inp)-made*r[inp]);
         setStk(w.id,g, stk(w.id,g)+made);
       }
-      for(const g in w.cons) setStk(w.id,g, stk(w.id,g) - w.cons[g]);
+      for(const g in w.cons) setStk(w.id,g, stk(w.id,g) - w.cons[g]*demandFactor(w.id,g));
     });
 
     Object.values(worlds).forEach(w=>{ for(const g of SIM_GOODS){
@@ -13995,6 +14013,10 @@ window.ECON = (function(){
     // ── Politics: a faction-wide crackdown restricting a good across its space ──
     { id:'crackdown',label:'⚖ Hegemony crackdown — high-tech', kind:'crackdown', faction:'hegemony', good:'Advanced Electronics', factor:0.2, weeks:6 },
     { id:'tariff',   label:'⚖ Hegemony import tariff — electronics', kind:'tariff', faction:'hegemony', good:'Common Electronics', factor:0.4, weeks:6 },
+    // ── New value-chain disruptions (deeper goods graph) ──
+    { id:'biorefinery', label:'⚗ Bio-refinery failure — Cypress', kind:'output', target:'cypress', good:'Biochemicals', factor:0.2, weeks:5 },
+    { id:'minecollapse',label:'💎 Mine collapse — Precious Metals', kind:'output', target:'profit-margin', good:'Precious Metals', factor:0.15, weeks:5 },
+    { id:'plague',      label:'☣ Plague — pharma demand spike (Hegemony)', kind:'demand', faction:'hegemony', good:'Pharmaceuticals', factor:3, weeks:5 },
   ];
   function fire(p){ ensure(); const s = Object.assign({}, p); s.until = (p.weeks!=null)? state.week + p.weeks : null; s.fired=state.week; state.shocks.push(s);
     if(!state.history) state.history=[];
@@ -14013,7 +14035,7 @@ window.ECON = (function(){
     const out = [];
     state.shocks.forEach(s=>{
       let label;
-      if(s.kind==='crackdown' || s.kind==='tariff') label = facName(s.faction);
+      if(s.kind==='crackdown' || s.kind==='tariff' || (s.kind==='demand' && s.faction)) label = facName(s.faction);
       else if(s.target && worlds[s.target]) label = worlds[s.target].label;
       else if(s.kind==='embargo') label = facName(s.facA)+' & '+facName(s.facB);
       else label = s.target || 'the lanes';
