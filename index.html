@@ -153,6 +153,95 @@ textarea{font-family:var(--font)}
 .npc-preview-skills{font-size:11px;color:var(--accentGold);margin-bottom:8px}
 .npc-preview-row{font-size:11px;color:var(--tx0);margin-bottom:3px;line-height:1.4}
 
+/* ── Economy editor modal (Design Mode · Production & Consumption) ── */
+#econ-editor-modal{
+  position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;
+  background:rgba(4,6,14,.62);padding:20px;box-sizing:border-box
+}
+#econ-editor-modal.open{display:flex}
+#econ-editor-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.5)
+}
+#econ-editor-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#econ-editor-title{font-size:13px;font-weight:700;letter-spacing:.5px;color:#C98BE8}
+#econ-editor-close{background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:2px 6px}
+#econ-editor-close:hover{color:var(--tx0)}
+#econ-editor-body{padding:16px;overflow-y:auto}
+#econ-editor-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:12px 16px;border-top:.5px solid var(--bd0);flex-shrink:0
+}
+.econ-ed-sub{font-size:11px;color:var(--tx1);line-height:1.5;margin:-4px 0 14px}
+.econ-ed-sub b{color:var(--tx0)}
+.econ-ed-lbl{font-size:10px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.econ-ed-lbl .econ-ed-hint{font-size:9px;letter-spacing:0;text-transform:none;color:var(--tx1);opacity:.8}
+.econ-ed-section{margin-bottom:16px}
+.econ-ed-rows{display:flex;flex-direction:column;gap:6px}
+.econ-ed-row{
+  display:grid;grid-template-columns:1fr 92px auto;gap:8px;align-items:center;
+  background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 8px
+}
+.econ-ed-row.auto{background:rgba(155,89,182,.08);border-color:rgba(155,89,182,.4);border-style:dashed}
+.econ-ed-row.warn{border-color:#d45050}
+.econ-ed-good{display:flex;align-items:center;gap:8px;min-width:0}
+.econ-ed-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.econ-ed-gname{font-size:12px;color:var(--tx0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.econ-ed-tier{font-size:9px;font-family:monospace;color:var(--tx1);opacity:.7}
+.econ-ed-badge{font-size:8px;font-family:monospace;letter-spacing:.5px;text-transform:uppercase;padding:1px 5px;border-radius:3px;cursor:help}
+.econ-ed-badge.auto{background:rgba(155,89,182,.22);color:#C98BE8}
+.econ-ed-badge.imported{background:rgba(0,180,200,.18);color:#3fd0d0}
+.econ-ed-badge.local{background:rgba(63,157,90,.2);color:#7fd6a0}
+.econ-ed-rate{
+  width:100%;font-size:12px;font-family:monospace;font-weight:700;text-align:right;
+  color:var(--accentGold);background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:4px;padding:5px 6px;outline:none;box-sizing:border-box
+}
+.econ-ed-rate:focus{border-color:#9B59B6}
+.econ-ed-rate:disabled{color:var(--tx1);opacity:.7}
+.econ-ed-unit{font-size:9px;font-family:monospace;color:var(--tx1)}
+.econ-ed-del{background:none;border:none;color:var(--tx1);cursor:pointer;font-size:13px;padding:4px;line-height:1}
+.econ-ed-del:hover{color:#d45050}
+.econ-ed-mini{background:none;border:.5px solid var(--bd0);color:var(--tx1);cursor:pointer;font-size:10px;border-radius:4px;padding:3px 6px;white-space:nowrap}
+.econ-ed-mini:hover{color:var(--tx0);border-color:var(--tx1)}
+.econ-ed-empty{font-size:11px;color:var(--tx1);font-style:italic;padding:4px 2px}
+.econ-ed-add{font-size:10px;font-family:monospace;color:#9B59B6;background:transparent;border:1px dashed #9B59B6;border-radius:5px;padding:7px;cursor:pointer;width:100%;margin-top:6px}
+.econ-ed-add:hover{background:rgba(155,89,182,.1)}
+.econ-ed-picker{position:relative;margin-top:6px}
+.econ-ed-search{
+  width:100%;font-size:12px;font-family:var(--font);color:var(--tx0);
+  background:var(--bg0);border:.5px solid #9B59B6;border-radius:6px;
+  padding:8px 9px;outline:none;box-sizing:border-box
+}
+.econ-ed-list{
+  margin-top:4px;max-height:184px;overflow-y:auto;border:.5px solid var(--bd0);
+  border-radius:6px;background:var(--bg0)
+}
+.econ-ed-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;border-bottom:.5px solid var(--bd1);color:var(--tx0);font-size:12px;padding:7px 9px;cursor:pointer}
+.econ-ed-opt:last-child{border-bottom:none}
+.econ-ed-opt:hover,.econ-ed-opt:focus{background:rgba(155,89,182,.14);outline:none}
+.econ-ed-opt:disabled{opacity:.35;cursor:not-allowed}
+.econ-ed-tree{font-family:monospace;font-size:11px;line-height:1.7;color:var(--tx1)}
+.econ-ed-tree .g{color:var(--tx0)}
+.econ-ed-tree .raw{color:#7fd6a0}
+.econ-ed-tree .cyc{color:#ff6b6b;font-weight:700}
+.econ-ed-tree .q{color:var(--accentGold)}
+.econ-ed-impact{background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:10px 12px}
+.econ-ed-impact-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bd1)}
+.econ-ed-impact-row:last-child{border-bottom:none}
+.econ-ed-impact-good{display:flex;align-items:center;gap:7px;color:var(--tx0)}
+.econ-ed-impact-val{font-family:monospace;font-size:11px}
+.econ-ed-arrow.up{color:#ff7a6b}
+.econ-ed-arrow.down{color:#7fd6a0}
+.econ-ed-deficit{font-size:9px;font-family:monospace;color:#ffb454;text-transform:uppercase;letter-spacing:.5px}
+.econ-ed-cyc-warn{background:rgba(212,80,80,.12);border:.5px solid #d45050;border-radius:6px;padding:8px 10px;font-size:11px;color:#ffa39c;margin-bottom:14px}
+.econ-ed-collapse summary{cursor:pointer;font-size:10px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:#9B59B6;margin-bottom:6px;outline:none}
+.econ-ed-collapse[open] summary{margin-bottom:8px}
+
 /* ── Body Creator modal (mirrors #npc-creator-*) ── */
 #body-creator-modal{
   position:fixed;inset:0;background:rgba(7,10,16,0.6);z-index:210;
@@ -2682,6 +2771,9 @@ input#ui-scale-range{
               <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">System Bodies</div>
               <table class="btbl" id="body-list-table"></table>
             </div>
+            <!-- Production & Consumption (system economy) — filled per-system by
+                 renderSystemOverview(); mirrors the galaxy star panel's section. -->
+            <div id="sys-econ-section"></div>
             <!-- Shown instead of the body list when a system has no charted
                  bodies — offers manual entry / random UWP generation. -->
             <div id="sys-blank-prompt" class="v-hidden"></div>
@@ -2883,6 +2975,24 @@ input#ui-scale-range{
 </div><!-- #root -->
 <div id="float-panels">
   <div id="toast-container"></div>
+
+  <!-- ── Economy editor modal (Design Mode · Production & Consumption) ── -->
+  <div id="econ-editor-modal" onclick="if(event.target===this)closeEconEditor()">
+    <div id="econ-editor-card" role="dialog" aria-modal="true" aria-labelledby="econ-editor-title">
+      <div id="econ-editor-hdr">
+        <span id="econ-editor-title">⚒ Production &amp; Consumption</span>
+        <button id="econ-editor-close" aria-label="Close" onclick="closeEconEditor()">✕</button>
+      </div>
+      <div id="econ-editor-body"></div>
+      <div id="econ-editor-footer">
+        <button class="npc-creator-btn" onclick="econEditRevert()" id="econ-editor-revert">Revert to default</button>
+        <span style="display:flex;align-items:center;gap:10px">
+          <button class="npc-creator-btn" onclick="closeEconEditor()">Cancel</button>
+          <button class="npc-creator-btn primary" onclick="commitEconEditor()" id="econ-editor-save">Save to market</button>
+        </span>
+      </div>
+    </div>
+  </div>
 
   <!-- ── NPC Creator modal ── -->
   <div id="npc-creator-modal" onclick="if(event.target===this)closeNpcCreator()">
@@ -4929,6 +5039,19 @@ const HX = (function(){
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`;
       html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`; }
+    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof ECON!=='undefined'){
+      html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Production &amp; Consumption</div>`;
+      if(!ECON.isMarketId(s.id)){
+        html+=`<div class="hx-small">${eh((fac&&fac.name)||'This faction')} keeps no open market at ${eh(disp(s))} — nothing to configure.</div>`;
+      } else {
+        const ep=ECON.effectiveProfile(s.id);
+        const chips=(typeof econChipsHTML==='function')?econChipsHTML(s.id):'';
+        html+= chips ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${chips}</div>`
+                     : `<div class="hx-small" style="margin-bottom:6px">No production or consumption configured.</div>`;
+        if(ep.overridden) html+=`<div class="hx-small" style="color:#C98BE8;margin:-2px 0 6px">✎ Custom economy — overrides the built-in profile.</div>`;
+        html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="openEconEditor('${s.id}')">⚒ Edit production &amp; consumption</button></div>`;
+      }
+    }
     const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
     if(fromLanes.length){ html+=`<div class="hx-sec-lbl">Lanes from ${eh(disp(origin))} · ${fromLanes.length}</div>`;
       fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
@@ -5087,6 +5210,10 @@ function renderSystemOverview(){
   if(dt) dt.textContent = 'SELECT A BODY TO INSPECT';
   const star = document.getElementById('sys-star-info');
   if(star) star.innerHTML = gxStarInfoHTML(sysId);
+
+  // System economy (Design Mode, referee) — same prod/cons data + editor as the galaxy view.
+  const econSec = document.getElementById('sys-econ-section');
+  if(econSec) econSec.innerHTML = econSystemSectionHTML((SYSTEMS[sysId]||{}).galaxyId);
 
   const bodies = effectiveBodies(sysId);
   const bodiesSec = document.getElementById('sys-bodies-section');
@@ -10355,7 +10482,7 @@ function forceDesignModeOff(){
 // controls). Called whenever Design Mode flips on or off.
 function refreshDesignAffordances(){
   if(currentView === 'station' && cur) renderDetail();
-  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'system'){ if(selectedBody) selectBody(selectedBody); else renderSystemOverview(); }
   if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
 }
 
@@ -13839,6 +13966,12 @@ window.ECON = (function(){
   const DEFAULT = { prod:{}, cons:{'Common Consumables':2,'Common Manufactured':1}, safW:2 };
 
   let worlds = null, adj = null, state = null;
+  // Per-world prod/cons overrides authored in the Design Mode "Production & Consumption"
+  // editor. Layered over the hardcoded DEF table by buildTopology() exactly like
+  // contentOverrides layers over hardcoded narrative text — DEF is never mutated, so
+  // "Revert" just drops the override. Keyed by GALAXY_NODES id. Persisted (referee-only)
+  // to the shared econ-profiles row so every device resolves the same economy.
+  let profiles = {};
 
   function nodeOf(id){ return (typeof GALAXY_NODES!=='undefined') ? GALAXY_NODES.find(n=>n.id===id) : null; }
   function isMarket(n){ return n && !NO_MARKET[n.faction]; }
@@ -13849,8 +13982,11 @@ window.ECON = (function(){
     (typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).forEach(n=>{
       if(!isMarket(n)) return;
       const d = DEF[n.id] || DEFAULT;
+      const ov = profiles[n.id];   // designer override (Design Mode economy editor) wins over DEF
       worlds[n.id] = { id:n.id, label:n.label||n.name, fac:n.faction,
-                       prod:d.prod||{}, cons:d.cons||{}, safW:d.safW||2, store:d.store||{} };
+                       prod:(ov&&ov.prod)?ov.prod:(d.prod||{}),
+                       cons:(ov&&ov.cons)?ov.cons:(d.cons||{}),
+                       safW:d.safW||2, store:d.store||{} };
       adj[n.id] = [];
     });
     Object.keys(worlds).forEach(id=>{
@@ -14223,9 +14359,108 @@ window.ECON = (function(){
     return { ok:true, moves };
   }
 
+  // ── Designer economy profiles + production-chain resolution ─────────────────
+  function defProfileOf(id){ const d = DEF[id] || DEFAULT; return { prod: d.prod||{}, cons: d.cons||{} }; }
+  function effectiveProfileOf(id){ const ov = profiles[id], d = defProfileOf(id);
+    return { prod:(ov&&ov.prod)?ov.prod:d.prod, cons:(ov&&ov.cons)?ov.cons:d.cons, overridden:!!ov }; }
+  function isMarketId(id){ ensure(); return !!worlds[id]; }   // false for vast/archon (no-market factions)
+
+  // Pure, cycle-safe production-chain resolver. Given an output good + its rate, return a
+  // tree: each node carries the good, its scaled rate, whether it's a raw (no recipe), and
+  // its child inputs. Tracks the ancestry path; if an input recurs in its own ancestry it's
+  // flagged cycle:true and NOT expanded — so a malformed recipe (A→B→A) can never recurse
+  // forever. Depth-capped as a second guard. The editor commits only the DIRECT children
+  // (node.inputs[*].rate); deeper tiers are preview-only (upstream worlds draw their own).
+  function resolveChain(good, rate, _path, _depth){
+    rate = +rate||0; _path = _path||[]; _depth = _depth||0;
+    const recipe = (GOODS[good] && GOODS[good].recipe) || null;
+    const node = { good, rate:Math.round(rate*1000)/1000, raw:!recipe, cycle:false, inputs:[] };
+    if(!recipe || _depth >= 12) return node;
+    for(const inp in recipe){
+      const qty = recipe[inp]*rate;
+      if(inp===good || _path.indexOf(inp) >= 0){            // input is its own ancestor → circular
+        node.inputs.push({ good:inp, rate:Math.round(qty*1000)/1000, raw:!(GOODS[inp]&&GOODS[inp].recipe), cycle:true, inputs:[] });
+      } else {
+        node.inputs.push(resolveChain(inp, qty, _path.concat(good), _depth+1));
+      }
+    }
+    return node;
+  }
+  function chainHasCycle(node){ return !!node && (node.cycle || (node.inputs||[]).some(chainHasCycle)); }
+  // Direct recipe inputs a prod map draws (one level, scaled, summed) — exactly recipeDraw()'s
+  // rule, surfaced so the editor can SHOW auto-imported inputs. NEVER written to cons (the sim
+  // already derives them from prod via recipeDraw; listing them in cons would double-count).
+  function autoInputsOf(prodMap){
+    const out = {};
+    for(const g in prodMap){ const r = GOODS[g] && GOODS[g].recipe; if(!r) continue;
+      for(const inp in r) out[inp] = (out[inp]||0) + r[inp]*prodMap[g]; }
+    return out;
+  }
+
+  // Net galaxy supply of a good = Σ producers − Σ (final demand + recipe draw). With
+  // (ovId,ovProd,ovCons) the named world's contribution is swapped for a candidate profile,
+  // so before/after the same call diffs a pending edit. Aggregates every world — so a good
+  // made/used on many worlds sums correctly instead of being overwritten.
+  function worldNetOf(prodMap, consMap, good){
+    let draw = 0; for(const out in prodMap){ const r = GOODS[out] && GOODS[out].recipe; if(r && r[good]) draw += r[good]*prodMap[out]; }
+    return (prodMap[good]||0) - ((consMap[good]||0) + draw);
+  }
+  function galaxyNetOf(good, ovId, ovProd, ovCons){
+    ensure(); let n = 0;
+    Object.values(worlds).forEach(w=>{ n += (ovId && w.id===ovId) ? worldNetOf(ovProd||{}, ovCons||{}, good) : worldNetOf(w.prod, w.cons, good); });
+    return n;
+  }
+  // Live Market Impact for a pending edit — no persistence, no re-settle. For every good the
+  // edit touches (directly or via recipe draw) report galaxy net supply before/after + a
+  // qualitative price arrow. Prices here renormalise to each world's settled baseline, so the
+  // honest stable signal is the STRUCTURAL balance: pushing a good toward deficit makes it
+  // chronically dearer (▲), toward surplus cheaper (▼). deficit flags goods the galaxy can no
+  // longer cover; newDeficit flags an edit that TIPS a good from covered into deficit.
+  function marketImpact(id, prod, cons){
+    ensure();
+    const cur = effectiveProfileOf(id), goods = new Set();
+    [prod, cur.prod].forEach(m=>{ for(const g in m){ goods.add(g); const r = GOODS[g] && GOODS[g].recipe; if(r) for(const inp in r) goods.add(inp); } });
+    [cons, cur.cons].forEach(m=>{ for(const g in m) goods.add(g); });
+    const out = [];
+    goods.forEach(g=>{ if(GOODS[g]==null) return;
+      const before = galaxyNetOf(g, id, cur.prod, cur.cons), after = galaxyNetOf(g, id, prod, cons);
+      const delta = Math.round((after-before)*100)/100;
+      if(Math.abs(delta) < 0.005) return;
+      out.push({ good:g, before:Math.round(before*100)/100, after:Math.round(after*100)/100,
+                 delta, arrow: delta>0?'▼':'▲', deficit: after < 0, newDeficit: after<0 && before>=0 });
+    });
+    out.sort((a,b)=> Math.abs(b.delta)-Math.abs(a.delta));
+    return out;
+  }
+
+  // Commit a pending edit: store the override, rebuild the trade topology with it in place,
+  // and re-settle the baseline so live prices reflect the new structure (mirrors syncLanes()).
+  function setProfile(id, prod, cons){
+    ensure();
+    profiles[id] = { prod: prod||{}, cons: cons||{} };
+    worlds = null; adj = null; ensure();
+    state.base = recomputeBase();
+    saveProfiles(); save();
+  }
+  function clearProfile(id){
+    ensure();
+    if(!profiles[id]) return;
+    delete profiles[id];
+    worlds = null; adj = null; ensure();
+    state.base = recomputeBase();
+    saveProfiles(); save();
+  }
+  async function loadProfiles(){ try { const r = await supaStorage.get('econ-profiles', true);
+    if(r.value!=null){ profiles = JSON.parse(r.value) || {}; worlds = null; adj = null; ensure(); state.base = recomputeBase(); } } catch(e){} }
+  function saveProfiles(){ try { if(typeof isReferee==='function' && !isReferee()) return;
+    supaStorage.set('econ-profiles', JSON.stringify(profiles), true); } catch(e){} }
+
   return {
     GOODS, SIM_GOODS, PRESETS,
     ensure, advance, syncToDate, pressure, intel, applyRun, fire, cancel, reset, load, save,
+    resolveChain, chainHasCycle, autoInputsOf, marketImpact, isMarketId,
+    effectiveProfile: effectiveProfileOf, defProfile: defProfileOf, setProfile, clearProfile,
+    loadProfiles, saveProfiles,
     get state(){ ensure(); return state; },
     worlds(){ ensure(); return worlds; },
     active(){ return !!(state && state.active); },
@@ -14284,6 +14519,253 @@ function econRaidConvoy(id){
     else showToast((r&&r.msg)||'No convoy','error');
   }
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
+
+// ── Economy editor (Design Mode · Production & Consumption) ─────────────────
+// Edits a world's prod/cons via ECON's profile-override layer, with recipe-aware
+// auto-input display, a full upstream chain preview, and a live Market Impact summary.
+// Commit re-settles the galactic baseline (ECON.setProfile); Revert drops the override.
+const ECON_GOOD_COL = {   // mirrors HX's GOOD_COL so good chips read consistently across the app
+  'Common Consumables':'#5fb87a','Common Ore':'#b07a4a','Common Electronics':'#4a90d9',
+  'Common Manufactured':'#8a9bb5','Advanced Electronics':'#3fd0d0','Precious Metals':'#e0c040',
+  'Radioactives':'#9fd44a','Biochemicals':'#3faf8f','Luxury Goods':'#c060c0','Pharmaceuticals':'#e07090'
+};
+function econGoodColor(g){ return ECON_GOOD_COL[g] || '#9fb0c8'; }
+function econNum(n){ return (Math.round((+n||0)*100)/100).toString(); }
+
+// Production/consumption chip row for a world — the SINGLE source both the galaxy star
+// panel and the system-overview panel render from, so the two views always show identical
+// numbers (one ECON profile keyed by node id). ▲ = produced (supply), ▼ = consumed (demand).
+function econChipsHTML(nodeId){
+  if(typeof ECON==='undefined' || !ECON.isMarketId(nodeId)) return '';
+  const ep = ECON.effectiveProfile(nodeId); let chips='';
+  Object.keys(ep.prod).forEach(g=> chips+=`<span class="hx-tag" style="border-color:${econGoodColor(g)};color:${econGoodColor(g)}">▲ ${escQH(g)} ${econNum(ep.prod[g])}</span>`);
+  Object.keys(ep.cons).forEach(g=> chips+=`<span class="hx-tag" style="border-color:${econGoodColor(g)};color:${econGoodColor(g)}">▼ ${escQH(g)} ${econNum(ep.cons[g])}</span>`);
+  return chips;
+}
+// Design-Mode "Production & Consumption" section for the SYSTEM overview panel. Mirrors the
+// galaxy star panel's section (same data via econChipsHTML, same editor via openEconEditor),
+// styled with this panel's .s-sec classes. nodeId = SYSTEMS[sysId].galaxyId (the ECON key).
+function econSystemSectionHTML(nodeId){
+  if(typeof ECON==='undefined' || !nodeId || !(designModeOn && isReferee())) return '';
+  let h = `<div class="s-sec ref-only"><div class="s-sec-lbl" style="color:#9B59B6">Production &amp; Consumption</div>`;
+  if(!ECON.isMarketId(nodeId)){
+    return h + `<div style="font-size:11px;color:var(--tx1)">No open market in this system — nothing to configure.</div></div>`;
+  }
+  const ep = ECON.effectiveProfile(nodeId), chips = econChipsHTML(nodeId);
+  h += chips ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${chips}</div>`
+             : `<div style="font-size:11px;color:var(--tx1);margin-bottom:8px">No production or consumption configured.</div>`;
+  if(ep.overridden) h += `<div style="font-size:11px;color:#C98BE8;margin:-2px 0 8px">✎ Custom economy — overrides the built-in profile.</div>`;
+  h += `<button class="design-add-btn" style="width:100%" onclick="openEconEditor('${nodeId}')">⚒ Edit production &amp; consumption</button></div>`;
+  return h;
+}
+let econEditNodeId = null;        // node id being edited
+let econEditDraft  = null;        // { prod:[{good,rate}], cons:[{good,rate}] } working copy
+let econPicker     = null;        // { list:'prod'|'cons' } while the add-good selector is open
+
+function openEconEditor(nodeId){
+  if(typeof isReferee==='function' && !isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  if(typeof ECON==='undefined' || !ECON.isMarketId(nodeId)){ if(typeof showToast==='function') showToast('This world keeps no market','error'); return; }
+  econEditNodeId = nodeId; econPicker = null;
+  const p = ECON.effectiveProfile(nodeId);
+  const toRows = m => Object.keys(m||{}).map(g=>({ good:g, rate:m[g] }));
+  econEditDraft = { prod: toRows(p.prod), cons: toRows(p.cons) };
+  const modal = document.getElementById('econ-editor-modal'); if(modal) modal.classList.add('open');
+  renderEconEditor();
+  setTimeout(()=>{ const b=document.getElementById('econ-editor-body'); if(b) b.scrollTop=0; }, 0);
+}
+function closeEconEditor(){
+  econEditNodeId = null; econEditDraft = null; econPicker = null;
+  const modal = document.getElementById('econ-editor-modal'); if(modal) modal.classList.remove('open');
+}
+function econDraftMaps(){   // draft arrays → {good:rate} maps (only valid, positive rows)
+  const toMap = arr => { const m={}; (arr||[]).forEach(r=>{ if(r.good && +r.rate>0) m[r.good]=+r.rate; }); return m; };
+  return { prod: toMap(econEditDraft.prod), cons: toMap(econEditDraft.cons) };
+}
+function econDraftValid(){
+  const seen = l => { const s=new Set(); return econEditDraft[l].every(r=>{ if(!r.good||!(+r.rate>0)||s.has(r.good)) return false; s.add(r.good); return true; }); };
+  return seen('prod') && seen('cons');
+}
+
+// One editable good row (Produces / manual Consumes). Rate edits don't rebuild the row
+// (focus is preserved) — they refresh only the derived panels via renderEconDerived().
+function econRowHtml(list, idx, r){
+  const col = econGoodColor(r.good), tier = (ECON.GOODS[r.good]||{}).tier;
+  const bad = !(+r.rate>0);
+  return `<div class="econ-ed-row${bad?' warn':''}">`+
+    `<span class="econ-ed-good"><span class="econ-ed-dot" style="background:${col}"></span>`+
+      `<span class="econ-ed-gname">${escQH(r.good)}</span><span class="econ-ed-tier">T${tier}</span></span>`+
+    `<input class="econ-ed-rate" type="number" min="0" step="1" value="${escQH(econNum(r.rate))}" `+
+      `aria-label="${escQH(r.good)} rate, kilotonnes per week" `+
+      `oninput="econSetRate('${list}',${idx},this.value)">`+
+    `<button class="econ-ed-del" title="Remove ${escQH(r.good)}" aria-label="Remove ${escQH(r.good)}" onclick="econRemoveRow('${list}',${idx})">✕</button>`+
+  `</div>`;
+}
+function econRowsHtml(list){
+  const rows = econEditDraft[list];
+  if(!rows.length) return `<div class="econ-ed-empty">None ${list==='prod'?'produced':'consumed as final demand'} here.</div>`;
+  return rows.map((r,i)=>econRowHtml(list,i,r)).join('');
+}
+// The add-good selector: searchable, icon-labelled, goods already in this list disabled.
+function econPickerHtml(){
+  if(!econPicker) return '';
+  const list = econPicker.list, used = new Set(econEditDraft[list].map(r=>r.good));
+  const goods = ECON.SIM_GOODS;
+  return `<div class="econ-ed-picker">`+
+    `<input class="econ-ed-search" id="econ-pick-search" placeholder="Search goods…" `+
+      `aria-label="Search goods" oninput="renderEconPicker()" onkeydown="if(event.key==='Escape'){econPicker=null;renderEconEditor();}">`+
+    `<div class="econ-ed-list" id="econ-pick-list">${econPickerListHtml('')}</div></div>`;
+}
+function econPickerListHtml(q){
+  const list = econPicker.list, used = new Set(econEditDraft[list].map(r=>r.good));
+  q = (q||'').toLowerCase();
+  const goods = ECON.SIM_GOODS.filter(g=>g.toLowerCase().includes(q));
+  if(!goods.length) return `<div class="econ-ed-empty" style="padding:8px 9px">No goods match “${escQH(q)}”.</div>`;
+  return goods.map((g,gi)=>{ const i=ECON.SIM_GOODS.indexOf(g), col=econGoodColor(g), tier=(ECON.GOODS[g]||{}).tier, dis=used.has(g);
+    return `<button class="econ-ed-opt" ${dis?'disabled':''} onclick="econPick(${i})">`+
+      `<span class="econ-ed-dot" style="background:${col}"></span><span style="flex:1">${escQH(g)}</span>`+
+      `<span class="econ-ed-tier">T${tier}${dis?' · added':''}</span></button>`; }).join('');
+}
+function renderEconPicker(){ const el=document.getElementById('econ-pick-list'), s=document.getElementById('econ-pick-search');
+  if(el) el.innerHTML = econPickerListHtml(s?s.value:''); }
+function econOpenPicker(list){ econPicker={list}; renderEconEditor(); setTimeout(()=>{ const s=document.getElementById('econ-pick-search'); if(s) s.focus(); },0); }
+function econPick(goodIdx){ if(!econPicker) return; const good=ECON.SIM_GOODS[goodIdx]; if(!good) return;
+  const list=econPicker.list; if(econEditDraft[list].some(r=>r.good===good)){ econPicker=null; renderEconEditor(); return; }
+  const dflt = list==='prod' ? 10 : 5;
+  econEditDraft[list].push({ good, rate:dflt }); econPicker=null; renderEconEditor(); }
+function econRemoveRow(list,idx){ econEditDraft[list].splice(idx,1); renderEconEditor(); }
+function econSetRate(list,idx,val){ if(econEditDraft[list][idx]){ econEditDraft[list][idx].rate = val===''?0:+val; }
+  // mark the row valid/invalid without rebuilding it (keeps input focus), then refresh derived panels
+  const rows=document.getElementById(list==='prod'?'econ-prod-rows':'econ-cons-rows');
+  if(rows && rows.children[idx]) rows.children[idx].classList.toggle('warn', !(+val>0));
+  renderEconDerived(); }
+// "Produce locally" — promote an auto-imported recipe input into a locally produced good.
+function econProduceLocally(goodIdx){ const good=ECON.SIM_GOODS[goodIdx]; if(!good) return;
+  if(!econEditDraft.prod.some(r=>r.good===good)){
+    const auto = ECON.autoInputsOf(econDraftMaps().prod);
+    econEditDraft.prod.push({ good, rate: Math.max(1, Math.round(auto[good]||1)) }); }
+  renderEconEditor(); }
+
+function econChainTreeHtml(node, depth){
+  const pad = depth>0 ? '&nbsp;'.repeat((depth-1)*3)+'└─ ' : '';
+  const cls = node.cycle ? 'cyc' : (node.raw ? 'raw' : 'g');
+  let h = `<div>${pad}<span class="${cls}">${node.cycle?'⟲ ':''}${escQH(node.good)}</span> <span class="q">×${econNum(node.rate)}</span>`+
+    `${node.raw&&!node.cycle?' <span style="opacity:.55">(raw)</span>':''}${node.cycle?' <span class="cyc">circular — not expanded</span>':''}</div>`;
+  (node.inputs||[]).forEach(c=> h += econChainTreeHtml(c, depth+1));
+  return h;
+}
+
+// Derived panels — recomputed live as rates change: auto-imported inputs, the full chain
+// preview, the Market Impact summary, the cycle warning, and the Save button's enabled state.
+function renderEconDerived(){
+  if(!econEditDraft) return;
+  const maps = econDraftMaps(), prodMap = maps.prod;
+  const auto = ECON.autoInputsOf(prodMap);
+  const prodGoods = new Set(econEditDraft.prod.map(r=>r.good));
+
+  // Auto-imported recipe inputs (shown, never written to cons). Hidden when produced locally.
+  const autoEl = document.getElementById('econ-auto-rows');
+  if(autoEl){ const keys = Object.keys(auto).filter(g=>!prodGoods.has(g));
+    autoEl.innerHTML = keys.length ? keys.map(g=>{ const i=ECON.SIM_GOODS.indexOf(g), col=econGoodColor(g), tier=(ECON.GOODS[g]||{}).tier;
+        return `<div class="econ-ed-row auto">`+
+          `<span class="econ-ed-good"><span class="econ-ed-dot" style="background:${col}"></span>`+
+            `<span class="econ-ed-gname">${escQH(g)}</span><span class="econ-ed-tier">T${tier}</span>`+
+            `<span class="econ-ed-badge auto" title="Auto-derived: a recipe input for a good produced here. The sim imports it via trade — it is NOT added to final demand (that would double-count). Click “produce locally” to make it here instead.">auto</span>`+
+            `<span class="econ-ed-badge imported" title="Supplied by interstellar trade rather than produced on this world.">imported</span></span>`+
+          `<span class="econ-ed-rate" style="border:none;background:none;text-align:right">${econNum(auto[g])}<span class="econ-ed-unit"> kt/wk</span></span>`+
+          `<button class="econ-ed-mini" title="Produce ${escQH(g)} on this world instead of importing it" onclick="econProduceLocally(${i})">+ make here</button>`+
+        `</div>`; }).join('')
+      : `<div class="econ-ed-empty">No recipe inputs — nothing produced here needs upstream goods.</div>`;
+  }
+
+  // Full upstream chain preview (collapsible) + circular-dependency detection.
+  let cyclic = false;
+  const chainEl = document.getElementById('econ-chain');
+  if(chainEl){ const recipeProds = econEditDraft.prod.filter(r=> r.good && +r.rate>0 && ECON.GOODS[r.good] && ECON.GOODS[r.good].recipe);
+    if(!recipeProds.length){ chainEl.innerHTML = `<div class="econ-ed-empty">Add a produced good with a recipe to preview its supply chain.</div>`; }
+    else { chainEl.innerHTML = recipeProds.map(r=>{ const tree=ECON.resolveChain(r.good, +r.rate); if(ECON.chainHasCycle(tree)) cyclic=true;
+      return `<div class="econ-ed-tree" style="margin-bottom:8px">${econChainTreeHtml(tree,0)}</div>`; }).join(''); }
+  }
+  const warnEl = document.getElementById('econ-cyc-warn');
+  if(warnEl) warnEl.style.display = cyclic ? 'block' : 'none';
+
+  // Market Impact — net galaxy supply shift + projected price direction per affected good.
+  const impEl = document.getElementById('econ-impact');
+  if(impEl){ const imp = ECON.marketImpact(econEditNodeId, maps.prod, maps.cons);
+    if(!imp.length){ impEl.innerHTML = `<div class="econ-ed-empty">No change to the galactic market yet.</div>`; }
+    else { impEl.innerHTML = imp.map(m=>{ const col=econGoodColor(m.good), up=m.arrow==='▲';
+      return `<div class="econ-ed-impact-row">`+
+        `<span class="econ-ed-impact-good"><span class="econ-ed-dot" style="background:${col}"></span>${escQH(m.good)}`+
+          `${m.newDeficit?' <span class="econ-ed-deficit" title="This edit tips the whole galaxy into a supply deficit for this good.">⚠ tips to deficit</span>':(m.deficit?' <span class="econ-ed-deficit">deficit</span>':'')}</span>`+
+        `<span class="econ-ed-impact-val">${econNum(m.before)}→${econNum(m.after)} kt/wk `+
+          `<span class="econ-ed-arrow ${up?'up':'down'}" title="${up?'Net supply falls → price tends dearer':'Net supply rises → price tends cheaper'}">${m.arrow}${up?' dearer':' cheaper'}</span></span>`+
+      `</div>`; }).join(''); }
+  }
+
+  const saveBtn = document.getElementById('econ-editor-save');
+  if(saveBtn) saveBtn.disabled = !econDraftValid();
+}
+
+function renderEconEditor(){
+  const body=document.getElementById('econ-editor-body'); if(!body||!econEditDraft) return;
+  const id=econEditNodeId, w=ECON.worlds()[id], p=ECON.effectiveProfile(id);
+  const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{}, fac=FAC[w.fac]||{name:'Independent',color:'#9fb0c8'};
+  const ttl=document.getElementById('econ-editor-title'); if(ttl) ttl.innerHTML=`⚒ ${escQH(w.label)} — Production &amp; Consumption`;
+  let h='';
+  h+=`<div class="econ-ed-sub"><span class="hx-tag" style="color:${fac.color};border-color:${fac.color}">${escQH(fac.name)}</span> `+
+     `Rates are in <b>kilotonnes per week</b> (1 tick = 1 Imperial week). `+
+     `${p.overridden?'<b style="color:#C98BE8">Custom economy</b> — overrides the built-in profile.':'Showing the built-in profile; edits create a custom override.'}</div>`;
+
+  h+=`<div class="econ-ed-cyc-warn" id="econ-cyc-warn" style="display:none">⟲ <b>Circular dependency</b> in a recipe chain — the loop is shown but not expanded, so resolution never runs away. Check the recipe data.</div>`;
+
+  // Produces
+  h+=`<div class="econ-ed-section"><div class="econ-ed-lbl">▲ Produces <span class="econ-ed-hint">— goods made here (adds supply)</span></div>`;
+  h+=`<div class="econ-ed-rows" id="econ-prod-rows">${econRowsHtml('prod')}</div>`;
+  h+= (econPicker&&econPicker.list==='prod') ? econPickerHtml()
+      : `<button class="econ-ed-add" onclick="econOpenPicker('prod')">+ Add produced good</button>`;
+  h+=`</div>`;
+
+  // Consumes (manual final demand) + auto-imported inputs
+  h+=`<div class="econ-ed-section"><div class="econ-ed-lbl">▼ Consumes <span class="econ-ed-hint">— final demand: population + finished goods (adds demand)</span></div>`;
+  h+=`<div class="econ-ed-rows" id="econ-cons-rows">${econRowsHtml('cons')}</div>`;
+  h+= (econPicker&&econPicker.list==='cons') ? econPickerHtml()
+      : `<button class="econ-ed-add" onclick="econOpenPicker('cons')">+ Add consumed good</button>`;
+  h+=`<div class="econ-ed-lbl" style="margin:14px 0 6px">⚙ Auto-imported recipe inputs <span class="econ-ed-hint">— derived from Produces; supplied by trade</span></div>`;
+  h+=`<div class="econ-ed-rows" id="econ-auto-rows"></div>`;
+  h+=`</div>`;
+
+  // Chain preview
+  h+=`<div class="econ-ed-section"><details class="econ-ed-collapse"><summary>▸ Full production-chain preview</summary>`+
+     `<div id="econ-chain"></div></details></div>`;
+
+  // Market impact
+  h+=`<div class="econ-ed-section"><div class="econ-ed-lbl">≈ Market impact <span class="econ-ed-hint">— projected galactic supply/demand &amp; price shift</span></div>`+
+     `<div class="econ-ed-impact" id="econ-impact"></div></div>`;
+
+  body.innerHTML=h;
+  // Revert only makes sense when an override exists
+  const rev=document.getElementById('econ-editor-revert'); if(rev) rev.style.display = p.overridden ? '' : 'none';
+  renderEconDerived();
+}
+
+function commitEconEditor(){
+  if(!econEditDraft||!econEditNodeId) return;
+  if(!econDraftValid()){ if(typeof showToast==='function') showToast('Fix invalid rows (rates must be > 0, no duplicates)','error'); return; }
+  const maps=econDraftMaps();
+  ECON.setProfile(econEditNodeId, maps.prod, maps.cons);
+  if(typeof showToast==='function') showToast('Economy saved — galactic market updated');
+  closeEconEditor();
+  if(typeof econPanelOpen!=='undefined'&&econPanelOpen) renderEconPanel();
+  if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
+function econEditRevert(){
+  if(!econEditNodeId) return;
+  if(!confirm('Revert this world to its built-in economy? Your custom production/consumption here will be discarded.')) return;
+  ECON.clearProfile(econEditNodeId);
+  if(typeof showToast==='function') showToast('Reverted to the built-in economy');
+  closeEconEditor();
+  if(typeof econPanelOpen!=='undefined'&&econPanelOpen) renderEconPanel();
+  if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
 
 function renderEconPanel(){
@@ -14376,7 +14858,7 @@ function renderEconPanel(){
   body.innerHTML=h;
 }
 
-ECON.load().then(() => { if(econPanelOpen) renderEconPanel(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+ECON.load().then(() => ECON.loadProfiles()).then(() => { if(econPanelOpen) renderEconPanel(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUICK REFERENCE SIDEBAR
