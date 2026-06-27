@@ -14243,10 +14243,41 @@ window.ECON = (function(){
     state.week = week;
   }
 
+  // Max weeks we will step one-at-a-time to catch the sim up to the live calendar.
+  // A persisted week can lag the Imperial calendar by tens of thousands of weeks
+  // (year 1105 ≈ week 57,617; a real saved row hit 179,197). Looping step() over
+  // that gap froze the tab for tens of seconds (~0.32 ms/step). Bigger gaps snap to
+  // a freshly-settled resting baseline instead — coherent prices, fixed cost. ~5 yrs.
+  const MAX_CATCHUP = 260;
+  // Re-establish a coherent steady state at `wk` WITHOUT stepping every intervening
+  // week. Re-seeds stock to each world+good's settled resting level (same baseline
+  // machinery freshState uses) and rebases the in-flight pipeline to `wk`, while
+  // preserving campaign-level fields (active flag, agent roster + banked profit,
+  // timeline, traders setting). After this stock == base, so pressures read ~0.
+  function reseedTo(wk){
+    ensure();
+    const seed = {};
+    Object.values(worlds).forEach(w=>{ seed[w.id]={};
+      SIM_GOODS.forEach(g=>{ const s=orderUpTo(w,g); if(s>0||w.prod[g]) seed[w.id][g]=Math.round(s); }); });
+    const settled = settleBaseline(seed);
+    const base = settled.stock;
+    const stock = {}; Object.keys(base).forEach(id=>{ stock[id]=Object.assign({},base[id]); });
+    state.base = base;
+    state.stock = stock;
+    state.transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
+    state.shocks = (state.shocks||[]).filter(s=> s.until==null || s.until>=wk);   // long-expired shocks drop
+    (state.agents||[]).forEach(a=>{ a.route=null; });                            // in-flight convoys would have landed ages ago
+    state.week = wk;
+  }
   function advance(weeks){ ensure(); const target = state.week + Math.max(1, Math.round(weeks));
-    for(let wk=state.week+1; wk<=target; wk++) step(wk); save(); }
+    if(target - state.week > MAX_CATCHUP) reseedTo(target);                       // gap too large to step — snap to resting baseline
+    else for(let wk=state.week+1; wk<=target; wk++) step(wk);
+    save(); }
   function syncToDate(){ ensure(); const now=curWeek();
-    if(now>state.week && state.active){ for(let wk=state.week+1; wk<=now; wk++) step(wk); save(); }
+    if(now>state.week && state.active){
+      if(now - state.week > MAX_CATCHUP) reseedTo(now);                           // gap too large to step — snap to resting baseline
+      else for(let wk=state.week+1; wk<=now; wk++) step(wk);
+      save(); }
     else if(now!==state.week){ state.week=now; } }
 
   // Price pressure = signed deviation of current stock from this world+good's own
