@@ -16586,6 +16586,65 @@ kbdLoad();
 loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on-demand in Settings
 renderEventLog();
 renderRsrMarkers();
+
+// ── Accessibility: label icon controls + make click-only rows keyboard-operable ──
+// The UI renders interactive controls as innerHTML strings; hundreds of icon-only
+// buttons and onclick <tr>/<div> rows ship without ARIA. Rather than hand-annotate
+// every call site, enhance the DOM as it renders: derive an aria-label from existing
+// title text for unlabelled / glyph-only controls, and give clickable NON-native
+// elements (tr, div, td, span…) button semantics + Enter/Space activation so they're
+// reachable by keyboard. Semantics only — no styling is changed. SVG nodes (the map /
+// orrery, which can emit hundreds of dots) are deliberately skipped to avoid a tab trap.
+const A11Y_SVG_NS = 'http://www.w3.org/2000/svg';
+const A11Y_NATIVE = { BUTTON:1, A:1, INPUT:1, SELECT:1, TEXTAREA:1, LABEL:1, SUMMARY:1, OPTION:1 };
+function a11yKeyActivate(e){
+  if(e.target !== e.currentTarget) return;                 // let nested controls handle their own keys
+  if(e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+}
+function a11yEnhanceEl(el){
+  if(!el || el.nodeType !== 1 || el.namespaceURI === A11Y_SVG_NS) return;
+  if(el.getAttribute('data-a11y')) return;
+  el.setAttribute('data-a11y','1');
+  // Label glyph-only / unlabelled controls from their tooltip text.
+  if(!el.getAttribute('aria-label') && !el.getAttribute('aria-labelledby')){
+    const txt = (el.textContent || '').trim();
+    const hasWords = /[a-z0-9]/i.test(txt);              // emoji/✕/▲ etc. don't count as an accessible name
+    const imgAlt = el.querySelector && el.querySelector('img[alt]:not([alt=""])');
+    if(!hasWords && !imgAlt){
+      const t = el.getAttribute('title');
+      if(t) el.setAttribute('aria-label', t);
+    }
+  }
+  // Non-native clickable elements: make them focusable + behave like a button.
+  if(!A11Y_NATIVE[el.tagName]){
+    if(!el.hasAttribute('role')) el.setAttribute('role','button');
+    if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+    el.addEventListener('keydown', a11yKeyActivate);
+  }
+}
+function a11yEnhance(root){
+  if(!root || root.nodeType !== 1 || root.namespaceURI === A11Y_SVG_NS) return;
+  if(root.matches && root.matches('[onclick]')) a11yEnhanceEl(root);
+  if(root.querySelectorAll) root.querySelectorAll('[onclick]:not([data-a11y])').forEach(a11yEnhanceEl);
+}
+(function initA11y(){
+  if(typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+  const initial = () => { try { a11yEnhance(document.body); } catch(e){} };
+  if(document.body) initial(); else document.addEventListener('DOMContentLoaded', initial);
+  let queue = [], pending = false;
+  const flush = () => { pending = false; const q = queue; queue = [];
+    q.forEach(n => { try { if(n.isConnected) a11yEnhance(n); } catch(e){} }); };
+  const obs = new MutationObserver(muts => {
+    muts.forEach(m => m.addedNodes && m.addedNodes.forEach(n => {
+      if(n.nodeType === 1 && n.namespaceURI !== A11Y_SVG_NS) queue.push(n); }));
+    if(queue.length && !pending){ pending = true; requestAnimationFrame(flush); }
+  });
+  const start = () => { if(document.body) obs.observe(document.body, { childList:true, subtree:true }); };
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
 </script>
 <script>
 // Register the offline-shell service worker. Secure-context only (https / the
