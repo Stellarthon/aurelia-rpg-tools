@@ -4289,6 +4289,7 @@ function gxAddLane(a, b){
   if(di >= 0) gxLaneDeletions.splice(di, 1);   // un-delete a previously removed base lane
   else if(!gxLaneAdditions.includes(k)) gxLaneAdditions.push(k);
   gxRebuildLanes(); saveGalaxyLanes();
+  try { if(typeof ECON!=='undefined') ECON.syncLanes(); } catch(e){}   // economy now follows jump lanes — re-route on edit
   if(typeof HX!=='undefined') HX.refresh();   // redraw the hex galaxy after a lane edit
   showToast('Jump lane added');
 }
@@ -4300,6 +4301,7 @@ function gxRemoveLane(k){
   if(ai >= 0) gxLaneAdditions.splice(ai, 1);    // a session addition — just drop it
   else if(!gxLaneDeletions.includes(k)) gxLaneDeletions.push(k); // tombstone a base lane
   gxRebuildLanes(); saveGalaxyLanes();
+  try { if(typeof ECON!=='undefined') ECON.syncLanes(); } catch(e){}   // economy now follows jump lanes — re-route on edit
   if(typeof HX!=='undefined') HX.refresh();   // redraw the hex galaxy after a lane edit
   showToast('Jump lane removed');
 }
@@ -13756,7 +13758,8 @@ loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
-loadGalaxyLanes().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -13840,9 +13843,32 @@ window.ECON = (function(){
     });
     Object.keys(worlds).forEach(id=>{
       const n = nodeOf(id);
-      // _loreLinks = original lore trade routes (n.connections is the live jump-lane overlay, often empty)
-      (((n&&n._loreLinks)||(n&&n.connections))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
+      // Trade graph follows the JUMP-LANE network (n.connections = the live GX_LANES
+      // overlay). Worlds with no jump lane are economically isolated BY DESIGN — see
+      // ECON.disconnected(); draw jump lanes to reconnect them (ECON.syncLanes picks
+      // up edits live). NB the jump-lane net is sparser than the old lore graph.
+      (((n&&n.connections))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
     });
+  }
+
+  // Rebuild the trade graph + baseline from the CURRENT jump lanes (call after a lane
+  // edit so the economy tracks the map). Stock/transit persist; only adj + base change.
+  function recomputeBase(){
+    const seed={}; Object.values(worlds).forEach(w=>{ seed[w.id]={};
+      SIM_GOODS.forEach(g=>{ const s=orderUpTo(w,g); if(s>0||w.prod[g]) seed[w.id][g]=Math.round(s); }); });
+    return settleBaseline(seed).stock;
+  }
+  function syncLanes(){ ensure(); buildTopology(); state.base = recomputeBase(); save(); }
+  // Market worlds NOT in the largest connected component of the jump-lane trade graph —
+  // cut off from the main economy. Empty when the network is fully connected.
+  function disconnected(){ ensure();
+    const ids=Object.keys(worlds), seen=new Set(), comps=[];
+    ids.forEach(s=>{ if(seen.has(s))return; const st=[s],c=[]; seen.add(s);
+      while(st.length){ const u=st.pop(); c.push(u); (adj[u]||[]).forEach(v=>{ if(worlds[v]&&!seen.has(v)){seen.add(v);st.push(v);} }); }
+      comps.push(c); });
+    comps.sort((a,b)=>b.length-a.length);
+    const main=new Set(comps[0]||[]);
+    return ids.filter(id=>!main.has(id)).map(id=>({id,label:worlds[id].label}));
   }
 
   function recipeDraw(w, good){
@@ -14197,7 +14223,7 @@ window.ECON = (function(){
     agents(){ ensure(); return state.agents||[]; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
-    raidConvoy,
+    raidConvoy, syncLanes, disconnected,
   };
 })();
 
@@ -14261,6 +14287,12 @@ function renderEconPanel(){
   h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
   h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Economy also advances when you move the Imperial calendar. Steps here preview cascades without moving the campaign date.</span>`;
   h+=`</div>`;
+  // The economy now trades over the JUMP-LANE network — flag any market worlds cut off from it.
+  { let disc=[]; try{ disc=ECON.disconnected(); }catch(e){}
+    if(disc.length){ h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0);background:rgba(180,60,60,.10)">`;
+      h+=`<div style="font-size:11px;color:#e8a0a0;margin-bottom:3px">⚠ ${disc.length} world${disc.length>1?'s':''} off the jump-lane network — economically isolated</div>`;
+      h+=`<div style="font-size:10px;color:#cdd6e0;line-height:1.5">${disc.map(d=>escQH(d.label)).join(' · ')}</div>`;
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:3px">Draw jump lanes to these worlds (Design Mode) to fold them back into the economy.</div></div>`; } }
   h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Fire a disruption</div>`;
   ECON.PRESETS.forEach(p=> h+=btn('⚡ '+p.label, `econFireById('${p.id}')`) );
   if(st.shocks.length){ h+=`<div style="font-size:11px;color:var(--tx1);margin:6px 0 3px">Active shocks</div>`;
