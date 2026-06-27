@@ -13704,10 +13704,18 @@ window.ECON = (function(){
 
   function freshState(){
     buildTopology();
-    const stock = {};
-    Object.values(worlds).forEach(w=>{ stock[w.id]={};
-      SIM_GOODS.forEach(g=>{ const s = orderUpTo(w,g); if(s>0 || w.prod[g]) stock[w.id][g] = Math.round(s); }); });  // seed full (incl. pipeline) so there's no cold-start scramble
-    return { week: curWeek(), active:false, stock, transit:[], shocks:[], log:[], base: settleBaseline(stock) };
+    const seed = {};
+    Object.values(worlds).forEach(w=>{ seed[w.id]={};
+      SIM_GOODS.forEach(g=>{ const s = orderUpTo(w,g); if(s>0 || w.prod[g]) seed[w.id][g] = Math.round(s); }); });  // full seed (incl. pipeline)
+    const base = settleBaseline(seed);   // settle the full seed to each world+good's resting level
+    // Open the economy AT that resting level so prices start STEADY (deviation 0),
+    // instead of scrambling from a full seed (which reads producers dear / importers
+    // cheap for the first weeks until it settles).
+    const stock = {}; Object.keys(base).forEach(id=>{ stock[id] = Object.assign({}, base[id]); });
+    // active:true → the living economy is ON by default. A referee who explicitly
+    // toggles it off persists active:false to the shared econ-state row, which
+    // overrides this on load; the default only applies when no state is saved yet.
+    return { week: curWeek(), active:true, stock, transit:[], shocks:[], log:[], base };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
