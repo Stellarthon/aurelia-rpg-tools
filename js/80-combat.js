@@ -646,7 +646,7 @@ function renderCombat(){
   if(!combatEncounter){
     if(badge) badge.textContent = '';
     body.innerHTML = ref
-      ? `<div class="cbt-empty">No active engagement.<br><br><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ Begin Encounter</button></div>`
+      ? `<div class="cbt-empty">No active engagement.<br><br><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ Begin Encounter</button></div>` + renderShipRoster(false)
       : `<div class="cbt-empty">No active engagement.<br>The referee will start combat when it begins.</div>`;
     return;
   }
@@ -691,8 +691,8 @@ function renderCombat(){
     `).join('')}</div>`);
   }
 
-  // Referee controls + hazard tooling
-  if(ref){ out.push(renderCombatControls(enc)); out.push(renderHazardControls()); }
+  // Referee controls + hazard tooling + roster/fleet deployment
+  if(ref){ out.push(renderCombatControls(enc)); out.push(renderHazardControls()); out.push(renderShipRoster(true)); }
 
   // Battle log
   out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
@@ -1003,10 +1003,13 @@ function setRangeDirect(aId, bId, bandIdx){
 function combatEditIsPlayer(shipId){ return shipId === 'player' || (combatShipById(shipId) || {}).ref === 'player'; }
 function combatEditStats(shipId){
   if(combatEditIsPlayer(shipId)) return shipState;
+  const rs = (typeof rosterShipById === 'function') ? rosterShipById(shipId) : null;
+  if(rs) return rs.stats;
   const s = combatShipById(shipId); return s ? combatStatsOf(s) : null;
 }
 function persistShipStat(shipId){
   if(combatEditIsPlayer(shipId)){ saveShipState(); if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert(); if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel(); }
+  else if(typeof rosterShipById === 'function' && rosterShipById(shipId)){ saveShipRoster(); if(typeof combatPanelOpen !== 'undefined' && combatPanelOpen && typeof renderCombat === 'function') renderCombat(); }
   else if(combatEncounter){ saveCombatEncounter(); }
 }
 function updateCombatShipStat(shipId, path, value){
@@ -1043,6 +1046,294 @@ function removeCombatWeapon(shipId, wid){
   persistShipStat(shipId); renderShipEditor();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WEAPONS CATALOG  (Design Mode · reusable MgT2e weapon templates)
+// ───────────────────────────────────────────────────────────────────────────
+// A referee-authored library of weapons that can be picked into ANY ship's
+// combat loadout (the ship editor), so stats are entered once and reused. This
+// is reference/bookkeeping only — it never resolves combat. Net-new entity: a
+// WEAPONS_BASE seed of the standard turret/bay weapons + the same add/edit/
+// remove overlay the other Design-Mode entities use (weaponAdditions/Deletions/
+// PropertyOverrides), read on demand via effectiveWeapons(). A template carries
+// the ship-weapon fields (name/type/mount/damage/range/ammoMax) plus reference
+// traits + TL that fold into the attached weapon's notes.
+const WEAPONS_BASE = [
+  { id:'wb-beam',    name:'Beam Laser',      type:'beam-laser',  mount:'turret',   damage:'1D',      range:'Very Long', ammoMax:0,  traits:'',          tl:10, notes:'' },
+  { id:'wb-pulse',   name:'Pulse Laser',     type:'pulse-laser', mount:'turret',   damage:'2D',      range:'Long',      ammoMax:0,  traits:'',          tl:10, notes:'' },
+  { id:'wb-missile', name:'Missile Rack',    type:'missile',     mount:'turret',   damage:'4D',      range:'Very Long', ammoMax:12, traits:'Smart',     tl:9,  notes:'Missiles travel over rounds at longer ranges.' },
+  { id:'wb-sand',    name:'Sandcaster',      type:'sandcaster',  mount:'turret',   damage:'special', range:'—',         ammoMax:20, traits:'Defensive', tl:9,  notes:'Point defence — reduces incoming laser damage.' },
+  { id:'wb-plasma',  name:'Plasma Barbette', type:'plasma',      mount:'barbette', damage:'',        range:'Medium',    ammoMax:0,  traits:'',          tl:12, notes:'Set damage to your High Guard build.' },
+];
+let weaponAdditions = [];
+let weaponDeletions = {};
+let weaponPropertyOverrides = {};
+
+async function loadWeaponCatalog(){
+  try { const r = await supaStorage.get('weapon-additions', true);      weaponAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(weaponAdditions)) weaponAdditions = []; } catch(e){ weaponAdditions = []; }
+  try { const r = await supaStorage.get('weapon-deletions', true);      weaponDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponDeletions = {}; }
+  try { const r = await supaStorage.get('weapon-prop-overrides', true); weaponPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponPropertyOverrides = {}; }
+}
+async function saveWeaponAdditions(){ try { await supaStorage.set('weapon-additions', JSON.stringify(weaponAdditions), true); } catch(e){ console.error('Weapon additions save failed', e); } }
+async function saveWeaponDeletions(){ try { await supaStorage.set('weapon-deletions', JSON.stringify(weaponDeletions), true); } catch(e){ console.error('Weapon deletions save failed', e); } }
+async function saveWeaponPropertyOverrides(){ try { await supaStorage.set('weapon-prop-overrides', JSON.stringify(weaponPropertyOverrides), true); } catch(e){ console.error('Weapon prop overrides save failed', e); } }
+
+// Effective catalog = seed (minus tombstoned, with overrides) + referee additions.
+function effectiveWeapons(){
+  const out = [];
+  WEAPONS_BASE.forEach(w => {
+    if(weaponDeletions[w.id]) return;
+    const ov = weaponPropertyOverrides[w.id];
+    out.push(ov ? Object.assign(JSON.parse(JSON.stringify(w)), ov) : JSON.parse(JSON.stringify(w)));
+  });
+  weaponAdditions.forEach(w => { if(!weaponDeletions[w.id]) out.push(JSON.parse(JSON.stringify(w))); });
+  return out;
+}
+function isBaseWeapon(id){ return WEAPONS_BASE.some(w => w.id === id); }
+function reRenderShipEditorIfOpen(){ if(typeof shipEditorId!=='undefined' && shipEditorId && typeof renderShipEditor==='function') renderShipEditor(); }
+
+function wpnAdd(){
+  if(!isReferee()) return;
+  let id = 'wpn' + Date.now().toString(36), bump = 1;
+  while(effectiveWeapons().some(w=>w.id===id) || weaponDeletions[id]) id = 'wpn' + (Date.now()+bump++).toString(36);
+  weaponAdditions.push({ id, name:'New Weapon', type:'beam-laser', mount:'turret', damage:'1D', range:'Very Long', ammoMax:0, traits:'', tl:'', notes:'' });
+  saveWeaponAdditions();
+  reRenderShipEditorIfOpen();
+}
+function wpnEditField(id, field, value){
+  if(!isReferee()) return;
+  if(field==='ammoMax') value = Number(value)||0;
+  const add = weaponAdditions.find(w=>w.id===id);
+  if(add){ add[field]=value; saveWeaponAdditions(); }
+  else if(isBaseWeapon(id)){ if(!weaponPropertyOverrides[id]) weaponPropertyOverrides[id]={}; weaponPropertyOverrides[id][field]=value; saveWeaponPropertyOverrides(); }
+  else return;
+  reRenderShipEditorIfOpen();
+}
+async function wpnRemove(id){
+  if(!isReferee()) return;
+  const w = effectiveWeapons().find(x=>x.id===id); if(!w) return;
+  if(!confirm('Remove "'+(w.name||'weapon')+'" from the catalog?\n\nShips already carrying it keep their copy. Restorable from "Show Removed Items".')) return;
+  const add = weaponAdditions.find(x=>x.id===id);
+  weaponDeletions[id] = { w: add || JSON.parse(JSON.stringify(w)), t: Date.now(), wasAddition: !!add };
+  if(add) weaponAdditions = weaponAdditions.filter(x=>x.id!==id);
+  await saveWeaponDeletions(); if(add) await saveWeaponAdditions();
+  reRenderShipEditorIfOpen();
+  showToast('Weapon removed from catalog', 'info');
+}
+async function restoreDeletedWeapon(id){
+  const entry = weaponDeletions[id]; if(!entry) return;
+  if(entry.wasAddition && entry.w){ if(!weaponAdditions.some(x=>x.id===id)) weaponAdditions.push(entry.w); await saveWeaponAdditions(); }
+  delete weaponDeletions[id]; await saveWeaponDeletions();
+  if(typeof closeRemovedItemsPanel==='function') closeRemovedItemsPanel();
+  reRenderShipEditorIfOpen();
+  showToast('Weapon restored');
+}
+
+// Attach a catalog template to a ship's loadout — pre-fills a new weapon row the
+// referee can still tweak per-ship. Reference traits + TL fold into its notes.
+function addCombatWeaponFromCatalog(shipId, weaponId){
+  if(!isReferee()) return;
+  if(!weaponId) return;
+  const st = (typeof combatEditStats==='function') ? combatEditStats(shipId) : null; if(!st) return;
+  const tpl = effectiveWeapons().find(w=>w.id===weaponId); if(!tpl) return;
+  st.weapons = st.weapons || [];
+  const notes = [tpl.notes, tpl.traits?('Traits: '+tpl.traits):'', (tpl.tl!=='' && tpl.tl!=null)?('TL'+tpl.tl):''].filter(Boolean).join(' · ');
+  st.weapons.push({ id:'w_'+Math.random().toString(36).slice(2,7), name:tpl.name, type:tpl.type, mount:tpl.mount||'turret', damage:tpl.damage||'', range:tpl.range||'Very Long', ammo:tpl.ammoMax||0, ammoMax:tpl.ammoMax||0, notes });
+  if(typeof persistShipStat==='function') persistShipStat(shipId);
+  reRenderShipEditorIfOpen();
+  showToast('Added ' + (tpl.name||'weapon') + ' from catalog');
+}
+
+// ── Catalog manager (inline in the ship editor, referee only) ────────────────
+let weaponCatalogOpen = false;
+function toggleWeaponCatalog(){ weaponCatalogOpen = !weaponCatalogOpen; reRenderShipEditorIfOpen(); }
+function renderWeaponCatalogManager(){
+  if(!isReferee()) return '';
+  const cat = effectiveWeapons();
+  const ea = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));   // coerce — tl/ammo may be numbers
+  const mounts = ['turret','fixed','barbette','bay'];
+  const rows = cat.map(w => {
+    const typeOpts = COMBAT_WEAPON_TYPES.map(t=>`<option value="${t}"${t===w.type?' selected':''}>${t}</option>`).join('');
+    const mountOpts = mounts.map(m=>`<option value="${m}"${m===w.mount?' selected':''}>${m}</option>`).join('');
+    return `<div class="cbt-weap-row" style="flex-wrap:wrap;gap:4px">
+      <input class="sf-input" style="flex:2;min-width:88px" value="${ea(w.name||'')}" title="Name" onchange="wpnEditField('${w.id}','name',this.value)">
+      <select class="cbt-sel" title="Type" onchange="wpnEditField('${w.id}','type',this.value)">${typeOpts}</select>
+      <select class="cbt-sel" title="Mount" onchange="wpnEditField('${w.id}','mount',this.value)">${mountOpts}</select>
+      <input class="sf-input" style="width:48px" value="${ea(w.damage||'')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="wpnEditField('${w.id}','damage',this.value)">
+      <input class="sf-input" style="width:74px" value="${ea(w.range||'')}" placeholder="range" title="Range band" onchange="wpnEditField('${w.id}','range',this.value)">
+      <input class="sf-input" style="width:54px" type="number" value="${Number(w.ammoMax)||0}" title="Ammo capacity (missiles/sandcaster)" onchange="wpnEditField('${w.id}','ammoMax',this.value)">
+      <input class="sf-input" style="flex:1;min-width:66px" value="${ea(w.traits||'')}" placeholder="traits" title="Traits, e.g. Smart, Scatter" onchange="wpnEditField('${w.id}','traits',this.value)">
+      <input class="sf-input" style="width:40px" value="${ea((w.tl===0||w.tl)?w.tl:'')}" placeholder="TL" title="Tech level" onchange="wpnEditField('${w.id}','tl',this.value)">
+      <button class="cbt-btn danger" title="Remove from catalog" onclick="wpnRemove('${w.id}')">✕</button>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:8px;padding:8px;border:1px dashed #b9c0b9;border-radius:6px;background:#f3f6f3">
+    <div style="font-size:10px;color:#6a6f6a;margin-bottom:6px">Weapon catalog — author reusable templates, then add them to any ship above.</div>
+    ${rows || '<div style="font-size:11px;color:#7a7a7a">Catalog is empty.</div>'}
+    <button class="cbt-btn" style="margin-top:6px" onclick="wpnAdd()">+ New catalog weapon</button>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHIP ROSTER + FLEETS  (Design Mode · author NPC/enemy ships, group, deploy)
+// ───────────────────────────────────────────────────────────────────────────
+// A persistent referee library of ships built off the SAME combat-ship stat
+// block (makeShipStats) the encounter uses — authored ahead of time, edited
+// through the existing ship editor (openShipEditor), grouped into fleets, and
+// dropped into an encounter via addCombatShip. Plus a generate-then-edit ship
+// builder (genShipStats) like the UWP world generator. This is authoring +
+// organisation only: the referee and the dice run the fight, exactly as before.
+// Stored in aurelia_state 'ship-roster' = { ships:[{id,name,side,stats}], fleets:[{id,name,shipIds[]}] }.
+let shipRoster = { ships: [], fleets: [] };
+
+async function loadShipRoster(){
+  // Referee tool — don't pull enemy prep into a player's memory.
+  if(typeof isReferee === 'function' && !isReferee()){ shipRoster = { ships: [], fleets: [] }; return; }
+  try {
+    const r = await supaStorage.get('ship-roster', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    shipRoster = (v && typeof v === 'object')
+      ? { ships: Array.isArray(v.ships) ? v.ships : [], fleets: Array.isArray(v.fleets) ? v.fleets : [] }
+      : { ships: [], fleets: [] };
+  } catch(e){ shipRoster = { ships: [], fleets: [] }; }
+}
+async function saveShipRoster(){ try { await supaStorage.set('ship-roster', JSON.stringify(shipRoster), true); } catch(e){ console.error('Ship roster save failed', e); } }
+function rosterShipById(id){ return ((shipRoster && shipRoster.ships) || []).find(s => s.id === id) || null; }
+
+// ── Generate-then-edit ship builder (reuses the weapons catalog for loadouts) ──
+function genShipStats(opts){
+  opts = opts || {};
+  const tonnage = Math.max(10, Number(opts.tonnage) || 100);
+  const tl = Math.max(7, Math.min(15, Number(opts.tl) || 12));
+  const role = opts.role || 'patrol';
+  const ROLE = {
+    fighter: { thrust:6, jump:0, armour:2, gun:2, pilot:2, tac:0, weps:['pulse-laser'] },
+    escort:  { thrust:4, jump:1, armour:4, gun:2, pilot:1, tac:1, weps:['beam-laser','beam-laser'] },
+    patrol:  { thrust:3, jump:2, armour:4, gun:1, pilot:1, tac:1, weps:['beam-laser','missile'] },
+    raider:  { thrust:5, jump:1, armour:3, gun:2, pilot:2, tac:1, weps:['pulse-laser','missile'] },
+    trader:  { thrust:1, jump:2, armour:0, gun:0, pilot:1, tac:0, weps:['sandcaster'] },
+    capital: { thrust:2, jump:1, armour:6, gun:3, pilot:1, tac:3, weps:['plasma','beam-laser','missile'] },
+  };
+  const r = ROLE[role] || ROLE.patrol;
+  const hp = Math.max(1, Math.round(tonnage * 0.4));   // matches the player ship default (100t → 40 HP)
+  const pwr = Math.max(1, Math.round(tonnage * 0.6));
+  const cat = (typeof effectiveWeapons === 'function') ? effectiveWeapons() : [];
+  const fromCatalog = t => {
+    const tpl = cat.find(w => w.type === t);
+    if(tpl){
+      const notes = [tpl.notes, tpl.traits ? ('Traits: ' + tpl.traits) : '', (tpl.tl !== '' && tpl.tl != null) ? ('TL' + tpl.tl) : ''].filter(Boolean).join(' · ');
+      return { id:'w_'+Math.random().toString(36).slice(2,7), name:tpl.name, type:tpl.type, mount:tpl.mount||'turret', damage:tpl.damage||'', range:tpl.range||'Very Long', ammo:tpl.ammoMax||0, ammoMax:tpl.ammoMax||0, notes };
+    }
+    return { id:'w_'+Math.random().toString(36).slice(2,7), name:t, type:t, mount:'turret', damage:'2D', range:'Very Long', ammo:0, ammoMax:0, notes:'' };
+  };
+  return makeShipStats({
+    name: opts.name || ('TL' + tl + ' ' + role.charAt(0).toUpperCase() + role.slice(1)),
+    tonnage, jumpRating: r.jump, armourRating: r.armour,
+    hullPoints: hp, hullPointsMax: hp, structurePoints: hp, structurePointsMax: hp,
+    thrust: r.thrust, power: pwr, powerMax: pwr, sensorDM: (tl>=14?2:(tl>=12?1:0)),
+    crewSkills: { pilot:r.pilot, gunnery:r.gun, engineer:1, sensors:1, tactics:r.tac, leadership:Math.max(0,r.tac-1) },
+    weapons: (r.weps || []).map(fromCatalog)
+  });
+}
+
+// ── Roster CRUD + fleets (referee) ──
+function rosterAddShip(stats){
+  if(!isReferee()) return null;
+  const id = 'rsh_' + Math.random().toString(36).slice(2,8);
+  shipRoster.ships = shipRoster.ships || [];
+  shipRoster.ships.push({ id, name: (stats && stats.name) || 'New Ship', side: 'hostile', stats: makeShipStats(stats || {}) });
+  saveShipRoster();
+  return id;
+}
+function rosterDuplicate(id){
+  if(!isReferee()) return;
+  const s = rosterShipById(id); if(!s) return;
+  const copy = JSON.parse(JSON.stringify(s));
+  copy.id = 'rsh_' + Math.random().toString(36).slice(2,8);
+  copy.name = (s.name || 'Ship') + ' (copy)';
+  (copy.stats.weapons || []).forEach(w => { w.id = 'w_' + Math.random().toString(36).slice(2,7); });
+  shipRoster.ships.push(copy); saveShipRoster();
+}
+function rosterRemove(id){
+  if(!isReferee()) return;
+  shipRoster.ships = (shipRoster.ships || []).filter(s => s.id !== id);
+  (shipRoster.fleets || []).forEach(f => { f.shipIds = (f.shipIds || []).filter(x => x !== id); });
+  saveShipRoster();
+}
+function rosterDeployShip(id){
+  if(!isReferee() || !combatEncounter) return null;
+  const s = rosterShipById(id); if(!s) return null;
+  // Deploy a COPY so the encounter ship is independent of the roster template.
+  return addCombatShip(JSON.parse(JSON.stringify(s.stats)), { name: s.name, side: s.side || 'hostile', revealed: false });
+}
+function fleetCreate(name){ if(!isReferee()) return; shipRoster.fleets = shipRoster.fleets || []; shipRoster.fleets.push({ id:'flt_'+Math.random().toString(36).slice(2,8), name: name || 'Fleet', shipIds: [] }); saveShipRoster(); }
+function fleetRemove(id){ if(!isReferee()) return; shipRoster.fleets = (shipRoster.fleets || []).filter(f => f.id !== id); saveShipRoster(); }
+function fleetAddShip(fid, sid){ if(!isReferee()) return; const f = (shipRoster.fleets || []).find(x => x.id === fid); if(!f || !rosterShipById(sid)) return; f.shipIds = f.shipIds || []; f.shipIds.push(sid); saveShipRoster(); }   // duplicates allowed (e.g. Corsair ×3)
+function fleetDeploy(fid){ if(!isReferee() || !combatEncounter) return; const f = (shipRoster.fleets || []).find(x => x.id === fid); if(!f) return; (f.shipIds || []).forEach(sid => rosterDeployShip(sid)); }
+
+// ── Combat-panel section: roster + fleets + generator (referee only) ──
+function renderShipRoster(hasEncounter){
+  if(!isReferee()) return '';
+  const R = shipRoster || { ships:[], fleets:[] };
+  const ships = R.ships || [], fleets = R.fleets || [];
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x==null?'':x));
+  const shipRows = ships.map(s => {
+    const st = s.stats || {}; const wc = (st.weapons || []).length;
+    const deploy = hasEncounter ? `<button class="cbt-btn" title="Add a copy to the current encounter" onclick="uiRosterDeploy('${s.id}')">→ enc</button>` : '';
+    return `<div class="cbt-haz-row">
+      <span class="cbt-haz-name">${ea(s.name || 'Ship')}</span>
+      <span class="cbt-haz-dm">${Number(st.tonnage)||0}t · hull ${Number(st.hullPointsMax)||0} · ${wc} wpn</span>
+      <button class="cbt-btn" title="Edit stats" onclick="openShipEditor('${s.id}')">✎</button>
+      <button class="cbt-btn" title="Duplicate" onclick="uiRosterDuplicate('${s.id}')">⧉</button>
+      ${deploy}
+      <button class="cbt-btn danger" title="Remove from roster" onclick="uiRosterRemove('${s.id}')">✕</button>
+    </div>`;
+  }).join('');
+  const fleetRows = fleets.map(f => {
+    const names = (f.shipIds || []).map(id => { const s = ships.find(x => x.id === id); return s ? ea(s.name) : '?'; }).join(', ');
+    const opts = ships.map(s => `<option value="${s.id}">${ea(s.name)}</option>`).join('');
+    const deploy = hasEncounter ? `<button class="cbt-btn" title="Add the whole fleet" onclick="uiFleetDeploy('${f.id}')">→ enc</button>` : '';
+    return `<div class="cbt-haz-row" style="flex-wrap:wrap">
+      <span class="cbt-haz-name">${ea(f.name || 'Fleet')} <span style="color:var(--tx1)">(${(f.shipIds||[]).length})</span></span>
+      ${deploy}
+      <button class="cbt-btn danger" title="Disband fleet (ships stay)" onclick="uiFleetRemove('${f.id}')">✕</button>
+      <div style="flex-basis:100%;font-size:9px;color:var(--tx1);margin-top:2px">${names || 'empty'}</div>
+      ${ships.length ? `<div style="flex-basis:100%;display:flex;gap:4px;margin-top:3px"><select class="cbt-sel" id="flt-add-${f.id}" style="flex:1">${opts}</select><button class="cbt-btn" onclick="uiFleetAddShip('${f.id}')">+ add</button></div>` : ''}
+    </div>`;
+  }).join('');
+  const roleOpts = ['escort','patrol','raider','trader','fighter','capital'].map(r => `<option value="${r}">${r}</option>`).join('');
+  return `<div class="cbt-sec-tab">Ship Roster &amp; Fleets</div>
+    <div class="cbt-controls">
+      ${shipRows || '<div style="font-size:10px;color:var(--tx1)">No ships in the roster yet — add a blank one or generate one below.</div>'}
+      <div class="cbt-ctl-row" style="border-top:.5px solid var(--bd0);padding-top:6px;margin-top:2px">
+        <button class="cbt-btn" onclick="uiRosterAddBlank()">+ Blank ship</button>
+      </div>
+      <div class="cbt-ctl-row">
+        <span style="font-size:9px;color:var(--tx1)">Generate</span>
+        <input class="cbt-num" id="gen-tonnage" type="number" min="10" step="10" value="200" title="Tonnage" style="width:62px">
+        <input class="cbt-num" id="gen-tl" type="number" min="7" max="15" value="12" title="Tech level" style="width:46px">
+        <select class="cbt-sel" id="gen-role" title="Role">${roleOpts}</select>
+        <button class="cbt-btn primary" onclick="uiRosterGenerate()">⚙ Generate</button>
+      </div>
+      ${(fleets.length || ships.length) ? `<div class="cbt-sec-tab" style="margin-top:6px">Fleets</div>${fleetRows}` : ''}
+      <div class="cbt-ctl-row"><button class="cbt-btn" onclick="uiFleetCreate()">+ New fleet</button></div>
+    </div>`;
+}
+
+// UI wrappers (referee)
+function uiRosterAddBlank(){ const id = rosterAddShip(makeShipStats({ name:'New Ship' })); if(id) openShipEditor(id); }
+function uiRosterGenerate(){
+  const t = document.getElementById('gen-tonnage'), tl = document.getElementById('gen-tl'), role = document.getElementById('gen-role');
+  const stats = genShipStats({ tonnage: t ? t.value : 200, tl: tl ? tl.value : 12, role: role ? role.value : 'patrol' });
+  const id = rosterAddShip(stats); if(id) openShipEditor(id);
+}
+function uiRosterDuplicate(id){ rosterDuplicate(id); renderCombat(); }
+function uiRosterRemove(id){ if(confirm('Remove this ship from the roster?')){ if(typeof shipEditorId!=='undefined' && shipEditorId===id && typeof closeShipEditor==='function') closeShipEditor(); rosterRemove(id); renderCombat(); } }
+function uiRosterDeploy(id){ const did = rosterDeployShip(id); if(did) renderCombat(); else showToast('Start an encounter first', 'info'); }
+function uiFleetCreate(){ const n = prompt('Fleet name:'); if(n){ fleetCreate(n); renderCombat(); } }
+function uiFleetRemove(id){ if(confirm('Disband this fleet? (Its ships stay in the roster.)')){ fleetRemove(id); renderCombat(); } }
+function uiFleetAddShip(fid){ const sel = document.getElementById('flt-add-' + fid); if(sel && sel.value){ fleetAddShip(fid, sel.value); renderCombat(); } }
+function uiFleetDeploy(fid){ fleetDeploy(fid); renderCombat(); }
+
 // ── Enemy ship editor modal (reuses the ship-data-file sheet layout) ─────────
 let shipEditorId = null;
 function openShipEditor(shipId){ shipEditorId = shipId; document.getElementById('combat-edit-modal').classList.remove('hidden'); renderShipEditor(); }
@@ -1057,7 +1348,8 @@ function renderShipEditor(){
   const card = document.getElementById('combat-edit-card');
   if(!card || !shipEditorId) return;
   const isPlayer = combatEditIsPlayer(shipEditorId);
-  const ship = isPlayer ? { id: 'player', ref: 'player', name: shipState.name } : combatShipById(shipEditorId);
+  const ship = isPlayer ? { id: 'player', ref: 'player', name: shipState.name }
+    : (combatShipById(shipEditorId) || ((typeof rosterShipById === 'function') ? rosterShipById(shipEditorId) : null));
   if(!ship){ closeShipEditor(); return; }
   const st = combatEditStats(shipEditorId);
   const wRows = (st.weapons || []).map(w => `
@@ -1067,6 +1359,8 @@ function renderShipEditor(){
       <input class="sf-input" style="width:56px" value="${escAttr(w.damage || '')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="updateCombatWeapon('${ship.id}','${w.id}','damage',this.value)">
       <button class="cbt-btn danger" onclick="removeCombatWeapon('${ship.id}','${w.id}')">✕</button>
     </div>`).join('');
+  const catItems = (typeof effectiveWeapons==='function') ? effectiveWeapons() : [];
+  const catOpts = catItems.map(w => `<option value="${w.id}">${escQH(w.name)}${w.damage?(' · '+escQH(w.damage)):''}${w.mount?(' · '+escQH(w.mount)):''}</option>`).join('');
   card.innerHTML = `
     <div class="cbt-edit-hdr">
       <span>✏ ${escQH(ship.ref === 'player' ? 'Edit Player Ship' : 'Edit Ship')}</span>
@@ -1097,8 +1391,13 @@ function renderShipEditor(){
         </div>
       </div></div>
       <div class="sf-sec"><div class="sf-tab">Weapons</div><div class="sf-card">
-        ${wRows || '<div style="font-size:11px;color:#7a7a7a">No weapons. Add one below.</div>'}
-        <button class="cbt-btn" style="margin-top:6px" onclick="addCombatWeapon('${ship.id}')">+ Add weapon</button>
+        ${wRows || '<div style="font-size:11px;color:#7a7a7a">No weapons. Add one below or pick from the catalog.</div>'}
+        <div class="cbt-weap-row" style="margin-top:6px">
+          <button class="cbt-btn" onclick="addCombatWeapon('${ship.id}')">+ Add blank</button>
+          ${catItems.length ? `<select class="cbt-sel" id="cbt-wpn-cat" style="flex:2"><option value="">— add from catalog —</option>${catOpts}</select><button class="cbt-btn" onclick="addCombatWeaponFromCatalog('${ship.id}',(document.getElementById('cbt-wpn-cat')||{}).value)">＋</button>` : ''}
+        </div>
+        <button class="cbt-btn" style="margin-top:6px;width:100%;text-align:left" onclick="toggleWeaponCatalog()">${weaponCatalogOpen?'▾':'▸'} Manage weapon catalog (${catItems.length})</button>
+        ${weaponCatalogOpen ? renderWeaponCatalogManager() : ''}
       </div></div>
     </div>`;
 }

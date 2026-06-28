@@ -616,6 +616,11 @@ function resetCampaign(){
   factionAdditions = {};
   factionDeletions = {};
   factionPropertyOverrides = {};
+  weaponAdditions = [];
+  weaponDeletions = {};
+  weaponPropertyOverrides = {};
+  shipRoster = { ships: [], fleets: [] };
+  npcRoster = [];
   selectedBodyLoc = null;
   questLog = [];
 
@@ -638,6 +643,11 @@ function resetCampaign(){
   saveFactionAdditions();
   saveFactionDeletions();
   saveFactionPropertyOverrides();
+  saveWeaponAdditions();
+  saveWeaponDeletions();
+  saveWeaponPropertyOverrides();
+  saveShipRoster();
+  saveNpcRoster();
   saveQuestLog();
 
   // Galaxy is back to the authored regions + systems — fold the now-empty overlays in.
