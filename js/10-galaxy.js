@@ -1662,13 +1662,18 @@ const HX = (function(){
       else marker=NS('circle',{cx:p.x,cy:p.y,r:isOrigin?5:4,fill:isOrigin?'#f4d35e':col,class:'hx-star-dot'});
       if(isSel&&!isOrigin){ marker.setAttribute('stroke','#fff'); marker.setAttribute('stroke-width','1.5'); }
       if(!inRange) marker.setAttribute('opacity','0.3'); marker.style.cursor='pointer';
-      marker.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return;
-        if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof gxLinkMode!=='undefined'&&gxLinkMode){ if(typeof gxLinkPick==='function') gxLinkPick(s.id); return; }
-        selectSys(s); });
       g.appendChild(marker);
       const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
       if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
-      if(!(isOrigin||isSel)){ marker.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); marker.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
+      // Finger-friendly tap target: the visible star is only ~8px across — far below a
+      // usable touch target — so overlay a larger transparent hit circle that carries the
+      // tap (and the hover-label). Sits on top so a tap near a star still selects it.
+      const hit=NS('circle',{cx:p.x,cy:p.y,r:14,fill:'transparent','pointer-events':'all',style:'cursor:pointer'});
+      hit.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return;
+        if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof gxLinkMode!=='undefined'&&gxLinkMode){ if(typeof gxLinkPick==='function') gxLinkPick(s.id); return; }
+        selectSys(s); });
+      if(!(isOrigin||isSel)){ hit.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); hit.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
+      g.appendChild(hit);
     });
     // Design Mode click-to-place: highlight every empty hex in view as a tap
     // target. Tiles the whole viewport, so panning lets the referee drop a system
@@ -2030,8 +2035,11 @@ const HX = (function(){
     view.scale=clamp(Math.min(rect.width/cw,rect.height/ch),0.3,1.6); fitScale=view.scale;
     view.x=rect.width/2-((minX+maxX)/2)*view.scale; view.y=rect.height/2-((minY+maxY)/2)*view.scale; fitted=true; render(); }
   function bindPanZoom(){ if(!svg) return; let drag=null, lastDist=null;
-    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; dragMoved=false; svg.classList.add('hx-dragging'); });
-    svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<4) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
+    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,touch:e.pointerType==='touch'}; dragMoved=false; svg.classList.add('hx-dragging'); });
+    // A finger tap jitters several px before lift; a 4px pan threshold misreads that as a
+    // drag and the star's `if(dragMoved) return;` swallows the tap. Use a larger slop for
+    // touch so taps register, while keeping mouse panning crisp.
+    svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<(drag.touch?12:4)) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
     window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
     // Tap empty space → deselect (back to the galaxy overview). Star markers and
     // lane hit-targets stopPropagation, so only background/empty-hex taps reach here.
