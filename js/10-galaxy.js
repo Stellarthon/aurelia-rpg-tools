@@ -1543,7 +1543,10 @@ const HX = (function(){
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
       const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker+mktPressure(src,g.name),
             sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-mktPressure(dst,g.name);
-      const buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      // Price-level overlay (referee manual adjustment × sticky inflation) layered OUTSIDE the
+      // bounded priceMult table, so a sustained shortage can push the level past the table's cap.
+      try { if(window.ECON && ECON.priceOverlay){ buyP*=ECON.priceOverlay(src.id,g.name); sellP*=ECON.priceOverlay(dst.id,g.name); } } catch(e){}
       out.push({good:g.name,buyP,sellP,profit:sellP-buyP}); });
     return out.sort((a,b)=>b.profit-a.profit); }
 
@@ -2002,6 +2005,7 @@ const HX = (function(){
                      : `<div class="hx-small" style="margin-bottom:6px">No production or consumption configured.</div>`;
         if(ep.overridden) html+=`<div class="hx-small" style="color:#C98BE8;margin:-2px 0 6px">✎ Custom economy — overrides the built-in profile.</div>`;
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="openEconEditor('${s.id}')">⚒ Edit production &amp; consumption</button></div>`;
+        if(typeof econPriceControlHTML==='function') html+=econPriceControlHTML(s.id);
       }
     }
     const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
@@ -2111,7 +2115,7 @@ const HX = (function(){
       if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
     // Add new / update existing.
     Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
-      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id;
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
         if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
           if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
             s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
@@ -2132,7 +2136,25 @@ const HX = (function(){
   function placePick(q,r){ const cb=placeCb; placeMode=false; placeCb=null; render(); renderSel(); if(cb) cb(q,r); }
   window.hxCancelPlace=cancelPlace;
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, get origin(){ return origin; } };
+  // ── World economic facts — the physical inputs the living economy derives an
+  //    UNCONFIGURED world's production/consumption from, so procedurally generated
+  //    worlds join the market automatically (ECON.derivedProfile). Reuses the SAME
+  //    seeded UWP the map shows (uwpOf), so the chart and the economy never disagree.
+  //    Gas/ice giants flag a hydrogen-skimming source for the fuel chain. Returns null
+  //    for an unknown / no-market node (caller falls back to a light-consumer default).
+  function worldFacts(id){
+    const node=(typeof GX_MAP!=='undefined')?GX_MAP[id]:null; if(!node) return null;
+    const s = BY_ID[id] || { id, systemId:node.systemId||id, fac:node.faction,
+                             star:node.name, label:node.label||node.name, deep:isDeep(node) };
+    let uwp; try{ uwp=uwpOf(s); }catch(e){ return null; }
+    let codes; try{ codes=WGEN.tradeCodes(uwp); }catch(e){ codes=[]; }
+    let gasGiant=false;
+    try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[])||[];
+      gasGiant=bodies.some(b=> b.discStyle==='gasgiant' || /gas giant|ice giant/i.test(b.type||'')); }catch(e){}
+    return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
+  }
+
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){

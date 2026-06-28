@@ -31,6 +31,11 @@ window.ECON = (function(){
     'Biochemicals':        { tier:1, recipe:{ 'Common Consumables':1 } },           // refined from agri output
     'Luxury Goods':        { tier:2, recipe:{ 'Precious Metals':1 } },              // worked precious metals
     'Pharmaceuticals':     { tier:2, recipe:{ 'Biochemicals':2 } },                 // food → biochem → pharma
+    // ── Fuel chain. Gas giants & C/D/E ports SKIM raw hydrogen; A/B ports REFINE it.
+    //    Mirrors the ship planner's fuelAt() model, so frontier skimmers feed core
+    //    refineries and fuel becomes a real, shockable, geography-driven commodity. ──
+    'Unrefined Hydrogen':  { tier:0 },                                              // raw (skimmed at gas giants / C-D-E ports)
+    'Refined Fuel':        { tier:1, recipe:{ 'Unrefined Hydrogen':1.1 } },         // refined at A-B starports
   };
   const SIM_GOODS = Object.keys(GOODS);
 
@@ -63,6 +68,99 @@ window.ECON = (function(){
   };
   const DEFAULT = { prod:{}, cons:{'Common Consumables':2,'Common Manufactured':1}, safW:2 };
 
+  // ── Procedural profile derivation ───────────────────────────────────────────
+  // The galaxy is semi-procedural: the referee hand-crafts and UWP-generates worlds.
+  // A world the referee has NOT hand-authored (not in DEF, no override) derives its
+  // production/consumption from what it physically IS — its MgT2e trade codes, its
+  // population, its starport, and (for fuel) any gas giant — via HX.worldFacts(). So a
+  // generated agri world feeds the sector and a generated refinery makes fuel, instead
+  // of falling through to a dead light-consumer DEFAULT. Precedence (buildTopology /
+  // defProfileOf): override > curated DEF > derivedProfile > DEFAULT fallback. Derived
+  // from the SEEDED UWP only (per-device deterministic) → identical baseline everywhere.
+  // Curated core worlds keep their hand-tuned DEF, so the balanced spine is untouched;
+  // derived worlds are deliberately MODEST so a single addition rarely tips the galaxy —
+  // and when a big one does, marketImpact() surfaces the new deficit to the referee.
+  function popScale(pop){ pop=pop|0;
+    if(pop<=0) return 0; if(pop<=2) return 2; if(pop<=3) return 4; if(pop<=4) return 7;
+    if(pop===5) return 11; if(pop===6) return 18; if(pop===7) return 30; if(pop===8) return 55;
+    if(pop===9) return 90; if(pop===10) return 130; return 170; }
+  let derivedCache = {};   // id → derived profile; cleared whenever topology rebuilds
+  let factsCache = {};     // id → HX.worldFacts(id); shared by derivedProfile + the fuel layer
+  function factsOf(id){
+    if(id in factsCache) return factsCache[id];
+    return (factsCache[id] = (typeof HX!=='undefined' && HX.worldFacts) ? HX.worldFacts(id) : null);
+  }
+  function derivedProfile(id){
+    if(derivedCache[id]) return derivedCache[id];
+    const f = factsOf(id);
+    if(!f) return DEFAULT;                                  // no facts yet (pre-HX-init) → old light default
+    const codes=f.codes||[], C=c=>codes.includes(c), sc=popScale(f.pop), prod={}, cons={};
+    const add=(m,g,v)=>{ v=Math.round(v); if(v>0) m[g]=(m[g]||0)+v; };
+    if(sc<=0){ return (derivedCache[id]={ prod:{}, cons:{}, safW:2 }); }   // unpopulated rock — no market activity
+    // FOOD — every inhabited world grows MOST of its own (local agriculture / hydroponics),
+    // so derived worlds aren't pure importers (which would starve the whole galaxy). Ag/Ga
+    // worlds are strong net exporters; Na (non-agri) & Po (poor) & dense In/Hi worlds run a
+    // mild deficit, fed by the Ag surplus. Producer-generous / consumer-light bias → the
+    // derived frontier rests at a small SURPLUS (stable baseline), never a structural deficit.
+    const foodDem = sc*0.5;
+    let foodMult = 1.0;                                       // default world → ~self-sufficient
+    if(C('Ag')||C('Ga')) foodMult = 2.3;                     // breadbasket → net exporter
+    else if(C('Na')) foodMult = 0.4;                         // non-agricultural → importer
+    else if(C('Po')) foodMult = 0.6;
+    else if(C('Hi')||C('In')) foodMult = 0.85;               // dense/urban → mild importer
+    add(cons,'Common Consumables', foodDem);
+    add(prod,'Common Consumables', foodDem*foodMult);
+    if(C('Ag')||C('Ga')) add(prod,'Biochemicals', sc*0.28);
+    // Archetype production (recipe inputs auto-import via recipeDraw — never list in cons).
+    // Mining worlds also salvage SCRAP (the untraded internal input the recipes draw on),
+    // so a frontier full of industry doesn't drain the two DEF scrap yards dry.
+    if(C('As')||C('De')||C('Ic')){ add(prod,'Common Ore', sc*2.6); add(prod,'Scrap', sc*1.2);
+      add(prod,'Precious Metals', sc*0.16); if(C('As')) add(prod,'Radioactives', sc*0.08); }   // mining / barren-rock
+    // Industry co-locates extraction/reclamation, so an industrial world mines & salvages
+    // ENOUGH of its own ore + scrap to feed its lines — else one big In world drains the
+    // whole galaxy's raws (the recipes draw 1 ore + 1 scrap per tier-1 unit).
+    if(C('In')){ add(prod,'Common Manufactured', sc*0.65); add(prod,'Common Electronics', sc*0.9);
+      add(prod,'Common Ore', sc*1.6); add(prod,'Scrap', sc*1.6); }
+    if(C('Ht')){ add(prod,'Advanced Electronics', sc*0.2); add(prod,'Pharmaceuticals', sc*0.12); }    // high-tech (advanced draws 2× electronics — kept modest)
+    if(C('Ri')){ add(prod,'Luxury Goods', sc*0.24); add(prod,'Precious Metals', sc*0.18); }            // rich worlds: worked + raw precious metals
+    // Finished-goods FINAL demand — kept light & concentrated so it doesn't out-run supply.
+    if(f.pop>=7) add(cons,'Common Manufactured', sc*0.12);
+    if(f.pop>=8) add(cons,'Advanced Electronics', sc*0.05);
+    if(C('Hi')||C('Ri')) add(cons,'Luxury Goods', sc*0.04);
+    if(C('Hi')) add(cons,'Pharmaceuticals', sc*0.03);
+    return (derivedCache[id]={ prod, cons, safW:2 });
+  }
+
+  // ── Fuel layer (applied to EVERY market world, DEF + derived alike) ──────────
+  // Fuel isn't part of a world's authored profile — it's infrastructure layered on by
+  // buildTopology from the world's starport + traffic: A/B ports run REFINERIES (make
+  // Refined Fuel), C/D/E ports SKIM raw Unrefined Hydrogen, a charted gas giant adds a
+  // major skimming rig, and every world burns the fuel its port offers in proportion to
+  // its shipping traffic. Refined Fuel's recipe draws hydrogen, so frontier skimmers feed
+  // core refineries — fuel becomes a geography-driven commodity that can run short.
+  const FUEL_REFINED='Refined Fuel', FUEL_HYDRO='Unrefined Hydrogen';
+  const FUEL_HUBS = { sol:3, aurelia:3, terminus:2, kronos:1.5, bastion:1.5, 'profit-margin':1 };  // curated thirsty hubs
+  const REFINERY_K=1.0, SKIM_K=1.7, FUEL_DEM_K=0.8, GG_BONUS=22;   // tuning knobs (calibrated against galaxy fuel balance)
+  function trafficWeight(id){
+    const n = (typeof GX_MAP!=='undefined') ? GX_MAP[id] : nodeOf(id);
+    const deg = (n && n.connections) ? n.connections.length : 0;
+    const f = factsOf(id);
+    const portT = f ? ({A:3,B:2,C:1,D:0.6,E:0.3,X:0}[f.port]||0.5) : 0.5;
+    const popT = f ? Math.max(0,(f.pop||0)-4)*0.4 : 0;
+    return 1 + deg*0.6 + portT + popT + (FUEL_HUBS[id]||0);
+  }
+  function addFuelRate(m,g,v){ v=Math.round(v*10)/10; if(v>0) m[g]=(m[g]||0)+v; }
+  function addFuel(id, prod, cons){
+    if(!GOODS[FUEL_REFINED]) return;
+    const f = factsOf(id); if(!f) return;
+    const port = f.port; if(port==='X' || !port) return;            // no starport → no fuel infrastructure / appreciable traffic
+    const tw = trafficWeight(id), refinery = (port==='A'||port==='B');
+    if(refinery) addFuelRate(prod, FUEL_REFINED, tw*REFINERY_K);    // refinery
+    else addFuelRate(prod, FUEL_HYDRO, tw*SKIM_K);                  // C/D/E gas skim
+    if(f.gasGiant) addFuelRate(prod, FUEL_HYDRO, GG_BONUS);         // charted gas-giant rig (e.g. Tanath)
+    addFuelRate(cons, refinery?FUEL_REFINED:FUEL_HYDRO, tw*FUEL_DEM_K);   // ships burn what their port offers
+  }
+
   let worlds = null, adj = null, state = null;
   // Per-world prod/cons overrides authored in the Design Mode "Production & Consumption"
   // editor. Layered over the hardcoded DEF table by buildTopology() exactly like
@@ -70,21 +168,33 @@ window.ECON = (function(){
   // "Revert" just drops the override. Keyed by GALAXY_NODES id. Persisted (referee-only)
   // to the shared econ-profiles row so every device resolves the same economy.
   let profiles = {};
+  // ── Referee manual price overlay ─────────────────────────────────────────────
+  // Authored intent (like profiles): a per-world and per-world+good price nudge in
+  // "notches" (+ = dearer / raise, − = cheaper / lower). Each notch is ±8%, geometric so
+  // +n and −n are exact inverses. Layered onto the price OUTSIDE the bounded priceMult (via
+  // priceAdjOf → overlayMult), so it works in BOTH Simple and Full mode, and SURVIVES reset
+  // (it lives here, not in state). Persisted to the shared econ-priceadj row (referee-only).
+  let priceAdj = { world:{}, good:{} };
+  const PADJ_STEP = 1.08, PADJ_MAX = 10;
+  function clampNotch(n){ return Math.max(-PADJ_MAX, Math.min(PADJ_MAX, Math.round(+n)||0)); }
+  function padjMult(notch){ return Math.pow(PADJ_STEP, clampNotch(notch)); }
 
   function nodeOf(id){ return (typeof GALAXY_NODES!=='undefined') ? GALAXY_NODES.find(n=>n.id===id) : null; }
   function isMarket(n){ return n && !NO_MARKET[n.faction]; }
   function curWeek(){ try { return Math.floor(imperialOrdinal(imperialDate)/7); } catch(e){ return 0; } }
 
   function buildTopology(){
-    worlds = {}; adj = {};
+    worlds = {}; adj = {}; derivedCache = {}; factsCache = {};   // facts may have changed (UWP/body/faction edits) → re-derive
     (typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).forEach(n=>{
       if(!isMarket(n)) return;
-      const d = DEF[n.id] || DEFAULT;
-      const ov = profiles[n.id];   // designer override (Design Mode economy editor) wins over DEF
-      worlds[n.id] = { id:n.id, label:n.label||n.name, fac:n.faction,
-                       prod:(ov&&ov.prod)?ov.prod:(d.prod||{}),
-                       cons:(ov&&ov.cons)?ov.cons:(d.cons||{}),
-                       safW:d.safW||2, store:d.store||{} };
+      const d = DEF[n.id] || derivedProfile(n.id);   // curated core keeps DEF; everything else derives from UWP/trade-codes/bodies
+      const ov = profiles[n.id];   // designer override (Design Mode economy editor) wins over DEF/derived
+      // COPY before layering fuel — DEF/derived/override profile objects must stay immutable
+      // (DEF is shared; derivedCache is reused; overrides are persisted), so we never mutate them.
+      const prod = Object.assign({}, (ov&&ov.prod)?ov.prod:(d.prod||{}));
+      const cons = Object.assign({}, (ov&&ov.cons)?ov.cons:(d.cons||{}));
+      addFuel(n.id, prod, cons);   // layer port-class fuel production + traffic-weighted fuel demand
+      worlds[n.id] = { id:n.id, label:n.label||n.name, fac:n.faction, prod, cons, safW:d.safW||2, store:d.store||{} };
       adj[n.id] = [];
     });
     Object.keys(worlds).forEach(id=>{
@@ -174,7 +284,7 @@ window.ECON = (function(){
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: 5, infl:{} };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -189,6 +299,24 @@ window.ECON = (function(){
       else if(s.kind==='crackdown' && s.faction===fac && (s.good==='*'||s.good===good)) f*=s.factor;  // faction-wide crackdown on a good
     });
     return f;
+  }
+  // ── Consumables underpin ALL labour ─────────────────────────────────────────
+  // When a world's larder runs low, the workforce doesn't turn up and EVERY OTHER
+  // output falls with it. foodFactor() returns a 0..1 multiplier applied to a world's
+  // NON-food production: 1.0 while there is ≥1 week of food on hand, ramping smoothly
+  // to FOOD_FLOOR as the larder empties. A world's OWN food production is EXEMPT (the
+  // production loop skips it) — farmers eat first, so a food shock can't recursively
+  // throttle the farms that fix it (no doom-loop). Inert at baseline: every world rests
+  // well above a week of cover, so foodFactor()===1 there and calm-state prices are
+  // unchanged (and the deterministic settle is unperturbed).
+  const FOOD_GOOD = 'Common Consumables', FOOD_THRESH_WK = 1, FOOD_FLOOR = 0.15;
+  function foodFactor(id){
+    const w = worlds[id]; if(!w) return 1;
+    const draw = (w.cons[FOOD_GOOD]||0) + recipeDraw(w, FOOD_GOOD);
+    if(draw <= 0) return 1;                                    // nobody to feed here → no labour penalty
+    const cover = stk(id, FOOD_GOOD) / draw;
+    if(cover >= FOOD_THRESH_WK) return 1;
+    return FOOD_FLOOR + (1 - FOOD_FLOOR) * Math.max(0, cover / FOOD_THRESH_WK);   // hungry workforce → output sags toward the floor
   }
   // Demand multiplier: a 'demand' shock (e.g. a plague spiking medical demand) inflates
   // consumption of a good at a world / across a faction → a fast-biting shortage.
@@ -227,10 +355,71 @@ window.ECON = (function(){
   // Independents layer without competing with logistics or churning recovery. Their
   // real payoff is legibility + a hook for convoy-escort / raid mechanics (Tier-3 #7).
   const AGENT_NAMES = ['Vasquez Holdings','The Meridian Run','Okonkwo & Daughters','Calla Drift-Freight','Red Lantern Cartage','Sable Voss Lines'];
-  const AGENT_VALUE = { 'Common Consumables':50,'Common Ore':40,'Common Electronics':300,'Common Manufactured':200,'Advanced Electronics':1200 }; // notional Cr/kt at par
-  const AGENT_START_CAP = 40000, AGENT_CAP_QTY = 12, AGENT_SPREAD_MIN = 4;
-  function agentUnitPrice(good, p){ return (AGENT_VALUE[good]||100) * (1 - (p||0)*0.08); }  // cheaper when glutted (p>0), dearer when short (p<0)
-  function freshAgents(){ return AGENT_NAMES.map((nm,i)=>({ id:'tr'+i, name:nm, cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0 })); }
+  const AGENT_VALUE = { 'Common Consumables':50,'Common Ore':40,'Common Electronics':300,'Common Manufactured':200,'Advanced Electronics':1200,'Refined Fuel':120,'Unrefined Hydrogen':30 }; // notional Cr/kt at par
+  const AGENT_START_CAP = 40000, AGENT_CAP_QTY = 12, AGENT_SPREAD_MIN = 4, PUBLIC_SPREAD_MIN = 1;
+  // Lifecycle economics (Cr/week). Idle traders run routine bulk haulage (MILK_RUN) that
+  // mostly offsets upkeep, so a calm galaxy thins the herd slowly rather than all at once;
+  // shocks are when survivors profit. PUBLIC (faction-backed) traders are subsidised and get
+  // a longer insolvency grace — they relieve their faction's shortages rather than chase margin.
+  const UPKEEP = 1000, SUBSIDY_PUBLIC = 600, MILK_RUN = 550;
+  const GRACE_PRIVATE = 4, GRACE_PUBLIC = 8, SPAWN_PROB = 0.35, DEFAULT_TRADER_CAP = 8;
+  // Backed traders avoid rival territory: hard = never route through it; soft = penalised but allowed.
+  const FACTION_AVOID = {
+    hegemony:  { hard:['rsc'],      soft:[] },
+    rsc:       { hard:['hegemony'], soft:[] },
+    omnisynth: { hard:[],           soft:['rsc','sanhedrin'] },
+    sanhedrin: { hard:['rsc'],      soft:['omnisynth'] },
+    uhc:       { hard:[],           soft:['rsc'] },
+  };
+  const FAC_SHORT = { hegemony:'Hegemony', rsc:'RSC', omnisynth:'OmniSynth', sanhedrin:'Sanhedrin', uhc:'UHC' };
+  const NAME_A=['Vasquez','Meridian','Okonkwo','Calla','Sable','Kessler','Yuan','Brightwater','Hollow','Tamburlaine','Orsk','Cinder','Halcyon','Ferrant','Drake','Voss','Anselm','Marlow','Quill','Saffron','Greywater','Castellan'];
+  const NAME_B=['Holdings','Run','& Daughters','Freight','Lines','Cartage','Hauling','Transit','Shipping','Consignment','Carriers','& Sons','Ventures','Logistics','Clipper Co.','Star-Freight'];
+  function agentUnitPrice(good, p, id){ return (AGENT_VALUE[good]||100) * (1 - (p||0)*0.08) * (id?overlayMult(id,good):1); }  // cheaper when glutted (p>0), dearer when short (p<0); ×price-level overlay so traders bank inflated margins
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function genAgentName(){ for(let i=0;i<8;i++){ const nm=pick(NAME_A)+' '+pick(NAME_B); if(!state.agents.some(a=>a.name===nm)) return nm; } return pick(NAME_A)+' '+pick(NAME_B); }
+  function pickBacking(){ if(Math.random()<0.55) return 'private'; return pick(['hegemony','omnisynth','sanhedrin','rsc','uhc']); }
+  // A fresh starting roster — a mix of independents and a couple of faction relief fleets.
+  function freshAgents(){
+    const seed=['private','private','hegemony','omnisynth','private'];
+    return seed.map((b,i)=>({ id:'tr'+i, name:AGENT_NAMES[i], cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing:b, insolventWk:0 }));
+  }
+  function traderCapOf(){ return Math.max(3, Math.min(30, (state&&state.traderCap)||DEFAULT_TRADER_CAP)); }
+  function factionOf(id){ return worlds[id] && worlds[id].fac; }
+  // 0 = fine, 1 = soft-avoid (penalised), 2 = hard-avoid (impassable) for a backed trader.
+  function avoidLevel(backing, id){
+    if(!backing || backing==='private') return 0;
+    const fac=factionOf(id), rel=FACTION_AVOID[backing];
+    if(!rel||!fac||fac===backing) return 0;
+    if(rel.hard.includes(fac)) return 2;
+    if(rel.soft.includes(fac)) return 1;
+    return 0;
+  }
+  function agentBlockSet(a, blk){
+    if(!a.backing || a.backing==='private') return blk;
+    const set=Object.assign({}, blk);
+    Object.keys(worlds).forEach(id=>{ if(avoidLevel(a.backing,id)===2) set[id]=1; });   // hostile space is impassable
+    return set;
+  }
+  // A convoy can only set out from a world where it can refuel: a fuel-starved source halts
+  // trade out of it — the fuel→trade coupling (mirror of food→output).
+  function fueled(id){
+    const f=factsOf(id); if(!f||f.port==='X'||!f.port) return false;
+    const g=(f.port==='A'||f.port==='B')?FUEL_REFINED:FUEL_HYDRO, w=worlds[id]; if(!w) return false;
+    const draw=(w.cons[g]||0); if(draw<=0) return true;
+    return stk(id,g)/draw >= 0.5;
+  }
+  function removeAgent(a, reason, week){
+    if(a.route){ const i=state.transit.findIndex(t=>t.agent===a.id && t.to===a.route.to && t.good===a.route.good); if(i>=0) state.transit.splice(i,1); }
+    const idx=state.agents.indexOf(a); if(idx>=0) state.agents.splice(idx,1);
+    log(week, `⚑ ${a.name} — ${reason}`);
+  }
+  function spawnAgent(week){
+    const backing=pickBacking();
+    state.agentSeq=(state.agentSeq||state.agents.length)+1;
+    state.agents.push({ id:'tr'+state.agentSeq, name:genAgentName(), cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing, insolventWk:0 });
+    const tag = backing==='private' ? 'independent' : (FAC_SHORT[backing]||backing)+'-backed';
+    log(week, `✦ New trader — ${state.agents[state.agents.length-1].name} (${tag})`);
+  }
 
   function agentsStep(week){
     if(!state.agents || state.tradersOn===false) return;
@@ -247,21 +436,28 @@ window.ECON = (function(){
       pool[g]={sur,sho}; });
     // Arrivals: bank profit & reposition (the cargo itself lands via state.transit).
     state.agents.forEach(a=>{ if(a.route && a.route.eta<=week){
-      const sp=pressure(a.route.to,a.route.good), sellUnit=agentUnitPrice(a.route.good, sp!=null?sp:0);
+      const sp=pressure(a.route.to,a.route.good), sellUnit=agentUnitPrice(a.route.good, sp!=null?sp:0, a.route.to);
       a.cap += a.route.qty*sellUnit; a.profit += Math.round(a.route.qty*(sellUnit-a.route.buyUnit));
       a.trips++; a.pos=a.route.to; a.route=null; } });
-    // Idle agents pick the best spread/short-haul edge; pool rooms are decremented so
-    // agents spread across opportunities instead of all stacking the same lane.
-    state.agents.forEach(a=>{ if(a.route) return;
-      let best=null;
-      goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
-        P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
-          P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
-            const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
-            const score=spread/Math.max(1,D[s.id]);
-            if(!best||score>best.score) best={b,s,g,dist:D[s.id],score}; }); }); });
-      if(!best) return;
-      const buyUnit=agentUnitPrice(best.g,best.b.p);
+
+    // ── Living-market lifecycle: upkeep, subsidy, milk-run, bankruptcy, market entry ──
+    for(let i=state.agents.length-1;i>=0;i--){ const a=state.agents[i];
+      const pub = a.backing && a.backing!=='private';
+      a.upkeep = UPKEEP;
+      a.cap -= UPKEEP;                                  // vessel + crew wages + mooring fees
+      if(pub) a.cap += SUBSIDY_PUBLIC;                  // faction props up its relief fleet
+      if(!a.route) a.cap += MILK_RUN;                   // routine background haulage when not on a big run
+      if(a.cap<=0) a.insolventWk=(a.insolventWk||0)+1; else a.insolventWk=0;
+      if((a.insolventWk||0) >= (pub?GRACE_PUBLIC:GRACE_PRIVATE)) removeAgent(a, 'insolvent — ceased trading', week);
+    }
+    const cap = traderCapOf();
+    while(state.agents.length > cap){ let weak=state.agents[0]; state.agents.forEach(a=>{ if(a.cap<weak.cap) weak=a; }); removeAgent(weak,'stood down (fleet cap reduced)',week); }
+    if(state.agents.length < cap && Math.random() < SPAWN_PROB) spawnAgent(week);
+
+    // ── Dispatch — idle agents pick a route. Pool rooms decrement so convoys spread out. ──
+    const executeRoute=(a,best)=>{
+      if(!fueled(best.b.id)) return;                                  // fuel-starved source → convoy can't depart
+      const buyUnit=agentUnitPrice(best.g,best.b.p,best.b.id);
       let qty=Math.min(AGENT_CAP_QTY,best.b.room,best.s.room);
       if(buyUnit>0) qty=Math.min(qty,Math.floor(a.cap/buyUnit));
       qty*=tariffMult(best.b.id,best.s.id,best.g);                    // tariff prices the convoy down at the border
@@ -271,7 +467,35 @@ window.ECON = (function(){
       a.route={ from:best.b.id, to:best.s.id, good:best.g, qty, buyUnit, began:week, eta:week+Math.max(1,best.dist) };
       a.pos=best.b.id; best.b.room-=qty; best.s.room-=qty;
       log(week, `${a.name}: ${qty}kt ${best.g.replace('Common ','')} ${worlds[best.b.id].label}→${worlds[best.s.id].label}`);
-    });
+    };
+    // PRIVATE merchants chase the fattest profit per jump, anywhere.
+    const dispatchPrivate=(a)=>{
+      let best=null;
+      goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
+        P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
+          P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
+            const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
+            const score=spread/Math.max(1,D[s.id]);
+            if(!best||score>best.score) best={b,s,g,dist:D[s.id],score}; }); }); });
+      if(best) executeRoute(a,best);
+    };
+    // PUBLIC relief fleets carry into the DEEPEST shortage in friendly space, routing around
+    // hostile territory (hard-avoid is impassable; soft-avoid is penalised; own-faction favoured).
+    const dispatchPublic=(a)=>{
+      const F=a.backing, aBlk=agentBlockSet(a,blk); let best=null;
+      goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
+        P.sho.forEach(s=>{ if(s.room<=0||aBlk[s.id]||avoidLevel(F,s.id)===2) return;
+          P.sur.forEach(b=>{ if(b.room<=0||aBlk[b.id]||b.id===s.id||embargoed(b.id,s.id)) return;
+            const spread=b.p-s.p; if(spread<PUBLIC_SPREAD_MIN) return;   // subsidised → runs on thin margins
+            const D=dist(b.id,aBlk); if(D[s.id]==null) return;
+            const depth=-s.p, ownBonus=(factionOf(s.id)===F)?2:0;
+            const softPen=(avoidLevel(F,s.id)===1?2:0)+(avoidLevel(F,b.id)===1?1:0);
+            const score=(depth+ownBonus-softPen)/Math.max(1,D[s.id]);
+            if(score>0 && (!best||score>best.score)) best={b,s,g,dist:D[s.id],score}; }); }); });
+      if(best) executeRoute(a,best);
+    };
+    state.agents.forEach(a=>{ if(a.route) return;
+      if(a.backing && a.backing!=='private') dispatchPublic(a); else dispatchPrivate(a); });
   }
 
   // Convoy raid — intercept a trader's in-flight cargo. The goods are destroyed/stolen
@@ -300,8 +524,9 @@ window.ECON = (function(){
     land.forEach(t=> setStk(t.to,t.good, stk(t.to,t.good)+t.qty));
 
     Object.values(worlds).forEach(w=>{
+      const ff = foodFactor(w.id);                              // hungry workforce throttles all non-food output (food itself is exempt — farmers eat first)
       for(const g in w.prod){
-        const cap = w.prod[g] * outputFactor(w.id, g);
+        const cap = w.prod[g] * outputFactor(w.id, g) * (g===FOOD_GOOD ? 1 : ff);
         const storeCap = safety(w,g) + w.prod[g]*2;                 // idle when warehouses are full — no infinite hoarding, so a producer shock actually bites
         const r = GOODS[g].recipe; let made = Math.min(cap, Math.max(0, storeCap - stk(w.id,g)));
         if(r) for(const inp in r) made = Math.min(made, stk(w.id,inp)/r[inp]);
@@ -341,6 +566,7 @@ window.ECON = (function(){
       });
     });
     agentsStep(week);            // autonomous Independents arbitrage the resulting price gaps
+    inflationStep(week);         // shortages ratchet the price level up (sticky); calm decays it back
     state.week = week;
   }
 
@@ -367,7 +593,7 @@ window.ECON = (function(){
     state.stock = stock;
     state.transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
     state.shocks = (state.shocks||[]).filter(s=> s.until==null || s.until>=wk);   // long-expired shocks drop
-    (state.agents||[]).forEach(a=>{ a.route=null; });                            // in-flight convoys would have landed ages ago
+    (state.agents||[]).forEach(a=>{ a.route=null; a.insolventWk=0; });           // in-flight convoys would have landed ages ago; don't bankrupt everyone on a big time-skip
     state.week = wk;
   }
   function advance(weeks){ ensure(); const target = state.week + Math.max(1, Math.round(weeks));
@@ -400,10 +626,49 @@ window.ECON = (function(){
     return Math.max(-4, Math.min(4, Math.round((stk(id,good)/ref - 1)*8)));
   }
 
+  // ── Sticky-spike inflation ───────────────────────────────────────────────────
+  // A persistent per-world, per-good price-LEVEL index (1 = par). Each live week a
+  // shortage ratchets it UP fast; otherwise it decays SLOWLY back toward 1 — so repeated
+  // crises leave a lasting higher price level (recognisably "inflation"), yet it is bounded
+  // and self-healing so it can't run away. Lives in state (clears on reset, persists in the
+  // shared row) and is SKIPPED by settleBaseline (the scratch state has no .infl field) — so
+  // the deterministic baseline is untouched. Applied as a multiplier OUTSIDE the bounded
+  // priceMult table, so the price level can genuinely climb (and enrich traders selling in).
+  const INFL_UP=0.07, INFL_DOWN=0.03, INFL_MAX=3.0;
+  function inflOf(id, good){ const m=state.infl; return (m && m[id] && m[id][good]) || 1; }
+  function priceAdjOf(id, good){ let m = padjMult(priceAdj.world[id]||0);   // world-wide nudge × per-good nudge
+    const gg = priceAdj.good[id]; if(gg && gg[good]) m *= padjMult(gg[good]); return m; }
+  function inflMult(id, good){ return state.active ? inflOf(id,good) : 1; }   // sticky inflation = full-sim only
+  function overlayMult(id, good){ return priceAdjOf(id,good) * inflMult(id,good); }   // shared seam: manual × inflation
+  function inflationStep(week){
+    if(!state.infl) return;                                          // scratch settle state has none → skipped (determinism)
+    const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
+    Object.keys(worlds).forEach(id=>{ goods.forEach(g=>{
+      const p = pressure(id,g); if(p==null) return;
+      const w = worlds[id], dem = demandFor(w,g), cover = dem>0 ? stk(id,g)/dem : Infinity;
+      let v = inflOf(id,g);
+      // Inflate only on GENUINE scarcity: below its own baseline (p≤−2) AND physically running
+      // out (<1wk of cover). A world merely riding below a high baseline but still well-stocked
+      // doesn't inflate — that keeps the calm galaxy near par (only real crises move the level).
+      if(p <= -2 && cover < 1) v *= (1 + INFL_UP * (-p)/4);          // running short (dearer) → prices ratchet up fast
+      else v += (1 - v) * INFL_DOWN;                                 // otherwise sticky decay back toward par
+      v = Math.max(1, Math.min(INFL_MAX, v));
+      if(v <= 1.0001){ if(state.infl[id]){ delete state.infl[id][g]; if(!Object.keys(state.infl[id]).length) delete state.infl[id]; } }
+      else (state.infl[id]=state.infl[id]||{})[g]=Math.round(v*1000)/1000;
+    }); });
+  }
+  // Combined price-level multiplier the player console + traders apply ON TOP of the bounded
+  // local price: manual referee adjustment × (sticky inflation, full-sim only).
+  function priceOverlay(id, good){ ensure(); return overlayMult(id, good); }
+  function inflationLevel(){ ensure(); let s=0,n=0;          // galaxy inflation gauge: mean index over ALL priced pairs (≈1 unless inflation is broad)
+    const goods=SIM_GOODS.filter(g=>!GOODS[g].internal);
+    Object.keys(worlds).forEach(id=>goods.forEach(g=>{ if(pressure(id,g)==null) return; s+=inflOf(id,g); n++; }));
+    return n? s/n : 1; }
+
   async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
     if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive; save(); }   // reseed stock; keep the current Simple/Full mode
 
   const PRESETS = [
@@ -492,7 +757,7 @@ window.ECON = (function(){
   }
 
   // ── Designer economy profiles + production-chain resolution ─────────────────
-  function defProfileOf(id){ const d = DEF[id] || DEFAULT; return { prod: d.prod||{}, cons: d.cons||{} }; }
+  function defProfileOf(id){ const d = DEF[id] || derivedProfile(id); return { prod: d.prod||{}, cons: d.cons||{} }; }
   function effectiveProfileOf(id){ const ov = profiles[id], d = defProfileOf(id);
     return { prod:(ov&&ov.prod)?ov.prod:d.prod, cons:(ov&&ov.cons)?ov.cons:d.cons, overridden:!!ov }; }
   function isMarketId(id){ ensure(); return !!worlds[id]; }   // false for vast/archon (no-market factions)
@@ -586,6 +851,14 @@ window.ECON = (function(){
     if(r.value!=null){ profiles = JSON.parse(r.value) || {}; worlds = null; adj = null; ensure(); state.base = recomputeBase(); } } catch(e){} }
   function saveProfiles(){ try { if(typeof isReferee==='function' && !isReferee()) return;
     supaStorage.set('econ-profiles', JSON.stringify(profiles), true); } catch(e){} }
+  async function loadPriceAdj(){ try { const r = await supaStorage.get('econ-priceadj', true);
+    if(r.value!=null){ const v=JSON.parse(r.value)||{}; priceAdj={ world:v.world||{}, good:v.good||{} }; } } catch(e){} }
+  function savePriceAdj(){ try { if(typeof isReferee==='function' && !isReferee()) return;
+    supaStorage.set('econ-priceadj', JSON.stringify(priceAdj), true); } catch(e){} }
+  function setWorldPriceAdj(id, notch){ ensure(); notch=clampNotch(notch); if(notch) priceAdj.world[id]=notch; else delete priceAdj.world[id]; savePriceAdj(); }
+  function setGoodPriceAdj(id, good, notch){ ensure(); notch=clampNotch(notch); priceAdj.good[id]=priceAdj.good[id]||{};
+    if(notch) priceAdj.good[id][good]=notch; else { delete priceAdj.good[id][good]; if(!Object.keys(priceAdj.good[id]).length) delete priceAdj.good[id]; } savePriceAdj(); }
+  function clearPriceAdjAt(id){ ensure(); delete priceAdj.world[id]; delete priceAdj.good[id]; savePriceAdj(); }
 
   return {
     GOODS, SIM_GOODS, PRESETS,
@@ -601,10 +874,19 @@ window.ECON = (function(){
     active(){ return !!(state && state.active); },
     setActive(v){ ensure(); state.active=!!v; if(v) state.week=curWeek(); save(); },
     coverWeeks(id,g){ ensure(); const w=worlds[id]; if(!w) return null; const rate=(w.cons[g]||0)+recipeDraw(w,g); return rate>0? stk(id,g)/rate : null; },
+    foodFactor(id){ ensure(); return foodFactor(id); },   // 0..1 labour-output multiplier (1 = fed; <1 = larder running dry, all non-food output sagging)
     stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
     agents(){ ensure(); return state.agents||[]; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
+    traderCap(){ ensure(); return traderCapOf(); },
+    setTraderCap(v){ ensure(); state.traderCap=Math.max(3,Math.min(30,Math.round(+v)||DEFAULT_TRADER_CAP)); save(); },
+    priceOverlay, inflationLevel, inflationOf:(id,g)=>{ ensure(); return inflOf(id,g); },
+    // Referee manual price controls (notches; + dearer, − cheaper). Works in Simple & Full mode, survives reset.
+    worldPriceAdj:(id)=>{ ensure(); return priceAdj.world[id]||0; },
+    goodPriceAdj:(id,g)=>{ ensure(); return (priceAdj.good[id]&&priceAdj.good[id][g])||0; },
+    setWorldPriceAdj, setGoodPriceAdj, clearPriceAdjAt, loadPriceAdj, savePriceAdj,
+    priceAdjMult:(id,g)=>{ ensure(); return priceAdjOf(id,g); },
     raidConvoy, syncLanes, disconnected,
   };
 })();
@@ -663,7 +945,8 @@ function econRaidConvoy(id){
 const ECON_GOOD_COL = {   // mirrors HX's GOOD_COL so good chips read consistently across the app
   'Common Consumables':'#5fb87a','Common Ore':'#b07a4a','Common Electronics':'#4a90d9',
   'Common Manufactured':'#8a9bb5','Advanced Electronics':'#3fd0d0','Precious Metals':'#e0c040',
-  'Radioactives':'#9fd44a','Biochemicals':'#3faf8f','Luxury Goods':'#c060c0','Pharmaceuticals':'#e07090'
+  'Radioactives':'#9fd44a','Biochemicals':'#3faf8f','Luxury Goods':'#c060c0','Pharmaceuticals':'#e07090',
+  'Refined Fuel':'#3f9d5a','Unrefined Hydrogen':'#caa83b'
 };
 function econGoodColor(g){ return ECON_GOOD_COL[g] || '#9fb0c8'; }
 function econNum(n){ return (Math.round((+n||0)*100)/100).toString(); }
@@ -691,9 +974,43 @@ function econSystemSectionHTML(nodeId){
   h += chips ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${chips}</div>`
              : `<div style="font-size:11px;color:var(--tx1);margin-bottom:8px">No production or consumption configured.</div>`;
   if(ep.overridden) h += `<div style="font-size:11px;color:#C98BE8;margin:-2px 0 8px">✎ Custom economy — overrides the built-in profile.</div>`;
-  h += `<button class="design-add-btn" style="width:100%" onclick="openEconEditor('${nodeId}')">⚒ Edit production &amp; consumption</button></div>`;
+  h += `<button class="design-add-btn" style="width:100%" onclick="openEconEditor('${nodeId}')">⚒ Edit production &amp; consumption</button>`;
+  h += econPriceControlHTML(nodeId);
+  h += `</div>`;
   return h;
 }
+
+// ── Referee manual price lever (raise/lower a whole world's prices) ───────────
+// Shared by the galaxy star panel, the system-overview panel, and the economy editor.
+// Each press = ±1 notch (±8%); works in Simple AND Full mode and survives reset.
+function econPriceControlHTML(nodeId, compact){
+  if(typeof ECON==='undefined' || !ECON.isMarketId || !ECON.isMarketId(nodeId)) return '';
+  const notch=ECON.worldPriceAdj(nodeId), pct=Math.round((Math.pow(1.08,notch)-1)*100);
+  const lbl = notch===0 ? 'at par' : (notch>0?`▲ +${pct}% dearer`:`▼ ${pct}% cheaper`);
+  const col = notch>0?'#e8a0a0':(notch<0?'#7ec98f':'var(--tx1)');
+  const bs='background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:5px;padding:2px 9px;font-size:12px;cursor:pointer';
+  return `<div style="margin-top:8px">`+
+    `<div style="font-size:11px;color:var(--tx1);margin-bottom:3px">Market prices <span style="color:${col}">· ${lbl}${notch?` (${notch>0?'+':''}${notch})`:''}</span></div>`+
+    `<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">`+
+      `<button title="Lower all prices here" style="${bs}" onclick="econBumpPrice('${nodeId}',-1)">– cheaper</button>`+
+      `<button title="Raise all prices here" style="${bs}" onclick="econBumpPrice('${nodeId}',1)">+ dearer</button>`+
+      (notch!==0?`<button title="Back to par" style="${bs};border-color:#6a2a2a;color:#e8a0a0" onclick="econResetPrice('${nodeId}')">reset</button>`:'')+
+    `</div>`+
+    (compact?'':`<div style="font-size:10px;color:var(--tx1);margin-top:3px">Nudges every good's buy &amp; sell price here (Simple &amp; Full mode). Per-good control is in the economy editor.</div>`)+
+  `</div>`;
+}
+function econRerenderPriceUI(nodeId){
+  try { if(econEditNodeId===nodeId){ const m=document.getElementById('econ-editor-modal'); if(m&&m.classList.contains('open')) renderEconEditor(); } } catch(e){}
+  try { if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); } catch(e){}
+  try { const el=document.getElementById('sys-econ-section'); if(el) el.innerHTML=econSystemSectionHTML(nodeId); } catch(e){}
+  try { if(typeof econPanelOpen!=='undefined' && econPanelOpen) renderEconPanel(); } catch(e){}
+}
+function econBumpPrice(nodeId, d){ if(typeof ECON==='undefined') return; ECON.setWorldPriceAdj(nodeId, ECON.worldPriceAdj(nodeId)+d); econRerenderPriceUI(nodeId); }
+function econResetPrice(nodeId){ if(typeof ECON==='undefined') return; ECON.setWorldPriceAdj(nodeId, 0); econRerenderPriceUI(nodeId); }   // clears the world-wide nudge (per-good tweaks kept)
+function econBumpGoodPrice(nodeId, good, d){ if(typeof ECON==='undefined') return; ECON.setGoodPriceAdj(nodeId, good, ECON.goodPriceAdj(nodeId,good)+d);
+  renderEconEditor(); try{ if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }catch(e){} }
+function econSetTraderCap(v){ if(typeof ECON==='undefined') return; ECON.setTraderCap(v); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+
 let econEditNodeId = null;        // node id being edited
 let econEditDraft  = null;        // { prod:[{good,rate}], cons:[{good,rate}] } working copy
 let econPicker     = null;        // { list:'prod'|'cons' } while the add-good selector is open
@@ -873,6 +1190,21 @@ function renderEconEditor(){
   h+=`<div class="econ-ed-section"><details class="econ-ed-collapse"><summary>▸ Full production-chain preview</summary>`+
      `<div id="econ-chain"></div></details></div>`;
 
+  // Market price tweaks — referee manual price overlay (world-wide lever + per good)
+  h+=`<div class="econ-ed-section"><div class="econ-ed-lbl">⚖ Market price tweaks <span class="econ-ed-hint">— manual referee nudge, Simple &amp; Full mode (survives reset)</span></div>`;
+  h+= econPriceControlHTML(id, true);
+  const pgoods = ECON.SIM_GOODS.filter(g=>!ECON.GOODS[g].internal && (((p.prod&&p.prod[g])||(p.cons&&p.cons[g]))||ECON.goodPriceAdj(id,g)));
+  h+=`<div class="econ-ed-lbl" style="margin:12px 0 4px;font-size:10px;color:var(--tx1)">Per good</div>`;
+  if(!pgoods.length){ h+=`<div class="econ-ed-empty">No goods traded here to price.</div>`; }
+  else pgoods.forEach(g=>{ const notch=ECON.goodPriceAdj(id,g), pct=Math.round((Math.pow(1.08,notch)-1)*100), col=econGoodColor(g);
+    const lab=notch===0?'par':(notch>0?`+${pct}%`:`${pct}%`), lc=notch>0?'#e8a0a0':(notch<0?'#7ec98f':'var(--tx1)');
+    h+=`<div class="econ-ed-row"><span class="econ-ed-good"><span class="econ-ed-dot" style="background:${col}"></span><span class="econ-ed-gname">${escQH(g)}</span></span>`+
+       `<span style="color:${lc};font-size:11px;min-width:46px;text-align:right">${lab}</span>`+
+       `<button class="econ-ed-mini" title="Cheaper" onclick="econBumpGoodPrice('${id}','${escQH(g)}',-1)">–</button>`+
+       `<button class="econ-ed-mini" title="Dearer" onclick="econBumpGoodPrice('${id}','${escQH(g)}',1)">+</button></div>`;
+  });
+  h+=`</div>`;
+
   // Market impact
   h+=`<div class="econ-ed-section"><div class="econ-ed-lbl">≈ Market impact <span class="econ-ed-hint">— projected galactic supply/demand &amp; price shift</span></div>`+
      `<div class="econ-ed-impact" id="econ-impact"></div></div>`;
@@ -916,6 +1248,8 @@ function renderEconPanel(){
   h+=btn(on?'⚙ Full simulation':'◐ Simple (default)', 'econToggleActive()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'background:#3a3320;border-color:#9d8a3f;color:#eadfbf');
   if(on){
     h+=`<span style="font-size:11px;color:var(--tx1)">Imperial week <b style="color:#f4d35e">${wk}</b></span>`;
+    { let lvl=1; try{ lvl=ECON.inflationLevel(); }catch(e){} const ic=lvl>1.15?'#e8a0a0':(lvl>1.03?'#e0b24a':'#9fb0c8');
+      h+=`<span style="font-size:11px;color:var(--tx1)" title="Galaxy price level vs par — rises with sustained shortages, decays slowly">Inflation <b style="color:${ic}">×${lvl.toFixed(2)}</b></span>`; }
     h+=btn('Step +1 wk','econStep(1)'); h+=btn('+4 wks','econStep(4)'); h+=btn('Reset','econReset()');
     h+=`<span style="font-size:10px;color:var(--tx1);flex-basis:100%">Full mode: the multi-tier sim steps every Imperial week and when you advance the calendar. Steps here preview cascades without moving the campaign date. Click the toggle to switch back to Simple.</span>`;
   } else {
@@ -959,26 +1293,42 @@ function renderEconPanel(){
     const pc = p==null?'#8aa':(p<0?'#e87a7a':(p>0?'#7ec98f':'#9fb0c8'));
     const ptxt = p==null?'—':(p<0?`▲ dearer (${p})`:(p>0?`▼ cheaper (+${p})`:'steady'));
     const cc = tc<1?'#e87a7a':(tc<2?'#e0b24a':'#9fb0c8');
-    h+=`<tr style="border-top:1px solid var(--bd0)"><td style="padding:3px 4px;color:var(--tx0)">${w.label}</td><td style="padding:3px 4px;color:var(--tx1)">${tg.replace('Common ','')}</td><td style="padding:3px 4px;text-align:right;color:${cc}">${tc.toFixed(1)} wk</td><td style="padding:3px 4px;text-align:right;color:${pc}">${ptxt}</td></tr>`;
+    let ff=1; try{ if(on) ff=ECON.foodFactor(id); }catch(e){}
+    const ffBadge = (ff<0.99) ? ` <span style="color:#e8a0a0;font-size:9px" title="Food short — workforce thin, ALL output throttled">⚠ −${Math.round((1-ff)*100)}%</span>` : '';
+    h+=`<tr style="border-top:1px solid var(--bd0)"><td style="padding:3px 4px;color:var(--tx0)">${w.label}${ffBadge}</td><td style="padding:3px 4px;color:var(--tx1)">${tg.replace('Common ','')}</td><td style="padding:3px 4px;text-align:right;color:${cc}">${tc.toFixed(1)} wk</td><td style="padding:3px 4px;text-align:right;color:${pc}">${ptxt}</td></tr>`;
   });
   h+=`</table></div>`;
-  // Traders — autonomous Independent merchants arbitraging price gaps
-  { const on=ECON.tradersOn(), wl=ECON.worlds(), money=n=>{ n=Math.round(n); const s=n<0?'−':''; const a=Math.abs(n); return s+(a>=1000?'Cr'+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,'')+'k':'Cr'+a); };
+  // Traders — the living merchant market (funds, upkeep, backing, territory, lifecycle)
+  { const on=ECON.tradersOn(), wl=ECON.worlds(), FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+    const money=n=>{ n=Math.round(n); const s=n<0?'−':''; const a=Math.abs(n); return s+(a>=1000?'Cr'+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,'')+'k':'Cr'+a); };
+    const backInfo=b=>{ if(!b||b==='private') return {nm:'Indep',col:'#66bbaa'}; const f=FAC[b]; return {nm:(f&&f.name?f.name.split(' ')[0]:b), col:(f&&f.color)||'#9fb0c8'}; };
+    const cap=ECON.traderCap(), ags=ECON.agents();
     h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — Independents</span>`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
     h+=btn(on?'● ON':'○ OFF','econToggleTraders()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
     h+=`</div>`;
-    ECON.agents().forEach(a=>{
-      const onRoute = a.route && wl[a.route.from] && wl[a.route.to];
-      const rt = onRoute
-        ? `<span style="color:#7ec0e0">hauling ${a.route.good.replace('Common ','')} ${escQH(wl[a.route.from].label)}→${escQH(wl[a.route.to].label)} · arr wk ${a.route.eta}</span>`
-        : `<span style="color:var(--tx1)">surveying</span>`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
+    h+=`<span style="font-size:10px;color:var(--tx1);white-space:nowrap">Fleet cap <b style="color:#f4d35e">${cap}</b> · ${ags.length} active</span>`;
+    h+=`<input type="range" min="3" max="30" value="${cap}" oninput="econSetTraderCap(this.value)" style="flex:1;accent-color:#3f9d5a;cursor:pointer" title="Max simultaneous traders — performance lever; lowering it stands the weakest down">`;
+    h+=`</div>`;
+    ags.forEach(a=>{
+      const bi=backInfo(a.backing), onRoute = a.route && wl[a.route.from] && wl[a.route.to];
+      const rt = onRoute ? `<span style="color:#7ec0e0">hauling ${a.route.good.replace('Common ','')} ${escQH(wl[a.route.from].label)}→${escQH(wl[a.route.to].label)}</span>`
+                         : `<span style="color:var(--tx1)">surveying</span>`;
       const pc = a.profit>=0?'#7ec98f':'#e87a7a';
-      const raidBtn = onRoute ? `<button onclick="econRaidConvoy('${a.id}')" title="Intercept this convoy — cargo lost, destination denied relief (RSC raider threat)" style="background:none;border:1px solid #6a2a2a;color:#e8a0a0;border-radius:5px;padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px">⚔ raid</button>` : '';
-      const raided = a.raided ? `<span style="color:#e8a0a0;font-size:10px"> · ${a.raided}⚔</span>` : '';
-      h+=`<div style="font-size:11px;color:#cdd6e0;padding:1px 0;display:flex;justify-content:space-between;gap:10px;align-items:center"><span>${escQH(a.name)} · ${rt}${raidBtn}</span><span style="color:${pc};white-space:nowrap">${a.trips} trips${raided} · ${money(a.profit)}</span></div>`;
+      const grace = (a.backing&&a.backing!=='private')?8:4;
+      const insolv = (a.insolventWk>0) ? `<span style="color:#e8a0a0;font-size:10px" title="Weeks insolvent — bankrupt at ${grace}"> ⚠${a.insolventWk}/${grace}wk</span>` : '';
+      const raidBtn = onRoute ? `<button onclick="econRaidConvoy('${a.id}')" title="Intercept this convoy — cargo lost, destination denied relief" style="background:none;border:1px solid #6a2a2a;color:#e8a0a0;border-radius:5px;padding:0 5px;font-size:10px;cursor:pointer;margin-left:5px">⚔</button>` : '';
+      const raided = a.raided ? `<span style="color:#e8a0a0;font-size:10px"> ${a.raided}⚔</span>` : '';
+      h+=`<div style="padding:2px 0;border-top:1px solid var(--bd0)">`;
+      h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
+      h+=`<span><span class="hx-tag" style="border-color:${bi.col};color:${bi.col};font-size:9px;padding:0 4px">${escQH(bi.nm)}</span> ${escQH(a.name)}</span>`;
+      h+=`<span style="color:${a.cap>=0?'#cdd6e0':'#e8a0a0'};white-space:nowrap">${money(a.cap)}${insolv}</span></div>`;
+      h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1)">`;
+      h+=`<span>${rt}${raidBtn}</span><span style="color:${pc};white-space:nowrap">${a.trips} trips${raided} · ${money(a.profit)} P/L · −${money(a.upkeep||0)}/wk</span></div>`;
+      h+=`</div>`;
     });
-    h+=`<div style="font-size:10px;color:var(--tx1);margin-top:4px">Idle at baseline; they swarm to arbitrage shock-driven price gaps, easing shortages as they go.</div>`;
+    h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Faction-backed fleets relieve their own shortages &amp; shun hostile space; independents chase profit. Upkeep drains idle traders; the insolvent go bankrupt; new ones spawn up to the cap.</div>`;
     h+=`</div>`; }
   // Economic history — fired shocks as a dated campaign timeline
   { const hist = ECON.state.history || [];
@@ -999,5 +1349,5 @@ function renderEconPanel(){
   body.innerHTML=h;
 }
 
-ECON.load().then(() => ECON.loadProfiles()).then(() => { if(econPanelOpen) renderEconPanel(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+ECON.load().then(() => ECON.loadProfiles()).then(() => ECON.loadPriceAdj()).then(() => { if(econPanelOpen) renderEconPanel(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 
