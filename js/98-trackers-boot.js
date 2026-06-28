@@ -534,3 +534,10 @@ function a11yEnhance(root){
   const start = () => { if(document.body) obs.observe(document.body, { childList:true, subtree:true }); };
   if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();
+
+// --- Relocated from the 30-system-body.js boot block (load-order fix) ---
+// Start shared-state / alert / combat polling for a returning player-mode device
+// AFTER files 55/75/80 have defined start*Polling(). Classic <script> tags do not
+// hoist a later file's function declarations across the file boundary, so this must
+// run last (see docs/ARCHITECTURE.md, the load-order rule).
+try { if(localStorage.getItem("aurelia_pm")==="1"){ startPolling(); startAlertPolling(); startCombatPolling(); } } catch(e){}
