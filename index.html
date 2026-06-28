@@ -9516,6 +9516,9 @@ function resetCampaign(){
   factionAdditions = {};
   factionDeletions = {};
   factionPropertyOverrides = {};
+  weaponAdditions = [];
+  weaponDeletions = {};
+  weaponPropertyOverrides = {};
   selectedBodyLoc = null;
   questLog = [];
 
@@ -9538,6 +9541,9 @@ function resetCampaign(){
   saveFactionAdditions();
   saveFactionDeletions();
   saveFactionPropertyOverrides();
+  saveWeaponAdditions();
+  saveWeaponDeletions();
+  saveWeaponPropertyOverrides();
   saveQuestLog();
 
   // Galaxy is back to the authored regions + systems — fold the now-empty overlays in.
@@ -11175,8 +11181,10 @@ function openRemovedItemsPanel(){
   const sysEntries = Object.keys(systemDeletions || {}).map(id => ({ id, entry: systemDeletions[id] }));
   // Removed regions / sectors
   const facEntries = Object.keys(factionDeletions || {}).map(id => ({ id, entry: factionDeletions[id] }));
+  // Removed catalog weapons
+  const wpnEntries = (typeof weaponDeletions !== 'undefined') ? Object.keys(weaponDeletions).map(id => ({ id, entry: weaponDeletions[id] })) : [];
   let html = '';
-  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length && !sysEntries.length && !facEntries.length){
+  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length && !sysEntries.length && !facEntries.length && !wpnEntries.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
     // Removed box types first, then bodies, then content items
@@ -11218,6 +11226,14 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${snippet.slice(0,140)}</div>
       </div>`;
     }).join('');
+    const wpnHtml = wpnEntries.map(({id, entry}) => {
+      const w = entry.w || {};
+      const snippet = `⚔ ${w.name || id}${w.damage ? ' · '+w.damage : ''} (weapon)`;
+      return `<div class="design-history-item" onclick="restoreDeletedWeapon('${id.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore weapon</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
     const itemHtml = keys.map(key => {
       const entry = contentDeletions[key];
       const item = entry.item;
@@ -11232,7 +11248,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
-    html = boxHtml + facHtml + sysHtml + bodyHtml + locHtml + itemHtml;
+    html = boxHtml + facHtml + wpnHtml + sysHtml + bodyHtml + locHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
@@ -13402,6 +13418,133 @@ function removeCombatWeapon(shipId, wid){
   persistShipStat(shipId); renderShipEditor();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WEAPONS CATALOG  (Design Mode · reusable MgT2e weapon templates)
+// ───────────────────────────────────────────────────────────────────────────
+// A referee-authored library of weapons that can be picked into ANY ship's
+// combat loadout (the ship editor), so stats are entered once and reused. This
+// is reference/bookkeeping only — it never resolves combat. Net-new entity: a
+// WEAPONS_BASE seed of the standard turret/bay weapons + the same add/edit/
+// remove overlay the other Design-Mode entities use (weaponAdditions/Deletions/
+// PropertyOverrides), read on demand via effectiveWeapons(). A template carries
+// the ship-weapon fields (name/type/mount/damage/range/ammoMax) plus reference
+// traits + TL that fold into the attached weapon's notes.
+const WEAPONS_BASE = [
+  { id:'wb-beam',    name:'Beam Laser',      type:'beam-laser',  mount:'turret',   damage:'1D',      range:'Very Long', ammoMax:0,  traits:'',          tl:10, notes:'' },
+  { id:'wb-pulse',   name:'Pulse Laser',     type:'pulse-laser', mount:'turret',   damage:'2D',      range:'Long',      ammoMax:0,  traits:'',          tl:10, notes:'' },
+  { id:'wb-missile', name:'Missile Rack',    type:'missile',     mount:'turret',   damage:'4D',      range:'Very Long', ammoMax:12, traits:'Smart',     tl:9,  notes:'Missiles travel over rounds at longer ranges.' },
+  { id:'wb-sand',    name:'Sandcaster',      type:'sandcaster',  mount:'turret',   damage:'special', range:'—',         ammoMax:20, traits:'Defensive', tl:9,  notes:'Point defence — reduces incoming laser damage.' },
+  { id:'wb-plasma',  name:'Plasma Barbette', type:'plasma',      mount:'barbette', damage:'',        range:'Medium',    ammoMax:0,  traits:'',          tl:12, notes:'Set damage to your High Guard build.' },
+];
+let weaponAdditions = [];
+let weaponDeletions = {};
+let weaponPropertyOverrides = {};
+
+async function loadWeaponCatalog(){
+  try { const r = await supaStorage.get('weapon-additions', true);      weaponAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(weaponAdditions)) weaponAdditions = []; } catch(e){ weaponAdditions = []; }
+  try { const r = await supaStorage.get('weapon-deletions', true);      weaponDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponDeletions = {}; }
+  try { const r = await supaStorage.get('weapon-prop-overrides', true); weaponPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponPropertyOverrides = {}; }
+}
+async function saveWeaponAdditions(){ try { await supaStorage.set('weapon-additions', JSON.stringify(weaponAdditions), true); } catch(e){ console.error('Weapon additions save failed', e); } }
+async function saveWeaponDeletions(){ try { await supaStorage.set('weapon-deletions', JSON.stringify(weaponDeletions), true); } catch(e){ console.error('Weapon deletions save failed', e); } }
+async function saveWeaponPropertyOverrides(){ try { await supaStorage.set('weapon-prop-overrides', JSON.stringify(weaponPropertyOverrides), true); } catch(e){ console.error('Weapon prop overrides save failed', e); } }
+
+// Effective catalog = seed (minus tombstoned, with overrides) + referee additions.
+function effectiveWeapons(){
+  const out = [];
+  WEAPONS_BASE.forEach(w => {
+    if(weaponDeletions[w.id]) return;
+    const ov = weaponPropertyOverrides[w.id];
+    out.push(ov ? Object.assign(JSON.parse(JSON.stringify(w)), ov) : JSON.parse(JSON.stringify(w)));
+  });
+  weaponAdditions.forEach(w => { if(!weaponDeletions[w.id]) out.push(JSON.parse(JSON.stringify(w))); });
+  return out;
+}
+function isBaseWeapon(id){ return WEAPONS_BASE.some(w => w.id === id); }
+function reRenderShipEditorIfOpen(){ if(typeof shipEditorId!=='undefined' && shipEditorId && typeof renderShipEditor==='function') renderShipEditor(); }
+
+function wpnAdd(){
+  if(!isReferee()) return;
+  let id = 'wpn' + Date.now().toString(36), bump = 1;
+  while(effectiveWeapons().some(w=>w.id===id) || weaponDeletions[id]) id = 'wpn' + (Date.now()+bump++).toString(36);
+  weaponAdditions.push({ id, name:'New Weapon', type:'beam-laser', mount:'turret', damage:'1D', range:'Very Long', ammoMax:0, traits:'', tl:'', notes:'' });
+  saveWeaponAdditions();
+  reRenderShipEditorIfOpen();
+}
+function wpnEditField(id, field, value){
+  if(!isReferee()) return;
+  if(field==='ammoMax') value = Number(value)||0;
+  const add = weaponAdditions.find(w=>w.id===id);
+  if(add){ add[field]=value; saveWeaponAdditions(); }
+  else if(isBaseWeapon(id)){ if(!weaponPropertyOverrides[id]) weaponPropertyOverrides[id]={}; weaponPropertyOverrides[id][field]=value; saveWeaponPropertyOverrides(); }
+  else return;
+  reRenderShipEditorIfOpen();
+}
+async function wpnRemove(id){
+  if(!isReferee()) return;
+  const w = effectiveWeapons().find(x=>x.id===id); if(!w) return;
+  if(!confirm('Remove "'+(w.name||'weapon')+'" from the catalog?\n\nShips already carrying it keep their copy. Restorable from "Show Removed Items".')) return;
+  const add = weaponAdditions.find(x=>x.id===id);
+  weaponDeletions[id] = { w: add || JSON.parse(JSON.stringify(w)), t: Date.now(), wasAddition: !!add };
+  if(add) weaponAdditions = weaponAdditions.filter(x=>x.id!==id);
+  await saveWeaponDeletions(); if(add) await saveWeaponAdditions();
+  reRenderShipEditorIfOpen();
+  showToast('Weapon removed from catalog', 'info');
+}
+async function restoreDeletedWeapon(id){
+  const entry = weaponDeletions[id]; if(!entry) return;
+  if(entry.wasAddition && entry.w){ if(!weaponAdditions.some(x=>x.id===id)) weaponAdditions.push(entry.w); await saveWeaponAdditions(); }
+  delete weaponDeletions[id]; await saveWeaponDeletions();
+  if(typeof closeRemovedItemsPanel==='function') closeRemovedItemsPanel();
+  reRenderShipEditorIfOpen();
+  showToast('Weapon restored');
+}
+
+// Attach a catalog template to a ship's loadout — pre-fills a new weapon row the
+// referee can still tweak per-ship. Reference traits + TL fold into its notes.
+function addCombatWeaponFromCatalog(shipId, weaponId){
+  if(!isReferee()) return;
+  if(!weaponId) return;
+  const st = (typeof combatEditStats==='function') ? combatEditStats(shipId) : null; if(!st) return;
+  const tpl = effectiveWeapons().find(w=>w.id===weaponId); if(!tpl) return;
+  st.weapons = st.weapons || [];
+  const notes = [tpl.notes, tpl.traits?('Traits: '+tpl.traits):'', (tpl.tl!=='' && tpl.tl!=null)?('TL'+tpl.tl):''].filter(Boolean).join(' · ');
+  st.weapons.push({ id:'w_'+Math.random().toString(36).slice(2,7), name:tpl.name, type:tpl.type, mount:tpl.mount||'turret', damage:tpl.damage||'', range:tpl.range||'Very Long', ammo:tpl.ammoMax||0, ammoMax:tpl.ammoMax||0, notes });
+  if(typeof persistShipStat==='function') persistShipStat(shipId);
+  reRenderShipEditorIfOpen();
+  showToast('Added ' + (tpl.name||'weapon') + ' from catalog');
+}
+
+// ── Catalog manager (inline in the ship editor, referee only) ────────────────
+let weaponCatalogOpen = false;
+function toggleWeaponCatalog(){ weaponCatalogOpen = !weaponCatalogOpen; reRenderShipEditorIfOpen(); }
+function renderWeaponCatalogManager(){
+  if(!isReferee()) return '';
+  const cat = effectiveWeapons();
+  const ea = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));   // coerce — tl/ammo may be numbers
+  const mounts = ['turret','fixed','barbette','bay'];
+  const rows = cat.map(w => {
+    const typeOpts = COMBAT_WEAPON_TYPES.map(t=>`<option value="${t}"${t===w.type?' selected':''}>${t}</option>`).join('');
+    const mountOpts = mounts.map(m=>`<option value="${m}"${m===w.mount?' selected':''}>${m}</option>`).join('');
+    return `<div class="cbt-weap-row" style="flex-wrap:wrap;gap:4px">
+      <input class="sf-input" style="flex:2;min-width:88px" value="${ea(w.name||'')}" title="Name" onchange="wpnEditField('${w.id}','name',this.value)">
+      <select class="cbt-sel" title="Type" onchange="wpnEditField('${w.id}','type',this.value)">${typeOpts}</select>
+      <select class="cbt-sel" title="Mount" onchange="wpnEditField('${w.id}','mount',this.value)">${mountOpts}</select>
+      <input class="sf-input" style="width:48px" value="${ea(w.damage||'')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="wpnEditField('${w.id}','damage',this.value)">
+      <input class="sf-input" style="width:74px" value="${ea(w.range||'')}" placeholder="range" title="Range band" onchange="wpnEditField('${w.id}','range',this.value)">
+      <input class="sf-input" style="width:54px" type="number" value="${Number(w.ammoMax)||0}" title="Ammo capacity (missiles/sandcaster)" onchange="wpnEditField('${w.id}','ammoMax',this.value)">
+      <input class="sf-input" style="flex:1;min-width:66px" value="${ea(w.traits||'')}" placeholder="traits" title="Traits, e.g. Smart, Scatter" onchange="wpnEditField('${w.id}','traits',this.value)">
+      <input class="sf-input" style="width:40px" value="${ea((w.tl===0||w.tl)?w.tl:'')}" placeholder="TL" title="Tech level" onchange="wpnEditField('${w.id}','tl',this.value)">
+      <button class="cbt-btn danger" title="Remove from catalog" onclick="wpnRemove('${w.id}')">✕</button>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:8px;padding:8px;border:1px dashed #b9c0b9;border-radius:6px;background:#f3f6f3">
+    <div style="font-size:10px;color:#6a6f6a;margin-bottom:6px">Weapon catalog — author reusable templates, then add them to any ship above.</div>
+    ${rows || '<div style="font-size:11px;color:#7a7a7a">Catalog is empty.</div>'}
+    <button class="cbt-btn" style="margin-top:6px" onclick="wpnAdd()">+ New catalog weapon</button>
+  </div>`;
+}
+
 // ── Enemy ship editor modal (reuses the ship-data-file sheet layout) ─────────
 let shipEditorId = null;
 function openShipEditor(shipId){ shipEditorId = shipId; document.getElementById('combat-edit-modal').classList.remove('hidden'); renderShipEditor(); }
@@ -13426,6 +13569,8 @@ function renderShipEditor(){
       <input class="sf-input" style="width:56px" value="${escAttr(w.damage || '')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="updateCombatWeapon('${ship.id}','${w.id}','damage',this.value)">
       <button class="cbt-btn danger" onclick="removeCombatWeapon('${ship.id}','${w.id}')">✕</button>
     </div>`).join('');
+  const catItems = (typeof effectiveWeapons==='function') ? effectiveWeapons() : [];
+  const catOpts = catItems.map(w => `<option value="${w.id}">${escQH(w.name)}${w.damage?(' · '+escQH(w.damage)):''}${w.mount?(' · '+escQH(w.mount)):''}</option>`).join('');
   card.innerHTML = `
     <div class="cbt-edit-hdr">
       <span>✏ ${escQH(ship.ref === 'player' ? 'Edit Player Ship' : 'Edit Ship')}</span>
@@ -13456,8 +13601,13 @@ function renderShipEditor(){
         </div>
       </div></div>
       <div class="sf-sec"><div class="sf-tab">Weapons</div><div class="sf-card">
-        ${wRows || '<div style="font-size:11px;color:#7a7a7a">No weapons. Add one below.</div>'}
-        <button class="cbt-btn" style="margin-top:6px" onclick="addCombatWeapon('${ship.id}')">+ Add weapon</button>
+        ${wRows || '<div style="font-size:11px;color:#7a7a7a">No weapons. Add one below or pick from the catalog.</div>'}
+        <div class="cbt-weap-row" style="margin-top:6px">
+          <button class="cbt-btn" onclick="addCombatWeapon('${ship.id}')">+ Add blank</button>
+          ${catItems.length ? `<select class="cbt-sel" id="cbt-wpn-cat" style="flex:2"><option value="">— add from catalog —</option>${catOpts}</select><button class="cbt-btn" onclick="addCombatWeaponFromCatalog('${ship.id}',(document.getElementById('cbt-wpn-cat')||{}).value)">＋</button>` : ''}
+        </div>
+        <button class="cbt-btn" style="margin-top:6px;width:100%;text-align:left" onclick="toggleWeaponCatalog()">${weaponCatalogOpen?'▾':'▸'} Manage weapon catalog (${catItems.length})</button>
+        ${weaponCatalogOpen ? renderWeaponCatalogManager() : ''}
       </div></div>
     </div>`;
 }
@@ -14685,6 +14835,7 @@ loadQuestLog(); // quests render on-demand when panel is opened, no immediate re
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
+loadWeaponCatalog().then(() => { if(typeof shipEditorId!=='undefined' && shipEditorId && typeof renderShipEditor==='function') renderShipEditor(); }); // referee weapon templates
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => { renderImperialDate(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
