@@ -2,27 +2,43 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // strip-secrets.mjs  ·  Stage 3 of the per-player redaction plan
 //
-// THE IRREVERSIBLE DE-BAKE. Rewrites the three campaign-data literals in
-// index.html (BASE_BODIES_AUROS, MAIN, GALAXY_NODES) to contain ONLY player-safe
+// THE IRREVERSIBLE DE-BAKE. Rewrites the campaign-data literals (BASE_BODIES_AUROS,
+// MAIN, GALAXY_NODES, BASE_LOCATIONS, TIMED_EVENTS) to contain ONLY player-safe
 // fields. The referee content (NPC stat blocks, checks, "Referee Context", RSR
-// notes, hooks, refnotes) is REMOVED from the shipped file — it now lives only in
+// notes, hooks, refnotes) is REMOVED from the shipped files — it now lives only in
 // the campaign_content table and is fetched at runtime by an authorised token via
-// get-content. After this, a player's downloaded HTML contains 0 bytes of secrets.
+// get-content. After this, a player's download contains 0 bytes of secrets.
 //
-//   node tools/strip-secrets.mjs            # rewrites index.html in place
+// NOTE: index.html was split into ordered classic <script src> files under js/
+// (see docs/ARCHITECTURE.md), so these literals now live in js modules, not in
+// index.html — this tool reads/writes those modules (see LITERAL_FILE below).
+//
+//   node tools/strip-secrets.mjs            # rewrites the js modules in place
 //   node tools/strip-secrets.mjs --check    # verify only, no write (exit 1 if dirty)
 //
 // Safe to re-run (idempotent). Classification MUST match tools/extract-content.mjs
 // and the client REDACT_FIELDS. The data literals are pure JSON-like literals
 // (verified), so parse→strip→reserialise is lossless for player-safe content.
 // ─────────────────────────────────────────────────────────────────────────────
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const htmlPath = resolve(repoRoot, 'index.html');
 const checkOnly = process.argv.includes('--check');
+
+// ── Post-split repoint (see docs/ARCHITECTURE.md) ────────────────────────────
+// index.html was split into ordered classic <script src> files under js/. The
+// campaign-data literals this de-bake strips no longer live in index.html — each
+// now lives in the js module below. (SUPABASE_KEY in js/50-supabase.js is a
+// *publishable* anon key, RLS-gated, NOT a de-baked secret — left as-is.)
+const LITERAL_FILE = {
+  BASE_BODIES_AUROS: 'js/00-core-data.js',
+  GALAXY_NODES:      'js/10-galaxy.js',
+  MAIN:              'js/20-station-data.js',
+  BASE_LOCATIONS:    'js/40-station.js',
+  TIMED_EVENTS:      'js/40-station.js',
+};
 
 // Referee-only fields removed from each structure (mirror of REDACT_FIELDS in
 // index.html and the referee side of tools/extract-content.mjs).
@@ -73,7 +89,19 @@ function stripFields(value, fields, isMainRoot = false) {
   return value;
 }
 
-const src = readFileSync(htmlPath, 'utf8');
+// Read every js module once. The coverage guard scans ALL of them so a referee
+// secret added to ANY module fails closed; stripping rewrites only the files
+// that hold a covered literal.
+const jsDir = resolve(repoRoot, 'js');
+const fileSrc = {};                                       // 'js/NN-x.js' -> contents
+for (const f of readdirSync(jsDir).filter(n => n.endsWith('.js')).sort()) {
+  fileSrc['js/' + f] = readFileSync(resolve(jsDir, f), 'utf8');
+}
+// First js module that declares each top-level data const (name -> 'js/..').
+const declFile = {};
+for (const [rel, s] of Object.entries(fileSrc))
+  for (const m of s.matchAll(/const ([A-Z_][A-Z0-9_]{2,}[A-Za-z_]*) *= *[\[{]/g))
+    if (!(m[1] in declFile)) declFile[m[1]] = rel;
 
 // ── Coverage guard (fail-closed) ─────────────────────────────────────────────
 // Refuse to strip if any structure still holds campaign-secret content this
@@ -90,10 +118,9 @@ const NON_SECRET = new Set([
 ]);
 const REF_FIELD_RE = /\b(npcs|checks|refnotes|refNote|rsr|events|hook):/;
 {
-  const declared = [...new Set([...src.matchAll(/const ([A-Z_][A-Z0-9_]{2,}[A-Za-z_]*) *= *[\[{]/g)].map(m => m[1]))];
-  const missing = MUST_COVER.filter(n => !REDACT[n] && new RegExp(`const ${n}\\b`).test(src));
-  const newlyFound = declared.filter(n =>
-    !REDACT[n] && !NON_SECRET.has(n) && !MUST_COVER.includes(n) && REF_FIELD_RE.test(valueSpan(src, n).text));
+  const missing = MUST_COVER.filter(n => !REDACT[n] && n in declFile);
+  const newlyFound = Object.keys(declFile).filter(n =>
+    !REDACT[n] && !NON_SECRET.has(n) && !MUST_COVER.includes(n) && REF_FIELD_RE.test(valueSpan(fileSrc[declFile[n]], n).text));
   const uncovered = [...new Set([...missing, ...newlyFound])];
   if (uncovered.length) {
     console.error(`✗ ABORT — referee content NOT covered by this strip: ${uncovered.join(', ')}`);
@@ -103,13 +130,16 @@ const REF_FIELD_RE = /\b(npcs|checks|refnotes|refNote|rsr|events|hook):/;
   }
 }
 
-const edits = [];
+// Locate + strip each covered literal in the js module that now holds it.
+const editsByFile = {};                                   // 'js/..' -> [{name,start,end,serialized,…}]
 let strippedFieldCount = 0;
 
 const countAndStrip = (rec, fields) => { for (const f of fields) if (rec[f] !== undefined) strippedFieldCount++; stripFields(rec, fields); };
 
 for (const [name, fields] of Object.entries(REDACT)) {
-  const span = valueSpan(src, name);
+  const rel = LITERAL_FILE[name];
+  if (!rel || !(rel in fileSrc)) throw new Error(`no js module mapped for ${name}`);
+  const span = valueSpan(fileSrc[rel], name);
   const value = evalLiteral(span.text);
   const before = JSON.stringify(value).length;
   let outValue = value;
@@ -126,25 +156,26 @@ for (const [name, fields] of Object.entries(REDACT)) {
     value.forEach(rec => countAndStrip(rec, fields));
   }
   const serialized = JSON.stringify(outValue, null, 2);
-  edits.push({ name, start: span.start, end: span.end, serialized, before, after: serialized.length });
+  (editsByFile[rel] ||= []).push({ name, start: span.start, end: span.end, serialized, before, after: serialized.length });
 }
 
-// Apply replacements from the end of the file backwards so offsets stay valid.
-let out = src;
-for (const e of edits.sort((a, b) => b.start - a.start)) {
-  out = out.slice(0, e.start) + e.serialized + out.slice(e.end);
+// Apply per file, end→start so offsets stay valid; write only files that changed.
+let anyChanged = false;
+for (const [rel, edits] of Object.entries(editsByFile)) {
+  let out = fileSrc[rel];
+  for (const e of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.serialized + out.slice(e.end);
+  const changed = out !== fileSrc[rel];
+  anyChanged = anyChanged || changed;
+  edits.forEach(e => console.log(`  ${rel} · ${e.name}: ${e.before} → ${e.after} bytes (JSON)`));
+  if (!checkOnly && changed) writeFileSync(resolve(repoRoot, rel), out);
 }
-
-const changed = out !== src;
-edits.forEach(e => console.log(`  ${e.name}: ${e.before} → ${e.after} bytes (JSON)`));
 console.log(`Referee fields removed: ${strippedFieldCount}`);
 
 if (checkOnly) {
-  if (changed) { console.error('✗ index.html still contains referee literals (run without --check to strip).'); process.exit(1); }
+  if (anyChanged) { console.error('✗ js modules still contain referee literals (run without --check to strip).'); process.exit(1); }
   console.log('✓ already stripped — no referee literals in the bundle.');
-} else if (changed) {
-  writeFileSync(htmlPath, out);
-  console.log('✓ index.html rewritten — referee content removed from the shipped file.');
+} else if (anyChanged) {
+  console.log('✓ js modules rewritten — referee content removed from the shipped files.');
 } else {
   console.log('✓ nothing to strip — already clean.');
 }
