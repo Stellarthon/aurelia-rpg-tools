@@ -2555,6 +2555,17 @@ input#ui-scale-range{
 #hx-pbody{flex:1;overflow-y:auto;padding:14px 16px;-webkit-overflow-scrolling:touch}
 .hx-sec-lbl{font-size:9px;color:var(--tx1);font-family:var(--mono,monospace);letter-spacing:2px;text-transform:uppercase;margin:16px 0 7px;border-bottom:.5px solid var(--bd2);padding-bottom:4px}
 .hx-sec-lbl:first-child{margin-top:0}
+/* Collapsible dropdown sections in the selected-system panel.
+   Scoped under #hx-pbody so they beat the ID-specificity `#hx-pbody summary` rule. */
+#hx-pbody .hx-sec{margin-top:14px}
+#hx-pbody .hx-sec:first-child{margin-top:0}
+#hx-pbody .hx-sec>summary.hx-sec-lbl{font-size:9px;letter-spacing:2px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;margin:0 0 7px;user-select:none;transition:color .12s}
+#hx-pbody .hx-sec>summary.hx-sec-lbl::-webkit-details-marker{display:none}
+#hx-pbody .hx-sec>summary.hx-sec-lbl::before{content:'▸';font-size:8px;line-height:1;opacity:.65;transition:transform .15s ease}
+#hx-pbody .hx-sec[open]>summary.hx-sec-lbl::before{transform:rotate(90deg)}
+#hx-pbody .hx-sec>summary.hx-sec-lbl:hover{color:var(--tx0)}
+#hx-pbody .hx-sec>summary.hx-sec-lbl:hover::before{opacity:1}
+#hx-pbody .hx-sec:not([open])>summary.hx-sec-lbl{margin-bottom:0;border-bottom-color:transparent}
 .hx-ship-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .hx-jbtns{display:flex;gap:4px}
 .hx-jbtn{width:30px;height:30px;border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx1);font-family:var(--mono,monospace);font-size:13px;font-weight:700;background:var(--bg1,#181c27);cursor:pointer}
@@ -2576,6 +2587,17 @@ input#ui-scale-range{
 .hx-act-btn{flex:1;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx0);font-size:11px;font-family:var(--mono,monospace);padding:8px;letter-spacing:.5px;cursor:pointer}
 .hx-act-btn:hover{border-color:var(--accentGold);color:var(--accentGold)}
 .hx-act-btn.primary{background:#0a3a44;border-color:#00e5ff;color:#00e5ff}
+.hx-edit-row{display:flex;align-items:center;gap:7px;font-size:11px;margin:0 0 5px}
+.hx-edit-row>span{flex:0 0 50px;color:var(--tx1);font-size:10px}
+.hx-edit-row.hx-edit-col{align-items:flex-start}
+.hx-edit-in{flex:1;min-width:0;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx0);font-size:11px;font-family:inherit;padding:6px 7px}
+textarea.hx-edit-in{resize:vertical;line-height:1.4}
+.hx-edit-in:focus{outline:none;border-color:var(--accentGold)}
+.hx-reg-row{display:flex;align-items:center;gap:7px;margin:0 0 5px}
+.hx-reg-col{flex:0 0 26px;width:26px;height:26px;padding:0;border:.5px solid var(--bd0,#2e3347);border-radius:6px;background:var(--bg1,#181c27);cursor:pointer}
+.hx-reg-del{flex:0 0 auto;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:#ff9bb6;font-size:12px;padding:5px 7px;cursor:pointer}
+.hx-reg-del:hover{border-color:#c0506e}
+.hx-reg-lock{flex:0 0 auto;font-size:11px;opacity:.5;padding:0 4px}
 .hx-route-leg{font-size:10px;font-family:var(--mono,monospace);color:var(--tx1);padding:3px 0;display:flex;gap:6px}
 .hx-route-leg b{color:var(--tx0)}
 .hx-note{font-size:10px;color:var(--tx1);line-height:1.55;background:var(--bg1,#181c27);border:.5px solid var(--bd2);border-radius:6px;padding:9px 11px;margin-top:8px}
@@ -3549,6 +3571,11 @@ const GALAXY_FACTIONS = {
   contested:  { name:'Independent (Contested)',              color:'#ddaa44' },
   uncharted:  { name:'Uncharted',                            color:'#9fb0c8' },
 };
+// Pristine snapshot of the authored regions. The Design-Mode faction overlay
+// (factionAdditions / factionDeletions / factionPropertyOverrides) is recomputed
+// from this base, so region renames / recolours / deletes apply retroactively
+// and stay restorable — exactly like the system overlay.
+const GALAXY_FACTIONS_BASE = JSON.parse(JSON.stringify(GALAXY_FACTIONS));
 
 const NODE_COLOR = '#00e5ff';
 
@@ -4289,6 +4316,13 @@ const GALAXY_NODES = [
   }
 ];
 
+// Pristine snapshot of the AUTHORED galaxy, taken before any derived fields
+// (_loreLinks, _baseConnections, the lane-overlay `connections`) are layered on.
+// The Design-Mode system overlay (systemAdditions/Deletions/PropertyOverrides,
+// defined below) is ALWAYS recomputed from this base, so referee edits/deletes
+// apply retroactively to the original systems and stay restorable.
+const GALAXY_NODES_BASE = GALAXY_NODES.map(n => JSON.parse(JSON.stringify(n)));
+
 // Snapshot each node's ORIGINAL lore connections before the live jump-lane
 // overlay (GX_LANES) overwrites `connections` further down. The economy sim
 // trades along these established commercial routes — independent of whatever
@@ -4428,6 +4462,288 @@ function gxLinkPick(id){
   const origin = gxLinkOrigin;
   gxLinkMode = false; gxLinkOrigin = null;
   gxAddLane(origin, id);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAR-SYSTEM OVERLAY  (Design Mode · add / edit / move / remove whole systems)
+// ───────────────────────────────────────────────────────────────────────────
+// The galaxy-map analogue of the body/location overlays: three Supabase-synced
+// stores layer on the authored GALAXY_NODES_BASE so the referee can add, edit,
+// reposition and remove star systems, with every change persisting, syncing to
+// players, and applying retroactively to the original systems.
+//   systemAdditions:         [ {id,systemId,name,label,faction,desc,connections,q,r}, ... ]  referee-created
+//   systemDeletions:         { id: {node, q, r, t, wasAddition} }   tombstones on systems (restorable)
+//   systemPropertyOverrides: { id: {field:val, q?, r?} }            in-place edits / repositions of base systems
+// effectiveNodes() recomputes the live set from base + overlay, and
+// rebuildSystemsFromOverlay() reapplies it across EVERY derived structure
+// (GALAXY_NODES in place, GX_MAP, SYSTEMS, _loreLinks, lanes, HX, ECON). It is
+// idempotent, so it runs the same on boot, on a referee edit, and on a player
+// poll — exactly like gxRebuildLanes recomputes the lane set.
+let systemAdditions = [];
+let systemDeletions = {};
+let systemPropertyOverrides = {};
+
+async function loadSystemStores(){
+  try { const r = await supaStorage.get('system-additions', true);      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
+  try { const r = await supaStorage.get('system-deletions', true);      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
+  try { const r = await supaStorage.get('system-prop-overrides', true); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
+}
+async function saveSystemAdditions(){ try { await supaStorage.set('system-additions', JSON.stringify(systemAdditions), true); } catch(e){ console.error('System additions save failed', e); } }
+async function saveSystemDeletions(){ try { await supaStorage.set('system-deletions', JSON.stringify(systemDeletions), true); } catch(e){ console.error('System deletions save failed', e); } }
+async function saveSystemPropertyOverrides(){ try { await supaStorage.set('system-prop-overrides', JSON.stringify(systemPropertyOverrides), true); } catch(e){ console.error('System property overrides save failed', e); } }
+
+// Live galaxy node set = base systems (minus tombstoned, with overrides applied)
+// followed by referee-added systems. Returns fresh clones so callers may mutate.
+function effectiveNodes(){
+  const out = [];
+  GALAXY_NODES_BASE.forEach(n => {
+    if(systemDeletions[n.id]) return;
+    const clone = JSON.parse(JSON.stringify(n));
+    const ov = systemPropertyOverrides[n.id];
+    out.push(ov ? Object.assign(clone, ov) : clone);
+  });
+  systemAdditions.forEach(n => { if(!systemDeletions[n.id]) out.push(JSON.parse(JSON.stringify(n))); });
+  return out;
+}
+function isAddedSystem(id){ return systemAdditions.some(s => s.id === id); }
+function isBaseSystem(id){ return GALAXY_NODES_BASE.some(n => n.id === id); }
+
+// Reapply the overlay across every structure that reads galaxy nodes. Clears and
+// refills GALAXY_NODES IN PLACE (so every closure that captured the array keeps
+// working), re-derives the lookup / lore / system registries, recomputes lanes,
+// then diffs the result into the HX hex map (no cluster reshuffle) and the
+// economy. Idempotent — safe to call repeatedly on load / edit / poll.
+function rebuildSystemsFromOverlay(){
+  const eff = effectiveNodes();
+  // 1. GALAXY_NODES, in place
+  GALAXY_NODES.length = 0; eff.forEach(n => GALAXY_NODES.push(n));
+  // 2. Node-local derived fields + lookup map
+  GALAXY_NODES.forEach(n => { n._loreLinks = Array.isArray(n.connections) ? n.connections.slice() : []; });
+  Object.keys(GX_MAP).forEach(k => delete GX_MAP[k]);
+  GALAXY_NODES.forEach(s => GX_MAP[s.id] = s);
+  GALAXY_NODES.forEach(s => { s._baseConnections = []; });
+  // 3. Register any newly-added system as a drillable (empty) system
+  GALAXY_NODES.forEach(n => {
+    const sid = n.systemId || n.id;
+    if(!SYSTEMS[sid]) SYSTEMS[sid] = { id: sid, name: (n.label || n.name || sid).replace(' ★','').trim(), starName: n.name, faction: n.faction, galaxyId: n.id, base: [] };
+  });
+  // 4. Lanes — gxRebuildLanes guards each endpoint against GX_MAP, so a lane that
+  //    touched a now-removed system is dropped automatically (and reappears on restore).
+  gxRebuildLanes();
+  // 5. Hex map + economy topology
+  try { if(typeof HX !== 'undefined' && HX.syncNodes) HX.syncNodes(GALAXY_NODES); } catch(e){ console.error('HX.syncNodes failed', e); }
+  try { if(typeof ECON !== 'undefined' && ECON.syncLanes) ECON.syncLanes(); } catch(e){}
+}
+
+// What references a system — surfaced before a destructive delete so the referee
+// sees what goes with it (no silent orphaning).
+function systemDeps(id){
+  let lanes = 0;
+  try { GX_LANES.forEach(k => { const p = k.split('|'); if(p[0]===id || p[1]===id) lanes++; }); } catch(e){}
+  const node = GX_MAP[id] || {};
+  const sysId = node.systemId || id;
+  const bodies = (typeof effectiveBodies === 'function' ? effectiveBodies(sysId) : []).length;
+  const here = (typeof shipState !== 'undefined' && shipState.locationId === id);
+  return { lanes, bodies, here, sysId };
+}
+
+// Create a system at a hex the referee tapped (click-to-place), then select it so
+// its editor opens for the rest of the details. Added blank, edited in place —
+// the same "add then immediately edit" idiom the content editors use.
+function hxCreateSystemAt(q, r){
+  if(!designModeOn || !isReferee()) return;
+  let id = 'sys' + Date.now().toString(36), bump = 1;
+  while(GX_MAP[id] || systemDeletions[id]) id = 'sys' + (Date.now() + bump++).toString(36);
+  const node = { id, systemId: id, name: 'New System', label: 'New System', faction: 'independent', connections: [], desc: '', q, r };
+  systemAdditions.push(node);
+  saveSystemAdditions();
+  rebuildSystemsFromOverlay();
+  if(typeof HX !== 'undefined'){ HX.refresh(); HX.selectById(id); }
+  showToast('System added — fill in its details');
+}
+function hxBeginAddSystem(){
+  if(!designModeOn || !isReferee()) return;
+  if(typeof HX !== 'undefined' && HX.armPlace) HX.armPlace((q, r) => hxCreateSystemAt(q, r));
+}
+
+// Edit a single field. Additions are mutated directly; base systems accumulate a
+// property override so the original data is never touched and edits stay retroactive.
+function hxEditSystemField(id, field, value){
+  if(!isReferee()) return;
+  const add = systemAdditions.find(s => s.id === id);
+  if(add){
+    add[field] = value;
+    if(field === 'label' && !add.name) add.name = value;
+    saveSystemAdditions();
+  } else if(isBaseSystem(id)){
+    if(!systemPropertyOverrides[id]) systemPropertyOverrides[id] = {};
+    systemPropertyOverrides[id][field] = value;
+    saveSystemPropertyOverrides();
+  } else return;
+  rebuildSystemsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+}
+
+function hxMoveSystem(id){
+  if(!designModeOn || !isReferee()) return;
+  if(typeof HX !== 'undefined' && HX.armPlace) HX.armPlace((q, r) => hxPlaceSystem(id, q, r));
+}
+function hxPlaceSystem(id, q, r){
+  if(!isReferee()) return;
+  const add = systemAdditions.find(s => s.id === id);
+  if(add){ add.q = q; add.r = r; saveSystemAdditions(); }
+  else if(isBaseSystem(id)){ if(!systemPropertyOverrides[id]) systemPropertyOverrides[id] = {}; systemPropertyOverrides[id].q = q; systemPropertyOverrides[id].r = r; saveSystemPropertyOverrides(); }
+  else return;
+  if(typeof HX !== 'undefined' && HX.moveSystem) HX.moveSystem(id, q, r);
+  if(typeof HX !== 'undefined') HX.refresh();
+  showToast('System moved');
+}
+
+async function hxRemoveSystem(id){
+  if(!designModeOn || !isReferee()) return;
+  const node = GX_MAP[id]; if(!node) return;
+  const dep = systemDeps(id);
+  if(dep.here){ alert('The party is currently located at "' + (node.label || node.name) + '". Move the ship to another system before removing this one — deleting it would strand the party.'); return; }
+  const bits = [];
+  if(dep.lanes)  bits.push(dep.lanes + ' jump lane' + (dep.lanes > 1 ? 's' : ''));
+  if(dep.bodies) bits.push(dep.bodies + ' charted ' + (dep.bodies > 1 ? 'bodies' : 'body'));
+  let msg = 'Remove "' + (node.label || node.name) + '"?';
+  msg += bits.length ? ('\n\nThis also removes ' + bits.join(' and ') + '. Everything is restorable from "Show Removed Items".')
+                     : ' You can restore it from "Show Removed Items".';
+  if(!confirm(msg)) return;
+  let q = node.q, r = node.r;
+  try { if(typeof HX !== 'undefined' && HX.hexOf){ const h = HX.hexOf(id); if(h){ q = h.q; r = h.r; } } } catch(e){}
+  const add = systemAdditions.find(s => s.id === id);
+  const baseNode = GALAXY_NODES_BASE.find(n => n.id === id);
+  systemDeletions[id] = { node: add || (baseNode ? JSON.parse(JSON.stringify(baseNode)) : node), q, r, t: Date.now(), wasAddition: !!add };
+  if(add) systemAdditions = systemAdditions.filter(s => s.id !== id);
+  await saveSystemDeletions(); if(add) await saveSystemAdditions();
+  rebuildSystemsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+  showToast('System removed', 'info');
+}
+
+async function restoreDeletedSystem(id){
+  const entry = systemDeletions[id]; if(!entry) return;
+  if(entry.wasAddition && entry.node){
+    const nd = entry.node;
+    if(entry.q != null) nd.q = entry.q;
+    if(entry.r != null) nd.r = entry.r;
+    if(!systemAdditions.some(s => s.id === id)) systemAdditions.push(nd);
+    await saveSystemAdditions();
+  } else if(entry.q != null){
+    if(!systemPropertyOverrides[id]) systemPropertyOverrides[id] = {};
+    systemPropertyOverrides[id].q = entry.q;
+    systemPropertyOverrides[id].r = entry.r;
+    await saveSystemPropertyOverrides();
+  }
+  delete systemDeletions[id];
+  await saveSystemDeletions();
+  rebuildSystemsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+  if(typeof closeRemovedItemsPanel === 'function') closeRemovedItemsPanel();
+  showToast('System restored');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGION / FACTION OVERLAY  (Design Mode · add / edit / remove sectors)
+// ───────────────────────────────────────────────────────────────────────────
+// Regions are the galaxy's sectors of space — each is a faction territory that
+// colours the map overlay and tags its systems. Same three-store overlay as
+// systems, layered on GALAXY_FACTIONS_BASE:
+//   factionAdditions:         { id: {name,color} }       referee-created regions
+//   factionDeletions:         { id: {fac, t, wasAddition} } tombstones (restorable)
+//   factionPropertyOverrides: { id: {name?,color?} }      edits to base regions
+// Composes with system authoring: a new region immediately appears in the
+// "Design — System" faction picker, and recolouring it recolours every system
+// and territory blob that references it (retroactive).
+let factionAdditions = {};
+let factionDeletions = {};
+let factionPropertyOverrides = {};
+
+async function loadFactionStores(){
+  try { const r = await supaStorage.get('faction-additions', true);      factionAdditions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionAdditions = {}; }
+  try { const r = await supaStorage.get('faction-deletions', true);      factionDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionDeletions = {}; }
+  try { const r = await supaStorage.get('faction-prop-overrides', true); factionPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionPropertyOverrides = {}; }
+}
+async function saveFactionAdditions(){ try { await supaStorage.set('faction-additions', JSON.stringify(factionAdditions), true); } catch(e){ console.error('Faction additions save failed', e); } }
+async function saveFactionDeletions(){ try { await supaStorage.set('faction-deletions', JSON.stringify(factionDeletions), true); } catch(e){ console.error('Faction deletions save failed', e); } }
+async function saveFactionPropertyOverrides(){ try { await supaStorage.set('faction-prop-overrides', JSON.stringify(factionPropertyOverrides), true); } catch(e){ console.error('Faction prop overrides save failed', e); } }
+
+function effectiveFactions(){
+  const out = {};
+  Object.keys(GALAXY_FACTIONS_BASE).forEach(id => {
+    if(factionDeletions[id]) return;
+    const clone = JSON.parse(JSON.stringify(GALAXY_FACTIONS_BASE[id]));
+    const ov = factionPropertyOverrides[id];
+    out[id] = ov ? Object.assign(clone, ov) : clone;
+  });
+  Object.keys(factionAdditions).forEach(id => { if(!factionDeletions[id]) out[id] = JSON.parse(JSON.stringify(factionAdditions[id])); });
+  return out;
+}
+// Rebuild GALAXY_FACTIONS in place (same object reference, so every FAC[id]
+// lookup keeps working). Colours/names are read live at render, so a refresh
+// is all that's needed downstream.
+function rebuildFactionsFromOverlay(){
+  const eff = effectiveFactions();
+  Object.keys(GALAXY_FACTIONS).forEach(k => delete GALAXY_FACTIONS[k]);
+  Object.keys(eff).forEach(k => GALAXY_FACTIONS[k] = eff[k]);
+}
+
+function hxAddFaction(){
+  if(!designModeOn || !isReferee()) return;
+  let id = 'reg' + Date.now().toString(36), bump = 1;
+  while(GALAXY_FACTIONS[id] || factionDeletions[id]) id = 'reg' + (Date.now() + bump++).toString(36);
+  factionAdditions[id] = { name: 'New Region', color: '#66bbaa' };
+  saveFactionAdditions();
+  rebuildFactionsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+  showToast('Region added — name it and pick a colour');
+}
+function hxEditFactionField(id, field, value){
+  if(!isReferee()) return;
+  const add = factionAdditions[id];
+  if(add){ add[field] = value; saveFactionAdditions(); }
+  else if(GALAXY_FACTIONS_BASE[id]){ if(!factionPropertyOverrides[id]) factionPropertyOverrides[id] = {}; factionPropertyOverrides[id][field] = value; saveFactionPropertyOverrides(); }
+  else return;
+  rebuildFactionsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+}
+async function hxRemoveFaction(id){
+  if(!designModeOn || !isReferee()) return;
+  if(id === 'independent' || id === 'uncharted'){ alert('The Independent and Uncharted regions are built-in fallbacks and can’t be removed.'); return; }
+  const fac = GALAXY_FACTIONS[id]; if(!fac) return;
+  const members = GALAXY_NODES.filter(n => n.faction === id).map(n => n.id);
+  let msg = 'Remove the region "' + (fac.name || id) + '"?';
+  if(members.length) msg += '\n\n' + members.length + ' system' + (members.length > 1 ? 's' : '') + ' in this region will become Independent.';
+  msg += ' Restorable from "Show Removed Items".';
+  if(!confirm(msg)) return;
+  // Reassign member systems → independent so nothing dangles (one batched save).
+  members.forEach(sid => {
+    const add = systemAdditions.find(s => s.id === sid);
+    if(add) add.faction = 'independent';
+    else { if(!systemPropertyOverrides[sid]) systemPropertyOverrides[sid] = {}; systemPropertyOverrides[sid].faction = 'independent'; }
+  });
+  const wasAdd = !!factionAdditions[id];
+  factionDeletions[id] = { fac: factionAdditions[id] || JSON.parse(JSON.stringify(GALAXY_FACTIONS_BASE[id] || fac)), t: Date.now(), wasAddition: wasAdd };
+  if(wasAdd) delete factionAdditions[id];
+  await saveFactionDeletions();
+  if(wasAdd) await saveFactionAdditions();
+  if(members.length){ await saveSystemAdditions(); await saveSystemPropertyOverrides(); }
+  rebuildFactionsFromOverlay();
+  rebuildSystemsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+  showToast('Region removed', 'info');
+}
+async function restoreDeletedFaction(id){
+  const entry = factionDeletions[id]; if(!entry) return;
+  if(entry.wasAddition && entry.fac){ factionAdditions[id] = entry.fac; await saveFactionAdditions(); }
+  delete factionDeletions[id];
+  await saveFactionDeletions();
+  rebuildFactionsFromOverlay();
+  if(typeof HX !== 'undefined') HX.refresh();
+  if(typeof closeRemovedItemsPanel === 'function') closeRemovedItemsPanel();
+  showToast('Region restored');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4794,6 +5110,8 @@ const HX = (function(){
   let origin=null, selected=null;
   let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
+  let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
+  let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
   const RPX=26, LABEL_ZOOM_F=1.3;
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
@@ -4820,6 +5138,28 @@ const HX = (function(){
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
   function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg) svg.classList.toggle('hx-lblzoom',labelsVisible()); }
 
+  // ── Infinite grid: which hexes to tile this frame ──
+  // Invert axialPx for the four screen corners to get the q,r box currently in
+  // view, so the hex grid and click-to-place targets fill wherever the referee
+  // has panned. The galaxy has no fixed bounds — pan into the void and keep going.
+  function visibleHexRange(pad){ if(!svg) return null;
+    const rect=svg.getBoundingClientRect(); if(!rect.width||!rect.height) return null;
+    pad=pad||0; const SQ3=Math.sqrt(3);
+    const toQR=(px,py)=>{ const sx=(px-view.x)/view.scale, sy=(py-view.y)/view.scale; const q=sx/(RPX*1.5); return { q, r: sy/(RPX*SQ3)-q/2 }; };
+    const cs=[toQR(0,0),toQR(rect.width,0),toQR(0,rect.height),toQR(rect.width,rect.height)];
+    let mnq=1e9,mxq=-1e9,mnr=1e9,mxr=-1e9;
+    cs.forEach(c=>{ mnq=Math.min(mnq,c.q); mxq=Math.max(mxq,c.q); mnr=Math.min(mnr,c.r); mxr=Math.max(mxr,c.r); });
+    return { minQ:Math.floor(mnq)-pad, maxQ:Math.ceil(mxq)+pad, minR:Math.floor(mnr)-pad, maxR:Math.ceil(mxr)+pad }; }
+  // The viewport box when it's a sane size (so the grid is unbounded and follows
+  // panning), else a tight box around the systems (pre-fit, or zoomed way out).
+  function gridRange(pad, sysBounds){ const vr=visibleHexRange(pad);
+    if(vr){ const cells=(vr.maxQ-vr.minQ+1)*(vr.maxR-vr.minR+1); if(cells>0 && cells<=6000) return vr; }
+    return { minQ:sysBounds.minQ-2, maxQ:sysBounds.maxQ+2, minR:sysBounds.minR-2, maxR:sysBounds.maxR+2 }; }
+  // Pan/zoom is transform-only (no DOM rebuild) for smoothness; re-render once the
+  // gesture settles so the grid + place targets re-tile the newly-exposed area.
+  let _vpRAF=null;
+  function scheduleViewportRender(){ if(_vpRAF) return; _vpRAF=requestAnimationFrame(()=>{ _vpRAF=null; if(svg&&origin) render(); }); }
+
   // ── Render ──
   function render(){ if(!svg||!origin) return;
     svg.innerHTML='';
@@ -4837,8 +5177,9 @@ const HX = (function(){
         lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); }); }
     let minQ=99,maxQ=-99,minR=99,maxR=-99;
     SYS.forEach(s=>{minQ=Math.min(minQ,s.q);maxQ=Math.max(maxQ,s.q);minR=Math.min(minR,s.r);maxR=Math.max(maxR,s.r);});
+    const gr=gridRange(1,{minQ,maxQ,minR,maxR});   // tile the visible viewport (infinite/pannable), not a fixed box
     const hexLayer=NS('g',{}); g.appendChild(hexLayer);
-    for(let q=minQ-2;q<=maxQ+2;q++) for(let r=minR-2;r<=maxR+2;r++){
+    for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
       const cell={q,r}, dist=hexDist(cell,origin), p=axialPx(q,r); let cls='hx-hex';
       if(range){ if(range.reach.has(q+','+r)) cls+=' fuelreach'; }
       else if(dist>=1&&dist<=jumpRating) cls+= dist===1?' reach reach1':' reach';
@@ -4887,6 +5228,15 @@ const HX = (function(){
       if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
       if(!(isOrigin||isSel)){ marker.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); marker.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
     });
+    // Design Mode click-to-place: highlight every empty hex in view as a tap
+    // target. Tiles the whole viewport, so panning lets the referee drop a system
+    // anywhere on the unbounded grid. Topmost layer so it wins the click.
+    if(placeMode){ const pl=NS('g',{}); g.appendChild(pl);
+      for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
+        if(occupied.has(q+','+r)) continue; const p=axialPx(q,r);
+        const cell=NS('polygon',{points:hexPoly(p.x,p.y),fill:'#9B59B6','fill-opacity':0.10,stroke:'#9B59B6','stroke-opacity':0.55,'stroke-width':1,'stroke-dasharray':'3,3',style:'cursor:pointer'});
+        cell.addEventListener('click',ev=>{ ev.stopPropagation(); placePick(q,r); });
+        pl.appendChild(cell); } }
   }
 
   // ── Living-economy overlay: where goods flow, and where the Independent traders are ──
@@ -5058,7 +5408,13 @@ const HX = (function(){
     if(!selected||!origin){ el.innerHTML=''; return; }
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const s=selected, fac=FAC[s.fac]||{name:'Independent',color:'#9fb0c8'}, dHex=hexDist(s,origin); let html='';
-    html+=`<div class="hx-sec-lbl">Selected System</div>`;
+    // Each panel section is a collapsible <details> dropdown. `sec()` closes the
+    // previously-open section and opens a new one; open/closed state is keyed and
+    // persisted in secState so it survives the frequent full-innerHTML re-renders.
+    let _secOpen=false;
+    const sec=(k,t,def,st)=>{ const o=(k in secState)?secState[k]:(def!==false); const pre=_secOpen?'</div></details>':''; _secOpen=true;
+      return pre+`<details class="hx-sec" data-sec="${k}"${o?' open':''}><summary class="hx-sec-lbl"${st?` style="${st}"`:''}>${t}</summary><div class="hx-sec-body">`; };
+    html+=sec('sel','Selected System',true);
     html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
     html+=`<div class="hx-small hx-mono" style="margin-top:2px">${s.deep?'Deep space — no fixed stellar position':eh(s.star)}</div>`;
     html+=`<span class="hx-tag" style="color:${fac.color};border-color:${fac.color}">${eh(fac.name)}</span>`;
@@ -5080,7 +5436,7 @@ const HX = (function(){
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxRefuelHere()">⛽ Refuel to ${fuelMax}t · ${FUEL_INFO[fuelAt(s)].t}</button></div>`;
     }
     if(s!==origin){
-      html+=`<div class="hx-sec-lbl">From ${eh(disp(origin))}</div>`;
+      html+=sec('from','From '+eh(disp(origin)),true);
       html+=`<div class="hx-kv"><span class="k">Jump distance</span><span class="v">${dHex} hex / ${dHex} pc</span></div>`;
       const route=bestRoute(origin,s);
       if(!route){ html+=`<div class="hx-note hx-warn">Unreachable with a Jump-${jumpRating} drive — no chain of ≤${jumpRating}-pc hops connects these. Needs a longer-legged ship or an intermediate stop.</div>`; }
@@ -5103,7 +5459,7 @@ const HX = (function(){
           html+=`<div class="hx-btn-row"><button class="hx-act-btn primary" onclick="hxExecuteJump()">${ejLbl}</button></div>`; }
         else if(plan.strandedAt==null) html+=`<div class="hx-small" style="margin-top:6px">Referee executes jumps. You can plan freely.</div>`;
       }
-      html+=`<div class="hx-sec-lbl">Speculative Cargo → ${eh(disp(s))}</div>`;
+      html+=sec('cargo','Speculative Cargo → '+eh(disp(s)),false);
       const srcMkt=hasMarket(origin), dstMkt=hasMarket(s);
       if(!srcMkt||!dstMkt){ const dead=!srcMkt?origin:s, df=FAC[dead.fac];
         html+=`<div class="hx-small">No open market — ${eh((df&&df.name)||'this region')} keeps no commercial trade or refuelling at ${eh(disp(dead))}.</div>`; }
@@ -5119,12 +5475,46 @@ const HX = (function(){
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
     }
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
-      html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Jump Lanes</div>`;
+      html+=sec('dlanes','Design — Jump Lanes',true,'color:#9B59B6');
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`;
       html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`; }
+    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
+      html+=sec('dsys','Design — System',false,'color:#9B59B6');
+      if(typeof HX!=='undefined'&&HX.placing&&HX.placing()){
+        html+=`<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="HX.cancelPlace()">✕ Cancel — or tap an empty hex on the map</button></div>`;
+      } else if(s.uncharted){
+        html+=`<div class="hx-small">Uncharted frontier star — not an authored system, so there's nothing to edit here. Use “Add new system” to chart a system of your own.</div>`;
+        html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
+      } else {
+        const nd=(typeof GX_MAP!=='undefined'?GX_MAP[s.id]:null)||{};
+        const FACS=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+        const facOpts=Object.keys(FACS).map(fk=>`<option value="${fk}"${s.fac===fk?' selected':''}>${eh((FACS[fk]||{}).name||fk)}</option>`).join('');
+        const ea=(typeof escAttr==='function')?escAttr:eh;
+        html+=`<label class="hx-edit-row"><span>Name</span><input class="hx-edit-in" value="${ea(disp(s))}" onchange="hxEditSystemField('${s.id}','label',this.value)"></label>`;
+        html+=`<label class="hx-edit-row"><span>Star</span><input class="hx-edit-in" value="${ea(s.star||'')}" onchange="hxEditSystemField('${s.id}','name',this.value)"></label>`;
+        html+=`<label class="hx-edit-row"><span>Faction</span><select class="hx-edit-in" onchange="hxEditSystemField('${s.id}','faction',this.value)">${facOpts}</select></label>`;
+        html+=`<label class="hx-edit-row hx-edit-col"><span>Notes</span><textarea class="hx-edit-in" rows="2" onchange="hxEditSystemField('${s.id}','desc',this.value)">${eh(nd.desc||'')}</textarea></label>`;
+        html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> above to add or randomly generate bodies.</div>`;
+        html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMoveSystem('${s.id}')">✎ Move on map</button> <button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="hxRemoveSystem('${s.id}')">🗑 Remove</button></div>`;
+        html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
+      }
+    }
+    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
+      html+=sec('dregions','Design — Regions',false,'color:#9B59B6');
+      const RF=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+      const ea2=(typeof escAttr==='function')?escAttr:eh;
+      Object.keys(RF).forEach(fk=>{ const f=RF[fk]||{}; const builtin=(fk==='independent'||fk==='uncharted'); const mem=SYS.filter(x=>x.fac===fk&&!x.uncharted).length;
+        html+=`<div class="hx-reg-row">`+
+          `<input type="color" class="hx-reg-col" value="${ea2(f.color||'#888888')}" onchange="hxEditFactionField('${fk}','color',this.value)" title="Region colour">`+
+          `<input class="hx-edit-in" value="${ea2(f.name||fk)}" onchange="hxEditFactionField('${fk}','name',this.value)" title="${mem} system${mem===1?'':'s'} in this region">`+
+          (builtin?`<span class="hx-reg-lock" title="Built-in fallback region">🔒</span>`:`<button class="hx-reg-del" title="Remove region" onclick="hxRemoveFaction('${fk}')">🗑</button>`)+
+        `</div>`; });
+      html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxAddFaction()">＋ Add region</button></div>`;
+      html+=`<div class="hx-small">Regions are the galaxy's sectors — they colour the territory overlay and tag systems. Assign a system to a region under “Design — System”.</div>`;
+    }
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof ECON!=='undefined'){
-      html+=`<div class="hx-sec-lbl" style="color:#9B59B6">Design — Production &amp; Consumption</div>`;
+      html+=sec('decon','Design — Production &amp; Consumption',true,'color:#9B59B6');
       if(!ECON.isMarketId(s.id)){
         html+=`<div class="hx-small">${eh((fac&&fac.name)||'This faction')} keeps no open market at ${eh(disp(s))} — nothing to configure.</div>`;
       } else {
@@ -5137,17 +5527,20 @@ const HX = (function(){
       }
     }
     const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
-    if(fromLanes.length){ html+=`<div class="hx-sec-lbl">Lanes from ${eh(disp(origin))} · ${fromLanes.length}</div>`;
+    if(fromLanes.length){ html+=sec('lanes','Lanes from '+eh(disp(origin))+' · '+fromLanes.length,false);
       fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
     const reach=SYS.filter(x=>x!==origin&&hexDist(x,origin)>=1&&hexDist(x,origin)<=jumpRating).sort((a,b)=>hexDist(a,origin)-hexDist(b,origin));
-    html+=`<div class="hx-sec-lbl">In range of ${eh(disp(origin))} · ${reach.length}</div>`;
+    html+=sec('range','In range of '+eh(disp(origin))+' · '+reach.length,false);
     if(!reach.length) html+=`<div class="hx-small">Nothing within Jump-${jumpRating}. Increase the jump drive or move.</div>`;
     reach.forEach(x=>{ const dh=hexDist(x,origin), lane=onLane(x,origin); html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${x.q},${x.r}')"><span class="hx-reach-name" style="${lane?'color:#00cc88':''}">${lane?'⟢ ':''}${eh(disp(x))}</span><span class="d">${dh} pc · ${legFuel(x,origin).toFixed(0)}t</span></div>`; });
     const log=(typeof shipState!=='undefined'&&Array.isArray(shipState.jumpLog))?shipState.jumpLog:[];
-    if(log.length){ html+=`<div class="hx-sec-lbl">Captain's Log · ${log.length}</div>`;
+    if(log.length){ html+=sec('log',"Captain's Log · "+log.length,false);
       log.slice(0,8).forEach(e=>{ html+=`<div class="hx-log-item"><b>${eh(e.date||'')}</b> · ${eh(e.from||'')} → <b>${eh(e.to||'')}</b> · ${e.weeks||0} wk · ${e.burn||0}t`+(e.refuels?` · ${e.refuels}⛽`:'')+`</div>`;
         (e.events||[]).forEach(ev=>html+=`<div class="hx-log-event">▸ <b style="color:#caa83b">${eh(ev.title||'')}</b>${ev.note?' — '+eh(ev.note):''}</div>`); }); }
+    if(_secOpen) html+='</div></details>';   // close the final open section
     el.innerHTML=html;
+    if(!secBound){ secBound=true;   // capture-phase listener: <details> toggle doesn't bubble, so remember each section's open state across re-renders
+      el.addEventListener('toggle',ev=>{ const d=ev.target; if(d&&d.tagName==='DETAILS'&&d.dataset&&d.dataset.sec) secState[d.dataset.sec]=d.open; },true); }
   }
 
   // ── Ship-stat inputs (shared with shipState) ──
@@ -5170,10 +5563,10 @@ const HX = (function(){
   function bindPanZoom(){ if(!svg) return; let drag=null, lastDist=null;
     svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; dragMoved=false; svg.classList.add('hx-dragging'); });
     svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<4) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
-    window.addEventListener('pointerup',()=>{ drag=null; if(svg) svg.classList.remove('hx-dragging'); });
-    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); },{passive:false});
+    window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
+    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); scheduleViewportRender(); },{passive:false});
     svg.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist) zoomBy(d/lastDist); lastDist=d; } },{passive:false});
-    svg.addEventListener('touchend',()=>lastDist=null); }
+    svg.addEventListener('touchend',()=>{ lastDist=null; scheduleViewportRender(); }); }
 
   function refresh(){ readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); }
 
@@ -5213,7 +5606,42 @@ const HX = (function(){
   window.hxMarkVisited=markVisited;
   window.hxSelectByKey=k=>{ const s=BY_KEY[k]; if(s) selectSys(s); };
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, get origin(){ return origin; } };
+  // ── Design Mode: live add / move / remove of campaign systems ──
+  // syncNodes() diffs the host's effective GALAXY_NODES set into SYS/BY_ID/BY_KEY/
+  // occupied WITHOUT re-running the cluster placement, so existing systems never
+  // jump. New nodes land on the hex they carry (click-to-place) or the nearest
+  // free hex; removed nodes free their cell. Called from rebuildSystemsFromOverlay.
+  function nearestFreeHex(q0,r0){ const sp=spiral(Math.round(q0||0),Math.round(r0||0),36);
+    for(const h of sp){ if(!occupied.has(h.q+','+h.r)) return h; } return {q:q0||0,r:r0||0}; }
+  function syncNodes(nodes){
+    const want={}; (nodes||[]).forEach(n=>{ want[n.id]=n; });
+    // Remove campaign systems whose node is gone (leave uncharted frontier stars).
+    for(let i=SYS.length-1;i>=0;i--){ const s=SYS[i]; if(s.uncharted) continue;
+      if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
+    // Add new / update existing.
+    Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id;
+        if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
+          if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
+            s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
+      else { let q=n.q, r=n.r;
+        if(q==null||r==null||occupied.has(q+','+r)){ const a=FACTION_ANCHOR[n.faction]||[0,0]; const f=nearestFreeHex(q!=null?q:a[0], r!=null?r:a[1]); q=f.q; r=f.r; }
+        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), campaign:true, q, r };
+        SYS.push(s); BY_ID[id]=s; BY_KEY[q+','+r]=s; occupied.add(q+','+r); } });
+    if(selected&&!BY_ID[selected.id]) selected=null;
+    if(origin&&!BY_ID[origin.id]) origin=BY_ID['aurelia']||SYS[0]||null;
+  }
+  function moveSystem(id,q,r){ const s=BY_ID[id]; if(!s) return; const occ=BY_KEY[q+','+r]; if(occ&&occ!==s) return;
+    occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
+    s.q=q; s.r=r; occupied.add(q+','+r); BY_KEY[q+','+r]=s; render(); renderSel(); }
+  function hexOf(id){ const s=BY_ID[id]; return s?{q:s.q,r:s.r}:null; }
+  function armPlace(cb){ if(typeof designModeOn!=='undefined'&&!designModeOn) return; placeMode=true; placeCb=cb||null;
+    toast('Tap an empty hex to place the system.'); render(); renderSel(); }
+  function cancelPlace(){ placeMode=false; placeCb=null; render(); renderSel(); }
+  function placePick(q,r){ const cb=placeCb; placeMode=false; placeCb=null; render(); renderSel(); if(cb) cb(q,r); }
+  window.hxCancelPlace=cancelPlace;
+
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){
@@ -8775,6 +9203,47 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Galaxy regions — players see referee region renames / recolours / changes
+  try {
+    const ra = await supaStorage.get('faction-additions', true);
+    const rd = await supaStorage.get('faction-deletions', true);
+    const rp = await supaStorage.get('faction-prop-overrides', true);
+    if(ra.ok && rd.ok && rp.ok){
+      const fa = ra.value != null ? JSON.parse(ra.value) : {};
+      const fd = rd.value != null ? JSON.parse(rd.value) : {};
+      const fp = rp.value != null ? JSON.parse(rp.value) : {};
+      const facChanged = JSON.stringify(fa) !== JSON.stringify(factionAdditions)
+        || JSON.stringify(fd) !== JSON.stringify(factionDeletions)
+        || JSON.stringify(fp) !== JSON.stringify(factionPropertyOverrides);
+      if(facChanged){
+        factionAdditions = fa; factionDeletions = fd; factionPropertyOverrides = fp;
+        if(typeof rebuildFactionsFromOverlay === 'function') rebuildFactionsFromOverlay();
+        if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Galaxy systems — players see referee-added / edited / removed star systems
+  try {
+    const rsa = await supaStorage.get('system-additions', true);
+    const rsd = await supaStorage.get('system-deletions', true);
+    const rsp = await supaStorage.get('system-prop-overrides', true);
+    if(rsa.ok && rsd.ok && rsp.ok){
+      const fa = rsa.value != null ? JSON.parse(rsa.value) : [];
+      const fd = rsd.value != null ? JSON.parse(rsd.value) : {};
+      const fp = rsp.value != null ? JSON.parse(rsp.value) : {};
+      const sysChanged = JSON.stringify(fa) !== JSON.stringify(systemAdditions)
+        || JSON.stringify(fd) !== JSON.stringify(systemDeletions)
+        || JSON.stringify(fp) !== JSON.stringify(systemPropertyOverrides);
+      if(sysChanged){
+        systemAdditions = Array.isArray(fa) ? fa : [];
+        systemDeletions = fd; systemPropertyOverrides = fp;
+        if(typeof rebuildSystemsFromOverlay === 'function') rebuildSystemsFromOverlay();
+        if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Quest log — players see live updates as referee changes quest status,
   // adds objectives, or marks things done during a session
   try {
@@ -9008,6 +9477,12 @@ function resetCampaign(){
   locationAdditions = {};
   locationDeletions = {};
   locationPropertyOverrides = {};
+  systemAdditions = [];
+  systemDeletions = {};
+  systemPropertyOverrides = {};
+  factionAdditions = {};
+  factionDeletions = {};
+  factionPropertyOverrides = {};
   selectedBodyLoc = null;
   questLog = [];
 
@@ -9024,7 +9499,17 @@ function resetCampaign(){
   saveLocationAdditions();
   saveLocationDeletions();
   saveLocationPropertyOverrides();
+  saveSystemAdditions();
+  saveSystemDeletions();
+  saveSystemPropertyOverrides();
+  saveFactionAdditions();
+  saveFactionDeletions();
+  saveFactionPropertyOverrides();
   saveQuestLog();
+
+  // Galaxy is back to the authored regions + systems — fold the now-empty overlays in.
+  if(typeof rebuildFactionsFromOverlay === 'function') rebuildFactionsFromOverlay();
+  if(typeof rebuildSystemsFromOverlay === 'function') rebuildSystemsFromOverlay();
 
   // Re-render everything currently visible
   renderClock();
@@ -9035,6 +9520,7 @@ function resetCampaign(){
   if(currentView === 'station') { renderHeader(); renderDetail(); updateStationLocks(); }
   if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
   if(currentView === 'body'){ if(selectedBody && getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
 
   alert('Campaign reset.');
 }
@@ -10652,8 +11138,12 @@ function openRemovedItemsPanel(){
       locEntries.push({ sysId, lid, entry: locationDeletions[sysId][lid] });
     });
   });
+  // Removed star systems (galaxy-map level)
+  const sysEntries = Object.keys(systemDeletions || {}).map(id => ({ id, entry: systemDeletions[id] }));
+  // Removed regions / sectors
+  const facEntries = Object.keys(factionDeletions || {}).map(id => ({ id, entry: factionDeletions[id] }));
   let html = '';
-  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length){
+  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length && !sysEntries.length && !facEntries.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
     // Removed box types first, then bodies, then content items
@@ -10679,6 +11169,22 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${snippet.slice(0,140)}</div>
       </div>`;
     }).join('');
+    const sysHtml = sysEntries.map(({id, entry}) => {
+      const n = entry.node || {};
+      const snippet = `✦ ${n.label || n.name || id}`;
+      return `<div class="design-history-item" onclick="restoreDeletedSystem('${id.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore system</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
+    const facHtml = facEntries.map(({id, entry}) => {
+      const f = entry.fac || {};
+      const snippet = `▰ ${f.name || id} (region)`;
+      return `<div class="design-history-item" onclick="restoreDeletedFaction('${id.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore region</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
     const itemHtml = keys.map(key => {
       const entry = contentDeletions[key];
       const item = entry.item;
@@ -10693,7 +11199,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
-    html = boxHtml + bodyHtml + locHtml + itemHtml;
+    html = boxHtml + facHtml + sysHtml + bodyHtml + locHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
@@ -14152,6 +14658,10 @@ loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
+loadFactionStores().then(() => { rebuildFactionsFromOverlay();   // fold in any referee-added / edited / removed regions
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadSystemStores().then(() => { rebuildSystemsFromOverlay();   // fold in any referee-added / edited / removed systems
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
