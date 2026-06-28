@@ -5118,7 +5118,7 @@ const HX = (function(){
     fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
     cargoHold=Math.max(0,Number(ss.cargoHold!=null?ss.cargoHold:30)); broker=clamp(Number(ss.broker!=null?ss.broker:2),0,6);
     origin=BY_ID[ss.locationId]||BY_ID['aurelia']||SYS[0];
-    if(!selected||!BY_ID[selected.id]) selected=origin; }
+    if(selected && !BY_ID[selected.id]) selected=null; }   // drop a stale selection; null = galaxy overview (deselected)
 
   // ── Visited systems — gate market intel so players can't price-scout worlds
   //    they have never been to. The current location and home port always count;
@@ -5392,6 +5392,12 @@ const HX = (function(){
     if(typeof shipState!=='undefined'&&s){ shipState.destination=(s===origin)?'':disp(s); shipState.jumpParsecs=(s===origin)?0:jumpDist(origin,s);
       if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
     refresh(); }
+  // Tapping empty space clears the selection and returns to the galaxy overview,
+  // so the galaxy-level panel is always reachable without leaving the map.
+  function deselect(){ if(!selected) return; selected=null;
+    if(typeof shipState!=='undefined'){ shipState.destination=''; shipState.jumpParsecs=0;
+      if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
+    refresh(); }
 
   // ── Right panel ──
   function renderDate(){ const el=document.getElementById('hx-pdate'); if(el&&typeof imperialDate!=='undefined'&&typeof formatImperial==='function') el.textContent=formatImperial(imperialDate); }
@@ -5405,15 +5411,31 @@ const HX = (function(){
       `<br><b style="color:#D4A843">Range</b> on ${fuelAboard.toFixed(0)}/${fuelMax.toFixed(0)}t + refuelling: <b>${rg.count}</b> system${rg.count===1?'':'s'}`+
       (rg.farthest?` — farthest <b>${eh(disp(rg.farthest))}</b> (${rg.farthestJumps} jump${rg.farthestJumps===1?'':'s'})`:'')+'.'; }
   function renderSel(){ const el=document.getElementById('hx-sel-block'); if(!el) return;
-    if(!selected||!origin){ el.innerHTML=''; return; }
+    if(!origin){ el.innerHTML=''; return; }
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
-    const s=selected, fac=FAC[s.fac]||{name:'Independent',color:'#9fb0c8'}, dHex=hexDist(s,origin); let html='';
+    const s=selected, fac=s?(FAC[s.fac]||{name:'Independent',color:'#9fb0c8'}):null, dHex=s?hexDist(s,origin):0; let html='';
     // Each panel section is a collapsible <details> dropdown. `sec()` closes the
     // previously-open section and opens a new one; open/closed state is keyed and
     // persisted in secState so it survives the frequent full-innerHTML re-renders.
     let _secOpen=false;
     const sec=(k,t,def,st)=>{ const o=(k in secState)?secState[k]:(def!==false); const pre=_secOpen?'</div></details>':''; _secOpen=true;
       return pre+`<details class="hx-sec" data-sec="${k}"${o?' open':''}><summary class="hx-sec-lbl"${st?` style="${st}"`:''}>${t}</summary><div class="hx-sec-body">`; };
+    if(!s){
+      // ── Galaxy overview (nothing selected) — tap a star to inspect it ──
+      html+=sec('galaxy','Galaxy',true);
+      html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">The Orion Arm</div>`;
+      html+=`<div class="hx-small hx-mono" style="margin-top:2px">Hex navigation · 1 hex = 1 parsec</div>`;
+      const charted=SYS.filter(x=>!x.uncharted).length, unch=SYS.filter(x=>x.uncharted).length;
+      html+=`<div class="hx-kv" style="margin-top:6px"><span class="k">Charted systems</span><span class="v">${charted}</span></div>`;
+      if(unch) html+=`<div class="hx-kv"><span class="k">Uncharted stars</span><span class="v">${unch}</span></div>`;
+      html+=`<div class="hx-kv"><span class="k">Your location</span><span class="v" style="color:#f4d35e">${eh(disp(origin))}</span></div>`;
+      const counts={}; SYS.forEach(x=>{ if(x.uncharted) return; counts[x.fac]=(counts[x.fac]||0)+1; });
+      const regKeys=Object.keys(FAC).filter(k=>counts[k]&&k!=='uncharted').sort((a,b)=>counts[b]-counts[a]);
+      if(regKeys.length){ html+=`<div class="hx-small" style="margin:8px 0 3px;color:var(--tx1)">Regions</div>`;
+        regKeys.forEach(k=>{ const f=FAC[k]||{};
+          html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d">${counts[k]}</span></div>`; }); }
+      html+=`<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
+    } else {
     html+=sec('sel','Selected System',true);
     html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
     html+=`<div class="hx-small hx-mono" style="margin-top:2px">${s.deep?'Deep space — no fixed stellar position':eh(s.star)}</div>`;
@@ -5474,15 +5496,20 @@ const HX = (function(){
         ? `<div class="hx-small" style="color:#4caf82;margin-top:4px">✓ Party has called here — market visible to players.</div>`
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
     }
+    }   // end of the selected-system (else) branch
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
       html+=sec('dlanes','Design — Jump Lanes',true,'color:#9B59B6');
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
-        : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`;
+        : (s ? `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`
+             : `<div class="hx-small">Select a star, then tap a destination to draw a jump lane between it and another.</div>`);
       html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`; }
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
       html+=sec('dsys','Design — System',false,'color:#9B59B6');
       if(typeof HX!=='undefined'&&HX.placing&&HX.placing()){
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="HX.cancelPlace()">✕ Cancel — or tap an empty hex on the map</button></div>`;
+      } else if(!s){
+        html+=`<div class="hx-small">Tap an empty hex on the map (or the button below) to chart a new system, then select it to edit its details.</div>`;
+        html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
       } else if(s.uncharted){
         html+=`<div class="hx-small">Uncharted frontier star — not an authored system, so there's nothing to edit here. Use “Add new system” to chart a system of your own.</div>`;
         html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
@@ -5513,7 +5540,7 @@ const HX = (function(){
       html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxAddFaction()">＋ Add region</button></div>`;
       html+=`<div class="hx-small">Regions are the galaxy's sectors — they colour the territory overlay and tag systems. Assign a system to a region under “Design — System”.</div>`;
     }
-    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof ECON!=='undefined'){
+    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof ECON!=='undefined'&&s){
       html+=sec('decon','Design — Production &amp; Consumption',true,'color:#9B59B6');
       if(!ECON.isMarketId(s.id)){
         html+=`<div class="hx-small">${eh((fac&&fac.name)||'This faction')} keeps no open market at ${eh(disp(s))} — nothing to configure.</div>`;
@@ -5564,6 +5591,12 @@ const HX = (function(){
     svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; dragMoved=false; svg.classList.add('hx-dragging'); });
     svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<4) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
     window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
+    // Tap empty space → deselect (back to the galaxy overview). Star markers and
+    // lane hit-targets stopPropagation, so only background/empty-hex taps reach here.
+    svg.addEventListener('click',e=>{ if(dragMoved) return;
+      if(placeMode) return;                                       // placing a system — the hex cells handle the tap
+      if(typeof gxLinkMode!=='undefined'&&gxLinkMode) return;     // drawing a lane — tap picks the destination
+      deselect(); });
     svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); scheduleViewportRender(); },{passive:false});
     svg.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist) zoomBy(d/lastDist); lastDist=d; } },{passive:false});
     svg.addEventListener('touchend',()=>{ lastDist=null; scheduleViewportRender(); }); }
