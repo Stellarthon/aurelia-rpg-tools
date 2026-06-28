@@ -5235,7 +5235,7 @@ const HX = (function(){
       for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
         if(occupied.has(q+','+r)) continue; const p=axialPx(q,r);
         const cell=NS('polygon',{points:hexPoly(p.x,p.y),fill:'#9B59B6','fill-opacity':0.10,stroke:'#9B59B6','stroke-opacity':0.55,'stroke-width':1,'stroke-dasharray':'3,3',style:'cursor:pointer'});
-        cell.addEventListener('click',ev=>{ ev.stopPropagation(); placePick(q,r); });
+        cell.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return; placePick(q,r); });   // ignore the click that ends a pan
         pl.appendChild(cell); } }
   }
 
