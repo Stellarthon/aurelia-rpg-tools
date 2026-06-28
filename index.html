@@ -68,6 +68,7 @@
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
     <button id="econ-btn" class="ref-only" onclick="toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
+    <button id="npc-btn" class="ref-only" onclick="toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
@@ -663,6 +664,16 @@
     </div>
     <div id="disc-body"></div>
     <div class="panel-resize-handle" id="disc-resize"></div>
+  </div>
+
+  <!-- ── NPC roster panel (referee) ── -->
+  <div id="npc-wrap" class="hidden">
+    <div id="npc-header" onclick="toggleNpcCollapse()">
+      <span id="npc-title-lbl">👥 NPC ROSTER <span id="npc-count">0</span></span>
+      <span id="npc-toggle">▼</span>
+    </div>
+    <div id="npc-body"></div>
+    <div class="panel-resize-handle" id="npc-resize"></div>
   </div>
 
   <!-- ── Reputation tracker panel ── -->

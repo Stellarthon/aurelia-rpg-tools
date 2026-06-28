@@ -323,8 +323,10 @@ function openRemovedItemsPanel(){
   const sysEntries = Object.keys(systemDeletions || {}).map(id => ({ id, entry: systemDeletions[id] }));
   // Removed regions / sectors
   const facEntries = Object.keys(factionDeletions || {}).map(id => ({ id, entry: factionDeletions[id] }));
+  // Removed catalog weapons
+  const wpnEntries = (typeof weaponDeletions !== 'undefined') ? Object.keys(weaponDeletions).map(id => ({ id, entry: weaponDeletions[id] })) : [];
   let html = '';
-  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length && !sysEntries.length && !facEntries.length){
+  if(!keys.length && !bodyEntries.length && !removedBoxes.length && !locEntries.length && !sysEntries.length && !facEntries.length && !wpnEntries.length){
     html = '<div class="init-empty">Nothing has been removed yet.</div>';
   } else {
     // Removed box types first, then bodies, then content items
@@ -366,6 +368,14 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${snippet.slice(0,140)}</div>
       </div>`;
     }).join('');
+    const wpnHtml = wpnEntries.map(({id, entry}) => {
+      const w = entry.w || {};
+      const snippet = `⚔ ${w.name || id}${w.damage ? ' · '+w.damage : ''} (weapon)`;
+      return `<div class="design-history-item" onclick="restoreDeletedWeapon('${id.replace(/'/g,"\\'")}')">
+        <div class="design-history-label">${new Date(entry.t).toLocaleString()} — tap to restore weapon</div>
+        <div class="design-history-snippet">${snippet.slice(0,140)}</div>
+      </div>`;
+    }).join('');
     const itemHtml = keys.map(key => {
       const entry = contentDeletions[key];
       const item = entry.item;
@@ -380,7 +390,7 @@ function openRemovedItemsPanel(){
         <div class="design-history-snippet">${(snippet||'').slice(0,140)}${(snippet||'').length>140?'…':''}</div>
       </div>`;
     }).join('');
-    html = boxHtml + facHtml + sysHtml + bodyHtml + locHtml + itemHtml;
+    html = boxHtml + facHtml + wpnHtml + sysHtml + bodyHtml + locHtml + itemHtml;
   }
   document.getElementById('design-edit-title').textContent = 'REMOVED ITEMS';
   document.getElementById('design-edit-body').innerHTML = html;
