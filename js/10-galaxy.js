@@ -1550,7 +1550,7 @@ const HX = (function(){
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
   let origin=null, selected=null;
-  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false, tapConsumed=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
@@ -1638,7 +1638,7 @@ const HX = (function(){
         else { line.setAttribute('opacity',touches?'0.55':'0.18'); }
         if(touches) line.setAttribute('stroke-width','1.6'); laneLayer.appendChild(line);
         if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
-          hit.addEventListener('click',ev=>{ ev.stopPropagation(); if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
+          hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
     if(selected&&selected!==origin){ const route=bestRoute(origin,selected);
       if(route&&route.length>1){ const plan=fuelPlan(route);
@@ -1669,7 +1669,11 @@ const HX = (function(){
       // usable touch target — so overlay a larger transparent hit circle that carries the
       // tap (and the hover-label). Sits on top so a tap near a star still selects it.
       const hit=NS('circle',{cx:p.x,cy:p.y,r:14,fill:'transparent','pointer-events':'all',style:'cursor:pointer'});
-      hit.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return;
+      // Drive selection off pointerup, not click: iOS Safari does not reliably emit a
+      // synthetic click on SVG shapes once we've taken over touch (touch-action:none +
+      // custom pointer handlers), which left stars untappable on iPad. tapConsumed tells
+      // the map-level pointerup this tap was handled, so it won't also deselect.
+      hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true;
         if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof gxLinkMode!=='undefined'&&gxLinkMode){ if(typeof gxLinkPick==='function') gxLinkPick(s.id); return; }
         selectSys(s); });
       if(!(isOrigin||isSel)){ hit.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); hit.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
@@ -1682,7 +1686,7 @@ const HX = (function(){
       for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
         if(occupied.has(q+','+r)) continue; const p=axialPx(q,r);
         const cell=NS('polygon',{points:hexPoly(p.x,p.y),fill:'#9B59B6','fill-opacity':0.10,stroke:'#9B59B6','stroke-opacity':0.55,'stroke-width':1,'stroke-dasharray':'3,3',style:'cursor:pointer'});
-        cell.addEventListener('click',ev=>{ ev.stopPropagation(); if(dragMoved) return; placePick(q,r); });   // ignore the click that ends a pan
+        cell.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; placePick(q,r); });   // ignore the tap that ends a pan
         pl.appendChild(cell); } }
   }
 
@@ -2035,15 +2039,19 @@ const HX = (function(){
     view.scale=clamp(Math.min(rect.width/cw,rect.height/ch),0.3,1.6); fitScale=view.scale;
     view.x=rect.width/2-((minX+maxX)/2)*view.scale; view.y=rect.height/2-((minY+maxY)/2)*view.scale; fitted=true; render(); }
   function bindPanZoom(){ if(!svg) return; let drag=null, lastDist=null;
-    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,touch:e.pointerType==='touch'}; dragMoved=false; svg.classList.add('hx-dragging'); });
+    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,touch:e.pointerType==='touch'}; dragMoved=false; tapConsumed=false; svg.classList.add('hx-dragging'); });
     // A finger tap jitters several px before lift; a 4px pan threshold misreads that as a
     // drag and the star's `if(dragMoved) return;` swallows the tap. Use a larger slop for
     // touch so taps register, while keeping mouse panning crisp.
     svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<(drag.touch?12:4)) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
-    window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
-    // Tap empty space → deselect (back to the galaxy overview). Star markers and
-    // lane hit-targets stopPropagation, so only background/empty-hex taps reach here.
-    svg.addEventListener('click',e=>{ if(dragMoved) return;
+    // Cleanup on window so a release that drifts off the map still ends the pan.
+    window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; tapConsumed=false; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
+    // Tap empty map → deselect (back to the galaxy overview). Scoped to the svg so taps
+    // elsewhere in the app never clear the selection. Star / lane / place-cell pointerups
+    // fire first (deeper in the tree) and set tapConsumed, so only true background taps
+    // reach deselect. Driven off pointerup, not click: iOS doesn't reliably synthesize a
+    // click on SVG shapes once touch-action:none + custom pointer handlers are in play.
+    svg.addEventListener('pointerup',e=>{ if(e.button>0||dragMoved||tapConsumed) return;
       if(placeMode) return;                                       // placing a system — the hex cells handle the tap
       if(typeof gxLinkMode!=='undefined'&&gxLinkMode) return;     // drawing a lane — tap picks the destination
       deselect(); });
