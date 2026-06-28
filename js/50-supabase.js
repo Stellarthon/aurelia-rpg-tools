@@ -1,0 +1,248 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// SUPABASE ADAPTER — drop-in replacement for window.storage
+// ═══════════════════════════════════════════════════════════════════════════
+// Mimics supaStorage.get(key, shared) / .set(key, value, shared) shape
+// so the rest of the app's storage calls don't need to change.
+// Table: aurelia_state(key text primary key, value text, updated_at timestamptz)
+// Private (per-device) keys already bake the device identity into the key
+// string itself (e.g. note-private-Cass-elevator), so "shared" doesn't need
+// its own column — every row in this table is technically readable by anyone
+// with the anon key, exactly like window.storage's shared=true behaviour.
+// This is acceptable here since the table only ever holds reveal flags and
+// notes text — never referee-only content (see note above).
+
+const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
+const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
+
+// ── Hosted planet-surface globe textures ────────────────────────────────────
+// Pre-rendered lit globe PNGs in the public Supabase Storage bucket "globes".
+// The catalog SELF-POPULATES at runtime by listing the bucket (an anon SELECT
+// policy on the globes bucket allows this), so uploading/removing textures needs
+// no code change. A body picks one by filename (body.texture); textureUrlFor()
+// resolves it to the encoded public URL. Resolution order:
+//   body.textureUrl (full URL escape hatch) > '__none__' (force procedural) >
+//   body.texture (explicit catalog file) > auto-match by planet type.
+const TEXTURE_BASE = SUPABASE_URL + '/storage/v1/object/public/globes/';
+let textureCatalog = []; // filenames in the globes bucket, loaded at runtime
+
+async function loadTextureCatalog(){
+  try {
+    const res = await fetch(SUPABASE_URL + '/storage/v1/object/list/globes', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
+    });
+    if(!res.ok) return;
+    const list = await res.json();
+    textureCatalog = (Array.isArray(list) ? list : [])
+      .filter(o => o && o.id && /\.(png|jpe?g|webp)$/i.test(o.name))  // real image files only (skip folders/placeholders)
+      .map(o => o.name);
+  } catch(e){ /* offline / blocked — leave empty; bodies with an explicit texture still resolve */ }
+}
+
+// Which texture category best fits a body, from its type keywords / disc style.
+function defaultTextureCategory(body){
+  const t = (body.type || '').toLowerCase();
+  const style = bodyDiscStyle(body);
+  if(style === 'star' || style === 'belt' || style === 'moon') return null; // keep procedural
+  if(style === 'gasgiant' || /gas giant|ice giant/.test(t)) return 'gaseous';
+  if(/volcan|scorch|lava|molten/.test(t)) return 'volcanic';
+  if(/desert|arid|dune|barren/.test(t)) return 'desert';
+  if(/ocean|jewel|garden|terran|earth|temperate/.test(t)) return 'terran';
+  if(style === 'ice' || /ice|frozen|glacial|tundra/.test(t)) return 'ice';
+  if(style === 'ocean') return 'terran';
+  if(style === 'rock') return 'desert';
+  return null;
+}
+// Pick a catalog file for a body's auto-category, deterministically varied by id
+// so two same-type worlds don't always get the identical globe.
+function defaultTextureFile(body){
+  const cat = defaultTextureCategory(body);
+  if(!cat) return null;
+  const matches = textureCatalog.filter(f => f.toLowerCase().startsWith(cat));
+  if(!matches.length) return null;
+  const seed = (typeof seedFromString === 'function') ? Math.abs(seedFromString(body.id)) : 0;
+  return matches[seed % matches.length];
+}
+function textureUrlFor(body){
+  if(body.textureUrl) return body.textureUrl;                  // explicit full URL wins
+  if(body.texture === '__none__') return null;                 // forced procedural
+  if(body.texture) return TEXTURE_BASE + encodeURIComponent(body.texture); // explicit catalog file
+  const auto = defaultTextureFile(body);                       // auto-match by type
+  return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
+// ───────────────────────────────────────────────────────────────────────────
+// Shared state lives in Supabase, but the network isn't guaranteed at the table
+// (a player on a phone, a referee on hotel wifi). Three layers keep the app
+// usable through a drop:
+//   1. write-through CACHE — every successful read is mirrored to localStorage,
+//      and every write is cached *before* it's sent, so a reload while offline
+//      still renders last-known shared state instead of blank defaults.
+//   2. outbound QUEUE — a write that can't reach Supabase is parked in
+//      localStorage (last-write-wins per key) and flushed on reconnect, so a
+//      referee can keep revealing / advancing the clock through an outage.
+//   3. CONNECTIVITY signal — get/set outcomes plus the browser online/offline
+//      events drive the status pill (#conn-pill) and the player poll's backoff.
+// IMPORTANT for callers: supaStorage.get now returns { ok, value }.
+//   ok:false  → the request FAILED (value may be a cached fallback, or null).
+//   ok:true, value===null → the row genuinely doesn't exist.
+// Startup loaders read res.value (so the cache fills them in offline); pollers
+// must gate on res.ok (so a failed fetch is a no-op, never an empty-state wipe).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CACHE_PREFIX = 'aurelia_cache_';
+const SYNC_QUEUE_KEY = 'aurelia_sync_queue';
+
+// 'live' = last network op succeeded · 'reconnecting' = online but Supabase
+// unreachable · 'offline' = browser reports no connection.
+let connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'live';
+let lastSyncTs = null;
+let _quotaWarned = false; // gate so the "storage full" warning shows at most once
+
+const supaStorage = {
+  cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
+  cacheSet(key, value){
+    try {
+      if(value == null) localStorage.removeItem(CACHE_PREFIX + key);
+      else localStorage.setItem(CACHE_PREFIX + key, value);
+    } catch(e){
+      /* quota / disabled — non-fatal, sync still works in-memory, but warn
+         the referee once so a full store doesn't lose changes silently. */
+      const quota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+      if(quota && !_quotaWarned){
+        _quotaWarned = true;
+        if(typeof showToast === 'function') showToast('Storage full — recent changes may not persist. Export your campaign to be safe.');
+      }
+    }
+  },
+  async get(key, shared){
+    try {
+      const res = await fetch(`${SUPABASE_REST}?key=eq.${encodeURIComponent(key)}&select=value`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY
+        }
+      });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      const value = rows.length ? rows[0].value : null;
+      this.cacheSet(key, value);            // mirror authoritative server state
+      markOnline();
+      return { ok: true, value, fromCache: false };
+    } catch(e){
+      markOffline();
+      return { ok: false, value: this.cacheGet(key), fromCache: true };
+    }
+  },
+  // Raw upsert — throws on any failure. Used by both set() and the queue flush.
+  async _post(key, value){
+    const res = await fetch(SUPABASE_REST, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({ key, value: String(value) })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    return true;
+  },
+  async set(key, value, shared){
+    const str = String(value);
+    this.cacheSet(key, str);               // optimistic: survives a reload even if the POST never lands
+    try {
+      await this._post(key, str);
+      markOnline();
+      flushQueue();                        // we're online — drain any backlog behind this write
+      return { ok: true };
+    } catch(e){
+      markOffline();
+      queueWrite(key, str);                // park it; reconnect (or the heartbeat) retries
+      return { ok: false };
+    }
+  }
+};
+
+// ── Outbound write queue (last-write-wins per key) ───────────────────────────
+function loadQueue(){ try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function saveQueue(q){ try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
+function queueLength(){ return Object.keys(loadQueue()).length; }
+function queueWrite(key, value){
+  const q = loadQueue();
+  q[key] = { value, ts: Date.now() };      // a newer write for a key supersedes the older one
+  saveQueue(q);
+  updateConnPill();
+}
+let flushing = false;
+async function flushQueue(){
+  if(flushing) return;
+  const keys = Object.keys(loadQueue());
+  if(!keys.length) return;
+  flushing = true;
+  try {
+    for(const key of keys){
+      const entry = loadQueue()[key];
+      if(!entry) continue;
+      try {
+        await supaStorage._post(key, entry.value);
+        const cur = loadQueue();           // re-read: the key may have been re-queued while awaiting
+        if(cur[key] && cur[key].ts === entry.ts){ delete cur[key]; saveQueue(cur); }
+        markOnline();
+      } catch(e){
+        markOffline();
+        break;                             // still down — stop; the next trigger retries
+      }
+    }
+  } finally {
+    flushing = false;
+    updateConnPill();
+  }
+}
+
+// ── Connectivity state → status pill + poll backoff ──────────────────────────
+function markOnline(){
+  const recovered = connState !== 'live';
+  connState = 'live';
+  lastSyncTs = Date.now();
+  pollBackoff = POLL_MS;                    // recovered — snap polling back to the fast cadence
+  if(recovered && queueLength()) flushQueue();
+  updateConnPill();
+}
+function markOffline(){
+  connState = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 'offline' : 'reconnecting';
+  updateConnPill();
+}
+function syncAgoLabel(){
+  if(!lastSyncTs) return 'not yet';
+  const s = Math.round((Date.now() - lastSyncTs) / 1000);
+  if(s < 60) return s + 's ago';
+  const m = Math.round(s / 60);
+  if(m < 60) return m + 'm ago';
+  return Math.round(m / 60) + 'h ago';
+}
+function updateConnPill(){
+  const pill = document.getElementById('conn-pill');
+  if(!pill) return;
+  const q = queueLength();
+  pill.classList.remove('cp-live','cp-reconnecting','cp-offline');
+  let icon, text;
+  if(connState === 'live'){
+    pill.classList.add('cp-live');
+    icon = '●'; text = q ? `Syncing ${q}…` : 'Live';
+  } else if(connState === 'reconnecting'){
+    pill.classList.add('cp-reconnecting');
+    icon = '◐'; text = 'Reconnecting';
+  } else {
+    pill.classList.add('cp-offline');
+    icon = '○'; text = 'Offline';
+  }
+  pill.innerHTML = `<span class="cp-dot">${icon}</span><span class="cp-txt">${text}</span>`;
+  pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()}`;
+}
+

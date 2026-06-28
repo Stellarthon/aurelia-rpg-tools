@@ -1,0 +1,1055 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPERIAL CALENDAR  (V1 — the campaign-date spine)
+// ───────────────────────────────────────────────────────────────────────────
+// Distinct from the intra-day station clock (clockMinutes / HH:MM): this is the
+// campaign-scale Traveller Imperial date, written DDD-YYYY (e.g. 114-1105). It
+// is the *source of truth* other features timestamp against — reputation
+// milestones {day,year}, discovery reveals — so it ships with a small public
+// API (imperialNow / formatImperial / imperialOrdinal / addImperialDays) for
+// them to compare and sort dates. Shared state in aurelia_state:
+//   'imperial-date'    → {day, year}
+//   'campaign-events'  → [{id, day, year, title, note, visibleTo}]
+// Referee advances the date (a jump = +1 week); players read it and poll for
+// changes on the existing 4s loop. Event visibility is gated by canSee().
+// ═══════════════════════════════════════════════════════════════════════════
+
+const IMPERIAL_YEAR_DAYS = 365;
+const IMPERIAL_WEEKDAYS = ['Wonday','Tuday','Thirday','Forday','Fiveday','Sixday','Senday'];
+
+let imperialDate = { day: 1, year: 1105 };
+let campaignEvents = [];
+let calPanelOpen = false;
+let calCollapsed = false;
+
+// ── Public date API (used by other features) ──
+function imperialNow(){ return { day: imperialDate.day, year: imperialDate.year }; }
+function imperialOrdinal(d){ return (d.year * IMPERIAL_YEAR_DAYS) + (d.day - 1); } // absolute day index
+function ordinalToImperial(n){ return { year: Math.floor(n / IMPERIAL_YEAR_DAYS), day: (n % IMPERIAL_YEAR_DAYS) + 1 }; }
+function addImperialDays(d, n){ return ordinalToImperial(imperialOrdinal(d) + n); }
+function formatImperial(d){ return String(d.day).padStart(3,'0') + '-' + d.year; }
+function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[(d.day - 2) % 7]; }
+
+// ── Persistence + sync ──
+async function loadImperialDate(){
+  try { const r = await supaStorage.get('imperial-date', true);
+    if(r.value != null) imperialDate = Object.assign(imperialDate, JSON.parse(r.value)); } catch(e){}
+}
+async function saveImperialDate(){
+  try { await supaStorage.set('imperial-date', JSON.stringify(imperialDate), true); }
+  catch(e){ console.error('Imperial date save failed:', e); }
+}
+async function loadCampaignEvents(){
+  try { const r = await supaStorage.get('campaign-events', true);
+    if(r.value != null) campaignEvents = JSON.parse(r.value) || []; } catch(e){ campaignEvents = []; }
+}
+async function saveCampaignEvents(){
+  try { await supaStorage.set('campaign-events', JSON.stringify(campaignEvents), true); }
+  catch(e){ console.error('Campaign events save failed:', e); }
+}
+
+// ── Header date chip ──
+function renderImperialDate(){
+  const el = document.getElementById('impdate-display');
+  if(!el) return;
+  el.innerHTML = `<span class="impd-lbl">IMP</span>${formatImperial(imperialDate)}`;
+  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + ' Imperial';
+}
+
+// ── Date mutation (referee) ──
+function advanceImperial(days){
+  if(!isReferee()) return;
+  imperialDate = addImperialDays(imperialDate, days);
+  afterDateChange();
+}
+function setImperialFromInputs(){
+  if(!isReferee()) return;
+  const d = parseInt(document.getElementById('cal-set-day').value, 10) || 1;
+  const y = parseInt(document.getElementById('cal-set-year').value, 10) || imperialDate.year;
+  imperialDate = { day: Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, d)), year: y };
+  afterDateChange();
+}
+function afterDateChange(){
+  renderImperialDate();
+  if(calPanelOpen) renderCalendarPanel();
+  if(typeof ECON!=='undefined'){ try { ECON.syncToDate(); } catch(e){}   // economy ticks in lockstep with the Imperial week
+    if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+    if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); }
+  saveImperialDate();
+}
+
+// ── Panel toggle / collapse (cloned from the quest panel) ──
+function toggleCalendarPanel(){
+  calPanelOpen = !calPanelOpen;
+  const w = document.getElementById('cal-wrap'), b = document.getElementById('cal-btn');
+  w.classList.toggle('hidden', !calPanelOpen);
+  if(b) b.classList.toggle('panel-open', calPanelOpen);
+  if(calPanelOpen) renderCalendarPanel();
+}
+function toggleCalCollapse(){
+  if(document.getElementById('cal-header').dataset.suppressClick === '1') return;
+  calCollapsed = !calCollapsed;
+  document.getElementById('cal-toggle').textContent = calCollapsed ? '▲' : '▼';
+  document.getElementById('cal-body').classList.toggle('collapsed', calCollapsed);
+  document.getElementById('cal-wrap').classList.toggle('panel-collapsed', calCollapsed);
+}
+
+// ── Render ──
+function calVisLabel(v){
+  if(v === 'referee') return 'Ref';
+  if(Array.isArray(v)) return v.map(n => n.split(' ')[0]).join('/') || 'None';
+  return 'All';
+}
+function renderCalEvent(e, ref, nowOrd){
+  const past = imperialOrdinal(e) <= nowOrd;
+  const visTag = ref ? `<span class="cal-ev-vis" onclick="cycleCalEventVis('${e.id}')" title="Click to change who can see this">${calVisLabel(e.visibleTo)}</span>` : '';
+  const del = ref ? `<span class="cal-ev-del" onclick="deleteCalEvent('${e.id}')" title="Delete event">✕</span>` : '';
+  return `<div class="cal-ev${past ? ' past' : ''}">
+    <span class="cal-ev-date">${formatImperial(e)}</span>
+    <div class="cal-ev-body"><div class="cal-ev-title">${escQH(e.title)}</div>${e.note ? `<div class="cal-ev-note">${escQH(e.note)}</div>` : ''}</div>
+    ${visTag}${del}
+  </div>`;
+}
+function renderCalendarPanel(){
+  const body = document.getElementById('cal-body');
+  if(!body) return;
+  const ref = isReferee();
+  const now = imperialNow(), nowOrd = imperialOrdinal(now);
+
+  const controls = ref ? `
+    <div class="cal-controls">
+      <button class="cal-btn-ctl" onclick="advanceImperial(-1)">− 1 Day</button>
+      <button class="cal-btn-ctl" onclick="advanceImperial(1)">+ 1 Day</button>
+      <button class="cal-btn-ctl wk" onclick="advanceImperial(7)" title="One jump ≈ one week">+ 1 Week ⟫</button>
+    </div>
+    <div class="cal-set-row">Set <input id="cal-set-day" type="number" min="1" max="365" value="${now.day}"> - <input id="cal-set-year" type="number" value="${now.year}"> <button class="cal-btn-ctl" onclick="setImperialFromInputs()">Go</button></div>` : '';
+
+  const visible = campaignEvents.filter(e => ref || canSee(e.visibleTo))
+    .slice().sort((a, b) => imperialOrdinal(a) - imperialOrdinal(b));
+  let tl = '';
+  if(!visible.length){
+    tl = `<div class="cal-empty">${ref ? 'No campaign events yet. Add one below.' : 'No events recorded.'}</div>`;
+  } else {
+    let placedNow = false;
+    visible.forEach(e => {
+      if(!placedNow && imperialOrdinal(e) > nowOrd){
+        tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+        placedNow = true;
+      }
+      tl += renderCalEvent(e, ref, nowOrd);
+    });
+    if(!placedNow) tl += `<div class="cal-today-marker">◆ now · ${formatImperial(now)}</div>`;
+  }
+
+  const addForm = ref ? `
+    <div class="cal-add">
+      <input id="cal-new-title" placeholder="Event title…" maxlength="80">
+      <div class="cal-add-row">
+        <input id="cal-new-day" type="number" min="1" max="365" value="${now.day}" title="Day">
+        <input id="cal-new-year" type="number" value="${now.year}" title="Year">
+        <input id="cal-new-vis" placeholder="all / referee / Rhett Calder" title="Who can see it" style="flex:1">
+      </div>
+      <textarea id="cal-new-note" placeholder="Note (optional)…" rows="2"></textarea>
+      <button class="cal-add-btn" onclick="addCalEvent()">+ Add to timeline</button>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="cal-now">
+      <div class="cal-now-date">${formatImperial(now)}</div>
+      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year} Imperial</div>
+    </div>
+    ${controls}
+    <div class="cal-tl-title">Campaign Timeline</div>
+    ${tl}
+    ${addForm}`;
+}
+
+// ── Event CRUD (referee) ──
+function parseCalVis(s){
+  s = (s || '').trim();
+  if(!s || s.toLowerCase() === 'all') return 'all';
+  if(s.toLowerCase() === 'referee' || s.toLowerCase() === 'ref') return 'referee';
+  return s.split(',').map(x => x.trim()).filter(Boolean);
+}
+function addCalEvent(){
+  if(!isReferee()) return;
+  const title = document.getElementById('cal-new-title').value.trim();
+  if(!title) return;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('cal-new-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('cal-new-year').value, 10) || imperialDate.year;
+  const note = document.getElementById('cal-new-note').value.trim();
+  const visibleTo = parseCalVis(document.getElementById('cal-new-vis').value);
+  campaignEvents.push({ id: 'ce_' + Date.now().toString(36), day, year, title, note, visibleTo });
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function deleteCalEvent(id){
+  if(!isReferee()) return;
+  campaignEvents = campaignEvents.filter(e => e.id !== id);
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function cycleCalEventVis(id){
+  if(!isReferee()) return;
+  const e = campaignEvents.find(x => x.id === id);
+  if(!e) return;
+  // all → referee → nav crew (Rhett + Cass) → all
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveCampaignEvents();
+  renderCalendarPanel();
+}
+function calVisRaw(v){ if(v === 'referee') return 'referee'; if(Array.isArray(v)) return v.join(', '); return 'all'; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DISCOVERY LOG / CODEX  (V1–V2 — "fog of knowledge")
+// ───────────────────────────────────────────────────────────────────────────
+// Generalises the reveal-status mechanic into three-stage fog on knowledge
+// records. Each entry has a state: hidden (referee only) → rumoured (players
+// see the title; the body is redacted) → known (players see the full body).
+// Audience within rumoured/known is gated by canSee(). When the referee first
+// lifts an entry out of hidden it is stamped revealedAt={day,year} from the
+// Imperial calendar, so reveals can plot on the same campaign timeline.
+// Shared state in aurelia_state key 'discovery-log'; players poll on the 4s loop.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DISC_CATEGORIES = [['lore','Lore'],['faction','Faction'],['location','Location'],['tech','Tech'],['person','Person']];
+
+let discoveryLog = [];
+let discPanelOpen = false;
+let discCollapsed = false;
+let discEditingId = null;
+
+async function loadDiscoveryLog(){
+  try { const r = await supaStorage.get('discovery-log', true); if(r.value != null) discoveryLog = JSON.parse(r.value) || []; }
+  catch(e){ discoveryLog = []; }
+}
+async function saveDiscoveryLog(){
+  try { await supaStorage.set('discovery-log', JSON.stringify(discoveryLog), true); }
+  catch(e){ console.error('Discovery log save failed:', e); }
+}
+
+// Which fog stage does the CURRENT viewer see for this entry? null = not visible.
+function discViewerStage(e){
+  if(isReferee()) return 'known';
+  if(e.state === 'hidden') return null;
+  if(!canSee(e.visibleTo)) return null;
+  return e.state; // 'rumoured' | 'known'
+}
+function discStateLabel(s){ return {hidden:'Hidden',rumoured:'Rumoured',known:'Known'}[s] || s; }
+
+function toggleDiscoveryPanel(){
+  discPanelOpen = !discPanelOpen;
+  const w = document.getElementById('disc-wrap'), b = document.getElementById('disc-btn');
+  w.classList.toggle('hidden', !discPanelOpen);
+  if(b) b.classList.toggle('panel-open', discPanelOpen);
+  if(discPanelOpen) renderDiscoveryPanel();
+}
+function toggleDiscCollapse(){
+  if(document.getElementById('disc-header').dataset.suppressClick === '1') return;
+  discCollapsed = !discCollapsed;
+  document.getElementById('disc-toggle').textContent = discCollapsed ? '▲' : '▼';
+  document.getElementById('disc-body').classList.toggle('collapsed', discCollapsed);
+  document.getElementById('disc-wrap').classList.toggle('panel-collapsed', discCollapsed);
+}
+
+function renderDiscCard(e, ref){
+  const stage = ref ? e.state : discViewerStage(e);
+  const cat = DISC_CATEGORIES.find(c => c[0] === e.category);
+  const catTag = `<span class="disc-cat cat-${e.category || 'lore'}">${cat ? cat[1] : (e.category || '')}</span>`;
+  let bodyHTML;
+  if(!ref && stage === 'rumoured'){
+    bodyHTML = `<span class="disc-redacted">▓▓▓ UNCONFIRMED — details unknown ▓▓▓</span>`;
+  } else {
+    bodyHTML = e.body ? escQH(e.body).replace(/\n/g,'<br>') : (ref ? '<span class="disc-redacted">(no body yet)</span>' : '');
+  }
+  const when = e.revealedAt ? `<span class="disc-when" title="Revealed">${formatImperial(e.revealedAt)}</span>` : '';
+  const refCtl = ref ? `
+    <div class="disc-ctl">
+      <button class="disc-mini state-${e.state}" onclick="cycleDiscState('${e.id}')" title="Hidden → Rumoured → Known">${discStateLabel(e.state)}</button>
+      <button class="disc-mini" onclick="cycleDiscVis('${e.id}')" title="Who can see it">${calVisLabel(e.visibleTo)}</button>
+      <button class="disc-mini" onclick="editDiscEntry('${e.id}')" title="Edit">✏</button>
+      <button class="disc-mini del" onclick="deleteDiscEntry('${e.id}')" title="Delete">✕</button>
+    </div>` : '';
+  return `<div class="disc-card state-${ref ? e.state : stage}">
+    <div class="disc-card-hd">${catTag}<span class="disc-title">${escQH(e.title)}</span>${when}</div>
+    ${bodyHTML ? `<div class="disc-body-txt">${bodyHTML}</div>` : ''}
+    ${refCtl}
+  </div>`;
+}
+
+function renderDiscForm(){
+  const editing = discEditingId ? discoveryLog.find(e => e.id === discEditingId) : null;
+  const catOpts = DISC_CATEGORIES.map(c => `<option value="${c[0]}"${editing && editing.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const stateOpts = ['hidden','rumoured','known'].map(s => {
+    const sel = editing ? (editing.state === s) : (s === 'hidden');
+    return `<option value="${s}"${sel ? ' selected' : ''}>${discStateLabel(s)}</option>`;
+  }).join('');
+  return `<div class="disc-add">
+    <div class="disc-add-ttl">${editing ? 'Edit entry' : 'New entry'}</div>
+    <input id="disc-f-title" placeholder="Title…" maxlength="100" value="${editing ? escAttr(editing.title) : ''}">
+    <div class="disc-add-row">
+      <select id="disc-f-cat">${catOpts}</select>
+      <select id="disc-f-state" title="Fog stage">${stateOpts}</select>
+      <input id="disc-f-vis" placeholder="all / referee / Rhett Calder" value="${editing ? escAttr(calVisRaw(editing.visibleTo)) : ''}">
+    </div>
+    <textarea id="disc-f-body" rows="3" placeholder="Body / clue text…">${editing ? escQH(editing.body || '') : ''}</textarea>
+    <div class="disc-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="saveDiscEntry()">${editing ? 'Save changes' : '+ Add entry'}</button>
+      ${editing ? `<button class="disc-mini" onclick="cancelDiscEdit()">Cancel</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderDiscoveryPanel(){
+  const body = document.getElementById('disc-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = discoveryLog.filter(e => ref || discViewerStage(e));
+  const countEl = document.getElementById('disc-count');
+  if(countEl) countEl.textContent = visible.length;
+  let list;
+  if(!visible.length){
+    list = `<div class="cal-empty">${ref ? 'No entries yet. Add lore, intel, or clues below.' : 'Nothing uncovered yet.'}</div>`;
+  } else {
+    // Order: known first, then rumoured, then hidden (referee view); within, keep insertion order.
+    const rank = s => (s === 'known' ? 0 : s === 'rumoured' ? 1 : 2);
+    const sorted = visible.slice().sort((a, b) => rank(ref ? a.state : discViewerStage(a)) - rank(ref ? b.state : discViewerStage(b)));
+    list = sorted.map(e => renderDiscCard(e, ref)).join('');
+  }
+  body.innerHTML = list + (ref ? renderDiscForm() : '');
+}
+
+function saveDiscEntry(){
+  if(!isReferee()) return;
+  const title = document.getElementById('disc-f-title').value.trim(); if(!title) return;
+  const category = document.getElementById('disc-f-cat').value;
+  const state = document.getElementById('disc-f-state').value;
+  const visibleTo = parseCalVis(document.getElementById('disc-f-vis').value);
+  const bodyTxt = document.getElementById('disc-f-body').value.trim();
+  if(discEditingId){
+    const e = discoveryLog.find(x => x.id === discEditingId);
+    if(e){
+      e.title = title; e.category = category; e.body = bodyTxt; e.visibleTo = visibleTo; e.state = state;
+      if(state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow();
+    }
+    discEditingId = null;
+  } else {
+    discoveryLog.push({
+      id: 'disc_' + Date.now().toString(36), title, category, body: bodyTxt, state, visibleTo,
+      createdAt: imperialNow(), revealedAt: state !== 'hidden' ? imperialNow() : null
+    });
+  }
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function editDiscEntry(id){ if(!isReferee()) return; discEditingId = id; renderDiscoveryPanel(); const f = document.getElementById('disc-f-title'); if(f) f.scrollIntoView({block:'nearest'}); }
+function cancelDiscEdit(){ discEditingId = null; renderDiscoveryPanel(); }
+function deleteDiscEntry(id){ if(!isReferee()) return; discoveryLog = discoveryLog.filter(e => e.id !== id); if(discEditingId === id) discEditingId = null; saveDiscoveryLog(); renderDiscoveryPanel(); }
+function cycleDiscState(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  e.state = {hidden:'rumoured', rumoured:'known', known:'hidden'}[e.state] || 'hidden';
+  if(e.state !== 'hidden' && !e.revealedAt) e.revealedAt = imperialNow(); // stamp first reveal
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+function cycleDiscVis(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  if(e.visibleTo === 'all') e.visibleTo = 'referee';
+  else if(e.visibleTo === 'referee') e.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else e.visibleTo = 'all';
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REPUTATION TRACKER  (V2 — faction standing + dated milestones)
+// ───────────────────────────────────────────────────────────────────────────
+// Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
+// timeline of dated milestones stamped {day,year} from the Imperial calendar.
+// Logging a milestone applies its delta to that faction's standing. Standings
+// are party-wide (all players see them); milestone visibility is gated by
+// canSee(). Shared state in aurelia_state key 'reputation'; 4s poll. The
+// encounter generator (later) reads these standings to scale difficulty.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const REP_BANDS = [ // [minInclusive, label, colour]
+  [6,   'Ally',       '#54d6c0'],
+  [3,   'Helpful',    '#7fd07f'],
+  [1,   'Friendly',   '#a8d860'],
+  [0,   'Neutral',    '#c9c4b6'],
+  [-2,  'Unfriendly', '#e0b050'],
+  [-5,  'Hostile',    '#e08040'],
+  [-99, 'At War',     '#d45050']
+];
+function repBand(s){ for(const [min, label, color] of REP_BANDS){ if(s >= min) return {label, color}; } return {label:'At War', color:'#d45050'}; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTY FUNDS & CHARACTER PURSES
+// ═══════════════════════════════════════════════════════════════════════════
+// A shared party fund every character can pay into / draw from, plus a personal
+// purse per character. One shared blob under key `funds` (synced like reputation);
+// every change is logged with the Imperial date + actor. Players see the party
+// fund and their own purse; the referee sees and adjusts everyone's. (This adds
+// the finances the character sheet deliberately left out — money lives here, in
+// one place, so it's the obvious hook for the future station/outpost buy-sell.)
+let funds = { party: 0, purses: {}, log: [] };
+let fundsPanelOpen = false, fundsCollapsed = false;
+async function loadFunds(){ try { const r = await supaStorage.get('funds', true); if(r.value != null) funds = Object.assign(funds, JSON.parse(r.value)); } catch(e){} }
+async function saveFunds(){ try { await supaStorage.set('funds', JSON.stringify(funds), true); } catch(e){ console.error('Funds save failed:', e); } }
+function fundActor(){ return isReferee() ? 'Referee' : (myIdentity || 'Unknown'); }
+function purseOf(name){ return Number(funds.purses[name]) || 0; }
+function fmtCr(n){ return 'Cr' + (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
+function fundsLog(target, amount, note){ funds.log.unshift(Object.assign(imperialNow(), { by: fundActor(), target, amount, note: note || '' })); funds.log = funds.log.slice(0, 50); }
+function fundsAmt(){ const v = parseInt((document.getElementById('fund-amt') || {}).value, 10); return isFinite(v) ? Math.abs(v) : 0; }
+function fundsNote(){ const e = document.getElementById('fund-note'); return e ? e.value.trim() : ''; }
+
+function toggleFundsPanel(){
+  fundsPanelOpen = !fundsPanelOpen;
+  const w = document.getElementById('funds-wrap'), b = document.getElementById('funds-btn');
+  w.classList.toggle('hidden', !fundsPanelOpen);
+  if(b) b.classList.toggle('panel-open', fundsPanelOpen);
+  if(fundsPanelOpen) renderFundsPanel();
+}
+function toggleFundsCollapse(){
+  if(document.getElementById('funds-header').dataset.suppressClick === '1') return;
+  fundsCollapsed = !fundsCollapsed;
+  document.getElementById('funds-toggle').textContent = fundsCollapsed ? '▲' : '▼';
+  document.getElementById('funds-body').classList.toggle('collapsed', fundsCollapsed);
+  document.getElementById('funds-wrap').classList.toggle('panel-collapsed', fundsCollapsed);
+}
+
+// ── Operations (all log + save) ──
+function depositToParty(){ const a = fundsAmt(); if(a <= 0) return;
+  if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) - a;
+  funds.party = (Number(funds.party) || 0) + a;
+  fundsLog('party', a, (myIdentity ? 'Deposit from ' + myIdentity : 'Added to fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
+  saveFunds(); renderFundsPanel(); }
+function withdrawFromParty(){ const a = fundsAmt(); if(a <= 0) return;
+  funds.party = (Number(funds.party) || 0) - a;
+  if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) + a;
+  fundsLog('party', -a, (myIdentity ? 'Withdrawn by ' + myIdentity : 'Drawn from fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
+  saveFunds(); renderFundsPanel(); }
+function adjustMyPurse(sign){ const a = fundsAmt(); if(a <= 0 || !myIdentity) return;
+  funds.purses[myIdentity] = purseOf(myIdentity) + sign * a;
+  fundsLog(myIdentity, sign * a, fundsNote() || (sign > 0 ? 'Income' : 'Spending'));
+  saveFunds(); renderFundsPanel(); }
+function refAdjustParty(sign){ const a = fundsAmt(); if(a <= 0) return;
+  funds.party = (Number(funds.party) || 0) + sign * a;
+  fundsLog('party', sign * a, fundsNote() || (sign > 0 ? 'Referee grant' : 'Referee charge'));
+  saveFunds(); renderFundsPanel(); }
+function refAdjustPurse(name, sign){ const a = fundsAmt(); if(a <= 0) return;
+  funds.purses[name] = purseOf(name) + sign * a;
+  fundsLog(name, sign * a, fundsNote() || (sign > 0 ? 'Paid by referee' : 'Charged by referee'));
+  saveFunds(); renderFundsPanel(); }
+
+function renderFundsPanel(){
+  const body = document.getElementById('funds-body'); if(!body) return;
+  const ref = isReferee(), me = myIdentity;
+  let h = `<div class="fund-row"><input id="fund-amt" class="fund-inp" type="number" min="0" step="100" placeholder="Cr amount"><input id="fund-note" class="fund-note" placeholder="note (optional)"></div>`;
+  // Party fund — visible to all
+  h += `<div class="fund-card"><div class="fund-lbl">Party Fund · shared</div><div class="fund-big">${fmtCr(funds.party)}</div>
+    <div class="fund-row"><button class="disc-mini" onclick="depositToParty()">▲ Deposit</button><button class="disc-mini" onclick="withdrawFromParty()">▼ Withdraw</button>`;
+  if(ref) h += `<button class="disc-mini" onclick="refAdjustParty(1)">+ Grant</button><button class="disc-mini" onclick="refAdjustParty(-1)">− Charge</button>`;
+  h += `</div></div>`;
+  // My purse — visible to the player
+  if(me){
+    h += `<div class="fund-card"><div class="fund-lbl">${escQH(me)} · your purse</div><div class="fund-big">${fmtCr(purseOf(me))}</div>
+      <div class="fund-row"><button class="disc-mini" onclick="adjustMyPurse(1)">+ Income</button><button class="disc-mini" onclick="adjustMyPurse(-1)">− Spend</button></div></div>`;
+  }
+  // All purses — referee only
+  if(ref){
+    h += `<div class="fund-lbl" style="margin-top:2px">Character purses</div><div class="fund-card">`;
+    KNOWN_CHARACTERS.forEach(n => { const safe = n.replace(/'/g, "\\'");
+      h += `<div class="fund-purse"><span>${escQH(n)}</span><span style="display:flex;gap:6px;align-items:center"><b style="font-family:monospace;color:var(--tx0)">${fmtCr(purseOf(n))}</b>
+        <button class="disc-mini" onclick="refAdjustPurse('${safe}',1)">+</button><button class="disc-mini" onclick="refAdjustPurse('${safe}',-1)">−</button></span></div>`; });
+    h += `</div>`;
+  }
+  // Ledger — party entries to all; purse entries to that player + referee
+  const vis = funds.log.filter(e => ref || e.target === 'party' || e.target === me);
+  h += `<div class="fund-lbl" style="margin-top:2px">Ledger</div>`;
+  if(!vis.length){ h += `<div class="cal-empty">No transactions yet.</div>`; }
+  else { h += vis.slice(0, 20).map(e =>
+    `<div class="fund-log"><span class="${e.amount >= 0 ? 'amt-pos' : 'amt-neg'}">${e.amount >= 0 ? '+' : '−'}${fmtCr(Math.abs(e.amount))}</span> · ${e.target === 'party' ? 'Party' : escQH(e.target)} · <span style="opacity:.6">${formatImperial(e)}</span><br>${escQH(e.note)} <span style="opacity:.5">(${escQH(e.by)})</span></div>`
+  ).join(''); }
+  body.innerHTML = h;
+}
+
+let reputation = {
+  factions: [
+    {id:'hegemony',  name:'Hegemony',                standing:-1},
+    {id:'rsr',       name:'Reach Stars Resistance',  standing:2},
+    {id:'syndicate', name:"Traders' Syndicate",      standing:0}
+  ],
+  milestones: []
+};
+let repPanelOpen = false;
+let repCollapsed = false;
+
+async function loadReputation(){ try { const r = await supaStorage.get('reputation', true); if(r.value != null) reputation = Object.assign(reputation, JSON.parse(r.value)); } catch(e){} }
+async function saveReputation(){ try { await supaStorage.set('reputation', JSON.stringify(reputation), true); } catch(e){ console.error('Reputation save failed:', e); } }
+
+function toggleReputationPanel(){
+  repPanelOpen = !repPanelOpen;
+  const w = document.getElementById('rep-wrap'), b = document.getElementById('rep-btn');
+  w.classList.toggle('hidden', !repPanelOpen);
+  if(b) b.classList.toggle('panel-open', repPanelOpen);
+  if(repPanelOpen) renderReputationPanel();
+}
+function toggleRepCollapse(){
+  if(document.getElementById('rep-header').dataset.suppressClick === '1') return;
+  repCollapsed = !repCollapsed;
+  document.getElementById('rep-toggle').textContent = repCollapsed ? '▲' : '▼';
+  document.getElementById('rep-body').classList.toggle('collapsed', repCollapsed);
+  document.getElementById('rep-wrap').classList.toggle('panel-collapsed', repCollapsed);
+}
+
+function repFactionName(id){ const f = reputation.factions.find(x => x.id === id); return f ? f.name : id; }
+
+function renderReputationPanel(){
+  const body = document.getElementById('rep-body'); if(!body) return;
+  const ref = isReferee();
+
+  const facHTML = reputation.factions.map(f => {
+    const b = repBand(f.standing);
+    const pct = ((f.standing + 6) / 12) * 100;
+    const ctl = ref ? `<div class="rep-fac-ctl">
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',-1)">−</button>
+        <button class="disc-mini" onclick="adjustStanding('${f.id}',1)">+</button>
+        <button class="disc-mini del" onclick="removeFaction('${f.id}')" title="Remove faction">✕</button>
+      </div>` : '';
+    return `<div class="rep-fac">
+      <div class="rep-fac-hd"><span class="rep-fac-name">${escQH(f.name)}</span>
+        <span class="rep-band" style="color:${b.color}">${b.label} <span class="rep-val">${f.standing > 0 ? '+' : ''}${f.standing}</span></span></div>
+      <div class="rep-meter"><div class="rep-meter-fill" style="width:${pct}%;background:${b.color}"></div><div class="rep-meter-zero"></div></div>
+      ${ctl}
+    </div>`;
+  }).join('');
+  const addFac = ref ? `<div class="rep-addfac"><input id="rep-newfac" placeholder="New faction…" maxlength="40"><button class="disc-mini" onclick="addFaction()">+ Faction</button></div>` : '';
+
+  const visM = reputation.milestones.filter(m => ref || canSee(m.visibleTo)).slice().sort((a, b) => imperialOrdinal(b) - imperialOrdinal(a));
+  let mHTML;
+  if(!visM.length){
+    mHTML = `<div class="cal-empty">${ref ? 'No milestones logged yet.' : 'No reputation events recorded.'}</div>`;
+  } else {
+    mHTML = visM.map(m => {
+      const dStr = (m.delta > 0 ? '+' : '') + m.delta;
+      const del = ref ? `<span class="cal-ev-del" onclick="deleteMilestone('${m.id}')" title="Delete">✕</span>` : '';
+      const vis = ref ? `<span class="cal-ev-vis" onclick="cycleMilestoneVis('${m.id}')" title="Who can see it">${calVisLabel(m.visibleTo)}</span>` : '';
+      return `<div class="rep-mile">
+        <span class="cal-ev-date">${formatImperial(m)}</span>
+        <div class="cal-ev-body"><div class="cal-ev-title">${escQH(m.title)}</div>
+          <div class="rep-mile-meta">${escQH(repFactionName(m.factionId))} <span class="rep-mile-delta ${m.delta >= 0 ? 'pos' : 'neg'}">${dStr}</span></div></div>
+        ${vis}${del}
+      </div>`;
+    }).join('');
+  }
+
+  const now = imperialNow();
+  const facOpts = reputation.factions.map(f => `<option value="${f.id}">${escQH(f.name)}</option>`).join('');
+  const addM = ref ? `<div class="disc-add">
+    <div class="disc-add-ttl">New milestone — applies delta to standing</div>
+    <input id="rep-m-title" placeholder="What happened…" maxlength="90">
+    <div class="disc-add-row">
+      <select id="rep-m-fac">${facOpts}</select>
+      <input id="rep-m-delta" type="number" value="-1" title="Standing change" style="width:56px">
+      <input id="rep-m-day" type="number" min="1" max="365" value="${now.day}" title="Day" style="width:52px">
+      <input id="rep-m-year" type="number" value="${now.year}" title="Year" style="width:62px">
+    </div>
+    <input id="rep-m-vis" placeholder="all / referee / Rhett Calder">
+    <button class="cal-add-btn" onclick="addMilestone()">+ Log milestone</button>
+  </div>` : '';
+
+  body.innerHTML = `<div class="rep-tl-title">Faction Standing</div>${facHTML}${addFac}<div class="rep-tl-title">Milestones</div>${mHTML}${addM}`;
+}
+
+function adjustStanding(id, delta){
+  if(!isReferee()) return;
+  const f = reputation.factions.find(x => x.id === id); if(!f) return;
+  f.standing = Math.max(-6, Math.min(6, f.standing + delta));
+  saveReputation(); renderReputationPanel();
+}
+function addFaction(){
+  if(!isReferee()) return;
+  const v = document.getElementById('rep-newfac').value.trim(); if(!v) return;
+  reputation.factions.push({ id:'fac_' + Date.now().toString(36), name:v, standing:0 });
+  saveReputation(); renderReputationPanel();
+}
+function removeFaction(id){
+  if(!isReferee()) return;
+  reputation.factions = reputation.factions.filter(f => f.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function addMilestone(){
+  if(!isReferee()) return;
+  const title = document.getElementById('rep-m-title').value.trim(); if(!title) return;
+  const factionId = document.getElementById('rep-m-fac').value;
+  const delta = parseInt(document.getElementById('rep-m-delta').value, 10) || 0;
+  const day = Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, parseInt(document.getElementById('rep-m-day').value, 10) || imperialDate.day));
+  const year = parseInt(document.getElementById('rep-m-year').value, 10) || imperialDate.year;
+  const visibleTo = parseCalVis(document.getElementById('rep-m-vis').value);
+  reputation.milestones.push({ id:'rm_' + Date.now().toString(36), factionId, delta, day, year, title, visibleTo });
+  const f = reputation.factions.find(x => x.id === factionId);
+  if(f) f.standing = Math.max(-6, Math.min(6, f.standing + delta)); // milestone moves standing
+  saveReputation(); renderReputationPanel();
+}
+function deleteMilestone(id){
+  if(!isReferee()) return;
+  reputation.milestones = reputation.milestones.filter(m => m.id !== id);
+  saveReputation(); renderReputationPanel();
+}
+function cycleMilestoneVis(id){
+  if(!isReferee()) return;
+  const m = reputation.milestones.find(x => x.id === id); if(!m) return;
+  if(m.visibleTo === 'all') m.visibleTo = 'referee';
+  else if(m.visibleTo === 'referee') m.visibleTo = ['Rhett Calder', 'Cassia Velen'];
+  else m.visibleTo = 'all';
+  saveReputation(); renderReputationPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORACLE  (V2 — rumour & random-encounter generators)
+// ───────────────────────────────────────────────────────────────────────────
+// Referee-only GM tools. Output is *seeded* from live state so it feels
+// diegetic, not random: rumours weight toward factions with extreme standing
+// and bend hostile/friendly to match; encounters scale difficulty off the
+// danger dial AND the party's worst faction standing (per the brief). Ship name
+// and current locale fill the templates. Results are ephemeral (not synced),
+// but a rumour can be pushed "→ Codex" as a rumoured discovery entry players see.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ORACLE_GOODS = ['refined fuel','medical supplies','luxury goods','machine parts','foodstuffs','small arms','data cores','rare ore'];
+const ORACLE_PLACES = ['Aurelia Station','the Aurelia approaches','Cairn Station','the outer berths','the concourse','the elevator gate'];
+const RUMOUR_TEMPLATES = {
+  generic: [
+    'A dock worker swears {ship} was flagged on a Hegemony watch advisory.',
+    'Someone is paying good credits to anyone who can place {ship} two weeks ago.',
+    'Prices on {good} are about to move — somebody knows something.',
+    'A broker on {place} is quietly buying {good} well above market.',
+    'Travellers are avoiding the {place} routes lately. Nobody will say why.'
+  ],
+  hostile: [
+    '{faction} has put a quiet bounty on whoever crewed {ship}.',
+    'They say {faction} enforcers were asking after {ship} at {place}.',
+    '{faction} is leaning on dockmasters to deny {ship} a berth.',
+    'A {faction} skiff has been shadowing arrivals at {place}.'
+  ],
+  friendly: [
+    '{faction} contacts hint there is clean work going, if you can be discreet.',
+    'Word from {faction}: a berth at {place} will be looked after, no questions.',
+    '{faction} remembers a favour your crew is owed — fondly.'
+  ],
+  neutral: [
+    '{faction} is moving more cargo than usual through {place}.',
+    '{faction} just lost a courier and wants it found before anyone else does.'
+  ]
+};
+const RUMOUR_RELIABILITY = ['Reliable','Likely true','Unconfirmed','Probably false'];
+
+// ── Market rumours: TRUE intel drawn from the living economy (ECON.intel) ──────
+// Maps the sim's clinical good names to evocative dockside terms, and holds the
+// rumour phrasings per signal kind. These rumours are tagged 'Reliable' because
+// they are literally true at generation time — a player who acts on them profits.
+const GOOD_FLAVOR = {
+  'Common Consumables':'foodstuffs','Common Ore':'raw ore','Common Electronics':'electronics components',
+  'Common Manufactured':'machine parts','Advanced Electronics':'high-tech components'
+};
+const MARKET_RUMOUR = {
+  shock_output: [
+    'Word on the docks: the {good} coming out of {place} has slowed to a trickle. Somebody knows why — and they’re already buying.',
+    'They say production of {good} at {place} has been hit hard. It won’t stay cheap for long.'
+  ],
+  shock_block: [
+    'The lanes around {place} are choked — nothing’s moving through, and shelves downstream are starting to empty.',
+    'Hard word from {place}: the route is shut. Whatever rides that lane is about to get dear.'
+  ],
+  shock_embargo: [
+    'Trade between {place} has frozen solid. The brokers who saw it coming are already repositioned.'
+  ],
+  shock_crackdown: [
+    'The {place} has clamped down on {good} across its territory — supply is drying up and the price is climbing.',
+    'Word is the {place} is restricting {good}. Whoever holds stock beyond their reach is sitting pretty.'
+  ],
+  shock_tariff: [
+    'The {place} has slapped a tariff on {good} imports — it’s getting pricey behind their borders, and cheap outside them.',
+    'A {place} import tariff is choking {good} at the frontier. Brokers who can run it past customs stand to clean up.'
+  ],
+  shock_demand: [
+    'Demand for {good} is surging across {place} — buyers are desperate and the price is spiking.',
+    'A run on {good} has hit {place}. Anyone arriving with a full hold could name their price.'
+  ],
+  shortage: [
+    'Stockpiles of {good} are running thin around {place}. Prices there won’t hold where they are.',
+    'A buyer at {place} is quietly paying over the odds for {good}. That tells you everything.',
+    'If you’re holding {good}, {place} is where to sell it — and soon.'
+  ],
+  glut: [
+    'There’s more {good} sitting at {place} than anyone can move. Cheap now — won’t last once word spreads.',
+    '{place} is awash in {good}. A sharp trader buys low here before the surplus clears.'
+  ]
+};
+
+const ENCOUNTER_TABLES = {
+  space: ['An unmarked ship matches your vector and holds at distance.','A distress beacon pulses nearby — genuine, or bait.','A customs interceptor orders you to cut thrust for inspection.','A debris field hides a salvageable, and probably claimed, wreck.','A free trader hails, offering an off-manifest cargo swap.'],
+  port:  ['A dockside argument escalates near your berth — one party is armed.','A fixer drops into the seat across from you with a job and a warning.','Port authority flags a discrepancy in your paperwork.','A face from a crew member’s past is three tables over.','Someone tries to fix a tracker to your hull during the night cycle.'],
+  surface:['A checkpoint ahead, and your transit codes are a day stale.','A local offers a shortcut around the patrols — for a price.','A crowd is gathering, and the mood could turn.','Weather closes in; shelter means trusting strangers.','You find something that was meant to stay buried.']
+};
+const ENCOUNTER_DIFF = ['Trivial','Routine','Tricky','Dangerous','Deadly'];
+const ORACLE_WHERE = [['space','Space'],['port','Port'],['surface','Surface']];
+const ORACLE_DANGER = [['0','Calm'],['1','Normal'],['2','Tense'],['3','Hostile']];
+
+let oracleWhere = 'space';
+let oracleDanger = 1;
+let oracleResult = null;   // {kind:'rumour'|'encounter', ...}
+let genPanelOpen = false;
+let genCollapsed = false;
+
+function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
+
+function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
+// Build a TRUE rumour from the living economy's current intel, or null if the sim
+// is off / nothing is moving. Biased toward the sharpest few signals so the most
+// newsworthy shock or shortage usually surfaces.
+function pickMarketRumour(){
+  if(!(window.ECON && ECON.active())) return null;
+  let items; try { items = ECON.intel(); } catch(e){ return null; }
+  if(!items || !items.length) return null;
+  const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
+  const key = item.kind === 'shock'
+    ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
+    : (item.kind === 'glut' ? 'glut' : 'shortage');
+  const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
+  const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
+  return { kind:'rumour', text, faction:null, reliability:'Reliable', source:'market' };
+}
+// Referee-triggered: deliberately pull the strongest current market signal.
+function generateMarketRumour(){
+  const m = pickMarketRumour();
+  oracleResult = m || { kind:'rumour', text:'The markets are calm — no strong signal moving right now.', faction:null, reliability:'Unconfirmed', source:'market' };
+  renderOraclePanel();
+}
+
+function generateRumour(){
+  // Organic hook: ~30% of the time, surface a TRUE signal from the living economy
+  // instead of a flavour template — when the sim is active and something is moving.
+  if(Math.random() < 0.3){ const m = pickMarketRumour(); if(m){ oracleResult = m; renderOraclePanel(); return; } }
+  const facs = reputation.factions || [];
+  let faction = null;
+  if(facs.length){ // weight by |standing| — louder factions when relations are extreme
+    const weighted = [];
+    facs.forEach(f => { const w = 1 + Math.abs(f.standing); for(let i = 0; i < w; i++) weighted.push(f); });
+    faction = pick(weighted);
+  }
+  let bucket = 'generic';
+  if(faction){ const s = faction.standing; bucket = s <= -3 ? 'hostile' : s >= 3 ? 'friendly' : (Math.random() < 0.5 ? 'neutral' : 'generic'); }
+  let line = pick(RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic);
+  line = line.replace(/{faction}/g, faction ? faction.name : 'Someone')
+             .replace(/{ship}/g, shipState.name || 'the ship')
+             .replace(/{place}/g, oraclePlace())
+             .replace(/{good}/g, pick(ORACLE_GOODS));
+  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
+  renderOraclePanel();
+}
+
+function generateEncounter(){
+  const base = pick(ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space);
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0); // most-negative standing
+  let diff = oracleDanger + Math.floor(Math.random() * 2);
+  if(worst <= -3) diff += 1;
+  if(worst <= -5) diff += 1;
+  diff = Math.max(0, Math.min(4, diff));
+  const hostile = (reputation.factions || []).filter(f => f.standing <= -3);
+  const tie = (hostile.length && Math.random() < 0.55) ? pick(hostile).name : null;
+  oracleResult = { kind:'encounter', text: base, difficulty: ENCOUNTER_DIFF[diff], diffIdx: diff, faction: tie };
+  renderOraclePanel();
+}
+
+function rumourToCodex(){
+  if(!isReferee() || !oracleResult || oracleResult.kind !== 'rumour') return;
+  discoveryLog.push({
+    id: 'disc_' + Date.now().toString(36),
+    title: oracleResult.text,
+    category: 'lore',
+    body: oracleResult.faction ? ('Attributed to ' + oracleResult.faction + ' · ' + oracleResult.reliability) : oracleResult.reliability,
+    state: 'rumoured',
+    visibleTo: 'all',
+    createdAt: imperialNow(),
+    revealedAt: imperialNow()
+  });
+  saveDiscoveryLog();
+  if(discPanelOpen) renderDiscoveryPanel();
+  const note = document.getElementById('gen-codex-note');
+  if(note){ note.textContent = '✓ Sent to Library Data as a rumour'; setTimeout(() => { if(note) note.textContent = ''; }, 2200); }
+}
+
+function setOracleWhere(w){ oracleWhere = w; renderOraclePanel(); }
+function setOracleDanger(d){ oracleDanger = parseInt(d, 10) || 0; renderOraclePanel(); }
+
+function toggleOraclePanel(){
+  if(!isReferee()) return;
+  genPanelOpen = !genPanelOpen;
+  const w = document.getElementById('gen-wrap'), b = document.getElementById('gen-btn');
+  w.classList.toggle('hidden', !genPanelOpen);
+  if(b) b.classList.toggle('panel-open', genPanelOpen);
+  if(genPanelOpen) renderOraclePanel();
+}
+function toggleGenCollapse(){
+  if(document.getElementById('gen-header').dataset.suppressClick === '1') return;
+  genCollapsed = !genCollapsed;
+  document.getElementById('gen-toggle').textContent = genCollapsed ? '▲' : '▼';
+  document.getElementById('gen-body').classList.toggle('collapsed', genCollapsed);
+  document.getElementById('gen-wrap').classList.toggle('panel-collapsed', genCollapsed);
+}
+
+function renderOraclePanel(){
+  const body = document.getElementById('gen-body'); if(!body) return;
+  let resultHTML = '<div class="cal-empty">Generate a rumour or encounter.</div>';
+  if(oracleResult){
+    if(oracleResult.kind === 'rumour'){
+      const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
+      const mkt = oracleResult.source === 'market' ? `<span class="gen-tag" style="color:var(--accentGold)" title="Drawn from the living economy — true at the time it was generated">📈 market</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
+        <div class="gen-meta">${mkt}${fac}<span class="gen-tag">${oracleResult.reliability}</span>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>
+          <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
+      </div>`;
+    } else {
+      const tie = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)} involved</span>` : '';
+      resultHTML = `<div class="gen-result">
+        <div class="gen-result-text">${escQH(oracleResult.text)}</div>
+        <div class="gen-meta"><span class="gen-diff gen-diff-${oracleResult.diffIdx}">${oracleResult.difficulty}</span>${tie}</div>
+      </div>`;
+    }
+  }
+  const whereOpts = ORACLE_WHERE.map(([v, l]) => `<span class="gen-opt${oracleWhere === v ? ' on' : ''}" onclick="setOracleWhere('${v}')">${l}</span>`).join('');
+  const dangerOpts = ORACLE_DANGER.map(([v, l]) => `<span class="gen-opt${oracleDanger == v ? ' on' : ''}" onclick="setOracleDanger('${v}')">${l}</span>`).join('');
+  const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0);
+  const repHint = worst <= -3 ? `<div class="gen-hint">⚠ Hostile standing (${worst}) is raising encounter danger.</div>` : '';
+
+  body.innerHTML = `
+    ${resultHTML}
+    <div class="gen-sec-title">Rumour</div>
+    <button class="gen-go" onclick="generateRumour()">🎲 Generate rumour</button>
+    <button class="gen-go" onclick="generateMarketRumour()" title="Pull a TRUE rumour straight from the living economy's current shortages & shocks">📈 Market whisper</button>
+    <div class="gen-sec-title">Encounter</div>
+    <div class="gen-row-lbl">Where</div><div class="gen-opts">${whereOpts}</div>
+    <div class="gen-row-lbl">Danger</div><div class="gen-opts">${dangerOpts}</div>
+    ${repHint}
+    <button class="gen-go" onclick="generateEncounter()">🎲 Generate encounter</button>`;
+}
+
+function toggleQuestCard(id){
+  const body = document.getElementById('qbody-'+id);
+  if(body) body.classList.toggle('open');
+}
+
+async function toggleObjective(questId, objIdx){
+  const q = questLog.find(x => x.id === questId);
+  if(!q || !q.objectives[objIdx]) return;
+  q.objectives[objIdx].done = !q.objectives[objIdx].done;
+  await saveQuestLog();
+  renderQuestPanel();
+}
+
+// ── Editor ────────────────────────────────────────────────────────────────
+
+function openQuestEditor(id){
+  questEditingId = id;
+  const isNew = !id;
+  const q = isNew ? null : questLog.find(x => x.id === id);
+
+  document.getElementById('quest-edit-title').textContent = isNew ? 'NEW MISSION' : 'EDIT MISSION';
+  document.getElementById('qe-title').value = q ? q.title : '';
+  document.getElementById('qe-status').value = q ? q.status : 'active';
+  document.getElementById('qe-player-desc').value = q ? q.playerDesc||'' : '';
+  document.getElementById('qe-ref-note').value = q ? q.refNote||'' : '';
+  document.getElementById('qe-delete-btn').classList.toggle('hidden', isNew);
+
+  renderObjectiveEditorRows(q ? q.objectives||[] : []);
+  document.getElementById('quest-edit-modal').classList.remove('hidden');
+}
+
+function closeQuestEditor(){
+  document.getElementById('quest-edit-modal').classList.add('hidden');
+  questEditingId = null;
+}
+
+function renderObjectiveEditorRows(objectives){
+  const container = document.getElementById('qe-objectives');
+  container.innerHTML = objectives.map((obj, i) => `
+    <div class="qe-obj-row" id="qe-obj-${i}">
+      <input type="checkbox" class="qe-obj-done" ${obj.done?'checked':''} title="Mark done">
+      <div class="qe-obj-inputs">
+        <textarea class="qe-obj-text" placeholder="Objective text...">${escQH(obj.text)}</textarea>
+        <textarea class="qe-obj-refnote" placeholder="Ref note (private)...">${escQH(obj.refNote||'')}</textarea>
+      </div>
+      <button class="qe-obj-remove" onclick="removeObjectiveRow(${i})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function addQuestObjective(){
+  const rows = readObjectiveRows();
+  rows.push({text:'', done:false, refNote:''});
+  renderObjectiveEditorRows(rows);
+}
+
+function removeObjectiveRow(idx){
+  const rows = readObjectiveRows();
+  rows.splice(idx, 1);
+  renderObjectiveEditorRows(rows);
+}
+
+function readObjectiveRows(){
+  const container = document.getElementById('qe-objectives');
+  const rows = [];
+  container.querySelectorAll('.qe-obj-row').forEach(row => {
+    rows.push({
+      text: row.querySelector('.qe-obj-text').value,
+      done: row.querySelector('.qe-obj-done').checked,
+      refNote: row.querySelector('.qe-obj-refnote').value,
+    });
+  });
+  return rows;
+}
+
+async function saveQuestEdit(){
+  const title = document.getElementById('qe-title').value.trim();
+  if(!title){ alert('A mission title is required.'); return; }
+
+  const questData = {
+    id: questEditingId || ('q-' + Date.now()),
+    title,
+    status: document.getElementById('qe-status').value,
+    playerDesc: document.getElementById('qe-player-desc').value,
+    refNote: document.getElementById('qe-ref-note').value,
+    objectives: readObjectiveRows(),
+  };
+
+  if(questEditingId){
+    const idx = questLog.findIndex(x => x.id === questEditingId);
+    if(idx !== -1) questLog[idx] = questData;
+    else questLog.push(questData);
+  } else {
+    questLog.push(questData);
+  }
+
+  await saveQuestLog();
+  closeQuestEditor();
+  if(questPanelOpen) renderQuestPanel();
+  showToast(questEditingId ? 'Quest updated' : 'Quest added');
+}
+
+async function deleteQuest(){
+  if(!questEditingId) return;
+  if(!confirm('Delete this mission? This cannot be undone.')) return;
+  questLog = questLog.filter(x => x.id !== questEditingId);
+  await saveQuestLog();
+  closeQuestEditor();
+  if(questPanelOpen) renderQuestPanel();
+  showToast('Quest deleted', 'info');
+}
+
+// ── Player polling extension ──────────────────────────────────────────────
+// Wired into the existing pollRevealState() call chain — see that function
+
+makePanelDraggable('event-log-wrap', 'event-log-header');
+makePanelResizable('event-log-wrap');
+makePanelDraggable('init-wrap', 'init-header');
+makePanelResizable('init-wrap');
+makePanelDraggable('health-wrap', 'health-header');
+makePanelResizable('health-wrap');
+makePanelDraggable('quest-wrap', 'quest-header');
+makePanelResizable('quest-wrap');
+makePanelDraggable('ship-wrap', 'ship-header');
+makePanelResizable('ship-wrap');
+makePanelDraggable('combat-wrap', 'combat-header');
+makePanelResizable('combat-wrap');
+makePanelDraggable('cal-wrap', 'cal-header');
+makePanelResizable('cal-wrap');
+makePanelDraggable('disc-wrap', 'disc-header');
+makePanelResizable('disc-wrap');
+makePanelDraggable('rep-wrap', 'rep-header');
+makePanelResizable('rep-wrap');
+makePanelDraggable('funds-wrap', 'funds-header');
+makePanelResizable('funds-wrap');
+makePanelDraggable('gen-wrap', 'gen-header');
+makePanelResizable('gen-wrap');
+
+buildOrrery();
+renderInit();
+buildQuickAddList();
+checkIdentity();
+renderWhoAmI();
+updateConnPill();             // paint initial sync status; markOnline/Offline keep it current
+if(queueLength()) flushQueue(); // push anything parked from a previous offline session
+
+// ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
+if(typeof HX !== 'undefined'){
+  HX.enter();
+  document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+  document.getElementById('breadcrumb').innerHTML = '';
+  updateBackBtn();
+}
+loadRevealState().then(() => {
+  if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
+});
+loadClockState().then(() => { renderClock(); });
+// Secure per-player content (Stage 2): no-op unless a token is stored. When on,
+// strips baked-in secrets and applies only this token's server-authorised data.
+ingestTokenFromUrl();     // apply a token from an invite link (#token=…) before hydrating
+hydrateSecureContent();
+loadContentOverrides().then(() => {
+  if(currentView === 'station' && cur){ renderDetail(); }
+  if(currentView === 'system' && selectedBody){ selectBody(selectedBody); }
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+});
+loadBodyStores().then(() => {
+  // Rebuild the system view so any added/removed/edited bodies appear
+  if(typeof buildOrrery === 'function') buildOrrery();
+  // Refresh galaxy "surveyed" markers once shared body data has loaded.
+  if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+  if(currentView === 'system' && selectedBody){
+    // If the selected body was deleted while away, fall back to overview
+    if(getBodies().find(b => b.id === selectedBody)) selectBody(selectedBody);
+    else goSystemOverview();
+  }
+  if(currentView === 'body' && selectedBody){
+    if(getBodies().find(b => b.id === selectedBody)) buildBodyView(selectedBody);
+    else goSystem();
+  }
+});
+loadLocationStores().then(() => {
+  // Locations render inside the body view; refresh it if that's where we are.
+  if(currentView === 'body' && selectedBody){
+    if(selectedBodyLoc && findLocation(selectedBodyLoc)) selectBodyLocation(selectedBodyLoc);
+    else buildBodyView(selectedBody);
+  }
+});
+loadTextureCatalog().then(() => {
+  // Re-render any view that draws textures once the catalog (and thus auto-by-type
+  // defaults) is known — the body close-up and the orrery both use globe images.
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  if(typeof buildOrrery === 'function') buildOrrery();
+});
+loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
+loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadAlertState().then(() => applyAlertState());
+loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
+renderImperialDate(); // show default immediately, then refresh once loaded
+loadImperialDate().then(() => { renderImperialDate(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
+loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
+loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
+loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
+loadFactionStores().then(() => { rebuildFactionsFromOverlay();   // fold in any referee-added / edited / removed regions
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadSystemStores().then(() => { rebuildSystemsFromOverlay();   // fold in any referee-added / edited / removed systems
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits
+  if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+

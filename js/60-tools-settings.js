@@ -1,0 +1,1161 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// CHARACTER SHEETS
+// ═══════════════════════════════════════════════════════════════════════════
+// One sheet per known character (Rhett Calder, Cassia Velen, etc.), stored
+// as a single JSON blob under key `sheet-${characterName}`. Stored shared
+// (like party notes) rather than under the private-note pattern, because
+// the referee needs read/write access to ANY character's sheet, not just
+// their own — shared:true plus client-side gating (only the matching
+// player's own identity, or the referee, can ever open a given sheet in
+// the UI) gives us that without a second storage scheme. Fields cover
+// stats, skills, equipment, weapons, and notes — finances, augments,
+// background terms, and portrait are deliberately omitted per the
+// referee's scoping (those matter at character creation, not at the table).
+
+let sheetCurrentCharacter = null; // which character's sheet is currently open in the modal
+let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
+
+function emptySheet(){
+  return {
+    name: '', age: '',
+    str: 7, dex: 7, end: 7, intl: 7, edu: 7, soc: 7,
+    skills: '', equipment: '', weapons: '', notes: ''
+  };
+}
+
+function charDM(score){
+  const n = parseInt(score) || 0;
+  if(n <= 0) return -3;
+  if(n <= 2) return -2;
+  if(n <= 5) return -1;
+  if(n <= 8) return 0;
+  if(n <= 11) return 1;
+  if(n <= 14) return 2;
+  return 3;
+}
+
+async function loadSheet(characterName){
+  try {
+    const res = await supaStorage.get(`sheet-${characterName}`, true);
+    if(res.value == null) return emptySheet();
+    return Object.assign(emptySheet(), JSON.parse(res.value));
+  } catch(e){ return emptySheet(); }
+}
+
+async function saveSheet(characterName, data){
+  try { await supaStorage.set(`sheet-${characterName}`, JSON.stringify(data), true); }
+  catch(e){ console.error('Sheet save failed', e); }
+}
+
+// ── Sheet menu (small popover from the header button) ──────────────────
+function openSheetMenu(){
+  const menu = document.getElementById('sheet-menu');
+  const card = document.getElementById('sheet-menu-card');
+  let html = '';
+  if(isReferee()){
+    html += '<div class="sheet-menu-label">View / edit a sheet</div>';
+    html += KNOWN_CHARACTERS.map(n =>
+      `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${n.replace(/'/g,"\\\\'")}')">${n}</button>`
+    ).join('');
+  } else {
+    if(!myIdentity){
+      html += '<div class="sheet-menu-label">Pick a character first</div>';
+      html += '<button class="sheet-menu-item" onclick="closeSheetMenu();showIdentityModal()">Choose my character</button>';
+    } else {
+      html += `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${myIdentity.replace(/'/g,"\\\\'")}')">My Sheet (${myIdentity})</button>`;
+      html += `<button class="sheet-menu-item" style="color:var(--tx1);font-size:10px" onclick="closeSheetMenu();changeIdentity()">Not ${myIdentity}? Switch character</button>`;
+    }
+  }
+  card.innerHTML = html;
+  menu.classList.remove('hidden');
+}
+
+function closeSheetMenu(){
+  document.getElementById('sheet-menu').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════
+// A small, extensible menu off the gear icon in the header. Currently
+// holds just the light/dark theme toggle, but built as a container so
+// more device-level preferences can be added here later without needing
+// a new menu. Theme choice is a personal device preference (like panel
+// positions or the access code), not campaign state, so it's stored in
+// localStorage only — never written to Supabase, and never shared
+// between devices or between referee and players.
+let lightModeOn = false;
+
+// ── UI Scale ──────────────────────────────────────────────────────────────
+// Scales the entire #root element via CSS font-size on <html>, which
+// cascades through all rem-based sizing. Stored in localStorage so it
+// persists across sessions on the same device.
+const UI_SCALE_STEPS = [75, 85, 100, 115, 130, 150];
+const UI_SCALE_DEFAULT = 100;
+
+// Cached so the hot path (pointermove during drag, ~60Hz) doesn't hit
+// localStorage on every call. Invalidated whenever the scale is changed.
+let _uiScaleCache = null;
+function getUIScale(){
+  if(_uiScaleCache !== null) return _uiScaleCache;
+  try {
+    const v = parseInt(localStorage.getItem('aurelia_ui_scale'), 10);
+    if(UI_SCALE_STEPS.includes(v)){ _uiScaleCache = v; return v; }
+  } catch(e){}
+  _uiScaleCache = UI_SCALE_DEFAULT;
+  return UI_SCALE_DEFAULT;
+}
+
+function applyUIScale(pct){
+  const scale = pct / 100;
+  // Use transform:scale on #root with inverse-sized dimensions.
+  // Setting width/height to (100/s)vw/(100/s)vh means the layout box
+  // is logically larger than the viewport, but after scale(s) it renders
+  // at exactly 100vw x 100vh — no clipping, no black space at any scale.
+  //
+  // The floating panels (event-log, init, health, quest, etc.) are now
+  // children of #float-panels, which is a sibling of #root and NOT
+  // inside the transform, so they always render at viewport scale.
+  //
+  // Pointer event compensation: e.clientX/Y are in screen (scaled) space;
+  // CSS layout coords are in logical (pre-scale) space. Divide by scale
+  // everywhere we convert pointer coords to layout coords.
+  document.documentElement.style.zoom = '';
+  const root = document.getElementById('root');
+  if(!root) return;
+  root.style.zoom = '';
+  if(scale === 1){
+    root.style.transform = '';
+    root.style.width = '';
+    root.style.height = '';
+    root.style.transformOrigin = '';
+  } else {
+    root.style.transformOrigin = 'top left';
+    root.style.transform = 'scale(' + scale + ')';
+    root.style.width  = (100 / scale) + 'vw';
+    root.style.height = (100 / scale) + 'vh';
+  }
+}
+
+function onUIScaleInput(idx){
+  // Live preview as thumb drags — update fill bar and value label without full re-render
+  const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  _uiScaleCache = pct;  // keep cache in sync
+  applyUIScale(pct);
+  const fill = document.getElementById('ui-scale-fill');
+  if(fill) fill.style.width = (parseInt(idx,10) / (UI_SCALE_STEPS.length-1) * 100) + '%';
+  const valEl = document.querySelector('.ui-scale-value');
+  if(valEl) valEl.textContent = pct + '%';
+}
+
+function onUIScaleCommit(idx){
+  const pct = UI_SCALE_STEPS[parseInt(idx, 10)] || UI_SCALE_DEFAULT;
+  _uiScaleCache = pct;  // keep cache in sync
+  applyUIScale(pct);
+  try { localStorage.setItem('aurelia_ui_scale', pct); } catch(e){}
+  // Re-render the menu so step labels update their highlight
+  const showArchon = isReferee();
+  renderSettingsMenu(showArchon);
+}
+
+// Apply saved scale on load
+applyUIScale(getUIScale());
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════════════════════════
+// Names-only search across station areas/subs, Aurelia locations, system
+// bodies, and their NPCs/skill checks — not full description/event text,
+// by design, to keep results short and fast to scan. Respects Design Mode
+// overrides so a referee-renamed or newly-added NPC/check is searchable,
+// and respects referee-vs-player visibility: players only ever see areas
+// that are actually revealed to them, never referee-only NPCs/checks.
+//
+// Each result also has its own resolveContent() lookup for its name, since
+// names themselves can be edited via Design Mode stage 1 just like any
+// other text field — a renamed NPC should be findable by its NEW name.
+
+function searchResolvedName(key, fallback){
+  const ov = contentOverrides[key];
+  if(ov === undefined) return fallback;
+  // Some override types (checks) store an object with a .skill field
+  // rather than a plain string — handle both shapes.
+  if(typeof ov === 'string') return ov;
+  if(ov && typeof ov === 'object' && ov.skill) return ov.skill;
+  if(ov && typeof ov === 'object' && ov.name) return ov.name;
+  return fallback;
+}
+
+function buildSearchIndex(){
+  const idx = [];
+  const ref = isReferee();
+
+  // ── Station areas + subs ──
+  Object.keys(MAIN).forEach(areaId => {
+    const a = MAIN[areaId];
+    if(!ref && !revealedAreas[areaId]) return; // players only see revealed areas
+    idx.push({type:'Station Area', name:a.label, sub:a.sub||'', nav:{view:'station', areaId, subId:null}});
+    if(a.npcs && ref){ // NPCs are referee-only content
+      a.npcs.forEach((n,i) => {
+        const nkey = 'sta-npc-'+areaId+i; // matches the nid pattern used at render time (no sub)
+        idx.push({type:'NPC', name:n.name, sub:a.label, nav:{view:'station', areaId, subId:null}});
+      });
+    }
+    if(a.checks && ref){
+      const chkBaseKey = areaId+'-check-';
+      a.checks.forEach((c,i) => {
+        const name = searchResolvedName(chkBaseKey+i, c.skill);
+        idx.push({type:'Skill Check', name, sub:a.label, nav:{view:'station', areaId, subId:null}});
+      });
+    }
+    if(a.subs){
+      Object.keys(a.subs).forEach(subId => {
+        const s = a.subs[subId];
+        idx.push({type:'Station Area', name:s.label, sub:a.label+' →', nav:{view:'station', areaId, subId}});
+        if(s.npcs && ref){
+          s.npcs.forEach(n => idx.push({type:'NPC', name:n.name, sub:s.label, nav:{view:'station', areaId, subId}}));
+        }
+        if(s.checks && ref){
+          const chkBaseKey = areaId+'_'+subId+'-check-';
+          s.checks.forEach((c,i) => {
+            const name = searchResolvedName(chkBaseKey+i, c.skill);
+            idx.push({type:'Skill Check', name, sub:s.label, nav:{view:'station', areaId, subId}});
+          });
+        }
+      });
+    }
+  });
+
+  // ── Locations on/around every body (generic — any world can own them) ──
+  getBodies().forEach(b => {
+    effectiveLocations(currentSystemId, b.id).forEach(loc => {
+      idx.push({type:'Location', name:loc.name, sub:b.name, nav:{view:'body', bodyId:b.id, locId:loc.id}});
+    });
+  });
+
+  // ── System bodies (includes moons like Pallor) ──
+  getBodies().forEach(b => {
+    idx.push({type:'System Body', name:b.name, sub:b.type||'', nav:{view:'system', bodyId:b.id}});
+    if(b.npcs && ref){
+      b.npcs.forEach((n,i) => {
+        idx.push({type:'NPC', name:n.name, sub:b.name, nav:{view:'system', bodyId:b.id}});
+      });
+    }
+    if(b.checks && ref){
+      const chkBaseKey = b.id+'-check-'; // matches the body-detail check key pattern... approximate, name itself is what's searched
+      b.checks.forEach((c,i) => {
+        idx.push({type:'Skill Check', name:c.skill, sub:b.name, nav:{view:'system', bodyId:b.id}});
+      });
+    }
+  });
+
+  // ── Galaxy systems (Orion Arm starmap) — public to everyone, referee or
+  // player, since the map itself is the app's landing view. Matchable by the
+  // in-world label, the real star designation (alt), and the faction name. A
+  // hit jumps to the galaxy view and selects that node's detail panel. ──
+  GALAXY_NODES.forEach(sys => {
+    const label = (sys.label || sys.name).replace(' ★','').trim();
+    const f = GALAXY_FACTIONS[sys.faction] || {name:'Independent'};
+    idx.push({
+      type:'System', name:label, alt:sys.name, sub:sys.name + ' · ' + f.name,
+      nav:{view:'galaxy', galaxyId:sys.id}
+    });
+  });
+
+  return idx;
+}
+
+function navigateToSearchResult(nav){
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').classList.remove('open');
+  // playViewTransition() (used by enterStation/goAurelia/goSystem) updates
+  // currentView asynchronously, 175ms into its fade animation — not
+  // synchronously on call. So we capture whether a view switch is needed
+  // BEFORE triggering it, rather than re-checking currentView right after
+  // calling the switch function, which would still read the OLD value at
+  // that point and silently always take the "switching" branch's timing.
+  const needsSwitch = currentView !== nav.view;
+  if(nav.view === 'station'){
+    if(needsSwitch) enterStation();
+    setTimeout(() => {
+      selArea(nav.areaId);
+      if(nav.subId) setTimeout(() => selSub(nav.subId), 60);
+    }, needsSwitch ? 220 : 0);
+  } else if(nav.view === 'body'){
+    // Locations now live in the generic body close-up. Switch to the body view
+    // (with a transition if we're elsewhere), then open the location if given.
+    if(currentView !== 'body'){
+      goBodyView(nav.bodyId);
+      if(nav.locId) setTimeout(() => selectBodyLocation(nav.locId), 220);
+    } else {
+      buildBodyView(nav.bodyId);
+      if(nav.locId) selectBodyLocation(nav.locId);
+    }
+  } else if(nav.view === 'system'){
+    if(needsSwitch) goSystem();
+    setTimeout(() => selectBody(nav.bodyId), needsSwitch ? 220 : 0);
+  } else if(nav.view === 'galaxy'){
+    // Jump to the Orion Arm starmap and open the matched system's detail panel.
+    if(needsSwitch) goGalaxy();
+    setTimeout(() => { if(typeof HX!=='undefined'){ HX.ensure(); HX.selectById(nav.galaxyId); } }, needsSwitch ? 240 : 0);
+  }
+}
+
+function renderSearchResults(){
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const box = document.getElementById('search-results');
+  if(!q){ box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  const idx = buildSearchIndex();
+  const matches = idx.filter(item =>
+    item.name.toLowerCase().includes(q) ||
+    (item.alt && item.alt.toLowerCase().includes(q))
+  ).slice(0, 30);
+
+  if(!matches.length){
+    box.innerHTML = '<div class="search-empty">No matches.</div>';
+    box.classList.add('open');
+    return;
+  }
+
+  // Store the actual nav objects in an array rather than inlining them into
+  // the onclick attribute string — sidesteps any quote-escaping risk if a
+  // future area/sub id ever contains an apostrophe, and is simpler than
+  // hand-escaping JSON for HTML attribute context.
+  window._searchResultNavs = matches.map(m => m.nav);
+
+  const groups = {};
+  matches.forEach((m, i) => { (groups[m.type] = groups[m.type] || []).push({...m, idx:i}); });
+
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let html = '';
+  Object.keys(groups).forEach(type => {
+    html += `<div class="search-group-lbl">${esc(type)}</div>`;
+    html += groups[type].map(m =>
+      `<button class="search-result-item" onclick="navigateToSearchResult(window._searchResultNavs[${m.idx}])">${esc(m.name)}<span class="search-result-sub">${esc(m.sub)}</span></button>`
+    ).join('');
+  });
+  box.innerHTML = html;
+  box.classList.add('open');
+}
+
+// Close search results when clicking outside the search box
+document.addEventListener('click', function(e){
+  const wrap = document.getElementById('search-wrap');
+  if(wrap && !wrap.contains(e.target)){
+    document.getElementById('search-results').classList.remove('open');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS MENU (expanded — Display + Archon Morality Tracker)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Archon Morality Tracker data ─────────────────────────────────────────
+// Stored as 'archon-morality' in localStorage only — this is purely a
+// referee tool, never synced to Supabase or shown to players.
+// Each action entry: { id, action, axes:{coop,comp,wisd,inno}, total, ts }
+
+const ARCHON_AXES = [
+  { key:'coop', label:'Cooperation' },
+  { key:'comp', label:'Compassion'  },
+  { key:'wisd', label:'Wisdom'      },
+  { key:'inno', label:'Innovation'  },
+];
+
+const ARCHON_BANDS = [
+  { min:15,  max:Infinity, cls:'worthy',      label:'Worthy of Active Support',  desc:'May offer direct assistance, share data, or provide protection.' },
+  { min:10,  max:14,       cls:'mercy',       label:'Worthy of Mercy',           desc:'Will not intervene against the party. Deemed salvageable.' },
+  { min:5,   max:9,        cls:'promising',   label:'Promising',                  desc:'Observation continues with slight favor. Right trajectory.' },
+  { min:0,   max:4,        cls:'inconclusive',label:'Inconclusive',              desc:'The Collective waits. No judgment rendered. The experiment continues.' },
+  { min:-5,  max:-1,       cls:'concerning',  label:'Concerning',                 desc:'Patterns of failure detected. May subtly obstruct.' },
+  { min:-10, max:-6,       cls:'alarming',    label:'Alarming',                   desc:'Active deterrence: disabling weapons, draining fuel, blocking jump routes.' },
+  { min:-Infinity, max:-11,cls:'unworthy',    label:'Unworthy',                   desc:'Experiment declared a failure. The Collective intervenes directly.' },
+];
+
+let archonLog = [];        // array of scored action entries
+let archonDraft = { coop:0, comp:0, wisd:0, inno:0 }; // current stepper state
+
+function loadArchonLog(){
+  try {
+    const raw = localStorage.getItem('aurelia_archon');
+    if(raw) archonLog = JSON.parse(raw);
+  } catch(e){ archonLog = []; }
+}
+
+function saveArchonLog(){
+  try { localStorage.setItem('aurelia_archon', JSON.stringify(archonLog)); }
+  catch(e){}
+}
+
+function archonAxisTotals(){
+  const totals = { coop:0, comp:0, wisd:0, inno:0 };
+  archonLog.forEach(e => {
+    ARCHON_AXES.forEach(a => { totals[a.key] += (e.axes[a.key]||0); });
+  });
+  return totals;
+}
+
+function archonGrandTotal(totals){
+  return Object.values(totals).reduce((s,v) => s+v, 0);
+}
+
+function archonClassification(total){
+  return ARCHON_BANDS.find(b => total >= b.min && total <= b.max)
+    || ARCHON_BANDS[ARCHON_BANDS.length-1];
+}
+
+function archonScoreLabel(n){
+  if(n > 0) return `+${n}`;
+  return `${n}`;
+}
+
+function archonAxisBarHTML(key, val, maxAbsTotal){
+  // Bar centred at 50% — left half is negative, right half is positive
+  const clamp = maxAbsTotal || 1;
+  const pct = Math.min(Math.abs(val) / clamp * 50, 50);
+  const isPos = val >= 0;
+  const colour = val > 0 ? '#4caf82' : val < 0 ? '#d45050' : 'transparent';
+  const left = isPos ? '50%' : `${50 - pct}%`;
+  const width = `${pct}%`;
+  return `
+    <div class="archon-axis-bar-wrap">
+      <div style="position:absolute;top:0;left:50%;width:.5px;height:100%;background:var(--bd0)"></div>
+      <div class="archon-axis-bar-fill" style="left:${left};width:${width};background:${colour}"></div>
+    </div>`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+
+function openSettingsMenu(){
+  if(!isReferee()) {
+    // Players only see the display section
+    renderSettingsMenu(false);
+  } else {
+    renderSettingsMenu(true);
+  }
+  document.getElementById('settings-menu').classList.remove('hidden');
+}
+
+function renderSettingsMenu(showArchon){
+  const card = document.getElementById('settings-menu-card');
+
+  // ── Display section ──
+  const scaleSteps = [75, 85, 100, 115, 130, 150];
+  const curScale = getUIScale();
+  const scaleIdx = scaleSteps.indexOf(curScale);
+  const fillPct = scaleIdx < 0 ? 40 : (scaleIdx / (scaleSteps.length - 1)) * 100;
+  let html = `
+    <div class="settings-section-lbl">Display</div>
+    <div class="settings-row">
+      <span class="settings-row-label">${lightModeOn ? '☀ Light Mode' : '🌙 Dark Mode'}</span>
+      <div class="theme-toggle" onclick="toggleLightMode()"><div class="theme-toggle-knob">${lightModeOn ? '☀' : '🌙'}</div></div>
+    </div>
+    <div class="ui-scale-row">
+      <div class="ui-scale-labels">
+        <span class="ui-scale-label">🔡 Text Size</span>
+        <span class="ui-scale-value">${curScale}%</span>
+      </div>
+      <div class="ui-scale-track">
+        <div class="ui-scale-fill" id="ui-scale-fill" style="width:${fillPct}%"></div>
+        <input id="ui-scale-range" type="range" min="0" max="${scaleSteps.length - 1}"
+          value="${scaleIdx < 0 ? 2 : scaleIdx}"
+          oninput="onUIScaleInput(this.value)"
+          onchange="onUIScaleCommit(this.value)">
+      </div>
+      <div class="ui-scale-steps">
+        ${scaleSteps.map(s => `<span class="ui-scale-step"${s===curScale?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
+      </div>
+    </div>`;
+
+  // Settings is configuration-only now: Display + keyboard shortcuts for
+  // everyone. Referee tools (design mode), morality, and the animation /
+  // orbital-ring toggles live in the Referee menu; campaign-editing tools
+  // live in the Design menu. The showArchon arg is kept for back-compat.
+  // ── Secure Content (per-player token) ──
+  const tok = getContentToken();
+  const roleLabel = !tok ? 'Local mode (no token)'
+    : (secureRole ? (secureRole === 'referee' ? 'Referee' : (myIdentity || 'Player')) : 'connecting…');
+  html += `
+    <div class="settings-section-lbl">Secure Content</div>
+    <div class="settings-row">
+      <span class="settings-row-label">Acting as</span>
+      <span style="color:var(--accentGold);font-weight:700">${escHtml(roleLabel)}</span>
+    </div>
+    <div class="settings-row">
+      <input id="content-token-input" type="text" placeholder="Paste access token…" value="${escHtml(tok)}"
+        style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--bd0);border-radius:var(--rad);color:var(--tx0);padding:7px 9px;font-family:monospace;font-size:12px">
+    </div>
+    <div class="settings-row" style="gap:8px">
+      <button onclick="applyContentTokenFromInput()" style="flex:1;padding:8px;background:var(--accentGoldBg);border:1px solid var(--accentGold);color:var(--accentGold);border-radius:var(--rad);font-weight:700;font-size:12px;cursor:pointer">Apply token</button>
+      <button onclick="clearContentToken()" style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:12px;cursor:pointer"${tok ? '' : ' disabled'}>Clear token</button>
+    </div>
+    <div class="settings-row">
+      <button onclick="copyInviteLink()" style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:12px;cursor:pointer" title="Build a shareable link that applies the token in the box above">🔗 Copy invite link</button>
+    </div>`;
+
+  html += kbdSettingsHTML();
+  card.innerHTML = html;
+}
+
+// Builds the Archon morality block (totals, axes, log, draft form). Extracted
+// so the Referee menu renders the same widget that used to live in Settings.
+function renderArchonSectionHTML(){
+  // ── Archon Morality Tracker section ──
+  const totals = archonAxisTotals();
+  const grand  = archonGrandTotal(totals);
+  const band   = archonClassification(grand);
+  const maxAbs = Math.max(...Object.values(totals).map(Math.abs), 1);
+
+  const axesHTML = ARCHON_AXES.map(a => {
+    const v = totals[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return `
+      <div class="archon-axis-row">
+        <span class="archon-axis-name">${a.label}</span>
+        ${archonAxisBarHTML(a.key, v, maxAbs)}
+        <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
+      </div>`;
+  }).join('');
+
+  const logHTML = archonLog.length
+    ? [...archonLog].reverse().map(e => {
+        const axisDesc = ARCHON_AXES
+          .filter(a => e.axes[a.key] !== 0)
+          .map(a => `${a.label} (${archonScoreLabel(e.axes[a.key])})`)
+          .join(', ');
+        const scoreCls = e.total >= 0 ? 'pos' : 'neg';
+        return `
+          <div class="archon-log-entry">
+            <div class="archon-log-top">
+              <span class="archon-log-action">${escArchon(e.action)}</span>
+              <span class="archon-log-score ${scoreCls}">${archonScoreLabel(e.total)}</span>
+              <button class="archon-log-delete" onclick="deleteArchonEntry('${e.id}')" title="Remove">✕</button>
+            </div>
+            ${axisDesc ? `<div class="archon-log-axes">${escArchon(axisDesc)}</div>` : ''}
+          </div>`;
+      }).join('')
+    : `<div class="archon-empty">No actions logged yet.</div>`;
+
+  // Draft stepper state
+  const steppers = ARCHON_AXES.map(a => {
+    const v = archonDraft[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return `
+      <div class="archon-axis-input-row">
+        <span class="archon-axis-input-lbl">${a.label}</span>
+        <div class="archon-axis-stepper">
+          <button onclick="archonStep('${a.key}',-1)">−</button>
+          <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
+          <button onclick="archonStep('${a.key}',+1)">+</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
+
+  return `
+    <div class="settings-section-lbl">Archon Collective — Morality</div>
+
+    <div class="archon-total-row">
+      <span class="archon-total-score">${archonScoreLabel(grand)}</span>
+      <span class="archon-classification archon-class-${band.cls}">
+        ${band.label}<br>
+        <span style="font-weight:400;font-size:8px;opacity:.8">${band.desc}</span>
+      </span>
+    </div>
+
+    <div class="archon-axes">${axesHTML}</div>
+    <div class="archon-divider"></div>
+
+    <div class="archon-add-form">
+      <textarea class="archon-add-action-input" id="archon-action-input"
+        placeholder="Describe the action (e.g. Spared the scavenger ships)..."></textarea>
+      <div class="archon-axis-inputs">${steppers}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0">
+        <span style="font-size:10px;font-family:monospace;color:var(--tx1)">
+          Entry total: <span class="archon-axis-score ${draftCls}">${archonScoreLabel(draftTotal)}</span>
+        </span>
+        <button onclick="archonResetDraft()" style="font-size:9px;font-family:monospace;background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:3px 8px;color:var(--tx1);cursor:pointer">Reset</button>
+      </div>
+      <button class="archon-submit-btn" onclick="submitArchonEntry()">Log Action</button>
+    </div>
+
+    <div class="archon-divider"></div>
+    <div class="archon-log-section">${logHTML}</div>`;
+}
+
+function escArchon(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Stepper ───────────────────────────────────────────────────────────────
+
+function archonStep(key, delta){
+  archonDraft[key] = Math.max(-5, Math.min(5, (archonDraft[key]||0) + delta));
+  // Partial update: only refresh the stepper spans and draft total — 
+  // avoids full card re-render which changes card height and loses textarea
+  ARCHON_AXES.forEach(a => {
+    const v = archonDraft[a.key];
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    // Each stepper span has a unique position; find it by its sibling buttons
+    const steppers = document.querySelectorAll('.archon-axis-stepper');
+    steppers.forEach(s => {
+      const lbl = s.closest('.archon-axis-input-row')?.querySelector('.archon-axis-input-lbl');
+      if(lbl && lbl.textContent.trim() === a.label){
+        const span = s.querySelector('span');
+        if(span){
+          span.textContent = archonScoreLabel(v);
+          span.className = 'archon-axis-score ' + cls;
+        }
+      }
+    });
+  });
+  // Update draft total
+  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
+  const totalSpan = document.querySelector('.archon-add-form .archon-axis-score');
+  if(totalSpan){
+    totalSpan.textContent = archonScoreLabel(draftTotal);
+    totalSpan.className = 'archon-axis-score ' + draftCls;
+  }
+}
+
+function archonResetDraft(){
+  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  renderRefereeMenu();
+  // textarea is intentionally cleared on reset
+}
+
+// ── Submit / delete ───────────────────────────────────────────────────────
+
+function submitArchonEntry(){
+  const actionEl = document.getElementById('archon-action-input');
+  const action = actionEl ? actionEl.value.trim() : '';
+  if(!action){
+    actionEl && (actionEl.style.borderColor = '#d45050');
+    return;
+  }
+  const axes = { ...archonDraft };
+  const total = Object.values(axes).reduce((s,v)=>s+v,0);
+  archonLog.push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
+  saveArchonLog();
+  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  renderRefereeMenu();
+  showToast('Morality action logged');
+}
+
+function deleteArchonEntry(id){
+  archonLog = archonLog.filter(e => e.id !== id);
+  saveArchonLog();
+  renderRefereeMenu();
+}
+
+function closeSettingsMenu(){
+  document.getElementById('settings-menu').classList.add('hidden');
+}
+
+// ── Referee menu (always available to referee) ────────────────────────────
+// Houses the Design-Mode toggle, ambient-animation + orbital-ring toggles,
+// and the Archon morality tracker — all moved out of Settings so Settings
+// stays configuration-only.
+function openRefereeMenu(){
+  if(!isReferee()) return;
+  renderRefereeMenu();
+  document.getElementById('referee-menu').classList.remove('hidden');
+}
+function closeRefereeMenu(){
+  document.getElementById('referee-menu').classList.add('hidden');
+}
+// Inline Design-Mode passcode state. We can't use prompt()/alert() — they're
+// silently suppressed inside sandboxed preview iframes — so the passcode is
+// entered through a field rendered inline in the Referee menu instead.
+let designPasscodePrompt = false, designPasscodeError = false;
+
+function renderRefereeMenu(){
+  const card = document.getElementById('referee-menu-card');
+  if(!card) return;
+  const dmOn = designModeOn;
+  const animOn = animationsOn();
+  const ringsShown = ringsOn();
+  const passField = (designPasscodePrompt && !dmOn) ? `
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;padding-top:0">
+      <input id="design-pass-input" type="password" placeholder="Design Mode passcode" autocomplete="off"
+        style="width:100%;font-size:12px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid ${designPasscodeError?'#d45050':'var(--bd0)'};border-radius:5px;padding:6px 9px;outline:none"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitDesignPasscode();}else if(event.key==='Escape'){cancelDesignPasscode();}">
+      ${designPasscodeError ? '<span style="font-size:10px;color:#d45050;font-family:monospace">Incorrect passcode.</span>' : ''}
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button onclick="cancelDesignPasscode()" style="font-size:10px;font-family:monospace;background:transparent;border:.5px solid var(--bd0);border-radius:4px;padding:4px 10px;color:var(--tx1);cursor:pointer">Cancel</button>
+        <button onclick="submitDesignPasscode()" style="font-size:10px;font-family:monospace;background:#9B59B6;border:none;border-radius:4px;padding:4px 10px;color:#fff;cursor:pointer">Unlock</button>
+      </div>
+    </div>` : '';
+  card.innerHTML = `
+    <div class="settings-section-lbl">Referee Tools</div>
+    <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
+      <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
+      <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
+    </div>
+    ${passField}
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${animOn}" style="cursor:pointer" onclick="toggleAnim()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnim();}">
+      <span class="settings-row-label">✨ Animations${animOn ? '' : ' — off'}</span>
+      <div class="theme-toggle ${animOn?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="settings-row" role="switch" tabindex="0" aria-checked="${ringsShown}" style="cursor:pointer" onclick="toggleRings()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRings();}">
+      <span class="settings-row-label">🪐 Orbital Rings${ringsShown ? '' : ' — hidden'}</span>
+      <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Campaign Backup</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();exportCampaign()">
+      <span class="settings-row-label">⬇ Export Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">JSON →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();importCampaign()">
+      <span class="settings-row-label">⬆ Import Campaign</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
+    </div>
+    <div class="archon-divider"></div>
+    ${renderArchonSectionHTML()}`;
+}
+
+// ── Design menu (shown only while Design Mode is ON) ───────────────────────
+// Campaign-editing tools: removed items, full reset, and the dynamic
+// referee-box manager.
+function openDesignMenu(){
+  if(!isReferee() || !designModeOn) return;
+  renderDesignMenu();
+  document.getElementById('design-menu').classList.remove('hidden');
+}
+function closeDesignMenu(){
+  document.getElementById('design-menu').classList.add('hidden');
+}
+function renderDesignMenu(){
+  const card = document.getElementById('design-menu-card');
+  if(!card) return;
+  const undoN = designUndoStack.length, redoN = designRedoStack.length;
+  const lastUndo = undoN ? designUndoStack[undoN-1].label : '';
+  const lastRedo = redoN ? designRedoStack[redoN-1].label : '';
+  card.innerHTML = `
+    <div class="settings-section-lbl">Design Tools</div>
+    <div class="settings-row" style="cursor:${undoN?'pointer':'default'};opacity:${undoN?1:0.45}" ${undoN?'onclick="designUndo()"':''}>
+      <span class="settings-row-label">↶ Undo${undoN?' — '+escHtml(lastUndo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${undoN}/${DESIGN_UNDO_LIMIT}</span>
+    </div>
+    <div class="settings-row" style="cursor:${redoN?'pointer':'default'};opacity:${redoN?1:0.45}" ${redoN?'onclick="designRedo()"':''}>
+      <span class="settings-row-label">↷ Redo${redoN?' — '+escHtml(lastRedo):''}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">${redoN}</span>
+    </div>
+    <div class="archon-divider"></div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
+      <span class="settings-row-label">🗑 Show Removed Items</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();resetCampaign()">
+      <span class="settings-row-label" style="color:#d45050">⟲ Reset Campaign</span>
+      <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
+    </div>
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Referee Boxes</div>
+    ${renderBoxManagerHTML()}`;
+}
+
+// Re-render whichever menus are open (after a state change that affects them).
+function refreshOpenMenus(){
+  if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
+  if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ── Bounded undo / redo for Design Mode ─────────────────────────────────────
+// Design edits/deletes (bodies, locations, economy profiles) mutate in-memory
+// state that's mirrored to Supabase. Rather than invert each op, we SNAPSHOT the
+// whole design state before a change and restore it on undo (redo re-applies the
+// later state). Bounded to DESIGN_UNDO_LIMIT steps and in-memory only (not persisted).
+const DESIGN_UNDO_LIMIT = 20;
+let designUndoStack = [], designRedoStack = [];
+function snapshotDesign(){
+  const clone = o => JSON.parse(JSON.stringify(o||{}));
+  return {
+    bodyAdditions: clone(bodyAdditions), bodyDeletions: clone(bodyDeletions), bodyPropertyOverrides: clone(bodyPropertyOverrides),
+    locationAdditions: clone(locationAdditions), locationDeletions: clone(locationDeletions), locationPropertyOverrides: clone(locationPropertyOverrides),
+    econProfiles: (typeof ECON!=='undefined' && ECON.exportProfiles) ? ECON.exportProfiles() : null,
+  };
+}
+async function restoreDesign(snap){
+  bodyAdditions = snap.bodyAdditions; bodyDeletions = snap.bodyDeletions; bodyPropertyOverrides = snap.bodyPropertyOverrides;
+  locationAdditions = snap.locationAdditions; locationDeletions = snap.locationDeletions; locationPropertyOverrides = snap.locationPropertyOverrides;
+  await saveBodyAdditions(); await saveBodyDeletions(); await saveBodyPropertyOverrides();
+  await saveLocationAdditions(); await saveLocationDeletions(); await saveLocationPropertyOverrides();
+  if(snap.econProfiles!=null && typeof ECON!=='undefined' && ECON.importProfiles) ECON.importProfiles(snap.econProfiles);
+  // Re-render whatever view is on screen so the restored state shows immediately.
+  if(currentView === 'system'){ buildOrrery(); if(selectedBody && getBodies().find(b=>b.id===selectedBody)) selectBody(selectedBody); else goSystemOverview(); }
+  else if(currentView === 'body' && selectedBody){ if(getBodies().find(b=>b.id===selectedBody)) buildBodyView(selectedBody); else goSystem(); }
+  else if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+  if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+  refreshOpenMenus();
+}
+// Call BEFORE a design mutation, capturing the pre-change state under a label.
+function recordDesignUndo(label){
+  designUndoStack.push({ label: label || 'change', snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  designRedoStack = [];                 // a fresh edit invalidates the redo branch
+  refreshOpenMenus();
+}
+async function designUndo(){
+  if(!isReferee()) return;
+  if(!designUndoStack.length){ if(typeof showToast==='function') showToast('Nothing to undo','info'); return; }
+  const entry = designUndoStack.pop();
+  designRedoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designRedoStack.length > DESIGN_UNDO_LIMIT) designRedoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Undid: ' + entry.label);
+}
+async function designRedo(){
+  if(!isReferee()) return;
+  if(!designRedoStack.length){ if(typeof showToast==='function') showToast('Nothing to redo','info'); return; }
+  const entry = designRedoStack.pop();
+  designUndoStack.push({ label: entry.label, snap: snapshotDesign() });
+  if(designUndoStack.length > DESIGN_UNDO_LIMIT) designUndoStack.shift();
+  await restoreDesign(entry.snap);
+  if(typeof showToast==='function') showToast('Redid: ' + entry.label);
+}
+
+// ── Campaign export / import (referee-only backup & sharing) ─────────────────
+// The whole campaign is just key/value rows in the shared Supabase table, so a
+// backup is a JSON dump of those rows. Export pulls every campaign row (skipping
+// per-device private notes + local cache keys); import writes them back through
+// supaStorage.set and reloads so every loader re-reads the restored state.
+const CAMPAIGN_EXPORT_VERSION = 1;
+async function exportCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  if(typeof showToast==='function') showToast('Exporting campaign…','info');
+  let rows;
+  try {
+    const res = await fetch(`${SUPABASE_REST}?select=key,value&limit=10000`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    rows = await res.json();
+  } catch(e){
+    if(typeof showToast==='function') showToast('Export failed — could not reach the campaign store ('+(e.message||'offline')+')','error');
+    return;
+  }
+  const keys = {};
+  (Array.isArray(rows)?rows:[]).forEach(r => {
+    if(!r || r.key==null) return;
+    if(/^note-private-/.test(r.key)) return;       // per-device personal notes — not shared campaign state
+    keys[r.key] = r.value;
+  });
+  const blob = { app:'archon-gambit', kind:'campaign', version:CAMPAIGN_EXPORT_VERSION,
+    exportedAt:new Date().toISOString(), count:Object.keys(keys).length, keys };
+  const json = JSON.stringify(blob, null, 2);
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  a.download = `archon-gambit-campaign-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} }, 4000);
+  if(typeof showToast==='function') showToast(`Exported ${blob.count} campaign key${blob.count===1?'':'s'}`);
+}
+function importCampaign(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if(!file) return;
+    let blob;
+    try { blob = JSON.parse(await file.text()); }
+    catch(e){ if(typeof showToast==='function') showToast('Import failed — not valid JSON','error'); return; }
+    const keys = blob && blob.keys;
+    if(!keys || typeof keys!=='object' || Array.isArray(keys)){
+      if(typeof showToast==='function') showToast('Import failed — no campaign keys in this file','error'); return; }
+    const names = Object.keys(keys);
+    if(!names.length){ if(typeof showToast==='function') showToast('Import failed — file has no keys','error'); return; }
+    if(!confirm(`Import ${names.length} campaign key${names.length===1?'':'s'} from "${file.name}"?\n\nThis OVERWRITES the current shared campaign — galaxy edits, codex, funds, economy, ship state, quests, and more. It cannot be undone. Continue?`)) return;
+    if(typeof showToast==='function') showToast('Importing campaign…','info');
+    let ok=0, fail=0;
+    for(const k of names){
+      const v = keys[k];
+      const r = await supaStorage.set(k, v==null?'':String(v), true);
+      if(r && r.ok) ok++; else fail++;
+    }
+    if(typeof showToast==='function') showToast(`Imported ${ok} key${ok===1?'':'s'}${fail?` (${fail} queued offline)`:''} — reloading…`);
+    setTimeout(()=>location.reload(), 900);
+  };
+  input.click();
+}
+
+// ── Ambient-animation + orbital-ring toggles ──────────────────────────────
+// Implemented as classes on #root so they apply to every existing AND future
+// element via CSS selectors (no per-node bookkeeping). Persisted per device.
+function animationsOn(){ return !rootEl.classList.contains('anim-off'); }
+function ringsOn(){ return !rootEl.classList.contains('rings-off'); }
+function toggleAnim(){
+  const turnOff = animationsOn();
+  rootEl.classList.toggle('anim-off', turnOff);
+  try{ localStorage.setItem('aurelia_anim_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function toggleRings(){
+  const turnOff = ringsOn();
+  rootEl.classList.toggle('rings-off', turnOff);
+  try{ localStorage.setItem('aurelia_rings_off', turnOff ? '1' : '0'); }catch(e){}
+  renderRefereeMenu();
+}
+function applyRefereePrefs(){
+  try{
+    if(localStorage.getItem('aurelia_anim_off') === '1') rootEl.classList.add('anim-off');
+    if(localStorage.getItem('aurelia_rings_off') === '1') rootEl.classList.add('rings-off');
+  }catch(e){}
+}
+applyRefereePrefs();
+
+// ── Dynamic referee-box registry (Task 4) ─────────────────────────────────
+// A box "type" (Read Aloud, Referee Note, or any custom box) renders across
+// every celestial body and station area. Built-ins keep their original
+// content keys (body-<id>-readAloud / -refNote) for back-compat; custom boxes
+// store per-object content under body-<id>-box-<key> via the same
+// resolveContent/contentOverrides layer. Removed types are kept (restorable)
+// and their content is preserved.
+const BOX_TYPES_LS = 'aurelia_box_types';
+const DEFAULT_BOX_TYPES = [
+  { key:'readAloud', label:'Read Aloud',   cls:'read', refOnly:false, builtin:true },
+  { key:'refNote',   label:'Referee Note', cls:'ref',  refOnly:true,  builtin:true }
+];
+let boxTypesStore = null;
+function loadBoxTypes(){
+  if(boxTypesStore) return boxTypesStore;
+  let stored = null;
+  try{ stored = JSON.parse(localStorage.getItem(BOX_TYPES_LS) || 'null'); }catch(e){}
+  if(stored && Array.isArray(stored.active) && Array.isArray(stored.removed)){
+    boxTypesStore = stored;
+  } else {
+    boxTypesStore = { active: DEFAULT_BOX_TYPES.map(b => ({...b})), removed: [] };
+  }
+  return boxTypesStore;
+}
+function saveBoxTypes(){
+  try{ localStorage.setItem(BOX_TYPES_LS, JSON.stringify(boxTypesStore)); }catch(e){}
+}
+function getBoxTypes(){ return loadBoxTypes().active; }
+function getRemovedBoxTypes(){ return loadBoxTypes().removed; }
+function slugifyBox(label){
+  const base = (label||'box').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'box';
+  const st = loadBoxTypes();
+  const taken = k => st.active.some(b=>b.key===k) || st.removed.some(b=>b.key===k) || k==='readAloud' || k==='refNote';
+  let s = base, n = 2;
+  while(taken(s)){ s = base + '-' + n; n++; }
+  return s;
+}
+function addBoxType(){
+  const label = (prompt('New box name (e.g. "Tactics", "Lore", "Hooks"):', 'Custom Box') || '').trim();
+  if(!label) return;
+  const refOnly = !confirm('Should players see this box?\n\nOK = visible to players.\nCancel = referee-only.');
+  const st = loadBoxTypes();
+  st.active.push({ key: slugifyBox(label), label, cls: refOnly ? 'ref' : 'read', refOnly, builtin:false });
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function renameBoxType(key, val){
+  const b = getBoxTypes().find(x => x.key === key);
+  if(!b) return;
+  b.label = (val||'').trim() || b.label;
+  saveBoxTypes();
+  rerenderCurrentDetail();
+}
+function deleteBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.active.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  if(!confirm('Remove this box from every location? You can restore it later from Removed Items — saved content is kept.')) return;
+  const [removed] = st.active.splice(idx, 1);
+  removed._removedAt = Date.now();
+  st.removed.push(removed);
+  saveBoxTypes();
+  renderDesignMenu();
+  rerenderCurrentDetail();
+}
+function restoreBoxType(key){
+  const st = loadBoxTypes();
+  const idx = st.removed.findIndex(b => b.key === key);
+  if(idx < 0) return;
+  const [b] = st.removed.splice(idx, 1);
+  delete b._removedAt;
+  st.active.push(b);
+  saveBoxTypes();
+  if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+  // If the user restored from the Removed Items panel, refresh it in place.
+  const dep = document.getElementById('design-edit-panel');
+  if(dep && !dep.classList.contains('hidden') && document.getElementById('design-edit-title').textContent === 'REMOVED ITEMS'){
+    openRemovedItemsPanel();
+  }
+  rerenderCurrentDetail();
+}
+function rerenderCurrentDetail(){
+  if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'system' && selectedBody) selectBody(selectedBody);
+  if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+}
+function renderBoxManagerHTML(){
+  const st = loadBoxTypes();
+  const rows = st.active.map(b => `
+    <div class="boxmgr-row">
+      <input class="boxmgr-name" value="${(b.label||'').replace(/"/g,'&quot;')}" onchange="renameBoxType('${b.key}',this.value)">
+      <span class="boxmgr-vis">${b.refOnly ? 'ref-only' : 'players'}</span>
+      <button class="boxmgr-del" onclick="deleteBoxType('${b.key}')" title="Remove box type">🗑</button>
+    </div>`).join('');
+  const removed = st.removed.length ? `
+    <div style="font-size:9px;color:var(--tx1);margin:10px 0 2px;font-family:monospace;letter-spacing:1px">REMOVED — TAP TO RESTORE</div>
+    ${st.removed.map(b => `<div class="boxmgr-row"><span style="flex:1;font-size:11px;color:var(--tx1)">${b.label||''}</span><button class="boxmgr-del" style="color:#4CAF50;border-color:#4CAF50" onclick="restoreBoxType('${b.key}')" title="Restore">↺</button></div>`).join('')}` : '';
+  return `
+    <div style="font-size:10px;color:var(--tx1);margin-bottom:6px;line-height:1.5">Boxes appear on every planet, moon, and station area. Rename inline; remove to hide everywhere (saved text is preserved).</div>
+    ${rows}
+    <button class="design-add-btn" style="width:100%;margin-top:8px" onclick="addBoxType()">+ Add Box Type</button>
+    ${removed}`;
+}
+
+// Renders the registry's box types for one object. `keyFor(box)` maps a box to
+// its content-override key; `builtinValue(boxKey)` returns the object's
+// hardcoded value for built-in boxes. When onlyCustom is true the built-in
+// Read Aloud / Referee Note are skipped (station + Aurelia panels render those
+// in their own bespoke layout and only want the custom boxes appended). In
+// design mode empty boxes still render (with a placeholder) so the referee can
+// fill them in; in play mode empty boxes are hidden.
+function renderBoxTypesHTML(keyFor, builtinValue, pm, onlyCustom){
+  let html = '';
+  getBoxTypes().forEach(bt => {
+    if(onlyCustom && bt.builtin) return;
+    if(bt.refOnly && pm) return; // ref-only boxes are hidden from players
+    const key = keyFor(bt);
+    const original = bt.builtin ? ((builtinValue ? builtinValue(bt.key) : '') || '') : '';
+    designOriginalRegistry[key] = original;
+    const text = resolveContent(key, original);
+    const hasContent = (text || '').trim() !== '';
+    if(!hasContent && !designModeOn) return;
+    const cls = bt.cls === 'ref' ? 's-blk ref ref-only' : 's-blk read';
+    const disp = hasContent
+      ? (text || '').replace(/\n/g, '<br>')
+      : '<span style="opacity:.45;font-style:italic">(empty — tap ✎ to add)</span>';
+    html += `<div class="${cls}"><div class="s-blk-lbl">${escHtml(bt.label)}</div>${designWrap(key, original, disp)}</div>`;
+  });
+  return html;
+}
+
+function toggleLightMode(){
+  lightModeOn = !lightModeOn;
+  rootEl.classList.toggle('light-mode', lightModeOn);
+  document.body.classList.toggle('light-mode-body', lightModeOn);
+  const fp = document.getElementById('float-panels');
+  if(fp) fp.classList.toggle('light-mode', lightModeOn);
+  try {
+    if(lightModeOn) localStorage.setItem('aurelia_theme', 'light');
+    else localStorage.removeItem('aurelia_theme');
+  } catch(e){}
+  openSettingsMenu(); // re-render so the toggle's label/icon updates immediately
+}
+
+try {
+  if(localStorage.getItem('aurelia_theme') === 'light'){
+    lightModeOn = true;
+    rootEl.classList.add('light-mode');
+    document.body.classList.add('light-mode-body');
+    const fp = document.getElementById('float-panels');
+    if(fp) fp.classList.add('light-mode');
+  }
+} catch(e){}
+
+// ── Sheet modal ──────────────────────────────────────────────────────────
+async function openSheet(characterName){
+  sheetCurrentCharacter = characterName;
+  const modal = document.getElementById('sheet-modal');
+  const title = document.getElementById('sheet-card-title');
+  const notice = document.getElementById('sheet-readonly-notice');
+  title.textContent = characterName.toUpperCase();
+  notice.textContent = isReferee() ? 'Referee view — editable' : '';
+  document.getElementById('sheet-card-body').innerHTML = '<div class="init-empty">Loading…</div>';
+  modal.classList.remove('hidden');
+
+  const data = await loadSheet(characterName);
+  renderSheetForm(data);
+}
+
+function closeSheet(){
+  document.getElementById('sheet-modal').classList.add('hidden');
+  sheetCurrentCharacter = null;
+}
+
+function renderSheetForm(data){
+  const body = document.getElementById('sheet-card-body');
+  const chars = [
+    ['STR','str'], ['DEX','dex'], ['END','end'],
+    ['INT','intl'], ['EDU','edu'], ['SOC','soc']
+  ];
+  body.innerHTML = `
+    <div class="sheet-name-row">
+      <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
+      <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${(data.age||'').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Characteristics</div>
+      <div class="sheet-char-grid">
+        ${chars.map(([label,key]) => `
+          <div class="sheet-char-box">
+            <div class="sheet-char-label">${label}</div>
+            <input type="number" class="sheet-char-input" id="sheet-f-${key}" value="${data[key]}" oninput="updateSheetDM('${key}')">
+            <div class="sheet-char-dm" id="sheet-dm-${key}">DM ${charDM(data[key])>=0?'+':''}${charDM(data[key])}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Skills</div>
+      <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Weapons</div>
+      <textarea class="sheet-textarea" id="sheet-f-weapons" placeholder="e.g. Snub pistol, close range, 3d6-3 damage, 6 rounds...">${data.weapons||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Equipment</div>
+      <textarea class="sheet-textarea" id="sheet-f-equipment" placeholder="e.g. Vacc suit (form-fitting, 6kg), Comm unit, Medkit...">${data.equipment||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Notes</div>
+      <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
+    </div>
+  `;
+}
+
+function updateSheetDM(key){
+  const input = document.getElementById('sheet-f-' + key);
+  const dmEl = document.getElementById('sheet-dm-' + key);
+  if(!input || !dmEl) return;
+  const dm = charDM(input.value);
+  dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
+}
+
+async function saveCurrentSheet(){
+  if(!sheetCurrentCharacter) return;
+  const data = {
+    name: document.getElementById('sheet-f-name').value,
+    age: document.getElementById('sheet-f-age').value,
+    str: parseInt(document.getElementById('sheet-f-str').value)||0,
+    dex: parseInt(document.getElementById('sheet-f-dex').value)||0,
+    end: parseInt(document.getElementById('sheet-f-end').value)||0,
+    intl: parseInt(document.getElementById('sheet-f-intl').value)||0,
+    edu: parseInt(document.getElementById('sheet-f-edu').value)||0,
+    soc: parseInt(document.getElementById('sheet-f-soc').value)||0,
+    skills: document.getElementById('sheet-f-skills').value,
+    weapons: document.getElementById('sheet-f-weapons').value,
+    equipment: document.getElementById('sheet-f-equipment').value,
+    notes: document.getElementById('sheet-f-notes').value
+  };
+  await saveSheet(sheetCurrentCharacter, data);
+  const msg = document.getElementById('sheet-save-msg');
+  msg.style.display = 'inline';
+  setTimeout(() => { msg.style.display = 'none'; }, 1500);
+}
+
