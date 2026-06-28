@@ -643,12 +643,22 @@ function uwpToManual(){
 }
 
 // ── Commit / edit / delete ─────────────────────────────────────────────────
+// A body edit (UWP, type, add/remove) can change a world's MgT2e trade codes or its fuel
+// sources (gas giant / A-B refinery), which the living economy derives an unconfigured world
+// from. Clear HX's cached UWPs (HX.syncNodes) then re-settle ECON so the change shows live
+// instead of only after a reload. Harmless/idempotent for edits that don't affect the economy.
+function econAfterBodyChange(){
+  try { if(typeof HX!=='undefined' && HX.syncNodes && typeof GALAXY_NODES!=='undefined') HX.syncNodes(GALAXY_NODES); } catch(e){}
+  try { if(typeof ECON!=='undefined' && ECON.syncLanes) ECON.syncLanes(); } catch(e){}
+}
+
 async function commitNewBody(obj){
   recordDesignUndo('Add body "' + (obj.name||'') + '"');
   obj.id = 'body-add-' + Date.now() + '-' + Math.floor(Math.random()*1000);
   if(!bodyAdditions[currentSystemId]) bodyAdditions[currentSystemId] = [];
   bodyAdditions[currentSystemId].push(obj);
   await saveBodyAdditions();
+  econAfterBodyChange();
   buildOrrery();
   showToast('Body "' + obj.name + '" added');
   selectBody(obj.id);
@@ -710,6 +720,7 @@ async function commitBodyEdit(id, obj){
     else delete bodyPropertyOverrides[currentSystemId][id];
     await saveBodyPropertyOverrides();
   }
+  econAfterBodyChange();
   buildOrrery();
   showToast('Body updated');
   // Refresh whichever view is showing this body so edits (texture included)
@@ -743,6 +754,7 @@ async function deleteBody(id){
     bodyDeletions[currentSystemId][id] = { body: b, t: Date.now(), wasAddition: false };
     await saveBodyDeletions();
   }
+  econAfterBodyChange();
   showToast('Body removed', 'info');
   goSystemOverview();
 }
@@ -757,6 +769,7 @@ async function restoreDeletedBody(sysId, id){
   }
   delete bodyDeletions[sysId][id];
   await saveBodyDeletions();
+  econAfterBodyChange();
   if(currentView === 'system'){ buildOrrery(); }
   closeRemovedItemsPanel();
   showToast('Body restored');
