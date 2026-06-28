@@ -39,7 +39,7 @@ pmCheck.addEventListener("change", function(){
   applyAlertState();
 });
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active")
-    const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; startPolling(); startAlertPolling(); startCombatPolling(); } } catch(e){}
+    const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; } } catch(e){}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM MAP
