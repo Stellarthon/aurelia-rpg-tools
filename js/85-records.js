@@ -364,6 +364,112 @@ function cycleDiscVis(id){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NPC ROSTER  (Design Mode · standalone, browsable NPC library — referee)
+// ───────────────────────────────────────────────────────────────────────────
+// A library of NPCs that AREN'T tied to a station — recurring contacts, patrons,
+// faction figures — authored + searched in one place, with a proper Traveller
+// stat block (the character-sheet shape). The panel also lists every PLACED NPC
+// (station/body sub-content, via buildSearchIndex) read-only with a jump-to, so
+// the referee can find any NPC from one surface. Lore already has its own CRUD
+// (the Library Data / discovery log), so this closes the last audit gap: NPCs as
+// a first-class, browsable entity. Referee tool: loaded referee-only, never shown
+// to players. Stored in aurelia_state 'npc-roster'.
+let npcRoster = [];
+let npcPanelOpen = false, npcCollapsed = false, npcEditingId = null, npcSearchQ = '';
+
+async function loadNpcRoster(){
+  if(typeof isReferee === 'function' && !isReferee()){ npcRoster = []; return; }   // referee tool — don't populate player memory
+  try { const r = await supaStorage.get('npc-roster', true); npcRoster = (r.value != null ? JSON.parse(r.value) : []); if(!Array.isArray(npcRoster)) npcRoster = []; }
+  catch(e){ npcRoster = []; }
+}
+async function saveNpcRoster(){ try { await supaStorage.set('npc-roster', JSON.stringify(npcRoster), true); } catch(e){ console.error('NPC roster save failed', e); } }
+function npcById(id){ return npcRoster.find(n => n.id === id) || null; }
+function emptyNpc(){ return { id:'npc_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), name:'', role:'', faction:'', location:'', desc:'', str:7,dex:7,end:7,intl:7,edu:7,soc:7, skills:'', equipment:'', weapons:'', notes:'' }; }
+
+function toggleNpcPanel(){
+  if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','info'); return; }
+  npcPanelOpen = !npcPanelOpen;
+  const w = document.getElementById('npc-wrap'), b = document.getElementById('npc-btn');
+  if(w) w.classList.toggle('hidden', !npcPanelOpen);
+  if(b) b.classList.toggle('panel-open', npcPanelOpen);
+  if(npcPanelOpen) renderNpcPanel();
+}
+function toggleNpcCollapse(){
+  const h = document.getElementById('npc-header'); if(h && h.dataset.suppressClick === '1') return;
+  npcCollapsed = !npcCollapsed;
+  document.getElementById('npc-toggle').textContent = npcCollapsed ? '▲' : '▼';
+  document.getElementById('npc-body').classList.toggle('collapsed', npcCollapsed);
+  document.getElementById('npc-wrap').classList.toggle('panel-collapsed', npcCollapsed);
+}
+function npcSetSearch(v){ npcSearchQ = v; renderNpcPanel(); }
+
+function npcRosterAdd(){ if(!isReferee()) return; const n = emptyNpc(); n.name = 'New NPC'; npcRoster.push(n); npcEditingId = n.id; saveNpcRoster(); renderNpcPanel(); }
+function npcRosterDuplicate(id){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const c = JSON.parse(JSON.stringify(n)); c.id = 'npc_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); c.name = (n.name||'NPC')+' (copy)'; npcRoster.push(c); npcEditingId = c.id; saveNpcRoster(); renderNpcPanel(); }
+function npcRosterRemove(id){ if(!isReferee()) return; if(!confirm('Remove this NPC from the roster?')) return; npcRoster = npcRoster.filter(n => n.id !== id); if(npcEditingId === id) npcEditingId = null; saveNpcRoster(); renderNpcPanel(); }
+function npcEdit(id){ if(!isReferee()) return; npcEditingId = (npcEditingId === id ? null : id); renderNpcPanel(); }
+function npcEditField(id, field, value){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const numeric = ['str','dex','end','intl','edu','soc']; n[field] = numeric.includes(field) ? (parseInt(value)||0) : value; saveNpcRoster(); }
+
+function renderNpcCard(n){
+  const ea = (typeof escQH==='function') ? escQH : (x=>String(x==null?'':x));
+  const ea2 = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));
+  const editing = npcEditingId === n.id;
+  const meta = [n.role, n.faction, n.location].filter(Boolean).map(ea).join(' · ');
+  let hd = `<div class="disc-card-hd"><span class="disc-title">${ea(n.name||'(unnamed)')}</span>
+    <div class="disc-ctl">
+      <button class="disc-mini" onclick="npcEdit('${n.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
+      <button class="disc-mini" onclick="npcRosterDuplicate('${n.id}')" title="Duplicate">⧉</button>
+      <button class="disc-mini del" onclick="npcRosterRemove('${n.id}')" title="Remove">✕</button>
+    </div></div>`;
+  if(!editing){
+    let b = hd; if(meta) b += `<div class="npc-meta">${meta}</div>`;
+    if(n.desc) b += `<div class="disc-body-txt">${ea(n.desc).replace(/\n/g,'<br>')}</div>`;
+    return `<div class="disc-card">${b}</div>`;
+  }
+  const chars = ['str','dex','end','intl','edu','soc'].map(c =>
+    `<label>${c.toUpperCase()}<input type="number" value="${parseInt(n[c])||0}" onchange="npcEditField('${n.id}','${c}',this.value)"></label>`).join('');
+  const ed = `<div class="disc-add">
+    <input value="${ea2(n.name)}" placeholder="Name" onchange="npcEditField('${n.id}','name',this.value)">
+    <div class="disc-add-row">
+      <input value="${ea2(n.role)}" placeholder="Role / title" onchange="npcEditField('${n.id}','role',this.value)">
+      <input value="${ea2(n.faction)}" placeholder="Faction" onchange="npcEditField('${n.id}','faction',this.value)">
+    </div>
+    <input value="${ea2(n.location)}" placeholder="Where found (system / station / world)" onchange="npcEditField('${n.id}','location',this.value)">
+    <textarea rows="2" placeholder="Description" onchange="npcEditField('${n.id}','desc',this.value)">${ea(n.desc||'')}</textarea>
+    <div class="npc-chars">${chars}</div>
+    <input value="${ea2(n.skills)}" placeholder="Skills (e.g. Gun Combat 1, Persuade 2)" onchange="npcEditField('${n.id}','skills',this.value)">
+    <input value="${ea2(n.equipment)}" placeholder="Equipment" onchange="npcEditField('${n.id}','equipment',this.value)">
+    <input value="${ea2(n.weapons)}" placeholder="Weapons" onchange="npcEditField('${n.id}','weapons',this.value)">
+    <textarea rows="2" placeholder="Referee notes" onchange="npcEditField('${n.id}','notes',this.value)">${ea(n.notes||'')}</textarea>
+  </div>`;
+  return `<div class="disc-card">${hd}${ed}</div>`;
+}
+
+function renderNpcPanel(){
+  const body = document.getElementById('npc-body'); if(!body) return;
+  if(!isReferee()){ body.innerHTML = '<div class="cal-empty">Referee only.</div>'; return; }
+  const q = (npcSearchQ||'').trim().toLowerCase();
+  const cnt = document.getElementById('npc-count'); if(cnt) cnt.textContent = npcRoster.length;
+  const ros = npcRoster.filter(n => !q || [n.name,n.role,n.faction,n.location].some(x => (x||'').toLowerCase().includes(q)));
+  // Every NPC placed in a station/body, via the existing search index (read-only).
+  let placed = [];
+  try { placed = buildSearchIndex().filter(it => it.type === 'NPC' && (!q || it.name.toLowerCase().includes(q))); } catch(e){}
+  window._npcNavs = placed.map(p => p.nav);
+  const searchBox = `<input class="npc-search" placeholder="🔍 Search NPCs…" value="${(typeof escAttr==='function')?escAttr(npcSearchQ):npcSearchQ}" oninput="npcSetSearch(this.value)">`;
+  const rosHtml = ros.length
+    ? ros.map(renderNpcCard).join('')
+    : `<div class="cal-empty">${q ? 'No roster NPCs match.' : 'No NPCs yet. Add recurring contacts, patrons, or faction figures below.'}</div>`;
+  const addBtn = `<button class="cal-add-btn" style="width:100%" onclick="npcRosterAdd()">+ New NPC</button>`;
+  let placedHtml = '';
+  if(placed.length){
+    placedHtml = `<div class="disc-add-ttl" style="margin-top:8px">Placed in the world · ${placed.length}</div>` +
+      placed.map((p,i) => `<div class="disc-card npc-jump" onclick="navigateToSearchResult(window._npcNavs[${i}])">
+        <div class="disc-card-hd"><span class="disc-title">${escQH(p.name)}</span></div>
+        <div class="npc-meta">${escQH(p.sub||'')} — tap to open</div></div>`).join('');
+  }
+  body.innerHTML = searchBox + rosHtml + addBtn + placedHtml;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // REPUTATION TRACKER  (V2 — faction standing + dated milestones)
 // ───────────────────────────────────────────────────────────────────────────
 // Party-wide faction standing on the Traveller reaction scale (−6…+6), plus a
@@ -972,6 +1078,8 @@ makePanelDraggable('cal-wrap', 'cal-header');
 makePanelResizable('cal-wrap');
 makePanelDraggable('disc-wrap', 'disc-header');
 makePanelResizable('disc-wrap');
+makePanelDraggable('npc-wrap', 'npc-header');
+makePanelResizable('npc-wrap');
 makePanelDraggable('rep-wrap', 'rep-header');
 makePanelResizable('rep-wrap');
 makePanelDraggable('funds-wrap', 'funds-header');
@@ -1039,6 +1147,9 @@ loadQuestLog(); // quests render on-demand when panel is opened, no immediate re
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
+loadWeaponCatalog().then(() => { if(typeof shipEditorId!=='undefined' && shipEditorId && typeof renderShipEditor==='function') renderShipEditor(); }); // referee weapon templates
+loadShipRoster().then(() => { if(typeof combatPanelOpen!=='undefined' && combatPanelOpen && typeof renderCombat==='function') renderCombat(); }); // referee ship roster + fleets
+loadNpcRoster().then(() => { if(typeof npcPanelOpen!=='undefined' && npcPanelOpen && typeof renderNpcPanel==='function') renderNpcPanel(); }); // referee NPC roster
 renderImperialDate(); // show default immediately, then refresh once loaded
 loadImperialDate().then(() => { renderImperialDate(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
