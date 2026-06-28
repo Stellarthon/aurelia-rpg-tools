@@ -9,6 +9,9 @@ const CACHE = 'orion-shell-v1';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-180.png',
+  // CSS + ordered classic scripts (index.html was split into these; all must be
+  // precached or an installed PWA loses styling / breaks on first offline load).
+  './css/tokens.css', './css/app.css',
 ];
 
 self.addEventListener('install', (e) => {
