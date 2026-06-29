@@ -1741,25 +1741,37 @@ const HX = (function(){
     // 2) Trader convoys — route each along the fuel-optimal JUMP-LANE path (not a straight
     //    line), draw that multi-hop polyline, and place the ship marker along it by progress.
     const week=st.week;
-    ((ECON.agents&&ECON.agents())||[]).forEach(a=>{ if(!a.route) return;
+    const allAgents=(ECON.agents&&ECON.agents())||[];
+    const manyConvoys = allAgents.filter(a=>a.route).length > 30;   // big fleet → drop per-convoy labels (clutter + cost), keep markers/lines
+    allAgents.forEach(a=>{ if(!a.route) return;
       const f=BY_ID[a.route.from], t=BY_ID[a.route.to]; if(!f||!t) return;
-      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.06,Math.min(0.94,(week-a.route.began)/(a.route.eta-a.route.began)));
-      let nodes=null; try{ nodes=bestRoute(f,t); }catch(e){}
-      let pts;
-      if(nodes && nodes.length>1) pts=nodes.map(n=>axialPx(n.q,n.r));                      // surveyed jump-lane, fuel-optimal
-      else { const idp=lorePath(a.route.from,a.route.to);                                  // else the always-flyable commercial routes
-        if(idp && idp.length>1) pts=idp.map(id=>BY_ID[id]).filter(Boolean).map(n=>axialPx(n.q,n.r)); }
-      if(!pts || pts.length<2) pts=[axialPx(f.q,f.r), axialPx(t.q,t.r)];                    // last resort: direct
+      const frac=(typeof window!=='undefined'&&window.econViewFrac)||0;   // sub-week render clock (+1 day) so convoys crawl along their lane path
+      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.06,Math.min(0.94,(week+frac-a.route.began)/(a.route.eta-a.route.began)));
+      // Marker path = deadhead (from → pickup, empty) + laden (pickup → dest), so the ship
+      // flies from where it currently is to its next cargo source instead of teleporting.
+      const legPts=(fid,tid)=>{ const ff=BY_ID[fid], tt=BY_ID[tid]; if(!ff||!tt) return null;
+        let nodes=null; try{ nodes=bestRoute(ff,tt); }catch(e){}
+        let p; if(nodes && nodes.length>1) p=nodes.map(n=>axialPx(n.q,n.r));                // surveyed jump-lane, fuel-optimal
+        else { const idp=lorePath(fid,tid); if(idp && idp.length>1) p=idp.map(id=>BY_ID[id]).filter(Boolean).map(n=>axialPx(n.q,n.r)); }   // else the always-flyable commercial routes
+        if(!p || p.length<2) p=[axialPx(ff.q,ff.r), axialPx(tt.q,tt.r)]; return p; };       // last resort: direct
+      const wp=(a.route.pickup && a.route.pickup!==a.route.from && BY_ID[a.route.pickup]) ? a.route.pickup : null;
+      let pts=legPts(a.route.from, wp||a.route.to);
+      if(wp){ const seg2=legPts(wp, a.route.to); if(seg2 && seg2.length>1) pts=(pts||[]).concat(seg2.slice(1)); }   // join deadhead + laden (drop the shared pickup point)
+      if(!pts || pts.length<2) pts=[axialPx(f.q,f.r), axialPx(t.q,t.r)];
       // walk the polyline to the progress point
       const seg=[]; let total=0; for(let i=0;i<pts.length-1;i++){ const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y); seg.push(d); total+=d; }
       let x=pts[0].x, y=pts[0].y;
       if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
         const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
-      const z=4.2, gg=NS('g',{'pointer-events':'none'});
-      gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:'#f4d35e','stroke-width':0.8,opacity:0.3,'stroke-dasharray':'2,3'}));
-      gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:'#f4d35e',stroke:'#04060e','stroke-width':1}));
-      const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
-      gg.appendChild(lbl);
+      // Highlight the SELECTED trader's route (picked in the econ console); dim the rest.
+      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id);
+      const anySel=(typeof window!=='undefined' && !!window.econTraderSel), dim=anySel&&!sel;
+      const col=sel?'#ffe27a':'#f4d35e', z=sel?6:4.2, gg=NS('g',{'pointer-events':'none'});
+      if(sel) gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':3,opacity:0.22,'stroke-linejoin':'round'}));   // glow
+      gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':sel?1.6:0.8,opacity:sel?0.95:(dim?0.12:0.3),'stroke-dasharray':sel?'none':'2,3'}));
+      gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:col,stroke:'#04060e','stroke-width':1,opacity:dim?0.35:1}));
+      if(!dim && (sel || !manyConvoys)){ const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
+        if(sel) lbl.setAttribute('font-weight','700'); gg.appendChild(lbl); }
       layer.appendChild(gg);
     });
   }

@@ -1463,7 +1463,7 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #gen-btn:hover{background:var(--bd0);color:var(--tx0)}
 #gen-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#gen-wrap{right:0;top:54px;width:312px}}
-#econ-wrap{position:fixed;top:54px;right:0;width:372px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:120px;max-width:94vw;max-height:86vh}
+#econ-wrap{position:fixed;top:54px;right:0;width:740px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:120px;max-width:94vw;max-height:90vh;resize:both;overflow:hidden}
 #econ-wrap.hidden{display:none}
 #econ-wrap.panel-collapsed{height:auto!important;min-height:0}
 #econ-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;border-bottom:.5px solid var(--bd0)}
