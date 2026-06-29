@@ -458,6 +458,8 @@ window.ECON = (function(){
   const MEGACORP_FLOOR = 40000;          // solvency floor — its vast off-screen holdings. Below the commission threshold ON PURPOSE: guarantees it can always bail a flagship and never collapses, WITHOUT free-funding endless growth (fleet/infra growth still comes from earned surplus, like the rivals)
   const CORP_MAX = 6, CORP_FORM_PROB = 0.015;          // occasional new houses form, up to this many
   const CORP_OUT_BUMP = 12;              // +specialty output one expansion adds at a world (the expansion also makes its own input chain — see buildTopology — so it never starves a recipe input)
+  const MONOPOLY_SHARE = 0.5;            // a house controlling ≥ this fraction of galactic output of its specialty gains pricing power (opt-in — see state.monopolyOn)
+  const MONOPOLY_PREMIUM_MAX = 0.30;     // monopoly price premium caps at +30% (bounded like inflation); scales from 0 at the threshold up to full dominance
   const CORP_DEM_FOOD = 2;               // +worker food demand per expansion (small; only Common Consumables, the galaxy's most-overproduced good, has the headroom to absorb it at the invest bound)
   const CORP_SHIP_POOL = ['far','subm','fat','fat','heavy'];   // well-capitalised → mid/large hulls
   const ESCORT_VALUE_MIN = 12000;        // a corp convoy worth at least this (Cr cargo = qty·Cr/kt) is worth flagging an escort contract for — catches high-tech/luxury hauls, not cheap bulk
@@ -637,6 +639,20 @@ window.ECON = (function(){
   function corpShipName(c){ return c.name.split(' ')[0]+' '+pick(['Clipper','Hauler','Lighter','Carrier','Star-Freight','Runner']); }
   function investCountAt(worldId){ let n=0; Object.values(state.corps).forEach(c=>{ (c.invests||[]).forEach(iv=>{ if(iv.world===worldId) n++; }); }); return n; }
   function totalInvests(){ let n=0; Object.values(state.corps).forEach(c=>{ n+=(c.invests||[]).length; }); return n; }
+  // Galaxy-wide output of a good (already includes the corp-invest layer baked into worlds[].prod by buildTopology).
+  function galacticProd(good){ let s=0; Object.keys(worlds).forEach(id=>{ s+=(worlds[id].prod[good]||0); }); return s; }
+  // A corp's share of galactic output of its SPECIALTY. Each of its expansions adds CORP_OUT_BUMP of that
+  // good (all invests are for the specialty — see corpsStep step 3), so its contribution is invests×bump.
+  function corpSpecialtyShare(c){ if(!c||!c.specialty) return 0; const tot=galacticProd(c.specialty); if(tot<=0) return 0;
+    return Math.min(1, ((c.invests||[]).length * CORP_OUT_BUMP) / tot); }
+  // Monopoly pricing premium for a good — OPT-IN (state.monopolyOn) and full-sim only, gated exactly like
+  // inflation so the deterministic baseline is untouched (scratch settle state has no .corps / active=false).
+  // Galaxy-wide for the dominated good; takes the strongest dominator if several qualify.
+  function monopolyMult(id, good){
+    if(!state.active || !state.monopolyOn || !state.corps) return 1;
+    let m=1; Object.values(state.corps).forEach(c=>{ if(c.defunct||!c.monopoly) return;
+      if(c.monopoly.good===good && c.monopoly.mult>m) m=c.monopoly.mult; }); return m;
+  }
   function pickInvestWorld(c){   // a world this corp "works": already produces its specialty, or its home — bounded ≤3 invests/world (total)
     const cand=Object.keys(worlds).filter(id=> (worlds[id].prod[c.specialty]>0 || id===c.home) && investCountAt(id) < CORP_INVEST_MAX_PER_WORLD);
     if(!cand.length) return null;
@@ -753,6 +769,12 @@ window.ECON = (function(){
       c.capHist=c.capHist||[];
       const net = c.treasury + state.agents.filter(a=>a.backing===c.id).reduce((s,a)=>s+(a.cap||0),0);   // re-scan: includes a hull commissioned this week (treasury↓ offset by the new ship's cap → no false dip)
       c.capHist.push({ wk:week, cap:Math.round(net) }); if(c.capHist.length>24) c.capHist.shift();
+      // 6) Monopoly flag — dominance of the corp's specialty good. Stored in shared state (persisted,
+      //    referee-advanced) but only ACTUALLY moves prices when state.monopolyOn (see monopolyMult).
+      const share = corpSpecialtyShare(c);
+      c.monopoly = (share >= MONOPOLY_SHARE)
+        ? { good:c.specialty, share:Math.round(share*100)/100, mult: 1 + MONOPOLY_PREMIUM_MAX * Math.min(1, (share-MONOPOLY_SHARE)/(1-MONOPOLY_SHARE)) }
+        : null;
     });
     // New houses occasionally form; broke + shipless ones dissolve (keep invests as a defunct shell → no base churn).
     if(Object.values(state.corps).filter(c=>!c.defunct).length < CORP_MAX && Math.random() < CORP_FORM_PROB) formCorp(week);
@@ -942,7 +964,7 @@ window.ECON = (function(){
   function priceAdjOf(id, good){ let m = padjMult(priceAdj.world[id]||0);   // world-wide nudge × per-good nudge
     const gg = priceAdj.good[id]; if(gg && gg[good]) m *= padjMult(gg[good]); return m; }
   function inflMult(id, good){ return state.active ? inflOf(id,good) : 1; }   // sticky inflation = full-sim only
-  function overlayMult(id, good){ return priceAdjOf(id,good) * inflMult(id,good); }   // shared seam: manual × inflation
+  function overlayMult(id, good){ return priceAdjOf(id,good) * inflMult(id,good) * monopolyMult(id,good); }   // shared seam: manual × inflation × (opt-in) monopoly premium
   function inflationStep(week){
     if(!state.infl) return;                                          // scratch settle state has none → skipped (determinism)
     const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
@@ -986,7 +1008,7 @@ window.ECON = (function(){
       worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
     } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
     reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
     save(); }   // reseed stock; keep the current Simple/Full mode
@@ -1202,8 +1224,13 @@ window.ECON = (function(){
     stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
     agents(){ ensure(); return state.agents||[]; },
     shipOf:(a)=>shipOf(a), SHIP_CLASSES,
-    corps(){ ensure(); return state.corps||{}; },   // {corpId:{name,specialty,home,color,treasury,invests,megacorp,...}}
+    corps(){ ensure(); return state.corps||{}; },   // {corpId:{name,specialty,home,color,treasury,invests,megacorp,monopoly,playerShares,...}}
     isCorp,
+    corpSpecialtyShare:(c)=>{ ensure(); return corpSpecialtyShare(c); },   // 0..1 — this house's slice of galactic output of its specialty
+    galacticProd:(g)=>{ ensure(); return galacticProd(g); },
+    monopolyOn(){ ensure(); return !!state.monopolyOn; },                  // opt-in price-affecting monopoly premium
+    setMonopoly(v){ ensure(); state.monopolyOn=!!v; save(); },
+    setCorpShares(id,pct){ ensure(); const c=state.corps&&state.corps[id]; if(!c) return; c.playerShares=Math.max(0,Math.min(100,Math.round(+pct)||0)); save(); },   // referee-only ledger: party's % stake in a house
     corpEvents(){ ensure(); return state.corpEvents||[]; },          // raw flagged contract opportunities
     contractItem:(e)=>{ ensure(); return corpContractItem(e); },     // raw event → rich, labelled contract item (reward, places, names)
     contractReward:(e)=>{ ensure(); return contractRewardOf(e); },
@@ -1321,6 +1348,25 @@ function econCorpDetailHTML(c){
   if(inv.length){ const by={}; inv.forEach(iv=>{ by[iv.world]=(by[iv.world]||0)+1; });
     const parts=Object.keys(by).map(wid=>`${escQH((wl[wid]||{}).label||wid)}${by[wid]>1?' ×'+by[wid]:''}`).join(' · ');
     h+=`<div style="font-size:10px;color:var(--tx1);margin:6px 0 0">Expansions · ${escQH(spec)} — ${parts}</div>`; }
+  // Rivalry — the house's natural competitor + any live black-job contracts it's running or fending off.
+  { const corps=ECON.corps(), others=Object.values(corps).filter(x=>!x.defunct&&x.id!==c.id);
+    const same=others.filter(x=>x.specialty===c.specialty).sort((a,b)=>(''+a.name).localeCompare(b.name));
+    const rival = same[0] || others.find(x=>x.megacorp) || others.slice().sort((a,b)=>(''+a.name).localeCompare(b.name))[0] || null;
+    const evs=ECON.corpEvents(), bj=e=>e.type==='sabotage'||e.type==='espionage';
+    const offensive=evs.filter(e=>bj(e)&&e.corp===c.id), defensive=evs.filter(e=>bj(e)&&e.target===c.id);
+    if(rival||offensive.length||defensive.length){
+      h+=`<div style="font-size:10px;color:var(--tx1);margin:6px 0 2px">Rivalry${rival?` · chief rival <span style="color:${rival.color||'#e8a0a0'}">${escQH(rival.name)}</span>`:''}</div>`;
+      offensive.forEach(e=>{ const t=corps[e.target]; h+=`<div style="font-size:10px;color:#e0b24a">⚔ running a ${e.type} job vs ${escQH((t&&t.name)||e.targetName||'a rival')}</div>`; });
+      defensive.forEach(e=>{ const o=corps[e.corp]; h+=`<div style="font-size:10px;color:#e8a0a0">🛡 targeted by ${escQH((o&&o.name)||'a rival')}'s ${e.type}</div>`; });
+    }
+  }
+  // Party stake — REFEREE LEDGER ONLY (no automated trading): records what share of the house the
+  // party owns, so the net-worth graph above doubles as their portfolio value. Adjust at the table.
+  { const sh=c.playerShares||0, portfolio=Math.round(net*sh/100);
+    const bs='background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:5px;padding:0 7px;font-size:11px;cursor:pointer';
+    h+=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10px;color:var(--tx1);margin:7px 0 0;border-top:1px dashed var(--bd0);padding-top:6px">`;
+    h+=`<span>Party stake <b style="color:${sh>0?'#7ec98f':'var(--tx1)'}">${sh}%</b>${sh>0?` · portfolio <b style="color:#7ec98f">${econMoney(portfolio)}</b>`:''}</span>`;
+    h+=`<span style="margin-left:auto;display:inline-flex;gap:4px"><button title="Sell 5%" style="${bs}" onclick="event.stopPropagation();econBumpCorpShares('${c.id}',-5)">–</button><button title="Buy 5%" style="${bs}" onclick="event.stopPropagation();econBumpCorpShares('${c.id}',5)">+</button></span></div>`; }
   h+=`</div>`;
   return h;
 }
@@ -1404,6 +1450,10 @@ function econApplyRun(){
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
 function econToggleTraders(){ ECON.setTraders(!ECON.tradersOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// Opt-in monopoly pricing: lets a house dominating its specialty good raise that good's price galaxy-wide
+// (bounded, full-sim only). OFF by default so it never silently shifts a tuned economy.
+function econToggleMonopoly(){ ECON.setMonopoly(!ECON.monopolyOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econBumpCorpShares(id, d){ if(typeof ECON==='undefined') return; const c=ECON.corps()[id]; if(!c) return; ECON.setCorpShares(id, (c.playerShares||0)+d); renderEconPanel(); }
 function econRaidConvoy(id){
   const r = ECON.raidConvoy(id);
   if(typeof showToast==='function'){
@@ -1818,26 +1868,32 @@ function renderEconPanel(){
     h+=`</div>`;
     h+=econPriceChartHTML(cur.good, cur.sys);
     h+=`</div>`; }
-  // Corporations — pooled-capital trading houses (identity · treasury · fleet · investments)
+  // Corporations — pooled-capital trading houses (identity · net worth · fleet · investments · market share)
   { const corps=Object.values(ECON.corps()), wl=ECON.worlds(), ags=ECON.agents();
     if(corps.length){
+      const netOf=c=>(c.treasury||0)+ags.filter(a=>a.backing===c.id).reduce((s,a)=>s+(a.cap||0),0);
+      const live=corps.filter(c=>!c.defunct), totNet=Math.max(1, live.reduce((s,c)=>s+Math.max(0,netOf(c)),0)), monoOn=ECON.monopolyOn();
       h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-      h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Corporations — pooled capital</div>`;
-      corps.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || (b.treasury-a.treasury)).forEach(c=>{
-        const fleet=ags.filter(a=>a.backing===c.id).length, inv=(c.invests||[]).length;
+      h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Corporations — pooled capital</span>`;
+      h+=btn(monoOn?'⚖ Monopoly ON':'⚖ Monopoly OFF','econToggleMonopoly()', monoOn?'background:#4a3a1d;border-color:#9d7a3f;color:#eadcbf':'');
+      h+=`</div>`;
+      corps.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || (netOf(b)-netOf(a))).forEach(c=>{
+        const fleet=ags.filter(a=>a.backing===c.id).length, inv=(c.invests||[]).length, net=netOf(c);
         const col=c.color||'#ff9a3c', gcol=(typeof econGoodColor==='function')?econGoodColor(c.specialty):'#9fb0c8', spec=(''+c.specialty).replace('Common ','');
-        const open = econCorpSel===c.id;
+        const wealthPct=c.defunct?0:Math.round(100*Math.max(0,net)/totNet), mktPct=Math.round(100*ECON.corpSpecialtyShare(c)), mono=c.monopoly, open=econCorpSel===c.id;
+        const monoBadge = mono?` <span style="color:#e0b24a;font-size:9px" title="Dominates ${Math.round((mono.share||0)*100)}% of galactic ${escQH(spec)}${monoOn?` — raising its price +${Math.round((mono.mult-1)*100)}%`:' (turn Monopoly pricing ON to apply)'}">⚖</span>`:'';
         h+=`<div onclick="econToggleCorp('${c.id}')" title="${escQH(c.name)} — click to highlight its ships &amp; see net-worth P&amp;L" style="padding:3px 0;border-top:1px solid var(--bd0);cursor:pointer${c.defunct?';opacity:.5':''}${open?';background:rgba(255,154,60,.08)':''}">`;
         h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
-        h+=`<span><span style="color:var(--tx1)">${open?'▾':'▸'}</span> <span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(c.name.split(' ')[0])}</span> ${escQH(c.name)}${c.megacorp?' <span style="color:#9fd0ff;font-size:9px" title="Megacorp — safeguarded, never collapses">★</span>':''}${c.defunct?' <span style="color:var(--tx1);font-size:9px">(defunct)</span>':''}</span>`;
-        h+=`<span style="color:${c.treasury>=0?'#7ec98f':'#e8a0a0'};white-space:nowrap">${econMoney(c.treasury)}</span></div>`;
+        h+=`<span><span style="color:var(--tx1)">${open?'▾':'▸'}</span> <span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(c.name.split(' ')[0])}</span> ${escQH(c.name)}${c.megacorp?' <span style="color:#9fd0ff;font-size:9px" title="Megacorp — safeguarded, never collapses">★</span>':''}${monoBadge}${c.defunct?' <span style="color:var(--tx1);font-size:9px">(defunct)</span>':''}</span>`;
+        h+=`<span style="color:${net>=0?'#7ec98f':'#e8a0a0'};white-space:nowrap" title="Net worth = treasury + fleet capital">${econMoney(net)}</span></div>`;
         h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1)">`;
-        h+=`<span><span style="color:${gcol}">◆ ${escQH(spec)}</span>${c.home&&wl[c.home]?` · ${escQH(wl[c.home].label)}`:''}</span>`;
+        h+=`<span><span style="color:${gcol}">◆ ${escQH(spec)}</span> ${mktPct}% mkt${c.home&&wl[c.home]?` · ${escQH(wl[c.home].label)}`:''}</span>`;
         h+=`<span style="white-space:nowrap">${fleet} ship${fleet===1?'':'s'} · ${inv} invest${inv===1?'':'s'}</span></div>`;
+        if(!c.defunct) h+=`<div title="${wealthPct}% of total corporate net worth" style="height:3px;background:var(--bd0);border-radius:2px;margin-top:3px"><div style="height:100%;width:${wealthPct}%;background:${col};border-radius:2px"></div></div>`;
         h+=`</div>`;
         if(open) h+=econCorpDetailHTML(c);
       });
-      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Click a house to highlight its ships on the map &amp; see its net-worth P&amp;L. Corp ships trade profit-first anywhere (no territory); treasuries sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses).</div>`;
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Click a house to highlight its ships on the map &amp; see its net-worth P&amp;L. Bar = share of total corporate net worth; “% mkt” = its slice of galactic output of its specialty. <b style="color:#e0b24a">⚖</b> marks a house dominating its good — turn on <b>Monopoly</b> to let that dominance raise the good's price (bounded, opt-in, full-sim). <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp.</div>`;
       h+=`</div>`;
     }
   }

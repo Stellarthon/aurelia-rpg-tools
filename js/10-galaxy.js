@@ -1643,6 +1643,18 @@ const HX = (function(){
         if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
           hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
+    // Corp territory — when a house is selected in the econ console, ring its HQ + expanded worlds in
+    // its house colour (HQ = solid ring + label; expansions = dashed, growing with the invest count).
+    if(typeof window!=='undefined' && window.econCorpSel && typeof ECON!=='undefined'){
+      try{ const c=ECON.corps()[window.econCorpSel];
+        if(c){ const col=c.color||'#ff9a3c', cg=NS('g',{'pointer-events':'none'}); const counts={};
+          if(c.home) counts[c.home]=0; (c.invests||[]).forEach(iv=>{ counts[iv.world]=(counts[iv.world]||0)+1; });
+          Object.keys(counts).forEach(wid=>{ const s=BY_ID[wid]; if(!s) return; const p=axialPx(s.q,s.r), isHome=wid===c.home, rad=11+Math.min(6,counts[wid]*2);
+            cg.appendChild(NS('circle',{cx:p.x,cy:p.y,r:rad,fill:col,'fill-opacity':0.06,stroke:col,'stroke-opacity':0.85,'stroke-width':isHome?1.8:1.1,'stroke-dasharray':isHome?'none':'3,3'}));
+            if(isHome){ const t=NS('text',{x:p.x,y:p.y-rad-3,'text-anchor':'middle',fill:col,'font-family':'monospace','font-size':8.5,'font-weight':700,opacity:0.9}); t.textContent='◆ '+(''+c.name).split(' ')[0].toUpperCase(); cg.appendChild(t); } });
+          g.appendChild(cg); }
+      }catch(e){}
+    }
     if(selected&&selected!==origin){ const route=bestRoute(origin,selected);
       if(route&&route.length>1){ const plan=fuelPlan(route);
         for(let i=0;i<route.length-1;i++){ const pa=axialPx(route[i].q,route[i].r),pb=axialPx(route[i+1].q,route[i+1].r);
@@ -1920,6 +1932,14 @@ const HX = (function(){
     html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
     html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
     const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    // Corporate presence — which trading houses are HQ'd or have expanded here (player-visible, like trade codes).
+    if(typeof ECON!=='undefined' && ECON.isMarketId && ECON.isMarketId(s.id)){
+      try{ const corps=Object.values(ECON.corps()).filter(c=>!c.defunct && (c.home===s.id || (c.invests||[]).some(iv=>iv.world===s.id)));
+        if(corps.length){ const parts=corps.map(c=>{ const n=(c.invests||[]).filter(iv=>iv.world===s.id).length, role=c.home===s.id?(n?`HQ +${n}`:'HQ'):`${n} op${n===1?'':'s'}`;
+            return `<span style="color:${c.color||'#ff9a3c'}">${eh((''+c.name).split(' ')[0])}</span> <span style="opacity:.65">(${role})</span>`; }).join(', ');
+          html+=`<div class="hx-kv"><span class="k">Corporate presence</span><span class="v" style="text-align:right">${parts}</span></div>`; }
+      }catch(e){}
+    }
     if(s===origin){
       html+=`<div class="hx-kv"><span class="k">Status</span><span class="v" style="color:#f4d35e">◆ Current location${typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?' · '+formatImperial(imperialDate):''}</span></div>`;
       if(fuelAt(s)!=='none' && fuelAboard<fuelMax && ref())
