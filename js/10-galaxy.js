@@ -1763,9 +1763,11 @@ const HX = (function(){
       let x=pts[0].x, y=pts[0].y;
       if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
         const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
-      // Highlight the SELECTED trader's route (picked in the econ console); dim the rest.
-      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id);
-      const anySel=(typeof window!=='undefined' && !!window.econTraderSel), dim=anySel&&!sel;
+      // Highlight the SELECTED trader's route, OR every convoy of the SELECTED corporation
+      // (econCorpSel = a backing id like 'corp:omnisynth'); dim the rest. Picked in the econ console.
+      const corpSel=(typeof window!=='undefined' && window.econCorpSel && a.backing===window.econCorpSel);
+      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id) || corpSel;
+      const anySel=(typeof window!=='undefined' && (!!window.econTraderSel || !!window.econCorpSel)), dim=anySel&&!sel;
       const col=sel?'#ffe27a':'#f4d35e', z=sel?6:4.2, gg=NS('g',{'pointer-events':'none'});
       if(sel) gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':3,opacity:0.22,'stroke-linejoin':'round'}));   // glow
       gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':sel?1.6:0.8,opacity:sel?0.95:(dim?0.12:0.3),'stroke-dasharray':sel?'none':'2,3'}));

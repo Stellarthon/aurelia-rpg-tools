@@ -747,6 +747,12 @@ window.ECON = (function(){
       if(Math.random() < CORP_CONTRACT_PROB){ const r=rivalOf(c);
         if(r){ const t = Math.random()<0.5 ? 'sabotage' : 'espionage';
           if(!hasCorpEvent(e=>e.type===t && e.corp===c.id && e.target===r.id)) emitCorpEvent(t, c, { target:r.id, targetName:r.name }); } }
+      // 5) Weekly P&L sample — NET WORTH (treasury + fleet capital), same {wk,cap} shape agents use so
+      //    econSparkline renders it unchanged. Net worth, not bare treasury: commissioning a hull / an
+      //    investment only moves cash into a ship or infrastructure, so this reads as real growth, not loss.
+      c.capHist=c.capHist||[];
+      const net = c.treasury + state.agents.filter(a=>a.backing===c.id).reduce((s,a)=>s+(a.cap||0),0);   // re-scan: includes a hull commissioned this week (treasury↓ offset by the new ship's cap → no false dip)
+      c.capHist.push({ wk:week, cap:Math.round(net) }); if(c.capHist.length>24) c.capHist.shift();
     });
     // New houses occasionally form; broke + shipless ones dissolve (keep invests as a defunct shell → no base churn).
     if(Object.values(state.corps).filter(c=>!c.defunct).length < CORP_MAX && Math.random() < CORP_FORM_PROB) formCorp(week);
@@ -1222,6 +1228,7 @@ window.ECON = (function(){
 let econPanelOpen = false, econCollapsed = false;
 let econRunSel = { from:'cypress', good:'Common Consumables', to:'aurelia', tons:30 };   // sticky cargo-run form
 let econTraderSel = null;   // expanded trader detail (agent id) in the console
+let econCorpSel = null;     // expanded corporation detail (corp id) — drawTrade highlights ALL its convoys
 let econDraftSel = null;    // {i, item, contract} — a corp contract drafted from an opportunity, awaiting post
 let econShockCfg = { weeks:6, severity:3 };   // sticky duration + severity for fired disruptions
 let econPriceHistSel = { good:'Common Consumables', sys:'' };   // price-history chart selection
@@ -1250,6 +1257,13 @@ function econPriceChartHTML(good, sysId){
 }
 const ECON_WATCH = ['erebus','profit-margin','graveyard','kronos','the-anvil','castor','cypress','the-garden','bastion','sol','aurelia','vesta','avalon','warehouse'];
 function econToggleTrader(id){ econTraderSel = (econTraderSel===id)?null:id; window.econTraderSel = econTraderSel;   // drawTrade highlights this convoy's route on the map
+  econCorpSel = null; window.econCorpSel = null;                                  // single-ship pick clears any house highlight (mutually exclusive)
+  renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// Click a corporation → highlight ALL its convoys on the map (every agent with backing===id) and
+// expand its detail (net-worth P&L + fleet roster). Mirrors econToggleTrader; the two highlight
+// modes are mutually exclusive so the map only ever shows one selection.
+function econToggleCorp(id){ econCorpSel = (econCorpSel===id)?null:id; window.econCorpSel = econCorpSel;
+  econTraderSel = null; window.econTraderSel = null;
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 function econMoney(n){ n=Math.round(n||0); const s=n<0?'−':''; const a=Math.abs(n); return s+(a>=1000?'Cr'+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,'')+'k':'Cr'+a); }
 // Tiny SVG P&L sparkline from a trader's weekly capital samples (a dashed zero-line when it dips below 0).
@@ -1277,6 +1291,36 @@ function econTraderDetailHTML(a){
   if(!(a.hist||[]).length) h+=`<div style="font-size:10px;color:var(--tx1)">No completed trips yet.</div>`;
   else a.hist.slice(0,8).forEach(t=>{ const pc=t.profit>=0?'#7ec98f':'#e8a0a0';
     h+=`<div style="font-size:10px;color:#cdd6e0;display:flex;justify-content:space-between;gap:8px"><span>wk${t.wk} · ${t.qty}kt ${t.good.replace('Common ','')} ${escQH((wl[t.from]||{}).label||t.from)}→${escQH((wl[t.to]||{}).label||t.to)}</span><span style="color:${pc};white-space:nowrap">${econMoney(t.profit)}</span></div>`; });
+  h+=`</div>`;
+  return h;
+}
+// Expanded detail for one corporation — identity, net-worth P&L (treasury + fleet), fleet roster &
+// world expansions. Net worth is the house's true P&L: the treasury sweeps each ship's surplus weekly
+// (so a single hull's capital sits near the float) — the wealth lives in the pooled treasury + fleet.
+function econCorpDetailHTML(c){
+  const wl=ECON.worlds(), st=ECON.state, nowT=st.week+(window.econViewFrac||0);
+  const ships=ECON.agents().filter(a=>a.backing===c.id);
+  const fleetCap=ships.reduce((s,a)=>s+(a.cap||0),0), net=(c.treasury||0)+fleetCap;
+  const gcol=(typeof econGoodColor==='function')?econGoodColor(c.specialty):'#9fb0c8', spec=(''+c.specialty).replace('Common ','');
+  let h=`<div style="background:var(--bg0);border:1px solid var(--bd0);border-radius:6px;padding:7px 8px;margin:1px 0 6px">`;
+  h+=`<div style="font-size:10px;color:var(--tx1);margin-bottom:5px">🏢 <b style="color:var(--tx0)">${escQH(c.name)}</b>${c.megacorp?' <span style="color:#9fd0ff" title="Megacorp — safeguarded">★</span>':''} · <span style="color:${gcol}">◆ ${escQH(spec)}</span>${c.home&&wl[c.home]?` · ${escQH(wl[c.home].label)}`:''}</div>`;
+  h+=`<div style="font-size:10px;color:var(--tx1);margin-bottom:2px">Net worth (treasury + fleet) · last ${(c.capHist||[]).length} wks · now <b style="color:${net>=0?'#7ec98f':'#e8a0a0'}">${econMoney(net)}</b></div>`;
+  h+=econSparkline(c.capHist,280,46);
+  { const ch=(c.capHist||[]).filter(p=>p&&p.wk!=null); if(ch.length>=2)
+    h+=`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--tx1);margin-top:1px"><span>wk ${ch[0].wk}</span><span>treasury ${econMoney(c.treasury)} · fleet ${econMoney(fleetCap)}</span><span>wk ${ch[ch.length-1].wk}</span></div>`; }
+  h+=`<div style="font-size:10px;color:var(--tx1);margin:6px 0 2px">Fleet · ${ships.length} ship${ships.length===1?'':'s'}</div>`;
+  if(!ships.length) h+=`<div style="font-size:10px;color:var(--tx1)">No active ships.</div>`;
+  else ships.forEach(a=>{
+    const onRoute=a.route&&wl[a.route.from]&&wl[a.route.to], berthing=onRoute&&a.route.began!=null&&nowT<a.route.began;
+    const rt = berthing ? `<span style="color:#e0b24a">⚓ loading at ${escQH(wl[a.route.from].label)}</span>`
+             : onRoute ? `<span style="color:#7ec0e0">${a.route.good.replace('Common ','')} ${escQH(wl[a.route.from].label)}→${escQH(wl[a.route.to].label)}</span>`
+                       : `<span style="color:var(--tx1)">surveying</span>`;
+    h+=`<div style="font-size:10px;color:#cdd6e0;display:flex;justify-content:space-between;gap:8px"><span>${escQH(a.name)} · ${rt}</span><span style="color:${a.cap>=0?'#cdd6e0':'#e8a0a0'};white-space:nowrap">${econMoney(a.cap)}</span></div>`;
+  });
+  const inv=c.invests||[];
+  if(inv.length){ const by={}; inv.forEach(iv=>{ by[iv.world]=(by[iv.world]||0)+1; });
+    const parts=Object.keys(by).map(wid=>`${escQH((wl[wid]||{}).label||wid)}${by[wid]>1?' ×'+by[wid]:''}`).join(' · ');
+    h+=`<div style="font-size:10px;color:var(--tx1);margin:6px 0 0">Expansions · ${escQH(spec)} — ${parts}</div>`; }
   h+=`</div>`;
   return h;
 }
@@ -1782,16 +1826,18 @@ function renderEconPanel(){
       corps.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || (b.treasury-a.treasury)).forEach(c=>{
         const fleet=ags.filter(a=>a.backing===c.id).length, inv=(c.invests||[]).length;
         const col=c.color||'#ff9a3c', gcol=(typeof econGoodColor==='function')?econGoodColor(c.specialty):'#9fb0c8', spec=(''+c.specialty).replace('Common ','');
-        h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)${c.defunct?';opacity:.5':''}">`;
+        const open = econCorpSel===c.id;
+        h+=`<div onclick="econToggleCorp('${c.id}')" title="${escQH(c.name)} — click to highlight its ships &amp; see net-worth P&amp;L" style="padding:3px 0;border-top:1px solid var(--bd0);cursor:pointer${c.defunct?';opacity:.5':''}${open?';background:rgba(255,154,60,.08)':''}">`;
         h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
-        h+=`<span><span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(c.name.split(' ')[0])}</span> ${escQH(c.name)}${c.megacorp?' <span style="color:#9fd0ff;font-size:9px" title="Megacorp — safeguarded, never collapses">★</span>':''}${c.defunct?' <span style="color:var(--tx1);font-size:9px">(defunct)</span>':''}</span>`;
+        h+=`<span><span style="color:var(--tx1)">${open?'▾':'▸'}</span> <span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(c.name.split(' ')[0])}</span> ${escQH(c.name)}${c.megacorp?' <span style="color:#9fd0ff;font-size:9px" title="Megacorp — safeguarded, never collapses">★</span>':''}${c.defunct?' <span style="color:var(--tx1);font-size:9px">(defunct)</span>':''}</span>`;
         h+=`<span style="color:${c.treasury>=0?'#7ec98f':'#e8a0a0'};white-space:nowrap">${econMoney(c.treasury)}</span></div>`;
         h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1)">`;
         h+=`<span><span style="color:${gcol}">◆ ${escQH(spec)}</span>${c.home&&wl[c.home]?` · ${escQH(wl[c.home].label)}`:''}</span>`;
         h+=`<span style="white-space:nowrap">${fleet} ship${fleet===1?'':'s'} · ${inv} invest${inv===1?'':'s'}</span></div>`;
         h+=`</div>`;
+        if(open) h+=econCorpDetailHTML(c);
       });
-      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Corp ships trade profit-first anywhere (no territory). Treasuries sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses).</div>`;
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Click a house to highlight its ships on the map &amp; see its net-worth P&amp;L. Corp ships trade profit-first anywhere (no territory); treasuries sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses).</div>`;
       h+=`</div>`;
     }
   }
