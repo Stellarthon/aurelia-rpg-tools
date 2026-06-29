@@ -206,6 +206,21 @@ window.ECON = (function(){
       worlds[n.id] = { id:n.id, label:n.label||n.name, fac:n.faction, prod, cons, safW:d.safW||2, store:d.store||{} };
       adj[n.id] = [];
     });
+    // ── Corp infrastructure layer (second pass — all worlds[] exist now). Each corp investment
+    //    bumps its specialty OUTPUT plus a little worker/equipment DEMAND at the worked world —
+    //    like addHubDemand, but emergent + bounded (≤3/world). Read from shared state.corps so
+    //    every device rebuilds an identical base; only the referee-only corpsStep evolves it.
+    //    Defunct corps keep their invests (bought-out infrastructure runs on → no base churn). ──
+    if(state && state.corps){ Object.values(state.corps).forEach(c=>{ (c.invests||[]).forEach(inv=>{
+      const w = worlds[inv.world]; if(!w) return;                    // guard: a thrown buildTopology would blank the whole economy panel
+      // Vertically integrate: the expansion makes its specialty AND its whole input chain down to
+      // raws, so the only galaxy-net change is +specialty surplus and a little worker food demand —
+      // a recipe specialty (e.g. Luxury Goods) never starves its input (Precious Metals). Keeps the
+      // galaxy in mild surplus at the invest bound (verified by the balance harness).
+      const addProd=(g,amt)=>{ w.prod[g]=Math.round(((w.prod[g]||0)+amt)*10)/10; const r=GOODS[g]&&GOODS[g].recipe; if(r){ for(const i in r) addProd(i, amt*r[i]); } };
+      addProd(c.specialty, CORP_OUT_BUMP);
+      w.cons[FOOD_GOOD] = Math.round(((w.cons[FOOD_GOOD]||0) + CORP_DEM_FOOD)*10)/10;
+    }); }); }
     Object.keys(worlds).forEach(id=>{
       const n = nodeOf(id);
       // Trade graph follows the JUMP-LANE network (n.connections = the live GX_LANES
@@ -287,13 +302,22 @@ window.ECON = (function(){
     const stock = {}; Object.keys(base).forEach(id=>{ stock[id] = Object.assign({}, base[id]); });
     const wk = curWeek();
     const transit = (settled.transit||[]).map(t=> Object.assign({}, t, { eta: wk + (t.eta - SETTLE_WK) }));
+    // Seed the corporations + flagships (DETERMINISTIC: fixed identities, empty invests, ids
+    // continuing the tr* sequence). The megacorp opens with two flagships; rivals get one. Empty
+    // invests add nothing to the topology, so the base computed above is corp-free and identical
+    // on every device.
+    const corps = freshCorps();
+    const agents = freshAgents(); let aseq = agents.length - 1;   // freshAgents → tr0..tr4 (last index 4)
+    const seedList = corpSeedList();
+    Object.values(corps).forEach(c=>{ const arch=seedList.find(a=>a.id===c.id), ship=arch?arch.seedShip:'subm', n=c.megacorp?2:1;
+      for(let k=0;k<n;k++){ aseq++; agents.push(newCorpShip('tr'+aseq, c.name.split(' ')[0]+' Flagship'+(n>1?' '+(k+1):''), c, ship, AGENT_START_CAP)); } });
     // active:false → a fresh campaign defaults to the SIMPLE economy (static per-world
     // produces/demands pricing via simplePressure(); no stepping, no logistics). The
     // referee opts INTO the full multi-tier simulation with the Living-economy toggle,
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents: freshAgents(), tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: 5, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{} };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[] };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -409,11 +433,55 @@ window.ECON = (function(){
     const seed=[['private','free'],['private','far'],['hegemony','subm'],['omnisynth','fat'],['private','free']];
     return seed.map((s,i)=>({ id:'tr'+i, name:AGENT_NAMES[i], cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing:s[0], shipId:s[1], insolventWk:0, hist:[], capHist:[] }));
   }
+  // ── Corporations: a THIRD backing type (alongside `private` and the factions). Pooled-capital
+  //    trading houses with an IDENTITY — a specialty good + home anchor that their ships favour and
+  //    their investments expand. Corp ships are ordinary state.agents with backing='corp:<id>'.
+  //    Treasury sweeps profitable ships' surplus and bails out losers; treasuries grow fleets and
+  //    fund world infrastructure (the corpInvest topology layer in buildTopology). LIVE-only —
+  //    skipped by settleBaseline like agents — and advanced ONLY by the referee, because investments
+  //    move state.base (see corpsStep guards + the load/reset/advance re-settles). ──
+  const CORP_SEED_TREASURY = 55000;      // a house opens with this much working capital
+  const CORP_FLOAT = 35000;              // operating float a corp ship keeps; surplus is swept to treasury
+  const CORP_BAIL_FLOOR = 6000;          // below this, a ship is topped back toward the float (funds permitting)
+  const CORP_SHIP_COST = 35000;          // capital seeded into a newly commissioned hull (drawn from treasury)
+  const CORP_COMMISSION_MIN = 45000;     // treasury floor to commission another ship
+  const CORP_INVEST_MIN = 130000;        // treasury floor to fund a world expansion
+  const CORP_INVEST_COST = 110000;       // cost of one expansion
+  const CORP_INVEST_MAX_PER_WORLD = 3;   // bounded so the galaxy drifts, not breaks
+  const CORP_INVEST_GLOBAL_MAX = 18;     // galaxy-wide cap on active expansions — keeps cumulative worker-food demand inside the galaxy's surplus (verified by the balance harness) so a long campaign can't slowly starve it
+  const CORP_INVEST_MAX_PER_CORP = 9;    // no single house may hold more than half the global cap — leaves room for rivals (so OmniSynth dominates but doesn't monopolise; keeps rival-vs-megacorp contracts grounded)
+  // OmniSynth — the setting's MEGACORP. Vital to the story → SAFEGUARDED: it never dissolves and a
+  // solvency floor keeps it from ever going bankrupt. It opens large and dominant; its commercial arm
+  // coexists with the `omnisynth` faction relief fleets. (Treasury is not price-affecting → no
+  // determinism impact; investments still obey the bounded layer + global cap, so balance holds.)
+  const MEGACORP_SEED_TREASURY = 300000; // opens as the dominant economic force
+  const MEGACORP_FLOOR = 40000;          // solvency floor — its vast off-screen holdings. Below the commission threshold ON PURPOSE: guarantees it can always bail a flagship and never collapses, WITHOUT free-funding endless growth (fleet/infra growth still comes from earned surplus, like the rivals)
+  const CORP_MAX = 6, CORP_FORM_PROB = 0.015;          // occasional new houses form, up to this many
+  const CORP_OUT_BUMP = 12;              // +specialty output one expansion adds at a world (the expansion also makes its own input chain — see buildTopology — so it never starves a recipe input)
+  const CORP_DEM_FOOD = 2;               // +worker food demand per expansion (small; only Common Consumables, the galaxy's most-overproduced good, has the headroom to absorb it at the invest bound)
+  const CORP_SHIP_POOL = ['far','subm','fat','fat','heavy'];   // well-capitalised → mid/large hulls
+  const ESCORT_VALUE_MIN = 12000;        // a corp convoy worth at least this (Cr cargo = qty·Cr/kt) is worth flagging an escort contract for — catches high-tech/luxury hauls, not cheap bulk
+  const CORP_CONTRACT_PROB = 0.04;       // weekly chance a house posts a sabotage/espionage job against a rival
+  const CORP_ARCHETYPES = [
+    { id:'corp:meridian', name:'Meridian Fuel Combine', specialty:FUEL_REFINED,  color:'#ff9a3c', seedShip:'subm', homes:['terminus','sol','aurelia'] },
+    { id:'corp:halcyon',  name:'Halcyon Luxury House',  specialty:'Luxury Goods', color:'#e75bd0', seedShip:'far',  homes:['aurelia','kronos','castor'] },
+    { id:'corp:ferrant',  name:'Ferrant Ore Cartel',    specialty:'Common Ore',   color:'#b08d57', seedShip:'fat',  homes:['erebus','profit-margin','kronos'] },
+  ];
+  // The megacorp seed — kept SEPARATE from CORP_ARCHETYPES (formCorp must never re-roll it).
+  const MEGACORP = { id:'corp:omnisynth', name:'OmniSynth Industries', specialty:'Advanced Electronics', color:'#6699ff', seedShip:'heavy', homes:['kronos','the-anvil','warehouse','profit-margin'], megacorp:true };
+  function corpSeedList(){ return CORP_ARCHETYPES.concat([MEGACORP]); }
+  function isCorp(b){ return typeof b==='string' && b.indexOf('corp:')===0; }
+  function corpOf(b){ return (state && state.corps && state.corps[b]) || null; }
+  function corpHomeOf(a){ const h=(a.homes||[]).find(id=>worlds && worlds[id]); return h || (a.homes&&a.homes[0]) || null; }
+  function newCorpShip(id, name, corp, shipId, cap){ return { id, name, cap, pos:null, route:null, trips:0, profit:0, backing:corp.id, shipId, insolventWk:0, hist:[], capHist:[] }; }
+  function freshCorps(){ const out={}; corpSeedList().forEach(a=>{   // deterministic seed (empty invests → corp-free base) — 3 rivals + the OmniSynth megacorp
+    out[a.id]={ id:a.id, name:a.name, specialty:a.specialty, color:a.color, home:corpHomeOf(a),
+      treasury: a.megacorp?MEGACORP_SEED_TREASURY:CORP_SEED_TREASURY, invests:[], founded:0, megacorp: !!a.megacorp }; }); return out; }
   function traderCapOf(){ return Math.max(3, Math.min(TRADER_CAP_MAX, (state&&state.traderCap)||DEFAULT_TRADER_CAP)); }
   function factionOf(id){ return worlds[id] && worlds[id].fac; }
   // 0 = fine, 1 = soft-avoid (penalised), 2 = hard-avoid (impassable) for a backed trader.
   function avoidLevel(backing, id){
-    if(!backing || backing==='private') return 0;
+    if(!backing || backing==='private' || isCorp(backing)) return 0;   // corps trade for profit, anywhere — no territory avoidance
     const fac=factionOf(id), rel=FACTION_AVOID[backing];
     if(!rel||!fac||fac===backing) return 0;
     if(rel.hard.includes(fac)) return 2;
@@ -421,7 +489,7 @@ window.ECON = (function(){
     return 0;
   }
   function agentBlockSet(a, blk){
-    if(!a.backing || a.backing==='private') return blk;
+    if(!a.backing || a.backing==='private' || isCorp(a.backing)) return blk;   // corps ignore faction territory
     const set=Object.assign({}, blk);
     Object.keys(worlds).forEach(id=>{ if(avoidLevel(a.backing,id)===2) set[id]=1; });   // hostile space is impassable
     return set;
@@ -471,14 +539,15 @@ window.ECON = (function(){
 
     // ── Living-market lifecycle: upkeep, subsidy, milk-run, bankruptcy, market entry ──
     for(let i=state.agents.length-1;i>=0;i--){ const a=state.agents[i];
-      const pub = a.backing && a.backing!=='private';
+      const corp = isCorp(a.backing);                  // corps draw NO faction subsidy — their treasury sweeps/bails them in corpsStep
+      const pub = a.backing && a.backing!=='private' && !corp;
       a.upkeep = upkeepOf(a);
       a.cap -= a.upkeep;                                // vessel + crew wages + mooring fees (scales with hull)
       if(pub) a.cap += subsidyOf(a);                   // faction props up its relief fleet
       if(!a.route) a.cap += milkRunOf(a);              // routine background haulage when not on a big run
       if(a.cap<=0) a.insolventWk=(a.insolventWk||0)+1; else a.insolventWk=0;
       a.capHist=a.capHist||[]; a.capHist.push({ wk:week, cap:Math.round(a.cap) }); if(a.capHist.length>24) a.capHist.shift();   // weekly P&L sample for the sparkline
-      if((a.insolventWk||0) >= (pub?GRACE_PUBLIC:GRACE_PRIVATE)) removeAgent(a, 'insolvent — ceased trading', week);
+      if((a.insolventWk||0) >= ((pub||corp)?GRACE_PUBLIC:GRACE_PRIVATE)) removeAgent(a, 'insolvent — ceased trading', week);
     }
     const cap = traderCapOf();
     while(state.agents.length > cap){ let weak=state.agents[0]; state.agents.forEach(a=>{ if(a.cap<weak.cap) weak=a; }); removeAgent(weak,'stood down (fleet cap reduced)',week); }
@@ -516,7 +585,7 @@ window.ECON = (function(){
     // global dispatch still steers clear of producer surplus to avoid fighting replenishment).
     const dispatchBackhaul=(a)=>{
       const pos=a.pos; if(!pos||!worlds[pos]||!fueled(pos)) return false;
-      const F=(a.backing&&a.backing!=='private')?a.backing:null, aBlk=agentBlockSet(a,blk);
+      const F=(a.backing&&a.backing!=='private'&&!isCorp(a.backing))?a.backing:null, aBlk=agentBlockSet(a,blk);   // corps back-haul like independents (profit spread, no territory)
       if(aBlk[pos]) return false;
       const D=dist(pos,aBlk), minGap=F?PUBLIC_SPREAD_MIN:2; let best=null;
       goods.forEach(g=>{
@@ -535,12 +604,12 @@ window.ECON = (function(){
     };
     // PRIVATE merchants chase the fattest profit per jump, anywhere.
     const dispatchPrivate=(a)=>{
-      let best=null;
+      const corp=corpOf(a.backing), spec=corp&&corp.specialty; let best=null;   // corp ships favour hauling their specialty good (identity)
       goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
         P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
           P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
             const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
-            const score=spread/Math.max(1,D[s.id]);
+            let score=spread/Math.max(1,D[s.id]); if(spec&&g===spec) score*=1.5;
             if(!best||score>best.score) best={b,s,g,dist:D[s.id],score}; }); }); });
       if(best) executeRoute(a,best);
     };
@@ -561,7 +630,134 @@ window.ECON = (function(){
     };
     state.agents.forEach(a=>{ if(a.route) return;
       if(dispatchBackhaul(a)) return;                                              // chain out of the current berth (no deadhead)
-      if(a.backing && a.backing!=='private') dispatchPublic(a); else dispatchPrivate(a); });   // else find the best run elsewhere
+      if(a.backing && a.backing!=='private' && !isCorp(a.backing)) dispatchPublic(a); else dispatchPrivate(a); });   // faction → relief routing; corp/independent → profit-first
+  }
+
+  // ── Corp lifecycle helpers ──
+  function corpShipName(c){ return c.name.split(' ')[0]+' '+pick(['Clipper','Hauler','Lighter','Carrier','Star-Freight','Runner']); }
+  function investCountAt(worldId){ let n=0; Object.values(state.corps).forEach(c=>{ (c.invests||[]).forEach(iv=>{ if(iv.world===worldId) n++; }); }); return n; }
+  function totalInvests(){ let n=0; Object.values(state.corps).forEach(c=>{ n+=(c.invests||[]).length; }); return n; }
+  function pickInvestWorld(c){   // a world this corp "works": already produces its specialty, or its home — bounded ≤3 invests/world (total)
+    const cand=Object.keys(worlds).filter(id=> (worlds[id].prod[c.specialty]>0 || id===c.home) && investCountAt(id) < CORP_INVEST_MAX_PER_WORLD);
+    if(!cand.length) return null;
+    if(c.home && cand.indexOf(c.home)>=0) return c.home;            // grow the home base first
+    return pick(cand);
+  }
+  // ── Corp CONTRACT opportunities — the (a) follow-on, now live. The sim FLAGS jobs the corps would
+  //    pay players for (escort/haul/sabotage/espionage/bounty); the referee DRAFTS one into the Quest
+  //    Log or Library Data (js/85-records CORP_CONTRACT templates + the console section). Pure flavour
+  //    — never price-affecting; referee-advanced; deduped so the list doesn't flood. ──
+  function emitCorpEvent(type, corp, data){
+    if(!state.corpEvents) state.corpEvents=[];
+    state.corpEvents.push(Object.assign({ type, corp:corp.id, wk:state.week }, data||{}));
+    if(state.corpEvents.length>40) state.corpEvents.shift();
+  }
+  function hasCorpEvent(pred){ return (state.corpEvents||[]).some(pred); }
+  // A corp's natural rival: a same-specialty competitor if any, else the megacorp (everyone resents
+  // OmniSynth), else any other house. Grounds sabotage/espionage contracts. (Full (c) faction
+  // alignment stays a TODO.)
+  function rivalOf(c){
+    const others = Object.values(state.corps).filter(x=>!x.defunct && x.id!==c.id);
+    if(!others.length) return null;
+    const same = others.filter(x=>x.specialty===c.specialty); if(same.length) return pick(same);
+    const mega = others.find(x=>x.megacorp); if(mega) return mega;
+    return pick(others);
+  }
+  function round100(n){ return Math.max(0, Math.round(n/100)*100); }
+  // Suggested Cr reward for a contract (referee can adjust at the table). Scales with cargo value /
+  // the hiring house's treasury so big jobs pay big. Displayed via econMoney.
+  function contractRewardOf(e){
+    const c = state.corps && state.corps[e.corp], cargo = (e.qty||0)*(AGENT_VALUE[e.good]||100);
+    switch(e.type){
+      case 'escort':    return Math.max(2500, round100(cargo*0.18));
+      case 'bounty':    return Math.max(4000, round100(cargo*0.40));
+      case 'haul':      return Math.max(3500, round100((AGENT_VALUE[e.good]||120)*45));
+      case 'sabotage':  return Math.max(6000, round100((c?c.treasury:60000)*0.05));
+      case 'espionage': return Math.max(4500, round100((c?c.treasury:60000)*0.035));
+      default:          return 5000;
+    }
+  }
+  // Raw corpEvent → rich, fully-labelled "contract intel" item (the shape intel() emits and the
+  // console + 85-records draftCorpContract() consume). Single source of truth for contract display.
+  function corpContractItem(e){
+    if(!state.corps) return null; const c = state.corps[e.corp]; if(!c) return null;
+    const tgt = e.target ? state.corps[e.target] : null;
+    const wl = id => (id && worlds[id]) ? worlds[id].label : (id||null);
+    return { kind:'contract', contract:e.type, corp:c.id, label:c.name, color:c.color,
+      target:e.target||null, targetName: tgt?tgt.name:(e.targetName||null),
+      world:e.world||null, place: wl(e.world),
+      good: e.good||c.specialty, vessel:e.vessel||null,
+      from:e.from||null, fromLabel: wl(e.from), to:e.to||null, toLabel: wl(e.to),
+      qty:e.qty||null, reward: contractRewardOf(e), wk:e.wk };
+  }
+  function maybeSpikeUnrest(world){ /* TODO(b): a corp expansion can spike UNREST at the world — referee flag (displaced labour / resource grab). Wire to a shared state.unrest map + console toggle. */ }
+  function formCorp(week){
+    const used=new Set(Object.keys(state.corps));
+    const arch=CORP_ARCHETYPES.find(a=>!used.has(a.id)); let corp;
+    if(arch){ corp={ id:arch.id, name:arch.name, specialty:arch.specialty, color:arch.color, home:corpHomeOf(arch), treasury:CORP_SEED_TREASURY, invests:[], founded:week }; }
+    else { let id; do { id='corp:n'+Math.floor(Math.random()*1e6).toString(36); } while(state.corps[id]);   // procedural house beyond the 3 archetypes
+      const spec=pick([FUEL_REFINED,'Luxury Goods','Common Ore','Common Electronics','Pharmaceuticals']);
+      const homes=Object.keys(worlds).filter(wid=>worlds[wid].prod[spec]>0);
+      corp={ id, name:pick(NAME_A)+' '+pick(['Combine','Cartel','Consortium','Holdings','Industries','Group']), specialty:spec,
+        color:pick(['#ff9a3c','#e75bd0','#b08d57','#6fd0c0','#d0c040','#ff7a7a']), home:homes.length?pick(homes):pick(Object.keys(worlds)),
+        treasury:CORP_SEED_TREASURY, invests:[], founded:week }; }
+    state.corps[corp.id]=corp;
+    state.agentSeq=(state.agentSeq||state.agents.length)+1;
+    state.agents.push(newCorpShip('tr'+state.agentSeq, corpShipName(corp), corp, arch?arch.seedShip:pick(CORP_SHIP_POOL), CORP_SHIP_COST));
+    log(week, `✦ A new trading house forms — ${corp.name} (${corp.specialty.replace('Common ','')})`);
+  }
+  // Weekly corp turn: pooled-funds sweep/bail, fleet growth, infrastructure investment, formation &
+  // dissolution. REFEREE-ONLY (investments move state.base; cross-device determinism, invariant #4)
+  // and skipped by settleBaseline (scratch state has no `corps`). Records investments only — the base
+  // re-settle is batched once per advance (see advance/syncToDate), never per-investment.
+  function corpsStep(week){
+    if(!state.corps || state.tradersOn===false || !state.active) return;
+    if(typeof isReferee==='function' && !isReferee()) return;
+    const cap=traderCapOf();
+    Object.values(state.corps).forEach(c=>{ if(c.defunct) return;
+      if(c.megacorp && c.treasury < MEGACORP_FLOOR) c.treasury = MEGACORP_FLOOR;   // OmniSynth solvency floor — it can always bail a flagship & never collapses (vast off-screen holdings)
+      const ships=state.agents.filter(a=>a.backing===c.id);          // re-scan each week — agentsStep splices on bankruptcy/spawn
+      // 1) Sweep ship surplus over the working float into the treasury; bail red ships back toward it.
+      ships.forEach(a=>{
+        if(a.cap > CORP_FLOAT){ c.treasury += a.cap-CORP_FLOAT; a.cap=CORP_FLOAT; }
+        else if(a.cap < CORP_BAIL_FLOOR){ const give=Math.min(CORP_FLOAT-a.cap, c.treasury); if(give>0){ a.cap+=give; c.treasury-=give; } }
+      });
+      // 2) Fleet growth — commission a hull when flush & there's room under the cap (reuse agentSeq → no id collision).
+      if(c.treasury >= CORP_COMMISSION_MIN && state.agents.length < cap){
+        state.agentSeq=(state.agentSeq||state.agents.length)+1;
+        const shipId=pick(CORP_SHIP_POOL), nm=corpShipName(c);
+        state.agents.push(newCorpShip('tr'+state.agentSeq, nm, c, shipId, CORP_SHIP_COST));
+        c.treasury-=CORP_SHIP_COST;
+        log(week, `✦ ${c.name} commissions the ${nm} (${SHIP_CLASSES[shipId].name})`);
+      }
+      // 3) Infrastructure investment — expand a world it works (≤3/world, ≤global cap). Moves base → defer the re-settle.
+      else if(c.treasury >= CORP_INVEST_MIN && totalInvests() < CORP_INVEST_GLOBAL_MAX && (c.invests||[]).length < CORP_INVEST_MAX_PER_CORP){
+        const target=pickInvestWorld(c);
+        if(target){ c.invests.push({ world:target, wk:week }); c.treasury-=CORP_INVEST_COST; state._corpDirty=true;
+          log(week, `⚒ ${c.name} expands ${c.specialty.replace('Common ','')} at ${worlds[target].label}`);
+          emitCorpEvent('haul', c, { world:target, good:'Common Manufactured' });   // an expansion needs equipment hauled in → a delivery contract
+          maybeSpikeUnrest(target);
+        }
+      }
+      // 4) Contract opportunities (flavour; deduped). A valuable convoy wants ESCORT; rivalry breeds
+      //    occasional SABOTAGE / ESPIONAGE jobs against a rival house.
+      const conv = ships.find(a=> a.route && a.route.good && a.route.qty*(AGENT_VALUE[a.route.good]||100) >= ESCORT_VALUE_MIN);
+      if(conv && !hasCorpEvent(e=>e.type==='escort' && e.agent===conv.id))
+        emitCorpEvent('escort', c, { agent:conv.id, vessel:conv.name, from:conv.route.from, to:conv.route.to, good:conv.route.good, qty:Math.round(conv.route.qty) });
+      if(Math.random() < CORP_CONTRACT_PROB){ const r=rivalOf(c);
+        if(r){ const t = Math.random()<0.5 ? 'sabotage' : 'espionage';
+          if(!hasCorpEvent(e=>e.type===t && e.corp===c.id && e.target===r.id)) emitCorpEvent(t, c, { target:r.id, targetName:r.name }); } }
+    });
+    // New houses occasionally form; broke + shipless ones dissolve (keep invests as a defunct shell → no base churn).
+    if(Object.values(state.corps).filter(c=>!c.defunct).length < CORP_MAX && Math.random() < CORP_FORM_PROB) formCorp(week);
+    Object.values(state.corps).forEach(c=>{ if(c.defunct || c.megacorp) return;   // the megacorp (OmniSynth) is SAFEGUARDED — it never dissolves (vital to the story)
+      if(c.treasury < 0 && !state.agents.some(a=>a.backing===c.id)){
+        if((c.invests||[]).length){ c.defunct=true; log(week, `⚑ ${c.name} — insolvent; its assets are bought out`); }
+        else { delete state.corps[c.id]; log(week, `⚑ ${c.name} — folded`); }
+      }
+    });
+    // TODO(c): corp↔faction alignment/rivalry — an aligned corp could inherit its patron's avoidLevel; a rival could be embargoed. (rivalOf() below is a first step.)
+    // TODO(d): OmniSynth is the built-in megacorp (megacorp:true, safeguarded). Next: maybeConsolidate() — OmniSynth absorbs a dissolved rival's fleet + invests; and a monopoly-pricing flag (corp.monopoly feeding overlayMult) once a house dominates a good. Monopoly pricing is PRICE-AFFECTING → must live in shared state + referee-advanced like inflation.
   }
 
   // Convoy raid — intercept a trader's in-flight cargo. The goods are destroyed/stolen
@@ -579,6 +775,8 @@ window.ECON = (function(){
     const loss = Math.round(r.qty * r.buyUnit);    // sunk purchase cost (cap already paid at dispatch)
     a.profit -= loss; a.raided = (a.raided||0)+1; a.pos = r.from; a.route = null;   // survivor limps home empty
     log(state.week, `⚔ Convoy raided — ${a.name} lost ${r.qty}kt ${r.good.replace('Common ','')} on ${worlds[r.from]?worlds[r.from].label:r.from}→${worlds[r.to]?worlds[r.to].label:r.to}`);
+    if(isCorp(a.backing) && corpOf(a.backing) && !hasCorpEvent(e=>e.type==='bounty' && e.agent===a.id))   // a raided HOUSE posts a bounty on the raiders
+      emitCorpEvent('bounty', corpOf(a.backing), { agent:a.id, vessel:a.name, from:r.from, to:r.to, good:r.good, qty:Math.round(r.qty) });
     save();
     return { ok:true, agent:a.name, good:r.good, qty:r.qty, to:(worlds[r.to]?worlds[r.to].label:r.to), loss };
   }
@@ -633,6 +831,7 @@ window.ECON = (function(){
     });
     psmStep(week);               // update the EMA price signal BEFORE anyone reads pressure() this week
     agentsStep(week);            // autonomous Independents arbitrage the resulting price gaps
+    corpsStep(week);             // corporations: treasury sweep/bail, fleet growth, infrastructure investment (referee-only)
     inflationStep(week);         // shortages ratchet the price level up (sticky); calm decays it back
     priceHistStep(week);         // sample per-world prices for the price-history charts
     state.week = week;
@@ -651,6 +850,7 @@ window.ECON = (function(){
   // timeline, traders setting). After this stock == base, so pressures read ~0.
   function reseedTo(wk){
     ensure();
+    worlds=null; adj=null; ensure();   // defensive: settle the topology that matches the current state.corps
     const seed = {};
     Object.values(worlds).forEach(w=>{ seed[w.id]={};
       SIM_GOODS.forEach(g=>{ const s=orderUpTo(w,g); if(s>0||w.prod[g]) seed[w.id][g]=Math.round(s); }); });
@@ -664,15 +864,19 @@ window.ECON = (function(){
     (state.agents||[]).forEach(a=>{ a.route=null; a.insolventWk=0; });           // in-flight convoys would have landed ages ago; don't bankrupt everyone on a big time-skip
     state.week = wk;
   }
+  // A corp investment during the per-week loop only RECORDS itself (state._corpDirty); we re-settle
+  // base ONCE here, not per-investment inside step() — bounds the settle cost and keeps base stable
+  // across the advance (see Determinism design).
+  function corpResettle(){ if(state._corpDirty){ state._corpDirty=false; worlds=null; adj=null; ensure(); state.base=recomputeBase(); } }
   function advance(weeks){ ensure(); const target = state.week + Math.max(1, Math.round(weeks));
     if(target - state.week > MAX_CATCHUP) reseedTo(target);                       // gap too large to step — snap to resting baseline
     else for(let wk=state.week+1; wk<=target; wk++) step(wk);
-    save(); }
+    corpResettle(); save(); }
   function syncToDate(){ ensure(); const now=curWeek();
     if(now>state.week && state.active){
       if(now - state.week > MAX_CATCHUP) reseedTo(now);                           // gap too large to step — snap to resting baseline
       else for(let wk=state.week+1; wk<=now; wk++) step(wk);
-      save(); }
+      corpResettle(); save(); }
     else if(now!==state.week){ state.week=now; } }
 
   // Price pressure = signed deviation of current stock from this world+good's own
@@ -772,10 +976,14 @@ window.ECON = (function(){
   }
 
   async function load(){ try { ensure(); const r = await supaStorage.get('econ-state', true);
-    if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value)); } } catch(e){} }
+    if(r.value!=null){ state = Object.assign(freshState(), JSON.parse(r.value));
+      worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
+    } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm }), true); } catch(e){} }
-  function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive; save(); }   // reseed stock; keep the current Simple/Full mode
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents }), true); } catch(e){} }
+  function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
+    reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
+    save(); }   // reseed stock; keep the current Simple/Full mode
 
   const PRESETS = [
     { id:'raid',     label:'Pirate raid — Erebus ore', kind:'output', target:'erebus', good:'Common Ore', factor:0.7, weeks:6 },
@@ -820,13 +1028,17 @@ window.ECON = (function(){
       else label = s.target || 'the lanes';
       out.push({ kind:'shock', shock:s.kind, world:s.target||null, label, good:s.good||null });
     });
+    // CORP CONTRACT HOOKS — surface flagged corp jobs so the Oracle can leak them as ambient rumours
+    // (the console's "Corporate contracts" section is the primary, targeted path). Ranked LAST so they
+    // never crowd out true market intel in the "Market whisper" pick.
+    (state.corpEvents||[]).forEach(e=>{ const it=corpContractItem(e); if(it) out.push(it); });
     const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
     Object.keys(worlds).forEach(id=>{ goods.forEach(g=>{
       const p = pressure(id,g); if(p==null) return;
       if(p<=-2) out.push({ kind:'shortage', world:id, label:worlds[id].label, good:g, pressure:p });
       else if(p>=3) out.push({ kind:'glut', world:id, label:worlds[id].label, good:g, pressure:p });
     }); });
-    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:1;
+    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:(x.kind==='contract'?2:1);
       if(r(a)!==r(b)) return r(a)-r(b); return Math.abs(b.pressure||4)-Math.abs(a.pressure||4); });
     return out;
   }
@@ -984,6 +1196,12 @@ window.ECON = (function(){
     stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
     agents(){ ensure(); return state.agents||[]; },
     shipOf:(a)=>shipOf(a), SHIP_CLASSES,
+    corps(){ ensure(); return state.corps||{}; },   // {corpId:{name,specialty,home,color,treasury,invests,megacorp,...}}
+    isCorp,
+    corpEvents(){ ensure(); return state.corpEvents||[]; },          // raw flagged contract opportunities
+    contractItem:(e)=>{ ensure(); return corpContractItem(e); },     // raw event → rich, labelled contract item (reward, places, names)
+    contractReward:(e)=>{ ensure(); return contractRewardOf(e); },
+    clearCorpEvent(i){ ensure(); if(state.corpEvents) { state.corpEvents.splice(i,1); save(); } },   // referee dismisses an opportunity after drafting/ignoring it
     agentById(id){ ensure(); return (state.agents||[]).find(a=>a.id===id)||null; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
@@ -1004,6 +1222,7 @@ window.ECON = (function(){
 let econPanelOpen = false, econCollapsed = false;
 let econRunSel = { from:'cypress', good:'Common Consumables', to:'aurelia', tons:30 };   // sticky cargo-run form
 let econTraderSel = null;   // expanded trader detail (agent id) in the console
+let econDraftSel = null;    // {i, item, contract} — a corp contract drafted from an opportunity, awaiting post
 let econShockCfg = { weeks:6, severity:3 };   // sticky duration + severity for fired disruptions
 let econPriceHistSel = { good:'Common Consumables', sys:'' };   // price-history chart selection
 function econSetPriceHistGood(v){ econPriceHistSel.good=v; econPriceHistSel.sys=''; renderEconPanel(); }
@@ -1149,6 +1368,28 @@ function econRaidConvoy(id){
   }
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
+// ── Corporate contracts: draft a flagged opportunity, then post it to the Quest Log / Library Data ──
+function econDraftContract(i){
+  const ev = ECON.corpEvents()[i]; if(!ev) return;
+  const item = ECON.contractItem(ev); if(!item || typeof draftCorpContract!=='function') return;
+  econDraftSel = { i, item, contract: draftCorpContract(item) };
+  renderEconPanel();
+}
+function econRerollContract(){ if(econDraftSel && typeof draftCorpContract==='function'){ econDraftSel.contract = draftCorpContract(econDraftSel.item); renderEconPanel(); } }
+function econContractNote(msg){ const n=document.getElementById('econ-contract-note'); if(n){ n.textContent=msg; } }
+function econContractToQuest(){
+  if(!econDraftSel) return;
+  const ok = (typeof spawnContractQuest==='function') && spawnContractQuest(econDraftSel.contract);
+  if(ok){ if(typeof showToast==='function') showToast('📋 Contract posted to the Quest Log','success'); ECON.clearCorpEvent(econDraftSel.i); econDraftSel=null; renderEconPanel(); }
+  else econContractNote('Quest Log unavailable');
+}
+function econContractToLibrary(){
+  if(!econDraftSel) return;
+  const ok = (typeof pushContractToLibrary==='function') && pushContractToLibrary(econDraftSel.contract);
+  if(ok){ if(typeof showToast==='function') showToast('📋 Contract leaked to Library Data','success'); ECON.clearCorpEvent(econDraftSel.i); econDraftSel=null; renderEconPanel(); }
+  else econContractNote('Library Data unavailable');
+}
+function econDismissContract(i){ ECON.clearCorpEvent(i); if(econDraftSel && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
 
 // ── Economy editor (Design Mode · Production & Consumption) ─────────────────
 // Edits a world's prod/cons via ECON's profile-override layer, with recipe-aware
@@ -1533,10 +1774,67 @@ function renderEconPanel(){
     h+=`</div>`;
     h+=econPriceChartHTML(cur.good, cur.sys);
     h+=`</div>`; }
+  // Corporations — pooled-capital trading houses (identity · treasury · fleet · investments)
+  { const corps=Object.values(ECON.corps()), wl=ECON.worlds(), ags=ECON.agents();
+    if(corps.length){
+      h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+      h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Corporations — pooled capital</div>`;
+      corps.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || (b.treasury-a.treasury)).forEach(c=>{
+        const fleet=ags.filter(a=>a.backing===c.id).length, inv=(c.invests||[]).length;
+        const col=c.color||'#ff9a3c', gcol=(typeof econGoodColor==='function')?econGoodColor(c.specialty):'#9fb0c8', spec=(''+c.specialty).replace('Common ','');
+        h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)${c.defunct?';opacity:.5':''}">`;
+        h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
+        h+=`<span><span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(c.name.split(' ')[0])}</span> ${escQH(c.name)}${c.megacorp?' <span style="color:#9fd0ff;font-size:9px" title="Megacorp — safeguarded, never collapses">★</span>':''}${c.defunct?' <span style="color:var(--tx1);font-size:9px">(defunct)</span>':''}</span>`;
+        h+=`<span style="color:${c.treasury>=0?'#7ec98f':'#e8a0a0'};white-space:nowrap">${econMoney(c.treasury)}</span></div>`;
+        h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1)">`;
+        h+=`<span><span style="color:${gcol}">◆ ${escQH(spec)}</span>${c.home&&wl[c.home]?` · ${escQH(wl[c.home].label)}`:''}</span>`;
+        h+=`<span style="white-space:nowrap">${fleet} ship${fleet===1?'':'s'} · ${inv} invest${inv===1?'':'s'}</span></div>`;
+        h+=`</div>`;
+      });
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Corp ships trade profit-first anywhere (no territory). Treasuries sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses).</div>`;
+      h+=`</div>`;
+    }
+  }
+  // Corporate contracts — jobs the houses would pay players for. The referee DRAFTS one into a
+  // concrete contract, then posts it to the Quest Log (players track it) or leaks it to Library Data.
+  { const evs=ECON.corpEvents();
+    if(evs.length){
+      const CICON={ escort:'🛡', haul:'📦', bounty:'🎯', sabotage:'⚔', espionage:'🕵' };
+      h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+      h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Corporate contracts <span style="color:var(--tx1);font-size:9px">— ${evs.length} on offer</span></div>`;
+      evs.slice().reverse().forEach((ev)=>{ const i=evs.indexOf(ev); const it=ECON.contractItem(ev); if(!it) return;
+        const col=it.color||'#9fd0ff', drafted=econDraftSel&&econDraftSel.i===i;
+        const summ = it.contract==='sabotage'||it.contract==='espionage' ? `vs ${escQH(it.targetName||'a rival')}`
+                   : it.contract==='haul' ? `→ ${escQH(it.place||'?')}`
+                   : (it.vessel?`${escQH(it.vessel)}`:'') ;
+        h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
+        h+=`<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#cdd6e0">`;
+        h+=`<span>${CICON[it.contract]||'•'} <span style="color:${col}">${escQH(it.label)}</span> <span style="color:var(--tx1);font-size:10px">${it.contract}${summ?' · '+summ:''}</span></span>`;
+        h+=`<span style="white-space:nowrap"><span style="color:#f4d35e">${econMoney(it.reward)}</span> <button onclick="econDraftContract(${i})" style="background:none;border:1px solid #3a5f8a;color:#9fd0ff;border-radius:5px;padding:0 6px;font-size:10px;cursor:pointer">✍ Draft</button> <button onclick="econDismissContract(${i})" title="Dismiss" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:0 5px;font-size:10px;cursor:pointer">✕</button></span></div>`;
+        if(drafted){ const d=econDraftSel.contract;
+          h+=`<div style="background:var(--bg0);border:1px solid var(--bd0);border-radius:6px;padding:7px 8px;margin:4px 0 6px">`;
+          h+=`<div style="font-size:11px;color:var(--tx0);font-weight:600;margin-bottom:3px">${escQH(d.title)}</div>`;
+          h+=`<div style="font-size:11px;color:#cdd6e0;line-height:1.45;margin-bottom:4px">${escQH(d.brief)}</div>`;
+          h+=`<div style="font-size:10px;color:var(--tx1);margin-bottom:5px">Reward ${econMoney(d.reward)} · ${escQH(d.refNote)}</div>`;
+          h+=`<div style="display:flex;gap:5px;flex-wrap:wrap">`;
+          h+=`<button onclick="econContractToQuest()" style="background:#1d3a4a;border:1px solid #3a6f9d;color:#bfe3ea;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Quest Log</button>`;
+          h+=`<button onclick="econContractToLibrary()" style="background:none;border:1px solid #6a5a2a;color:#e0c87a;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Library Data</button>`;
+          h+=`<button onclick="econRerollContract()" title="Re-roll the wording" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">⟳ Re-roll</button>`;
+          h+=`<span id="econ-contract-note" style="font-size:9px;color:#7ec98f;align-self:center"></span></div>`;
+          h+=`</div>`;
+        }
+        h+=`</div>`;
+      });
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Flagged from live corp activity — valuable convoys want escorts, raided houses post bounties, rivals pay for sabotage &amp; espionage (often against OmniSynth). Sabotage/bounty resolve with the ⚔ raid button on the target convoy.</div>`;
+      h+=`</div>`;
+    }
+  }
   // Traders — the living merchant market (funds, upkeep, backing, territory, lifecycle)
-  { const on=ECON.tradersOn(), wl=ECON.worlds(), FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+  { const on=ECON.tradersOn(), wl=ECON.worlds(), FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{}, CORPS=ECON.corps();
     const money=n=>{ n=Math.round(n); const s=n<0?'−':''; const a=Math.abs(n); return s+(a>=1000?'Cr'+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,'')+'k':'Cr'+a); };
-    const backInfo=b=>{ if(!b||b==='private') return {nm:'Indep',col:'#66bbaa'}; const f=FAC[b]; return {nm:(f&&f.name?f.name.split(' ')[0]:b), col:(f&&f.color)||'#9fb0c8'}; };
+    const backInfo=b=>{ if(!b||b==='private') return {nm:'Indep',col:'#66bbaa'};
+      if(ECON.isCorp(b)){ const c=CORPS[b]; return {nm:(c&&c.name?c.name.split(' ')[0]:'Corp'), col:(c&&c.color)||'#ff9a3c'}; }   // corp ships get their house colour
+      const f=FAC[b]; return {nm:(f&&f.name?f.name.split(' ')[0]:b), col:(f&&f.color)||'#9fb0c8'}; };
     const cap=ECON.traderCap(), ags=ECON.agents();
     h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
     h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
