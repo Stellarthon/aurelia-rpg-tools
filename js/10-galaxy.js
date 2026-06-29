@@ -1543,7 +1543,10 @@ const HX = (function(){
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
       const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker+mktPressure(src,g.name),
             sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-mktPressure(dst,g.name);
-      const buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      // Price-level overlay (referee manual adjustment × sticky inflation) layered OUTSIDE the
+      // bounded priceMult table, so a sustained shortage can push the level past the table's cap.
+      try { if(window.ECON && ECON.priceOverlay){ buyP*=ECON.priceOverlay(src.id,g.name); sellP*=ECON.priceOverlay(dst.id,g.name); } } catch(e){}
       out.push({good:g.name,buyP,sellP,profit:sellP-buyP}); });
     return out.sort((a,b)=>b.profit-a.profit); }
 
@@ -1738,25 +1741,37 @@ const HX = (function(){
     // 2) Trader convoys — route each along the fuel-optimal JUMP-LANE path (not a straight
     //    line), draw that multi-hop polyline, and place the ship marker along it by progress.
     const week=st.week;
-    ((ECON.agents&&ECON.agents())||[]).forEach(a=>{ if(!a.route) return;
+    const allAgents=(ECON.agents&&ECON.agents())||[];
+    const manyConvoys = allAgents.filter(a=>a.route).length > 30;   // big fleet → drop per-convoy labels (clutter + cost), keep markers/lines
+    allAgents.forEach(a=>{ if(!a.route) return;
       const f=BY_ID[a.route.from], t=BY_ID[a.route.to]; if(!f||!t) return;
-      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.06,Math.min(0.94,(week-a.route.began)/(a.route.eta-a.route.began)));
-      let nodes=null; try{ nodes=bestRoute(f,t); }catch(e){}
-      let pts;
-      if(nodes && nodes.length>1) pts=nodes.map(n=>axialPx(n.q,n.r));                      // surveyed jump-lane, fuel-optimal
-      else { const idp=lorePath(a.route.from,a.route.to);                                  // else the always-flyable commercial routes
-        if(idp && idp.length>1) pts=idp.map(id=>BY_ID[id]).filter(Boolean).map(n=>axialPx(n.q,n.r)); }
-      if(!pts || pts.length<2) pts=[axialPx(f.q,f.r), axialPx(t.q,t.r)];                    // last resort: direct
+      const frac=(typeof window!=='undefined'&&window.econViewFrac)||0;   // sub-week render clock (+1 day) so convoys crawl along their lane path
+      let pr=0.5; if(a.route.began!=null && a.route.eta>a.route.began) pr=Math.max(0.06,Math.min(0.94,(week+frac-a.route.began)/(a.route.eta-a.route.began)));
+      // Marker path = deadhead (from → pickup, empty) + laden (pickup → dest), so the ship
+      // flies from where it currently is to its next cargo source instead of teleporting.
+      const legPts=(fid,tid)=>{ const ff=BY_ID[fid], tt=BY_ID[tid]; if(!ff||!tt) return null;
+        let nodes=null; try{ nodes=bestRoute(ff,tt); }catch(e){}
+        let p; if(nodes && nodes.length>1) p=nodes.map(n=>axialPx(n.q,n.r));                // surveyed jump-lane, fuel-optimal
+        else { const idp=lorePath(fid,tid); if(idp && idp.length>1) p=idp.map(id=>BY_ID[id]).filter(Boolean).map(n=>axialPx(n.q,n.r)); }   // else the always-flyable commercial routes
+        if(!p || p.length<2) p=[axialPx(ff.q,ff.r), axialPx(tt.q,tt.r)]; return p; };       // last resort: direct
+      const wp=(a.route.pickup && a.route.pickup!==a.route.from && BY_ID[a.route.pickup]) ? a.route.pickup : null;
+      let pts=legPts(a.route.from, wp||a.route.to);
+      if(wp){ const seg2=legPts(wp, a.route.to); if(seg2 && seg2.length>1) pts=(pts||[]).concat(seg2.slice(1)); }   // join deadhead + laden (drop the shared pickup point)
+      if(!pts || pts.length<2) pts=[axialPx(f.q,f.r), axialPx(t.q,t.r)];
       // walk the polyline to the progress point
       const seg=[]; let total=0; for(let i=0;i<pts.length-1;i++){ const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y); seg.push(d); total+=d; }
       let x=pts[0].x, y=pts[0].y;
       if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
         const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
-      const z=4.2, gg=NS('g',{'pointer-events':'none'});
-      gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:'#f4d35e','stroke-width':0.8,opacity:0.3,'stroke-dasharray':'2,3'}));
-      gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:'#f4d35e',stroke:'#04060e','stroke-width':1}));
-      const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
-      gg.appendChild(lbl);
+      // Highlight the SELECTED trader's route (picked in the econ console); dim the rest.
+      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id);
+      const anySel=(typeof window!=='undefined' && !!window.econTraderSel), dim=anySel&&!sel;
+      const col=sel?'#ffe27a':'#f4d35e', z=sel?6:4.2, gg=NS('g',{'pointer-events':'none'});
+      if(sel) gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':3,opacity:0.22,'stroke-linejoin':'round'}));   // glow
+      gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':sel?1.6:0.8,opacity:sel?0.95:(dim?0.12:0.3),'stroke-dasharray':sel?'none':'2,3'}));
+      gg.appendChild(NS('polygon',{points:`${x},${y-z} ${x+z},${y} ${x},${y+z} ${x-z},${y}`,fill:col,stroke:'#04060e','stroke-width':1,opacity:dim?0.35:1}));
+      if(!dim && (sel || !manyConvoys)){ const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
+        if(sel) lbl.setAttribute('font-weight','700'); gg.appendChild(lbl); }
       layer.appendChild(gg);
     });
   }
@@ -2002,6 +2017,7 @@ const HX = (function(){
                      : `<div class="hx-small" style="margin-bottom:6px">No production or consumption configured.</div>`;
         if(ep.overridden) html+=`<div class="hx-small" style="color:#C98BE8;margin:-2px 0 6px">✎ Custom economy — overrides the built-in profile.</div>`;
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="openEconEditor('${s.id}')">⚒ Edit production &amp; consumption</button></div>`;
+        if(typeof econPriceControlHTML==='function') html+=econPriceControlHTML(s.id);
       }
     }
     const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
@@ -2111,7 +2127,7 @@ const HX = (function(){
       if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
     // Add new / update existing.
     Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
-      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id;
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
         if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
           if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
             s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
@@ -2132,7 +2148,25 @@ const HX = (function(){
   function placePick(q,r){ const cb=placeCb; placeMode=false; placeCb=null; render(); renderSel(); if(cb) cb(q,r); }
   window.hxCancelPlace=cancelPlace;
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, get origin(){ return origin; } };
+  // ── World economic facts — the physical inputs the living economy derives an
+  //    UNCONFIGURED world's production/consumption from, so procedurally generated
+  //    worlds join the market automatically (ECON.derivedProfile). Reuses the SAME
+  //    seeded UWP the map shows (uwpOf), so the chart and the economy never disagree.
+  //    Gas/ice giants flag a hydrogen-skimming source for the fuel chain. Returns null
+  //    for an unknown / no-market node (caller falls back to a light-consumer default).
+  function worldFacts(id){
+    const node=(typeof GX_MAP!=='undefined')?GX_MAP[id]:null; if(!node) return null;
+    const s = BY_ID[id] || { id, systemId:node.systemId||id, fac:node.faction,
+                             star:node.name, label:node.label||node.name, deep:isDeep(node) };
+    let uwp; try{ uwp=uwpOf(s); }catch(e){ return null; }
+    let codes; try{ codes=WGEN.tradeCodes(uwp); }catch(e){ codes=[]; }
+    let gasGiant=false;
+    try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[])||[];
+      gasGiant=bodies.some(b=> b.discStyle==='gasgiant' || /gas giant|ice giant/i.test(b.type||'')); }catch(e){}
+    return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
+  }
+
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){
