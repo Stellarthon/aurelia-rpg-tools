@@ -761,6 +761,28 @@ const GOOD_FLAVOR = {
   'Common Consumables':'foodstuffs','Common Ore':'raw ore','Common Electronics':'electronics components',
   'Common Manufactured':'machine parts','Advanced Electronics':'high-tech components'
 };
+// CORP CONTRACTS — the corp sim flags jobs (ECON.corpEvents / the {kind:'contract'} items from
+// ECON.intel); these templates resolve them into ready-to-run contracts. Placeholders: {corp} (the
+// hiring house), {target} (rival), {place}/{from}/{to} (worlds), {good}, {vessel}, {reward}. Each has
+// a short title, player-facing briefs, and a referee note. Drafted via draftCorpContract() below and
+// pushed to the Quest Log / Library Data from the economy console.
+const CORP_CONTRACT = {
+  escort: { title:'Escort — {corp}', refNote:'{corp} convoy {vessel} ({good}, {from}→{to}). Reward ~{reward}. If the players escort it successfully, it survives; if they fail or decline, resolve with the ⚔ convoy-raid button.', briefs:[
+    '{corp} is paying {reward} for armed escort of its hauler {vessel} — {good} on the {from}→{to} run. Raiders have been working that lane.',
+    'Word at the {to} docks: {corp} wants guns aboard {vessel} for the {good} run in from {from}. {reward} on safe arrival.' ]},
+  haul: { title:'Priority haul — {corp}', refNote:'{corp} expanding at {place}; needs {good} delivered to support it. Premium ~{reward} over market.', briefs:[
+    '{corp} will pay a premium — {reward} — for a fast delivery of {good} into {place} to feed its new operation there.',
+    '{corp} is short of {good} at {place} and paying over the odds ({reward}) to anyone who can run a hold in quick.' ]},
+  bounty: { title:'Bounty — {corp}', refNote:'{corp} convoy {vessel} was raided near {to} ({good}). It posts a {reward} bounty on the raiders.', briefs:[
+    '{corp} posts a {reward} bounty on the raiders who hit its {good} shipment near {to}. They want a name, or a wreck.',
+    'Someone gutted a {corp} hauler off {to}. The company is paying {reward} to whoever settles the account.' ]},
+  sabotage: { title:'Black job — {corp} vs {target}', refNote:'{corp} hiring against its rival {target}. Reward ~{reward}. Resolve a success with the ⚔ raid button on a {target} convoy.', briefs:[
+    '{corp} will quietly pay {reward} to see {target}’s next {good} shipment never reach port. No questions, no records.',
+    'A {corp} fixer is hiring deniable hands — {reward} to make a {target} cargo disappear. {good}, in transit, soon.' ]},
+  espionage: { title:'Corporate espionage — {corp}', refNote:'{corp} wants intel on rival {target} (expansion plans / routes). Reward ~{reward}. Could hand the players {target}’s next move.', briefs:[
+    '{corp} wants eyes inside {target} — {reward} for their expansion plans and trade routes. Discretion essential.',
+    'A discreet {corp} broker is paying {reward} for whatever you can lift on {target}: berths, routes, who they’re buying.' ]}
+};
 const MARKET_RUMOUR = {
   shock_output: [
     'Word on the docks: the {good} coming out of {place} has slowed to a trickle. Somebody knows why — and they’re already buying.',
@@ -815,6 +837,54 @@ function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
 
 function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
+// Fill a CORP_CONTRACT template from a rich contract item (ECON.contractItem / an intel 'contract' item).
+function fillContract(s, item){
+  const money = (typeof econMoney==='function') ? econMoney(item.reward) : ('Cr'+(item.reward||0));
+  return (''+s)
+    .replace(/{corp}/g,   item.label||'a corporation')
+    .replace(/{target}/g, item.targetName||'a rival house')
+    .replace(/{place}/g,  item.place||item.toLabel||'the frontier')
+    .replace(/{from}/g,   item.fromLabel||'port')
+    .replace(/{to}/g,     item.toLabel||'port')
+    .replace(/{good}/g,   goodFlavor(item.good))
+    .replace(/{vessel}/g, item.vessel||'a hauler')
+    .replace(/{reward}/g, money);
+}
+// Roll a concrete contract from a flagged opportunity → {type,corp,target,reward,title,brief,refNote}.
+function draftCorpContract(item){
+  const t = (CORP_CONTRACT[item.contract]) || CORP_CONTRACT.escort;
+  return { type:item.contract, corp:item.label, target:item.targetName||null, reward:item.reward, color:item.color||null,
+    title: fillContract(t.title, item), brief: fillContract(pick(t.briefs), item), refNote: fillContract(t.refNote, item) };
+}
+// Post a drafted contract to the shared Quest Log (players see & track it). Reuses the quest system.
+function spawnContractQuest(c){
+  if(typeof isReferee==='function' && !isReferee()) return false;
+  if(!c || typeof questLog==='undefined') return false;
+  const reward = c.reward ? ' · suggested reward '+((typeof econMoney==='function')?econMoney(c.reward):('Cr'+c.reward)) : '';
+  questLog.push({ id:'q_'+Date.now().toString(36), title:c.title, status:'active', playerDesc:c.brief,
+    refNote:(c.refNote||'')+reward, objectives:[] });
+  if(typeof saveQuestLog==='function') saveQuestLog();
+  if(typeof renderQuestPanel==='function' && typeof questPanelOpen!=='undefined' && questPanelOpen) renderQuestPanel();
+  return true;
+}
+// Post a drafted contract to Library Data as a rumour players can overhear (reuses the discovery log).
+function pushContractToLibrary(c){
+  if(typeof isReferee==='function' && !isReferee()) return false;
+  if(!c || typeof discoveryLog==='undefined') return false;
+  const reward = c.reward ? ' · reward '+((typeof econMoney==='function')?econMoney(c.reward):('Cr'+c.reward)) : '';
+  discoveryLog.push({ id:'disc_'+Date.now().toString(36), title:c.brief, category:'faction',
+    body:(c.refNote||'')+reward, state:'rumoured', visibleTo:'all', createdAt:imperialNow(), revealedAt:imperialNow() });
+  if(typeof saveDiscoveryLog==='function') saveDiscoveryLog();
+  if(typeof renderDiscoveryPanel==='function' && typeof discPanelOpen!=='undefined' && discPanelOpen) renderDiscoveryPanel();
+  return true;
+}
+// Oracle-side: post the currently shown contract rumour to the Quest Log.
+function contractToQuest(){
+  if(!oracleResult || !oracleResult.contract) return;
+  if(spawnContractQuest(oracleResult.contract)){
+    const note=document.getElementById('gen-codex-note'); if(note){ note.textContent='✓ Posted to the Quest Log'; setTimeout(()=>{ if(note) note.textContent=''; },2200); }
+  }
+}
 // Build a TRUE rumour from the living economy's current intel, or null if the sim
 // is off / nothing is moving. Biased toward the sharpest few signals so the most
 // newsworthy shock or shortage usually surfaces.
@@ -823,6 +893,9 @@ function pickMarketRumour(){
   let items; try { items = ECON.intel(); } catch(e){ return null; }
   if(!items || !items.length) return null;
   const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
+  if(item.kind === 'contract'){ const d = draftCorpContract(item);   // a corp job overheard on the docks
+    return { kind:'rumour', text:d.brief, faction:null, source:'contract', contract:d,
+      reliability:(item.contract==='sabotage'||item.contract==='espionage')?'Whispered':'Reliable' }; }
   const key = item.kind === 'shock'
     ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
@@ -915,11 +988,13 @@ function renderOraclePanel(){
   if(oracleResult){
     if(oracleResult.kind === 'rumour'){
       const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
-      const mkt = oracleResult.source === 'market' ? `<span class="gen-tag" style="color:var(--accentGold)" title="Drawn from the living economy — true at the time it was generated">📈 market</span>` : '';
+      const mkt = oracleResult.source === 'market' ? `<span class="gen-tag" style="color:var(--accentGold)" title="Drawn from the living economy — true at the time it was generated">📈 market</span>`
+                : oracleResult.source === 'contract' ? `<span class="gen-tag" style="color:#9fd0ff" title="A corporation's job, drawn from the living economy">📋 contract</span>` : '';
+      const questBtn = oracleResult.contract ? `<button class="disc-mini" onclick="contractToQuest()" title="Post this contract to the Quest Log for players">→ Quest Log</button>` : '';
       resultHTML = `<div class="gen-result">
         <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
         <div class="gen-meta">${mkt}${fac}<span class="gen-tag">${oracleResult.reliability}</span>
-          <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>
+          <button class="disc-mini" onclick="rumourToCodex()" title="Push to Library Data as a rumour players can see">→ Library Data</button>${questBtn}
           <span id="gen-codex-note" style="font-size:9px;color:var(--accentGold)"></span></div>
       </div>`;
     } else {
