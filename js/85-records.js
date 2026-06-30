@@ -781,7 +781,10 @@ const CORP_CONTRACT = {
     'A {corp} fixer is hiring deniable hands — {reward} to make a {target} cargo disappear. {good}, in transit, soon.' ]},
   espionage: { title:'Corporate espionage — {corp}', refNote:'{corp} wants intel on rival {target} (expansion plans / routes). Reward ~{reward}. Could hand the players {target}’s next move.', briefs:[
     '{corp} wants eyes inside {target} — {reward} for their expansion plans and trade routes. Discretion essential.',
-    'A discreet {corp} broker is paying {reward} for whatever you can lift on {target}: berths, routes, who they’re buying.' ]}
+    'A discreet {corp} broker is paying {reward} for whatever you can lift on {target}: berths, routes, who they’re buying.' ]},
+  smuggle: { title:'Run the blockade — {place}', refNote:'{corp} wants {good} run past the trade restriction at {place}. Premium ~{reward}. Players smuggle a hold in — resolve as a skill/heat scene; if they’re caught or decline, seize the cargo with the ⚔ convoy-raid button.', briefs:[
+    '{corp} is quietly paying {reward} to anyone who can run a hold of {good} past the clampdown at {place}. Customs are watching the berths.',
+    'There’s a black market for {good} at {place} since the restriction bit — {corp} will pay {reward} for a discreet delivery, no manifest, no questions.' ]}
 };
 const MARKET_RUMOUR = {
   shock_output: [
@@ -815,6 +818,26 @@ const MARKET_RUMOUR = {
   glut: [
     'There’s more {good} sitting at {place} than anyone can move. Cheap now — won’t last once word spreads.',
     '{place} is awash in {good}. A sharp trader buys low here before the surplus clears.'
+  ],
+  status_boom: [
+    '{place} is booming — a new operation has drawn workers, money and trouble in equal measure. Easy coin there, if you know who to ask.',
+    'Word is {place} is flush right now: wages up, bars full, and the holding cells fuller.'
+  ],
+  status_bust: [
+    '{place} has gone quiet — the work dried up and anyone who can is leaving. Desperate ports make for cheap, willing hands.',
+    'They pulled out of {place} and took the jobs with them. It’s a buyer’s market for anything — and anyone — there now.'
+  ],
+  status_unrest: [
+    '{place} is restive — strikes on the docks, anger in the streets. Cargo moves slow and nothing ships on schedule.',
+    'There’s real trouble brewing at {place}: the workforce has had enough and the bosses are nervous.'
+  ],
+  status_rationing: [
+    'Larders are thinning at {place} — ration cards are out and folk are eyeing the relief convoys. A full hold of staples would be welcome, and well paid.',
+    '{place} is tightening its belt. Whoever turns up with food will find grateful buyers.'
+  ],
+  blackmarket: [
+    'There’s a black market running at {place} for {good} since the restriction. The discreet are doing very well out of it.',
+    'Ask the right people at {place} and you can move {good} off the books — at a premium, and a risk.'
   ]
 };
 
@@ -895,7 +918,11 @@ function pickMarketRumour(){
   const item = items[Math.floor(Math.random() * Math.min(items.length, 4))];
   if(item.kind === 'contract'){ const d = draftCorpContract(item);   // a corp job overheard on the docks
     return { kind:'rumour', text:d.brief, faction:null, source:'contract', contract:d,
-      reliability:(item.contract==='sabotage'||item.contract==='espionage')?'Whispered':'Reliable' }; }
+      reliability:(item.contract==='sabotage'||item.contract==='espionage'||item.contract==='smuggle')?'Whispered':'Reliable' }; }
+  if(item.kind === 'status'){ const tmpl = MARKET_RUMOUR['status_'+item.status] || MARKET_RUMOUR.shortage;   // a world's mood/condition
+    return { kind:'rumour', text: pick(tmpl).replace(/{place}/g, item.label), faction:null, reliability:'Reliable', source:'market' }; }
+  if(item.kind === 'blackmarket'){ const text = pick(MARKET_RUMOUR.blackmarket).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
+    return { kind:'rumour', text, faction:null, reliability:'Whispered', source:'market' }; }   // illicit, so sketchy intel
   const key = item.kind === 'shock'
     ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
