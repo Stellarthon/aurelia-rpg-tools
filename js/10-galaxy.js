@@ -1918,6 +1918,13 @@ const HX = (function(){
     html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
     html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
     const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    // Living-economy world condition + black market (referee always; players once they've called here, like market data)
+    if(typeof ECON!=='undefined' && ECON.active() && (ref() || isVisited(s))){
+      const wst=ECON.worldStatus(s.id), WM=ECON.WS_META||{};
+      if(wst && wst.kind && WM[wst.kind]) html+=`<div class="hx-kv"><span class="k">Condition</span><span class="v" style="color:${WM[wst.kind].color}">${WM[wst.kind].icon} ${WM[wst.kind].label}${wst.sev>1?' '+('I'.repeat(wst.sev)):''}</span></div>`;
+      const cbd=ECON.contraband(s.id);
+      if(cbd && cbd.good) html+=`<div class="hx-kv"><span class="k">Black market</span><span class="v" style="color:#b48cd6">☣ ${eh((''+cbd.good).replace('Common ',''))} +${Math.round(((cbd.premium||1.6)-1)*100)}%</span></div>`;
+    }
     if(s===origin){
       html+=`<div class="hx-kv"><span class="k">Status</span><span class="v" style="color:#f4d35e">◆ Current location${typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?' · '+formatImperial(imperialDate):''}</span></div>`;
       if(fuelAt(s)!=='none' && fuelAboard<fuelMax && ref())
@@ -1958,6 +1965,9 @@ const HX = (function(){
         else { ops.forEach(o=>{ html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name">${eh(o.good)}</span><span class="d">${kCr(o.buyP)} → ${kCr(o.sellP)} · <b style="color:#3f9d5a">+${kCr(o.profit)}/t</b></span></div>`; });
           const best=ops[0]; html+=`<div class="hx-kv"><span class="k">Best load · ${eh(best.good)} × ${cargoHold}t</span><span class="v" style="color:#3f9d5a">+${kCr(best.profit*cargoHold)}</span></div>`;
           html+=`<div class="hx-small" style="color:var(--tx1);margin-top:4px">Prices as of ${eh(typeof formatImperial==='function'?formatImperial(imperialDate):'now')} (Broker-${broker}); they drift week to week. Play rolls 3D6 per buy/sell.</div>`; } }
+      { const cbd=(typeof ECON!=='undefined'&&ECON.active())?ECON.contraband(s.id):null;
+        if(cbd && cbd.good && (ref()||isVisited(s)))
+          html+=`<div class="hx-small" style="color:#b48cd6;margin-top:4px">☣ Black market — ${eh((''+cbd.good).replace('Common ',''))} moves off the books here at ~+${Math.round(((cbd.premium||1.6)-1)*100)}% over list since the restriction. Arrange the buy with the referee.</div>`; }
       if(ref() && (srcMkt&&dstMkt)){ html+= isVisited(s)
         ? `<div class="hx-small" style="color:#4caf82;margin-top:4px">✓ Party has called here — market visible to players.</div>`
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
