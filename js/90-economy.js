@@ -394,7 +394,7 @@ window.ECON = (function(){
   // scale with HULL SIZE (bigger ships cost more to run but haul more): see upkeepOf/milkRunOf.
   // Idle traders mostly cover upkeep on milk-runs so a calm galaxy thins the herd slowly; shocks
   // are when survivors profit. PUBLIC fleets are subsidised + get a longer insolvency grace.
-  const GRACE_PRIVATE = 4, GRACE_PUBLIC = 8, SPAWN_PROB = 0.35, DEFAULT_TRADER_CAP = 8, TRADER_CAP_MAX = 150;   // ~10ms/weekly-step at 150; stays smooth (see bench)
+  const GRACE_PRIVATE = 4, GRACE_PUBLIC = 8, SPAWN_PROB = 0.35, DEFAULT_TRADER_CAP = 12, TRADER_CAP_MAX = 150;   // 12 fits the 10-ship opening fleet (5 independents/relief + 5 corp flagships) + a little commission room, so no seed ship — and no rival's only flagship — is culled on the first step. ~10ms/weekly-step at 150; stays smooth (see bench)
   // Backed traders avoid rival territory: hard = never route through it; soft = penalised but allowed.
   const FACTION_AVOID = {
     hegemony:  { hard:['rsc'],      soft:[] },
@@ -440,22 +440,33 @@ window.ECON = (function(){
   //    fund world infrastructure (the corpInvest topology layer in buildTopology). LIVE-only —
   //    skipped by settleBaseline like agents — and advanced ONLY by the referee, because investments
   //    move state.base (see corpsStep guards + the load/reset/advance re-settles). ──
-  const CORP_SEED_TREASURY = 55000;      // a house opens with this much working capital
+  const CORP_SEED_TREASURY = 90000;      // a house opens with this much working capital — just shy of its first expansion, so a few weeks of operating income tip it over (rivals are established houses, not startups)
   const CORP_FLOAT = 35000;              // operating float a corp ship keeps; surplus is swept to treasury
   const CORP_BAIL_FLOOR = 6000;          // below this, a ship is topped back toward the float (funds permitting)
   const CORP_SHIP_COST = 35000;          // capital seeded into a newly commissioned hull (drawn from treasury)
   const CORP_COMMISSION_MIN = 45000;     // treasury floor to commission another ship
-  const CORP_INVEST_MIN = 130000;        // treasury floor to fund a world expansion
-  const CORP_INVEST_COST = 110000;       // cost of one expansion
+  const CORP_INVEST_MIN = 100000;        // treasury floor to fund a world expansion
+  const CORP_INVEST_COST = 85000;        // cost of one expansion
   const CORP_INVEST_MAX_PER_WORLD = 3;   // bounded so the galaxy drifts, not breaks
   const CORP_INVEST_GLOBAL_MAX = 18;     // galaxy-wide cap on active expansions — keeps cumulative worker-food demand inside the galaxy's surplus (verified by the balance harness) so a long campaign can't slowly starve it
   const CORP_INVEST_MAX_PER_CORP = 9;    // no single house may hold more than half the global cap — leaves room for rivals (so OmniSynth dominates but doesn't monopolise; keeps rival-vs-megacorp contracts grounded)
+  // ── Operating income — the engine of a LIVING corp economy. A house's on-screen flagship only
+  //    arbitrages during shocks; between them an IDLE ship actually loses money (milk-run < upkeep),
+  //    so without this every treasury froze the instant its seed capital was spent — and only the
+  //    megacorp's outsized seed ever funded an expansion, so OmniSynth held ~100% of ALL investment
+  //    within a few turns while no rival could ever reach the invest floor. This income is the house's
+  //    off-screen trade + the return on its built infrastructure: treasuries now GROW between shocks,
+  //    so rivals climb to fund their own expansions and the megacorp compounds toward its cap. Pooled
+  //    capital, PRICE-NEUTRAL (treasury never feeds prices), referee-advanced — the invariants hold.
+  const CORP_OP_INCOME = 3000;           // weekly cashflow per active flagship (the off-screen trade the on-screen sim doesn't model)
+  const CORP_INVEST_YIELD = 2500;        // weekly return per active expansion — a bigger footprint grows faster, but the 9 / global-18 invest caps keep "richer-gets-richer" from ever reaching a literal monopoly
+  const CORP_TREASURY_CAP = 750000;      // reserve ceiling: a house that's hit its invest cap has nothing left to buy, so bound the idle war-chest (×2 for the megacorp) — keeps console treasuries readable
   // OmniSynth — the setting's MEGACORP. Vital to the story → SAFEGUARDED: it never dissolves and a
   // solvency floor keeps it from ever going bankrupt. It opens large and dominant; its commercial arm
   // coexists with the `omnisynth` faction relief fleets. (Treasury is not price-affecting → no
   // determinism impact; investments still obey the bounded layer + global cap, so balance holds.)
-  const MEGACORP_SEED_TREASURY = 300000; // opens as the dominant economic force
-  const MEGACORP_FLOOR = 40000;          // solvency floor — its vast off-screen holdings. Below the commission threshold ON PURPOSE: guarantees it can always bail a flagship and never collapses, WITHOUT free-funding endless growth (fleet/infra growth still comes from earned surplus, like the rivals)
+  const MEGACORP_SEED_TREASURY = 200000; // opens as the dominant economic force — a clear first-mover lead (≈2 immediate expansions) without instantly locking the rivals out
+  const MEGACORP_FLOOR = 40000;          // solvency floor — its vast off-screen holdings. Below the commission threshold ON PURPOSE: guarantees it can always bail a flagship and never collapses, WITHOUT free-funding endless growth (fleet/infra growth comes from operating income, like the rivals — just faster, as it runs two flagships)
   const CORP_MAX = 6, CORP_FORM_PROB = 0.015;          // occasional new houses form, up to this many
   const CORP_OUT_BUMP = 12;              // +specialty output one expansion adds at a world (the expansion also makes its own input chain — see buildTopology — so it never starves a recipe input)
   const CORP_DEM_FOOD = 2;               // +worker food demand per expansion (small; only Common Consumables, the galaxy's most-overproduced good, has the headroom to absorb it at the invest bound)
@@ -706,10 +717,11 @@ window.ECON = (function(){
     state.agents.push(newCorpShip('tr'+state.agentSeq, corpShipName(corp), corp, arch?arch.seedShip:pick(CORP_SHIP_POOL), CORP_SHIP_COST));
     log(week, `✦ A new trading house forms — ${corp.name} (${corp.specialty.replace('Common ','')})`);
   }
-  // Weekly corp turn: pooled-funds sweep/bail, fleet growth, infrastructure investment, formation &
-  // dissolution. REFEREE-ONLY (investments move state.base; cross-device determinism, invariant #4)
-  // and skipped by settleBaseline (scratch state has no `corps`). Records investments only — the base
-  // re-settle is batched once per advance (see advance/syncToDate), never per-investment.
+  // Weekly corp turn: operating income, pooled-funds sweep/bail, fleet growth, infrastructure
+  // investment, formation & dissolution. REFEREE-ONLY (investments move state.base; cross-device
+  // determinism, invariant #4) and skipped by settleBaseline (scratch state has no `corps`). Records
+  // investments only — the base re-settle is batched once per advance (see advance/syncToDate).
+  // Tune the corp-balance constants with the headless harness: node tools/econ-corp-harness.cjs
   function corpsStep(week){
     if(!state.corps || state.tradersOn===false || !state.active) return;
     if(typeof isReferee==='function' && !isReferee()) return;
@@ -717,6 +729,11 @@ window.ECON = (function(){
     Object.values(state.corps).forEach(c=>{ if(c.defunct) return;
       if(c.megacorp && c.treasury < MEGACORP_FLOOR) c.treasury = MEGACORP_FLOOR;   // OmniSynth solvency floor — it can always bail a flagship & never collapses (vast off-screen holdings)
       const ships=state.agents.filter(a=>a.backing===c.id);          // re-scan each week — agentsStep splices on bankruptcy/spawn
+      // 0) Operating income (see CORP_OP_INCOME) — accrue BEFORE the spend decisions so a house can act on
+      //    it the same week. Scales with the active footprint (flagships + expansions) and is bounded by a
+      //    reserve ceiling so an idle, fully-expanded house never piles up an unreadable war-chest.
+      const tcap=(c.megacorp?2:1)*CORP_TREASURY_CAP;
+      if(c.treasury < tcap) c.treasury = Math.min(tcap, c.treasury + CORP_OP_INCOME*ships.length + CORP_INVEST_YIELD*(c.invests||[]).length);
       // 1) Sweep ship surplus over the working float into the treasury; bail red ships back toward it.
       ships.forEach(a=>{
         if(a.cap > CORP_FLOAT){ c.treasury += a.cap-CORP_FLOAT; a.cap=CORP_FLOAT; }
@@ -1791,7 +1808,7 @@ function renderEconPanel(){
         h+=`<span style="white-space:nowrap">${fleet} ship${fleet===1?'':'s'} · ${inv} invest${inv===1?'':'s'}</span></div>`;
         h+=`</div>`;
       });
-      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Corp ships trade profit-first anywhere (no territory). Treasuries sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses).</div>`;
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Corp ships trade profit-first anywhere (no territory). Treasuries earn weekly operating income (off-screen trade + returns on expansions), sweep ship profit, bail out losers, grow fleets, and fund world expansions. <b style="color:#9fd0ff">★</b> = the OmniSynth megacorp (safeguarded — never collapses). OmniSynth leads but the per-house invest cap keeps room for rivals.</div>`;
       h+=`</div>`;
     }
   }
