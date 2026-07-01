@@ -6,6 +6,36 @@
 // it: showIntroSplash() on app entry, and maybeSystemWelcome() the first time
 // a traveller visits a system (see 10-galaxy.js). Purely cosmetic — the app
 // boots underneath regardless, so this can never block access.
+
+// ── Splash config (referee-editable, shared) ────────────────────────────────
+// The built-in copy lives in SPLASH_DEFAULTS. The referee can edit the text and
+// turn either splash on/off from Design Mode (see openSplashEditor in
+// 65-design-mode.js); those edits are shared campaign state (Supabase key
+// 'splash-config') so every player picks them up, exactly like reveal-status.
+// getSplashConfig() always merges saved values over the defaults, so a missing
+// or partial override never leaves a field blank.
+const SPLASH_DEFAULTS = {
+  intro: { enabled:true, kicker:'Aurelian System', title:'WELCOME TRAVELLER',
+           sub:'May the stars ever be full of wonder.', hint:'Tap anywhere to begin' },
+  system:{ enabled:true, kicker:'', sub:'Welcome Traveller', hint:'Tap anywhere to continue' },
+};
+let splashConfig = null;   // raw saved overrides; null until first load
+function getSplashConfig(){
+  const o = splashConfig || {};
+  return {
+    intro:  Object.assign({}, SPLASH_DEFAULTS.intro,  o.intro  || {}),
+    system: Object.assign({}, SPLASH_DEFAULTS.system, o.system || {}),
+  };
+}
+async function loadSplashConfig(){
+  try { const r = await supaStorage.get('splash-config', true); splashConfig = (r && r.value != null) ? JSON.parse(r.value) : {}; }
+  catch(e){ splashConfig = {}; }   // offline / first run → fall back to defaults
+}
+async function saveSplashConfig(){
+  try { await supaStorage.set('splash-config', JSON.stringify(splashConfig || {}), true); }
+  catch(e){ console.error('Splash config save failed', e); }
+}
+
 let _splashTimer = null, _splashArm = null;
 function _splashEnd(){ dismissSplash(); }
 // opts: { kicker, title, sub, hint, italicSub, duration }
@@ -57,18 +87,27 @@ function dismissSplash(){
   el.removeEventListener('click', _splashEnd);
 }
 
-// App-entry welcome — shown once the access gate clears (players + referee).
+// Prime splashConfig synchronously from the last-synced value in the local
+// cache, so the intro can honour the referee's on/off + text without waiting on
+// a network round-trip. The async loadSplashConfig()/poll refresh it afterward.
+function primeSplashConfigFromCache(){
+  if(splashConfig !== null) return;
+  try {
+    const raw = (typeof supaStorage !== 'undefined' && supaStorage.cacheGet) ? supaStorage.cacheGet('splash-config') : null;
+    if(raw != null) splashConfig = JSON.parse(raw);
+  } catch(e){ /* leave null → getSplashConfig() falls back to defaults */ }
+}
+
+// App-entry welcome — shown once the access gate clears (players + referee),
+// using the referee's shared config.
 let _introShown = false;
 function showIntroSplash(){
   if(_introShown) return;                     // only ever once per page load
   _introShown = true;
-  showSplash({
-    kicker: 'Aurelian System',
-    title:  'WELCOME TRAVELLER',
-    sub:    'May the stars ever be full of wonder.',
-    italicSub: true,
-    hint:   'Tap anywhere to begin',
-  });
+  primeSplashConfigFromCache();
+  const c = getSplashConfig().intro;
+  if(!c.enabled) return;                       // referee turned the intro off
+  showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -376,6 +415,13 @@ async function pollRevealState(){
         renderClock();
       }
     }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Pick up the referee's splash-screen edits (text / on-off). No re-render
+  // needed — the new config is read live the next time a splash is shown.
+  try {
+    const resSplash = await supaStorage.get('splash-config', true);
+    if(resSplash.ok){ splashConfig = resSplash.value != null ? JSON.parse(resSplash.value) : {}; }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Also pick up any Design Mode content edits the referee has made

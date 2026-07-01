@@ -1506,6 +1506,36 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .qe-obj-text{width:100%;font-size:11px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:5px 8px;resize:none;height:36px}
 .qe-obj-refnote{width:100%;font-size:10px;font-family:monospace;background:var(--bg0);color:var(--tx1);border:.5px solid var(--bd0);border-radius:4px;padding:4px 8px;resize:none;height:28px;font-style:italic}
 .qe-obj-done{width:16px;height:16px;flex-shrink:0;margin-top:8px;accent-color:var(--txS);cursor:pointer}
+
+/* ── Splash-screen editor (referee, Design Mode) — mirrors #quest-edit-modal ── */
+#splash-edit-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:220;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#splash-edit-modal.hidden{display:none}
+#splash-edit-card{
+  background:var(--bg1);border:.5px solid var(--accentGold);border-radius:10px;
+  width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden
+}
+.splash-edit-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+.splash-edit-header .se-ttl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+.splash-edit-body{flex:1;overflow-y:auto;padding:14px 16px}
+.splash-edit-footer{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:10px 16px;border-top:.5px solid var(--bd0);flex-shrink:0;flex-wrap:wrap
+}
+.splash-edit-footer button{
+  font-size:11px;font-family:monospace;padding:7px 14px;border-radius:5px;cursor:pointer;border:none
+}
+.splash-edit-footer .se-save{background:var(--accentGold);color:#0f1117;font-weight:700}
+.splash-edit-footer .se-reset{background:#3B1A1A;color:#d45050;border:.5px solid #d45050 !important;margin-right:auto}
+.splash-edit-footer .se-preview{background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold) !important}
+.splash-edit-footer .se-cancel{background:var(--bg0);color:var(--tx1)}
+.se-note{font-size:10px;color:var(--tx1);font-style:italic;margin:-2px 0 12px;font-family:monospace;line-height:1.5}
+.se-disabled{opacity:.45}
 .qe-obj-remove{font-size:11px;background:#3B1A1A;color:#d45050;border:.5px solid #d45050;border-radius:50%;width:20px;height:20px;flex-shrink:0;margin-top:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #root.pm-active #health-wrap{display:none!important}
 #health-header{
