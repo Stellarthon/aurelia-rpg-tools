@@ -1,4 +1,42 @@
 // ═══════════════════════════════════════════════════════════════════════════
+// INTRO SPLASH — "Welcome, Traveller"
+// ═══════════════════════════════════════════════════════════════════════════
+// A brief, role-agnostic welcome (players and referee alike) shown once the
+// access gate clears — or immediately on load for a returning viewer whose
+// gate is already unlocked. It fades in over the app, auto-dismisses after a
+// few seconds, and can be skipped with a tap or any key. Purely cosmetic: the
+// app boots underneath regardless, so this can never block access.
+let _introTimer = null;
+function _introEnd(){ dismissIntroSplash(); }
+function showIntroSplash(){
+  const el = document.getElementById('intro-splash');
+  if(!el || el.dataset.shown) return;      // only ever once per page load
+  el.dataset.shown = '1';
+  el.setAttribute('aria-hidden', 'false');
+  // Next frame, so the .show transition animates up from the hidden state.
+  requestAnimationFrame(() => el.classList.add('show'));
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  _introTimer = setTimeout(dismissIntroSplash, reduce ? 1400 : 3800);
+  // Arm skip-to-dismiss only after the entrance settles, so the click or Enter
+  // that unlocked the gate doesn't instantly close the splash.
+  setTimeout(() => {
+    if(el.classList.contains('show')){
+      document.addEventListener('keydown', _introEnd);
+      el.addEventListener('click', _introEnd);
+    }
+  }, 500);
+}
+function dismissIntroSplash(){
+  const el = document.getElementById('intro-splash');
+  if(!el || !el.classList.contains('show')) return;
+  clearTimeout(_introTimer);
+  el.classList.remove('show');             // fades out via the CSS transition
+  el.setAttribute('aria-hidden', 'true');
+  document.removeEventListener('keydown', _introEnd);
+  el.removeEventListener('click', _introEnd);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACCESS GATE
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTE: this is a casual deterrent, not real security. Anyone who views the
@@ -13,6 +51,7 @@ function checkPassword(){
   if(input.value === ACCESS_CODE){
     try { localStorage.setItem('aurelia_access', '1'); } catch(e){}
     document.getElementById('pw-gate').classList.add('hidden');
+    showIntroSplash();
   } else {
     input.classList.add('wrong');
     err.textContent = 'Incorrect code — try again.';
@@ -24,6 +63,7 @@ function checkPassword(){
   try {
     if(localStorage.getItem('aurelia_access') === '1'){
       document.getElementById('pw-gate').classList.add('hidden');
+      showIntroSplash();
     }
   } catch(e){}
 })();
