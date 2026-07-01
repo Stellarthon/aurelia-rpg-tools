@@ -868,10 +868,10 @@ function renderSplashEditor(){
 
       <div class="settings-section-lbl" style="margin-top:14px">Per-system welcome</div>
       <div class="settings-row">
-        <span class="settings-row-label">Show on first visit</span>
+        <span class="settings-row-label">Show when entering a system</span>
         ${toggle('system')}
       </div>
-      <div class="se-note">Shown the first time a traveller enters each system. The system's own name is always the title.</div>
+      <div class="se-note">Shown each time anyone enters a system from the galaxy. The system's own name is always the title.</div>
       <div class="${sysOff?'se-disabled':''}">
         ${field('system','kicker','Small line above name',"(optional)")}
         ${field('system','sub','Subtitle',"Welcome Traveller")}

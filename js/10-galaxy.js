@@ -2230,28 +2230,14 @@ function enterSystem(systemId){
 }
 
 // ── Per-system welcome ──────────────────────────────────────────────────────
-// The first time a traveller drops into a given system, greet them with the
-// system name over "Welcome Traveller". First-visit state is per-device
-// (localStorage), so every player gets their own welcome, and it never fires
-// for the referee (who navigates constantly while prepping). Cosmetic only.
-function systemVisited(id){
-  try { return !!(JSON.parse(localStorage.getItem('aurelia_visited_systems') || '{}'))[id]; }
-  catch(e){ return false; }
-}
-function markSystemVisited(id){
-  try {
-    const v = JSON.parse(localStorage.getItem('aurelia_visited_systems') || '{}');
-    v[id] = true;
-    localStorage.setItem('aurelia_visited_systems', JSON.stringify(v));
-  } catch(e){}
-}
+// Greet the viewer with the system name over "Welcome Traveller" each time they
+// drop into a system from the galaxy. Shown to everyone (players + referee); the
+// referee can turn it off or edit the copy from the splash editor. Cosmetic.
 function maybeSystemWelcome(sysId){
-  if(typeof isReferee === 'function' && isReferee()) return;   // travellers only
   if(typeof showSplash !== 'function') return;                 // splash unavailable
-  if(!sysId || !SYSTEMS[sysId] || systemVisited(sysId)) return;
+  if(!sysId || !SYSTEMS[sysId]) return;
   const c = (typeof getSplashConfig === 'function') ? getSplashConfig().system : null;
-  if(c && c.enabled === false) return;   // referee turned it off — don't consume the first-visit flag
-  markSystemVisited(sysId);
+  if(c && c.enabled === false) return;   // referee turned it off
   showSplash({
     kicker: c ? c.kicker : '',
     title:  currentSystemName().toUpperCase(),   // the system name is always the headline
