@@ -749,6 +749,10 @@ function renderDesignMenu(){
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">${redoN}</span>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openCatalogue(null)">
+      <span class="settings-row-label">🎒 Item Catalogue</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -1282,22 +1286,26 @@ function _catLabel(cat){
 }
 function renderInventorySection(characterName){
   const items = invItemsFor(characterName);
+  const editable = canEditInv(characterName);
   const carried = items.filter(it => !it.stowed);
   const stowed  = items.filter(it => it.stowed);
   const group = (label, list) => list.length ? `<div class="inv-group">
       <div class="inv-group-lbl">${label}<span class="inv-group-count">${list.length}</span></div>
-      <div class="inv-list">${list.map(renderInvTile).join('')}</div>
+      <div class="inv-list">${list.map(it => renderInvTile(it, characterName, editable)).join('')}</div>
     </div>` : '';
+  const cname = String(characterName || '').replace(/'/g, "\\'");
+  const addBtn = editable ? `<button class="inv-add-btn" onclick="openCatalogue('${cname}')">＋ Add item</button>` : '';
   const body = items.length
     ? (group('Carried', carried) + group('Stowed', stowed))
-    : `<div class="inv-empty">No items yet — add / remove and the item catalogue arrive in the next update.</div>`;
-  return `<div class="sheet-section">
+    : `<div class="inv-empty">No items yet.${editable ? ' Tap “＋ Add item” to add from the catalogue.' : ''}</div>`;
+  return `<div class="sheet-section" id="sheet-inv-section">
     <div class="sheet-section-lbl">Inventory</div>
-    <div class="inv-hint">Read-only · tap an item for its stat block</div>
+    <div class="inv-hint">${editable ? 'Tap an item for its stat block · ✕ to remove' : 'Read-only · tap an item for its stat block'}</div>
     ${body}
+    ${addBtn}
   </div>`;
 }
-function renderInvTile(it){
+function renderInvTile(it, characterName, editable){
   const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
   const s = it.snapshot || {};
   const cat = s.category || 'gear';
@@ -1309,11 +1317,15 @@ function renderInvTile(it){
   meta.push((s.w || 1) + '×' + (s.h || 1));
   const eqBadge = it.equipped
     ? `<span class="inv-badge inv-badge-eq">Equipped${it.slot ? (' · ' + ea(slotLabel(it.slot))) : ''}</span>` : '';
+  const cname = String(characterName || '').replace(/'/g, "\\'");
+  const removeBtn = editable
+    ? `<button class="inv-remove-btn" title="Remove" onclick="event.stopPropagation(); invRemoveItem('${cname}','${it.iid}')">✕</button>` : '';
   return `<div class="inv-item inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}" onclick="this.classList.toggle('open')">
     <div class="inv-item-head">
       <span class="inv-item-name">${name}</span>
       ${eqBadge}
       <span class="inv-badge inv-badge-cat">${ea(_catLabel(cat))}</span>
+      ${removeBtn}
     </div>
     <div class="inv-item-meta">${meta.join(' · ')}</div>
     ${renderInvItemDetail(it)}
@@ -1340,5 +1352,274 @@ function renderInvItemDetail(it){
   }
   add('Notes', s.notes || s.desc);
   return `<div class="inv-item-detail">${rows.join('') || '<div class="inv-d-row"><span class="inv-d-v">No further details.</span></div>'}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — editing (Phase 2: honour-based add / remove)
+// ───────────────────────────────────────────────────────────────────────────
+// Who may edit a character's inventory: the referee (any), or the player whose
+// device identity matches (their own) — the same honour gate as the sheet. The
+// KV table is not RLS-enforced; this mirrors funds/notes exactly (Phase 0 §1.2).
+function canEditInv(characterName){
+  return isReferee() || (!!myIdentity && myIdentity === characterName);
+}
+
+// Re-render just the inventory <section> in the open sheet, so add/remove leave
+// the rest of the form (and any unsaved characteristic edits) untouched.
+function refreshSheetInventory(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('sheet-inv-section');
+  if(el) el.outerHTML = renderInventorySection(sheetCurrentCharacter);
+}
+
+async function invAddFromCatalogue(characterName, defId){
+  if(!canEditInv(characterName)) return;
+  const def = catById(defId); if(!def) return;
+  // Freeze a snapshot so later catalogue edits/deletes never mutate an owned item.
+  const snap = {
+    name:def.name, category:def.category || 'gear', tl:def.tl, mass:Number(def.mass) || 0, cost:Number(def.cost) || 0,
+    w:def.w || 1, h:def.h || 1, desc:def.desc || '', notes:def.notes || '',
+    range:def.range || '', damage:def.damage || '', magazine:def.magazine || '', magazineCost:def.magazineCost || '',
+    traits:def.traits || '', skill:def.skill || '', protection:def.protection || '', rad:def.rad || '', reqStr:def.reqStr || ''
+  };
+  invBucket(characterName).items.push(makeInvItem(snap, { defId: def.id }));
+  await saveInventory();
+  refreshSheetInventory();
+  if(typeof showToast === 'function') showToast('Added ' + (def.name || 'item') + (characterName !== myIdentity ? (' → ' + characterName) : ''));
+}
+
+async function invRemoveItem(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const b = INVENTORY.byChar && INVENTORY.byChar[characterName];
+  if(!b || !Array.isArray(b.items)) return;
+  const it = b.items.find(x => x.iid === iid);
+  b.items = b.items.filter(x => x.iid !== iid);
+  await saveInventory();
+  refreshSheetInventory();
+  if(it && typeof showToast === 'function') showToast('Removed ' + ((it.snapshot && it.snapshot.name) || 'item'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ITEM CATALOGUE  (referee-authored library — SHIPS EMPTY; §4.8)
+// ───────────────────────────────────────────────────────────────────────────
+// A reusable library of item definitions the referee authors once and players
+// add to their sheets (§4.5). Stored as a plain array under the shared KV key
+// 'item-catalogue' — no seed, no pre-loaded rulebook data. Same façade + honour
+// model as everything else. The picker is shared: players get search + one-tap
+// Add; referees also get New/Edit/Duplicate/Delete via a category-adaptive form.
+// Modelled on the ship weapon catalogue (js/80-combat.js).
+const ITEM_CATEGORIES = ['weapon','armour','gear','augment','consumable'];
+let ITEM_CATALOGUE = [];
+
+async function loadItemCatalogue(){
+  try {
+    const r = await supaStorage.get('item-catalogue', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    ITEM_CATALOGUE = Array.isArray(v) ? v : [];
+  } catch(e){ ITEM_CATALOGUE = []; }
+}
+async function saveItemCatalogue(){
+  try { await supaStorage.set('item-catalogue', JSON.stringify(ITEM_CATALOGUE), true); }
+  catch(e){ console.error('Catalogue save failed', e); }
+}
+function catById(id){ return ITEM_CATALOGUE.find(d => d.id === id) || null; }
+function catNewId(){ return 'itm_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36); }
+function emptyItemDef(){
+  return { id:catNewId(), name:'', category:'gear', tl:'', mass:0, cost:0, w:1, h:1, fpManual:false,
+    desc:'', notes:'', range:'', damage:'', magazine:'', magazineCost:'', traits:'', skill:'',
+    protection:'', rad:'', reqStr:'' };
+}
+
+function catAdd(){
+  if(!isReferee()) return;
+  const d = emptyItemDef();
+  ITEM_CATALOGUE.push(d);
+  catalogueEditingId = d.id;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catDuplicate(id){
+  if(!isReferee()) return;
+  const s = catById(id); if(!s) return;
+  const d = Object.assign(JSON.parse(JSON.stringify(s)), { id:catNewId(), name:((s.name || 'Item') + ' (copy)') });
+  ITEM_CATALOGUE.push(d);
+  catalogueEditingId = d.id;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catRemove(id){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  if(!confirm('Delete "' + (d.name || 'item') + '" from the catalogue?\n\nItems already on characters keep their own copy.')) return;
+  ITEM_CATALOGUE = ITEM_CATALOGUE.filter(x => x.id !== id);
+  if(catalogueEditingId === id) catalogueEditingId = null;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catEditField(id, field, value){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  if(field === 'mass'){ d.mass = Number(value) || 0; if(!d.fpManual){ const f = footprintFromMass(d.mass); d.w = f.w; d.h = f.h; } }
+  else if(field === 'cost'){ d.cost = Number(value) || 0; }
+  else if(field === 'tl'){ d.tl = (value === '' ? '' : (Number(value) || 0)); }
+  else if(field === 'w' || field === 'h'){ d[field] = Math.max(1, Number(value) || 1); d.fpManual = true; }
+  else { d[field] = value; }
+  saveItemCatalogue();
+  if(field === 'category' || field === 'mass') renderCatalogueModal(); // category swaps the specific fields; mass re-derives footprint
+}
+function catAutoFootprint(id){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  const f = footprintFromMass(d.mass); d.w = f.w; d.h = f.h; d.fpManual = false;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+
+// ── Catalogue modal (shared: add picker + referee authoring) ──────────────────
+let catalogueTargetChar = null;   // character to add to (null = referee manage / author)
+let catalogueSearch = '';
+let catalogueCatFilter = 'all';
+let catalogueEditingId = null;
+
+function openCatalogue(targetChar){
+  catalogueTargetChar = targetChar || null;
+  catalogueEditingId = null;
+  catalogueSearch = '';
+  catalogueCatFilter = 'all';
+  const m = document.getElementById('catalogue-modal');
+  if(m) m.classList.add('open');
+  const body = document.getElementById('catalogue-body');
+  if(body) body.innerHTML = '<div class="cat-empty">Loading…</div>';
+  loadItemCatalogue().then(renderCatalogueModal);
+}
+function closeCatalogue(){
+  const m = document.getElementById('catalogue-modal');
+  if(m) m.classList.remove('open');
+  catalogueEditingId = null;
+}
+function catSetFilter(c){ catalogueCatFilter = c; renderCatalogueModal(); }
+function catSetSearch(v){
+  catalogueSearch = v;
+  const list = document.getElementById('catalogue-list');
+  if(list) list.innerHTML = renderCatalogueList();   // list-only refresh keeps the search box focused
+}
+function catOpenEditor(id){ if(!isReferee()) return; catalogueEditingId = id; renderCatalogueModal(); }
+function catBackToList(){ catalogueEditingId = null; renderCatalogueModal(); }
+function catAddToChar(defId){ if(catalogueTargetChar) invAddFromCatalogue(catalogueTargetChar, defId); }
+
+function renderCatalogueModal(){
+  const body = document.getElementById('catalogue-body');
+  if(!body) return;
+  body.innerHTML = (catalogueEditingId && isReferee())
+    ? renderCatalogueEditor(catById(catalogueEditingId))
+    : renderCatalogueBrowser();
+}
+function renderCatalogueBrowser(){
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const ref = isReferee();
+  const note = catalogueTargetChar
+    ? `<div class="cat-target">Adding to <b>${ea(catalogueTargetChar)}</b> — tap ＋ Add</div>`
+    : (ref ? `<div class="cat-target">Authoring the shared item library</div>` : '');
+  const chips = ['all'].concat(ITEM_CATEGORIES).map(c =>
+    `<button class="cat-chip${catalogueCatFilter === c ? ' on' : ''}" onclick="catSetFilter('${c}')">${c === 'all' ? 'All' : ea(_catLabel(c))}</button>`).join('');
+  const newBtn = ref ? `<button class="cat-new-btn" onclick="catAdd()">＋ New item</button>` : '';
+  return `${note}
+    <div class="cat-controls">
+      <input id="cat-search" class="cat-search" placeholder="Search items…" value="${eatt(catalogueSearch)}" oninput="catSetSearch(this.value)">
+      ${newBtn}
+    </div>
+    <div class="cat-chips">${chips}</div>
+    <div id="catalogue-list">${renderCatalogueList()}</div>`;
+}
+function renderCatalogueList(){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const ref = isReferee();
+  if(!ITEM_CATALOGUE.length){
+    return `<div class="cat-empty">${ref
+      ? 'The catalogue is empty — nothing is pre-loaded. Tap “＋ New item” to author your first entry.'
+      : 'No items in the catalogue yet. Ask your referee to add some.'}</div>`;
+  }
+  const q = catalogueSearch.trim().toLowerCase();
+  let list = ITEM_CATALOGUE.slice();
+  if(catalogueCatFilter !== 'all') list = list.filter(d => (d.category || 'gear') === catalogueCatFilter);
+  if(q) list = list.filter(d =>
+    (d.name || '').toLowerCase().includes(q) ||
+    (d.category || '').toLowerCase().includes(q) ||
+    (d.traits || '').toLowerCase().includes(q));
+  list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  if(!list.length) return `<div class="cat-empty">No matches.</div>`;
+  return list.map(d => {
+    const meta = [];
+    if(d.tl !== '' && d.tl != null) meta.push('TL' + ea(String(d.tl)));
+    meta.push((Number(d.mass) || 0) + 'kg');
+    if(Number(d.cost)) meta.push('Cr' + Number(d.cost).toLocaleString());
+    meta.push((d.w || 1) + '×' + (d.h || 1));
+    const addBtn = catalogueTargetChar ? `<button class="cat-add-btn" onclick="catAddToChar('${d.id}')">＋ Add</button>` : '';
+    const refBtns = ref
+      ? `<button class="cat-icon-btn" title="Edit" onclick="catOpenEditor('${d.id}')">✎</button><button class="cat-icon-btn" title="Duplicate" onclick="catDuplicate('${d.id}')">⧉</button><button class="cat-icon-btn danger" title="Delete" onclick="catRemove('${d.id}')">🗑</button>`
+      : '';
+    return `<div class="cat-row inv-cat-${d.category || 'gear'}">
+      <div class="cat-row-main">
+        <div class="cat-row-name">${ea(d.name || '(unnamed)')}<span class="inv-badge inv-badge-cat">${ea(_catLabel(d.category))}</span></div>
+        <div class="cat-row-meta">${meta.join(' · ')}</div>
+      </div>
+      <div class="cat-row-actions">${addBtn}${refBtns}</div>
+    </div>`;
+  }).join('');
+}
+function renderCatalogueEditor(d){
+  if(!d){ catalogueEditingId = null; return renderCatalogueBrowser(); }
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const cat = d.category || 'gear';
+  const catOpts = ITEM_CATEGORIES.map(c => `<option value="${c}"${c === cat ? ' selected' : ''}>${_catLabel(c)}</option>`).join('');
+  const fld = (label, key, val, opts) => { opts = opts || {}; return `<label class="cat-f">
+      <span class="cat-f-lbl">${label}</span>
+      <input class="cat-input"${opts.type ? ` type="${opts.type}"` : ''} value="${eatt(val == null ? '' : val)}"${opts.ph ? ` placeholder="${eatt(opts.ph)}"` : ''} onchange="catEditField('${d.id}','${key}',this.value)">
+    </label>`; };
+  let specific = '';
+  if(cat === 'weapon'){
+    specific = `<div class="cat-sub-lbl">Weapon</div><div class="cat-f-grid">
+      ${fld('Range','range',d.range,{ph:'e.g. Ranged'})}
+      ${fld('Damage','damage',d.damage,{ph:'e.g. 3D-3'})}
+      ${fld('Magazine','magazine',d.magazine,{ph:'rounds'})}
+      ${fld('Mag. cost (Cr)','magazineCost',d.magazineCost,{type:'number'})}
+      ${fld('Traits','traits',d.traits,{ph:'e.g. Auto 2'})}
+      ${fld('Skill','skill',d.skill,{ph:'e.g. Gun Combat (slug)'})}
+    </div>`;
+  } else if(cat === 'armour'){
+    specific = `<div class="cat-sub-lbl">Armour</div><div class="cat-f-grid">
+      ${fld('Protection','protection',d.protection,{ph:'e.g. 8'})}
+      ${fld('Rad protection','rad',d.rad)}
+      ${fld('Required STR','reqStr',d.reqStr)}
+    </div>`;
+  }
+  return `<div class="cat-editor">
+    <button class="cat-back-btn" onclick="catBackToList()">← Catalogue</button>
+    <label class="cat-f"><span class="cat-f-lbl">Name</span>
+      <input class="cat-input" value="${eatt(d.name)}" placeholder="Item name" onchange="catEditField('${d.id}','name',this.value)"></label>
+    <label class="cat-f"><span class="cat-f-lbl">Category</span>
+      <select class="cat-input" onchange="catEditField('${d.id}','category',this.value)">${catOpts}</select></label>
+    <div class="cat-f-grid">
+      ${fld('TL','tl',d.tl,{type:'number'})}
+      ${fld('Mass (kg)','mass',d.mass,{type:'number'})}
+      ${fld('Cost (Cr)','cost',d.cost,{type:'number'})}
+    </div>
+    <div class="cat-f-grid cat-fp-grid">
+      ${fld('Footprint W','w',d.w,{type:'number'})}
+      ${fld('Footprint H','h',d.h,{type:'number'})}
+      <div class="cat-fp-hint">${d.fpManual ? 'manual' : 'auto from mass'}<button class="cat-mini-btn" onclick="catAutoFootprint('${d.id}')">↻ from mass</button></div>
+    </div>
+    ${specific}
+    <label class="cat-f"><span class="cat-f-lbl">Description / effect</span>
+      <textarea class="cat-input cat-textarea" onchange="catEditField('${d.id}','desc',this.value)">${ea(d.desc || '')}</textarea></label>
+    <label class="cat-f"><span class="cat-f-lbl">Notes</span>
+      <textarea class="cat-input cat-textarea" onchange="catEditField('${d.id}','notes',this.value)">${ea(d.notes || '')}</textarea></label>
+    <div class="cat-editor-actions">
+      <button class="cat-icon-btn danger" onclick="catRemove('${d.id}')">🗑 Delete</button>
+      <button class="cat-new-btn" onclick="catBackToList()">Done</button>
+    </div>
+  </div>`;
 }
 
