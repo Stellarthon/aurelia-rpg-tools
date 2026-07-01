@@ -371,6 +371,17 @@
     </div>
   </div>
 
+  <!-- ── Item Catalogue modal (inventory add picker + referee authoring) ── -->
+  <div id="catalogue-modal" onclick="if(event.target===this)closeCatalogue()">
+    <div id="catalogue-card">
+      <div id="catalogue-hdr">
+        <span id="catalogue-title">🎒 Item Catalogue</span>
+        <button id="catalogue-close" aria-label="Close" onclick="closeCatalogue()">✕</button>
+      </div>
+      <div id="catalogue-body"></div>
+    </div>
+  </div>
+
   <!-- ── Design Mode inline editor ── -->
   <div id="design-edit-panel" class="hidden" onclick="if(event.target===this) closeDesignEdit()">
     <div id="design-edit-card">
