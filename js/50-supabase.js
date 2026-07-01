@@ -73,6 +73,31 @@ function textureUrlFor(body){
   return auto ? TEXTURE_BASE + encodeURIComponent(auto) : null;
 }
 
+// ── Character portraits (Supabase Storage 'portraits' bucket) ────────────────
+// Honour-system, mirroring the globes texture bucket + the app's anon-key model:
+// a public bucket with anon read/insert/update scoped to it (migration
+// 0002_portraits_bucket.sql). Each character has ONE deterministic object
+// (portraits/<slug>.jpg) overwritten on upload; a version stamp stored on the
+// sheet blob (portraitVer) cache-busts the shared public URL across devices.
+const PORTRAIT_BASE = SUPABASE_URL + '/storage/v1/object/public/portraits/';
+function portraitSlug(characterName){
+  return String(characterName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'character';
+}
+function portraitPath(characterName){ return portraitSlug(characterName) + '.jpg'; }
+function portraitUrlFor(characterName, ver){
+  const url = PORTRAIT_BASE + encodeURIComponent(portraitPath(characterName));
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadPortraitBlob(characterName, blob){
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/portraits/' + encodeURIComponent(portraitPath(characterName)), {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('Portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
 // ───────────────────────────────────────────────────────────────────────────
