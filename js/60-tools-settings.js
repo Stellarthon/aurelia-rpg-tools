@@ -1094,7 +1094,10 @@ async function openSheet(characterName){
 
 function closeSheet(){
   document.getElementById('sheet-modal').classList.add('hidden');
+  if(typeof closeInvItemModal === 'function') closeInvItemModal();  // don't orphan child modals over a closed sheet
+  if(typeof closeCatalogue === 'function') closeCatalogue();
   sheetCurrentCharacter = null;
+  sheetCurrentData = null;
 }
 
 function renderSheetForm(data){
@@ -1929,7 +1932,7 @@ function invTilePointerDown(e, characterName, iid){
   if(e.pointerType === 'mouse' && e.button !== 0) return;
   const d = { characterName, iid, el: e.currentTarget, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId, dragging: false, ghost: null, timer: null };
   _invDrag = d;
-  d.timer = setTimeout(() => { if(_invDrag === d && !d.dragging) invBeginDrag(); }, 240); // touch long-press → drag
+  if(e.pointerType !== 'mouse') d.timer = setTimeout(() => { if(_invDrag === d && !d.dragging) invBeginDrag(); }, 240); // touch/pen long-press → drag (mouse uses the move threshold)
   window.addEventListener('pointermove', invTilePointerMove);
   window.addEventListener('pointerup', invTilePointerUp);
   window.addEventListener('pointercancel', invTilePointerUp);

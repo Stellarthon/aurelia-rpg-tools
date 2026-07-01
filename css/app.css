@@ -2406,13 +2406,12 @@ input#ui-scale-range{
   touch-action:none;-webkit-user-select:none;user-select:none
 }
 .inv-tile:hover{border-color:var(--tx1)}
-.inv-tile.is-equipped{border-top-color:var(--accentGold)}
 .inv-tile.inv-cat-weapon{border-top-color:#7a4a4a}
 .inv-tile.inv-cat-armour{border-top-color:#4a6a7a}
 .inv-tile.inv-cat-augment{border-top-color:#6a4a7a}
 .inv-tile.inv-cat-consumable{border-top-color:#4a7a5a}
-.inv-tile.is-equipped{border-top-color:var(--accentGold)}
-.inv-tile-name{font-size:11px;color:var(--tx0);font-weight:600;line-height:1.2;overflow:hidden}
+.inv-tile.is-equipped{border-top-color:var(--accentGold)} /* wins over category colour via source order */
+.inv-tile-name{font-size:11px;color:var(--tx0);font-weight:600;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .inv-tile-q{color:var(--tx1);font-weight:400}
 .inv-tile-foot{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:var(--tx1);font-family:monospace}
 .inv-tile-eq{color:var(--accentGold)}
