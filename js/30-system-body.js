@@ -123,7 +123,7 @@ function buildOrreryNow(){
   // ── Body list table ────────────────────────────────────────
   const tbl = document.getElementById("body-list-table");
   if(tbl){
-    tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>UWP</th><th></th></tr>`;
+    tbl.innerHTML = `<tr><th>Body</th><th>Type</th><th>${worldProfileHeader()}</th><th></th></tr>`;
     bodies.forEach(b => {
       if(b.isMoon) return;
       const tr = document.createElement("tr");
@@ -131,7 +131,7 @@ function buildOrreryNow(){
         <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
             <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
         <td style="color:var(--tx1);font-size:10px">${(b.type||'').split('·')[0].trim()}</td>
-        <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${b.uwpString||'—'}</td>
+        <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${bodyProfileCell(b)}</td>
         <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
       tr.style.cursor="pointer";
       tr.setAttribute("role","button");
@@ -377,16 +377,45 @@ function buildOrreryNow(){
 // read-aloud, referee note, NPCs, checks, events). Used by BOTH the orrery
 // detail panel (selectBody) and the close-up body view (buildBodyView) so the
 // two never diverge and their design-mode edits resolve to the same keys.
+// A world's stat header. For the Traveller world-schema provider (default) this
+// is the classic UWP string — unchanged. For a referee-defined schema (provider
+// !== 'traveller-uwp') it's a fields grid read from body.fields, so a non-
+// Traveller universe shows its own world data (Climate / Terrain / Allegiance…)
+// instead of a UWP code.
+function renderWorldStatsHTML(body){
+  const ws = (typeof pkWorldSchema === 'function') ? pkWorldSchema() : { provider:'traveller-uwp' };
+  if(ws.provider === 'traveller-uwp'){
+    if(body.uwpString && body.uwpString !== '—'){
+      return `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+        <span style="font-family:monospace;font-size:18px;color:var(--accentGold);font-weight:700">${body.uwpString}</span>
+        <span style="font-size:9px;color:#8b91a8;font-family:monospace;letter-spacing:1px">${body.tag||''}</span>
+      </div>`;
+    }
+    return '';
+  }
+  const bf = body.fields || {};
+  const rows = (ws.fields||[]).filter(f => bf[f.key] != null && bf[f.key] !== '')
+    .map(f => `<div class="sg-l">${escHtml(f.label||f.key)}</div><div class="sg-v">${escHtml(String(bf[f.key]))}</div>`).join('');
+  const tag = body.tag ? `<div style="font-size:9px;color:#8b91a8;font-family:monospace;letter-spacing:1px;margin-bottom:4px">${body.tag}</div>` : '';
+  return tag + (rows ? `<div class="sg">${rows}</div>` : '');
+}
+// Compact profile for the system-overview body table: the UWP string under the
+// Traveller provider, else the first couple of schema-field values.
+function bodyProfileCell(b){
+  const ws = (typeof pkWorldSchema === 'function') ? pkWorldSchema() : { provider:'traveller-uwp' };
+  if(ws.provider === 'traveller-uwp') return b.uwpString || '—';
+  const bf = b.fields || {};
+  const vals = (ws.fields||[]).map(f => bf[f.key]).filter(v => v != null && v !== '').slice(0,2);
+  return vals.length ? escHtml(vals.join(' · ')) : '—';
+}
+function worldProfileHeader(){
+  return (typeof pkWorldSchema === 'function' && pkWorldSchema().provider !== 'traveller-uwp') ? 'Profile' : 'UWP';
+}
 function renderBodyContentSections(body, pm){
   const id = body.id;
   let html = "";
 
-  if(body.uwpString&&body.uwpString!=="—"){
-    html += `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
-      <span style="font-family:monospace;font-size:18px;color:var(--accentGold);font-weight:700">${body.uwpString}</span>
-      <span style="font-size:9px;color:#8b91a8;font-family:monospace;letter-spacing:1px">${body.tag||""}</span>
-    </div>`;
-  }
+  html += renderWorldStatsHTML(body);
 
   const fields=[["Orbit",body.orbitAU],["Diameter",body.diameter],["Period",body.period]].filter(f=>f[1]&&f[1]!=="—");
   if(fields.length) html += `<div class="sg">${fields.map(([l,v])=>`<div class="sg-l">${l}</div><div class="sg-v">${v}</div>`).join("")}</div>`;
@@ -534,6 +563,18 @@ function isAddedBody(id){
 //   star | belt | gasgiant | ocean | ice | rock | moon
 function bodyDiscStyle(body){
   if(body.discStyle) return body.discStyle;
+  // Campaign Pack object-type registry: an explicit typeId, or a type whose id/
+  // label matches the body's type text, selects the disc renderer. Built-in
+  // bodies match nothing here and fall through to the keyword logic below
+  // (identical behaviour); referee-defined types resolve to their chosen disc.
+  if(typeof pkObjectTypes === 'function'){
+    const types = pkObjectTypes();
+    let ot = body.typeId ? types.find(x => x.id === body.typeId) : null;
+    if(!ot){ const tl = (body.type || '').toLowerCase();
+      ot = types.find(x => x.id && tl === String(x.id).toLowerCase())
+        || types.find(x => x.label && tl === String(x.label).toLowerCase()); }
+    if(ot && ot.disc) return ot.disc;
+  }
   const t = (body.type || '').toLowerCase();
   if(body.isStar) return 'star';
   if(/asteroid belt/.test(t)) return 'belt';  // matches isBeltBody exactly
@@ -1458,7 +1499,7 @@ function goSystem(){
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-system").classList.remove("v-hidden");
     document.getElementById("view-system").style.display="flex";
-    document.getElementById("hdr-title").textContent = currentSystemName().toUpperCase()+" SYSTEM";
+    document.getElementById("hdr-title").textContent = currentSystemName().toUpperCase()+" "+layerShort('system','System').toUpperCase();
     if(selectedBody){
       const b=getBodies().find(x=>x.id===selectedBody);
       setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");

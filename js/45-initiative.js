@@ -23,7 +23,9 @@ function saveCombatants(){
   } catch(e){}
 }
 
-function roll2d6(){ return (1+Math.floor(Math.random()*6)) + (1+Math.floor(Math.random()*6)); }
+// Initiative rolls the campaign's resolution dice (2d6 by default; a pack can
+// switch to d20, 3d6, etc). Falls back to 2d6 before the pack engine loads.
+function roll2d6(){ return (typeof rollCampaignDice === 'function') ? rollCampaignDice() : ((1+Math.floor(Math.random()*6)) + (1+Math.floor(Math.random()*6))); }
 
 function addCombatant(){
   const nameEl = document.getElementById('init-name-input');
