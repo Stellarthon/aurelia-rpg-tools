@@ -128,7 +128,18 @@ let connState = (typeof navigator !== 'undefined' && navigator.onLine === false)
 let lastSyncTs = null;
 let _quotaWarned = false; // gate so the "storage full" warning shows at most once
 
+// ── Campaign namespace (multi-campaign isolation) ────────────────────────────
+// Every shared key is prefixed with the active campaign id so a second referee's
+// universe never overwrites the first. The BUILT-IN Archon Gambit campaign is
+// deliberately kept UN-prefixed, so the existing live Supabase rows keep working
+// with zero migration — only authored campaigns are isolated under camp:<id>:.
+function campaignKeyPrefix(){
+  const id = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'archon-gambit';
+  return (id === 'archon-gambit') ? '' : ('camp:' + id + ':');
+}
+
 const supaStorage = {
+  _nk(key){ return campaignKeyPrefix() + key; },   // namespaced key for the active campaign
   cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
   cacheSet(key, value){
     try {
@@ -145,6 +156,7 @@ const supaStorage = {
     }
   },
   async get(key, shared){
+    key = this._nk(key);   // isolate by active campaign (built-in stays un-prefixed)
     try {
       const res = await fetch(`${SUPABASE_REST}?key=eq.${encodeURIComponent(key)}&select=value`, {
         headers: {
@@ -179,6 +191,7 @@ const supaStorage = {
     return true;
   },
   async set(key, value, shared){
+    key = this._nk(key);                   // isolate by active campaign (built-in stays un-prefixed)
     const str = String(value);
     this.cacheSet(key, str);               // optimistic: survives a reload even if the POST never lands
     try {

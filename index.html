@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- Decorative starfield behind every view (populated by buildStarfield at boot) -->
+<div id="starfield" aria-hidden="true"></div>
 <!-- ── Splash overlay — reusable welcome screen ──
      Drives two moments: the app-entry welcome ("WELCOME TRAVELLER") once the
      access gate clears, and a per-system welcome ("[SYSTEM NAME] / Welcome
@@ -396,6 +398,17 @@
     </div>
   </div>
 
+  <!-- ── Traveller quick-nav bar (player mode only; shown across every view) ──
+       A flex child of #root so it reserves space at the bottom of whichever
+       view is active. Scales via the --tvscale root variable (Settings). -->
+  <div id="tvbar" role="navigation" aria-label="Quick navigation">
+    <button class="tv-btn" onclick="openSheetMenu()" title="Character sheet"><span class="ico">📋</span><span class="lbl">Sheet</span></button>
+    <button class="tv-btn" onclick="toggleShipPanel()" title="Ship status"><span class="ico">🚀</span><span class="lbl">Ship</span></button>
+    <button class="tv-btn" onclick="toggleQuestPanel()" title="Mission log"><span class="ico">📜</span><span class="lbl">Missions</span></button>
+    <button class="tv-btn" onclick="toggleFundsPanel()" title="Funds"><span class="ico">💰</span><span class="lbl">Funds</span></button>
+    <button class="tv-btn" onclick="toggleQref()" title="Quick reference rules"><span class="ico">📖</span><span class="lbl">Rules</span></button>
+  </div>
+
 
   <!-- ── Event Log (floating panel) ── -->
   <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
@@ -415,19 +428,31 @@
 
   <!-- ── Character sheet modal ── -->
   <div id="sheet-modal" class="hidden" onclick="if(event.target===this) closeSheet()">
-    <div id="sheet-card">
-      <div id="sheet-card-header">
-        <span id="sheet-card-title">CHARACTER SHEET</span>
-        <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
+    <div id="sheet-layout" onclick="if(event.target===this) closeSheet()">
+      <!-- Funds box (left) — party fund + this character's purse, from the funds system -->
+      <aside id="sheet-funds-aside" class="sheet-aside">
+        <div class="sheet-aside-head">💰 Funds</div>
+        <div class="sheet-aside-body" id="sheet-funds-body"></div>
+      </aside>
+      <div id="sheet-card">
+        <div id="sheet-card-header">
+          <span id="sheet-card-title">CHARACTER SHEET</span>
+          <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
+        </div>
+        <div id="sheet-card-body"></div>
+        <div id="sheet-card-footer">
+          <span id="sheet-readonly-notice"></span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span id="sheet-save-msg">✓ Saved</span>
+            <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
+          </span>
+        </div>
       </div>
-      <div id="sheet-card-body"></div>
-      <div id="sheet-card-footer">
-        <span id="sheet-readonly-notice"></span>
-        <span style="display:flex;align-items:center;gap:10px">
-          <span id="sheet-save-msg">✓ Saved</span>
-          <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
-        </span>
-      </div>
+      <!-- Status effects (right) — Traveller 2e conditions applied to this character -->
+      <aside id="sheet-status-aside" class="sheet-aside">
+        <div class="sheet-aside-head">⚠ Status Effects</div>
+        <div class="sheet-aside-body" id="sheet-status-body"></div>
+      </aside>
     </div>
   </div>
 
@@ -567,6 +592,18 @@
       </div>
     </div>
   </div>
+  <!-- ── Campaign Studio (referee) — the whole universe as editable pack data ── -->
+  <div id="campaign-studio-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeCampaignStudio()">
+    <div style="background:var(--bg1);border:1px solid var(--bd0);border-radius:10px;max-width:580px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd0)">
+        <span style="font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🌐 Campaign Studio</span>
+        <button aria-label="Close" onclick="closeCampaignStudio()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div id="campaign-studio-tabs" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-bottom:1px solid var(--bd0)"></div>
+      <div id="campaign-studio-body" style="overflow:auto;padding:14px 16px"></div>
+    </div>
+  </div>
+
   <div id="event-log-wrap">
     <div id="event-log-header" onclick="toggleEventLog()">
       <span id="event-log-title">EVENT LOG</span>
@@ -844,6 +881,7 @@
   </div>
 </div><!-- #float-panels -->
 <script src="js/00-core-data.js"></script>
+<script src="js/05-campaign-pack.js"></script>
 <script src="js/10-galaxy.js"></script>
 <script src="js/20-station-data.js"></script>
 <script src="js/30-system-body.js"></script>
@@ -852,6 +890,7 @@
 <script src="js/50-supabase.js"></script>
 <script src="js/55-auth-gating.js"></script>
 <script src="js/60-tools-settings.js"></script>
+<script src="js/62-campaign-studio.js"></script>
 <script src="js/65-design-mode.js"></script>
 <script src="js/70-panels-quest.js"></script>
 <script src="js/75-ship.js"></script>

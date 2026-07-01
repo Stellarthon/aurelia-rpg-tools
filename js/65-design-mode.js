@@ -160,7 +160,12 @@ let locationDeletions = {};
 let locationPropertyOverrides = {};
 
 function baseLocationsFor(sysId, bodyId){
-  return ((BASE_LOCATIONS[sysId] || {})[bodyId]) || [];
+  // Route through the active Campaign Pack; the built-in pack's content.locations
+  // IS the BASE_LOCATIONS constant (same ref) so behaviour is identical, while an
+  // authored campaign supplies its own.
+  const c = (typeof activePackContent === 'function') ? activePackContent() : null;
+  const src = (c && c.locations) ? c.locations : (typeof BASE_LOCATIONS !== 'undefined' ? BASE_LOCATIONS : {});
+  return ((src[sysId] || {})[bodyId]) || [];
 }
 
 async function loadLocationStores(){

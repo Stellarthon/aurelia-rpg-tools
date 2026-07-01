@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Aurelia RPG Tools — Campaign Setup</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  FIRST-RUN SETUP WIZARD  ·  standalone prototype
+  ────────────────────────────────────────────────────────────────────────────
+  A new referee runs this once to stand up their own copy of the Aurelia RPG
+  Tools for the Traveller community. It collects everything the main app needs
+  that is currently HARD-CODED in index.html, and writes it to localStorage
+  under the keys the app will read (with the same `aurelia_*` namespace).
+
+  This is a PROTOTYPE — test the flow here, then fold the wizard into index.html
+  (gated on `localStorage.aurelia_setup_done !== '1'`) and make the app read the
+  config keys with the old hard-coded values as fallbacks:
+
+    SUPABASE_URL   ← localStorage.aurelia_supabase_url  || '<old default>'
+    SUPABASE_KEY   ← localStorage.aurelia_supabase_key  || '<old default>'
+    ACCESS_CODE    ← localStorage.aurelia_access_code   || 'Traveller2E!'
+    DESIGN_MODE_CODE ← localStorage.aurelia_design_code || 'ilovetwix2012!'
+    campaign name  ← localStorage.aurelia_campaign_name
+
+  Nothing here talks to a server except the optional "Test connection" button.
+  Tokens are generated client-side with crypto.randomUUID().
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+:root{
+  --bg0:#0f1117;--bg1:#181c27;--bg2:#1e2333;
+  --bd0:#2e3347;--bd1:#252a3a;
+  --tx0:#e8eaf0;--tx1:#a3a9bf;
+  --txI:#5b8ef0;--bgI:#1a2650;
+  --txS:#4caf82;--bgS:#0f2e20;
+  --txW:#d4913a;--bgW:#2e1f0a;
+  --txD:#d45050;--bgD:#2e1010;
+  --gold:#D4A843;--goldBg:#3D2B1F;
+  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --rad:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:radial-gradient(1200px 800px at 50% -10%,#161b2b 0%,var(--bg0) 60%);color:var(--tx0);font-family:var(--font);min-height:100%}
+body{padding:28px 16px 80px}
+a{color:var(--txI)}
+.wrap{max-width:760px;margin:0 auto}
+
+/* ── Header / brand ── */
+.brand{text-align:center;margin-bottom:22px}
+.brand .mark{font-family:var(--mono);letter-spacing:.32em;font-size:11px;color:var(--gold);text-transform:uppercase}
+.brand h1{margin:8px 0 4px;font-size:26px;font-weight:650;letter-spacing:.01em}
+.brand p{margin:0;color:var(--tx1);font-size:13px}
+
+/* ── Stepper ── */
+.steps{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:0 0 22px}
+.steps .dot{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--tx1);padding:5px 11px;border:.5px solid var(--bd0);border-radius:99px;background:var(--bg1);white-space:nowrap}
+.steps .dot .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);color:var(--tx1);font-family:var(--mono);font-size:10px}
+.steps .dot.active{border-color:var(--gold);color:var(--tx0)}
+.steps .dot.active .n{background:var(--gold);color:#1a120a;font-weight:700}
+.steps .dot.done .n{background:var(--txS);color:#06160e}
+.steps .dot.done{color:var(--tx1)}
+
+/* ── Card ── */
+.card{background:linear-gradient(180deg,var(--bg1),#141824);border:.5px solid var(--bd0);border-radius:var(--rad);padding:26px 26px 22px;box-shadow:0 18px 50px -28px #000}
+.card h2{margin:0 0 6px;font-size:19px;font-weight:600}
+.card .lede{margin:0 0 20px;color:var(--tx1);font-size:13px;line-height:1.55}
+.section{margin-bottom:18px}
+label{display:block;font-size:12px;color:var(--tx0);font-weight:600;margin-bottom:6px}
+label .opt{color:var(--tx1);font-weight:400}
+.hint{font-size:11px;color:var(--tx1);margin:5px 0 0;line-height:1.5}
+input[type=text],input[type=password],input[type=number],input[type=url],textarea,select{
+  width:100%;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:6px;
+  padding:9px 11px;font-size:13px;font-family:var(--font);outline:none;transition:border-color .15s}
+input:focus,textarea:focus,select:focus{border-color:var(--txI)}
+input.mono,textarea.mono{font-family:var(--mono);font-size:12px}
+textarea{resize:vertical;min-height:78px;line-height:1.5}
+.row{display:flex;gap:12px}
+.row>*{flex:1}
+.err{border-color:var(--txD)!important}
+.field-err{color:var(--txD);font-size:11px;margin-top:5px;min-height:0}
+
+/* ── Buttons ── */
+.btn{appearance:none;border:.5px solid var(--bd0);background:var(--bg2);color:var(--tx0);font-family:var(--font);
+  font-size:13px;font-weight:600;padding:10px 18px;border-radius:7px;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--tx1)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#1a120a}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:6px 12px;font-size:11.5px;font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:18px;border-top:.5px solid var(--bd1)}
+.nav .spacer{flex:1}
+
+/* ── Callouts / pills ── */
+.note{border:.5px solid var(--bd0);border-left:3px solid var(--txI);background:var(--bgI);color:#cdd9f5;
+  border-radius:6px;padding:11px 13px;font-size:12px;line-height:1.55;margin:14px 0}
+.note.warn{border-left-color:var(--txW);background:var(--bgW);color:#f0d8ad}
+.note.ok{border-left-color:var(--txS);background:var(--bgS);color:#bfe8d2}
+.note.gold{border-left-color:var(--gold);background:var(--goldBg);color:#f0dcae}
+.note b{color:#fff}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:99px;border:.5px solid var(--bd0);background:var(--bg0);color:var(--tx1)}
+.pill.s{border-color:var(--txS);color:var(--txS)}
+.pill.d{border-color:var(--txD);color:var(--txD)}
+.pill.w{border-color:var(--txW);color:var(--txW)}
+
+/* ── Code blocks ── */
+.codewrap{position:relative;margin:12px 0}
+.codewrap pre{background:#0a0c12;border:.5px solid var(--bd0);border-radius:6px;padding:14px 14px;overflow:auto;
+  font-family:var(--mono);font-size:11.5px;line-height:1.6;color:#cdd4e6;margin:0;max-height:320px}
+.codewrap .copy{position:absolute;top:8px;right:8px}
+.kbd{font-family:var(--mono);font-size:11px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:4px;padding:1px 6px;color:var(--tx0)}
+
+/* ── Copyable command line + advanced (collapsible) checklists ── */
+.cmd{display:flex;align-items:center;gap:8px;background:#0a0c12;border:.5px solid var(--bd0);border-radius:6px;padding:5px 6px 5px 10px;margin:7px 0}
+.cmd code{font-family:var(--mono);font-size:11.5px;color:#cdd4e6;flex:1;overflow-x:auto;white-space:nowrap;padding:2px 0}
+.cmd .btn{flex:none}
+details.adv{border:.5px solid var(--bd0);border-radius:6px;margin:12px 0;overflow:hidden}
+details.adv>summary{cursor:pointer;list-style:none;padding:11px 13px;font-size:12.5px;font-weight:600;color:var(--tx0);background:var(--bg2);user-select:none}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary .chev{display:inline-block;width:13px;color:var(--txW);transition:transform .15s}
+details.adv[open]>summary .chev{transform:rotate(90deg)}
+details.adv .body{padding:4px 15px 14px;font-size:12px;line-height:1.55;color:var(--tx1)}
+details.adv .body p{margin:10px 0}
+details.adv ol{margin:10px 0 0;padding-left:22px}
+details.adv ol>li{margin:0 0 15px;color:var(--tx0)}
+details.adv ol>li .what{color:var(--tx0)}
+details.adv .sub{font-size:11px;color:var(--tx1);margin:4px 0 0}
+.where{display:inline-block;font-size:9.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;
+  color:var(--txW);border:.5px solid var(--bd0);border-radius:99px;padding:1px 7px;margin-left:7px;vertical-align:middle;white-space:nowrap}
+.where.sql{color:var(--txI)} .where.edit{color:var(--txS)}
+
+/* ── Players table ── */
+.players{border:.5px solid var(--bd0);border-radius:7px;overflow:hidden}
+.players .ph{display:grid;grid-template-columns:1fr 1fr 96px 36px;gap:10px;padding:9px 12px;background:var(--bg2);font-size:11px;color:var(--tx1);font-weight:600}
+.players .pr{display:grid;grid-template-columns:1fr 1fr 96px 36px;gap:10px;padding:8px 12px;align-items:center;border-top:.5px solid var(--bd1)}
+.players .pr input{padding:7px 9px;font-size:12px}
+.players .pr select{padding:7px 9px;font-size:12px}
+.players .pr .x{background:transparent;border:none;color:var(--tx1);font-size:16px;cursor:pointer;line-height:1}
+.players .pr .x:hover{color:var(--txD)}
+.players .pr.ref{background:#15110a}
+.tag{font-family:var(--mono);font-size:10px;color:var(--gold)}
+.muted{color:var(--tx1)}
+.tokchip{font-family:var(--mono);font-size:10.5px;color:var(--txS);word-break:break-all}
+
+/* ── Review / summary ── */
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px 14px;font-size:12.5px;margin:4px 0}
+.kv .k{color:var(--tx1)}
+.kv .v{color:var(--tx0);font-family:var(--mono);word-break:break-all}
+.divider{height:1px;background:var(--bd1);margin:16px 0}
+.dim{opacity:.55}
+@media(max-width:560px){
+  .row{flex-direction:column}
+  .players .ph,.players .pr{grid-template-columns:1fr 1fr 78px 30px}
+  .kv{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="mark">Aurelia RPG Tools</div>
+    <h1 id="brand-title">Campaign Setup</h1>
+    <p>Stand up your own referee tools for a Traveller campaign — about 10 minutes.</p>
+  </div>
+
+  <div class="steps" id="stepper"></div>
+
+  <div class="card" id="card"><!-- step content injected here --></div>
+</div>
+
+<script>
+"use strict";
+
+/* ── localStorage keys the live app will read (aurelia_* namespace) ──────────── */
+const K = {
+  done:     'aurelia_setup_done',
+  config:   'aurelia_setup_config',   // full JSON blob (for re-editing)
+  url:      'aurelia_supabase_url',
+  key:      'aurelia_supabase_key',
+  campaign: 'aurelia_campaign_name',
+  referee:  'aurelia_referee_name',
+  access:   'aurelia_access_code',
+  design:   'aurelia_design_code',
+};
+
+/* ── Wizard state ────────────────────────────────────────────────────────────
+   Pre-loaded from any prior save so re-running the wizard is non-destructive. */
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(K.config) || '{}') || {}; } catch(e){ saved = {}; }
+
+const state = {
+  step: 0,
+  campaign: {
+    name:    saved.campaign?.name    ?? '',
+    referee: saved.campaign?.referee ?? '',
+    appUrl:  saved.campaign?.appUrl  ?? (location.origin + location.pathname.replace(/setup_prototype\.html$/,'index.html')),
+    impDay:  saved.campaign?.impDay  ?? 1,
+    impYear: saved.campaign?.impYear ?? 1105,
+  },
+  supabase: {
+    url: saved.supabase?.url ?? '',
+    key: saved.supabase?.key ?? '',
+    tested: false,
+  },
+  access: {
+    playerCode: saved.access?.playerCode ?? '',
+    designCode: saved.access?.designCode ?? '',
+  },
+  players: saved.players?.length ? saved.players.map(p => ({...p})) : null, // null → seed defaults on first visit
+};
+
+const STEPS = [
+  { id:'welcome',  label:'Welcome'   },
+  { id:'campaign', label:'Campaign'  },
+  { id:'supabase', label:'Connect'   },
+  { id:'database', label:'Database'  },
+  { id:'access',   label:'Access'    },
+  { id:'players',  label:'Players'   },
+  { id:'finish',   label:'Finish'    },
+];
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8); return v.toString(16); }));
+
+/* ── Default player roster (seeded once) ──────────────────────────────────── */
+function seedPlayers(){
+  return [
+    { identity:'Referee',      role:'referee', audiences:[],               token: uuid() },
+    { identity:'Rhett Calder', role:'player',  audiences:['Rhett Calder'], token: uuid() },
+    { identity:'Cassia Velen', role:'player',  audiences:['Cassia Velen'], token: uuid() },
+  ];
+}
+if(!state.players) state.players = seedPlayers();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RENDER
+   ════════════════════════════════════════════════════════════════════════════ */
+function renderStepper(){
+  $('#stepper').innerHTML = STEPS.map((s,i) => {
+    const cls = i===state.step ? 'active' : (i<state.step ? 'done' : '');
+    const mark = i<state.step ? '✓' : (i+1);
+    return `<div class="dot ${cls}"><span class="n">${mark}</span>${esc(s.label)}</div>`;
+  }).join('');
+  const title = STEPS[state.step].id==='welcome' ? 'Campaign Setup' : (state.campaign.name || 'Campaign Setup');
+  $('#brand-title').textContent = title;
+}
+
+function render(){
+  renderStepper();
+  const id = STEPS[state.step].id;
+  $('#card').innerHTML = VIEWS[id]();
+  // focus first input for keyboard flow
+  const f = $('#card input, #card textarea'); if(f) setTimeout(()=>f.focus(), 30);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* Navigation footer shared by most steps */
+function nav({back=true, next=true, nextLabel='Continue', nextFn='goNext()', extra=''} = {}){
+  return `<div class="nav">
+    ${back ? `<button class="btn ghost" onclick="goBack()">‹ Back</button>` : `<span></span>`}
+    <div class="spacer"></div>${extra}
+    ${next ? `<button class="btn primary" onclick="${nextFn}">${esc(nextLabel)} ›</button>` : ``}
+  </div>`;
+}
+
+/* ── Per-step views ───────────────────────────────────────────────────────── */
+const VIEWS = {
+  welcome(){ return `
+    <h2>Welcome, Referee.</h2>
+    <p class="lede">Aurelia RPG Tools is a <b>browser-based virtual tabletop (VTT)</b> for Traveller — the whole app
+      is one HTML page that runs in any modern browser, with nothing to install. You host that page once; your
+      players just open the link on a laptop, tablet, or phone. This wizard configures a fresh copy for your own
+      campaign — your players never see this screen.</p>
+    <div class="section">
+      <div class="note gold"><b>What you'll need</b><br>
+        • <b>Somewhere to host the page</b> — any free static host works:
+          <a href="https://app.netlify.com/drop" target="_blank" rel="noopener">Netlify Drop</a> (drag the folder in,
+          get a link — no account needed to start), <a href="https://pages.github.com" target="_blank" rel="noopener">GitHub
+          Pages</a>, or Cloudflare Pages. That link is what you share with players.<br>
+        • <b>A free <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> account</b> — the shared
+          backend that syncs reveals, the clock, and notes between everyone at the table.<br>
+        • <b>About 10 minutes.</b> You can stop and re-run this any time; nothing is lost.</div>
+      <p class="lede" style="margin-bottom:8px">We'll walk through, in order:</p>
+      <div class="kv">
+        <span class="k">1 · Campaign</span><span class="v">name, your handle, the starting Imperial date</span>
+        <span class="k">2 · Connect</span><span class="v">your Supabase project URL + key</span>
+        <span class="k">3 · Database</span><span class="v">paste-ready SQL to create the tables</span>
+        <span class="k">4 · Access</span><span class="v">the codes that gate the app + Design Mode</span>
+        <span class="k">5 · Players</span><span class="v">generate a token + invite link per player</span>
+        <span class="k">6 · Finish</span><span class="v">save config &amp; hand out invites</span>
+      </div>
+    </div>
+    ${nav({ back:false, nextLabel:'Get started' })}`;
+  },
+
+  campaign(){ const c = state.campaign; return `
+    <h2>Campaign basics</h2>
+    <p class="lede">Names your campaign and sets the in-fiction clock. Only the campaign name is shown to players.</p>
+    <div class="section">
+      <label for="f-name">Campaign name</label>
+      <input id="f-name" type="text" maxlength="60" placeholder="e.g. The Archon Gambit" value="${esc(c.name)}"
+        oninput="state.campaign.name=this.value;clearErr(this)">
+      <div class="field-err" id="e-name"></div>
+    </div>
+    <div class="section">
+      <label for="f-ref">Referee handle <span class="opt">— optional</span></label>
+      <input id="f-ref" type="text" maxlength="40" placeholder="Your name at the table" value="${esc(c.referee)}"
+        oninput="state.campaign.referee=this.value">
+      <p class="hint">Shown only in your own referee view, never to players.</p>
+    </div>
+    <div class="section">
+      <label>Starting Imperial date <span class="opt">— optional</span></label>
+      <div class="row">
+        <div>
+          <input id="f-day" type="number" min="1" max="365" placeholder="Day (1–365)" value="${esc(c.impDay)}"
+            oninput="state.campaign.impDay=clampInt(this.value,1,365,1)">
+          <p class="hint">Day of year</p>
+        </div>
+        <div>
+          <input id="f-year" type="number" min="0" max="9999" placeholder="Year" value="${esc(c.impYear)}"
+            oninput="state.campaign.impYear=clampInt(this.value,0,9999,1105)">
+          <p class="hint">Imperial year (default 1105)</p>
+        </div>
+      </div>
+      <p class="hint">The map shows this as <span class="kbd" id="imp-preview">${impLabel()}</span>. The clock advances on jumps.</p>
+    </div>
+    ${nav()}`;
+  },
+
+  supabase(){ const s = state.supabase; return `
+    <h2>Connect your Supabase project</h2>
+    <p class="lede">This is the shared backend. Create a free project at
+      <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com/dashboard</a>,
+      then copy two values from <b>Project Settings → API</b>.</p>
+    <div class="section">
+      <label for="f-url">Project URL</label>
+      <input id="f-url" class="mono" type="url" placeholder="https://xxxxxxxx.supabase.co" value="${esc(s.url)}"
+        oninput="state.supabase.url=this.value.trim();state.supabase.tested=false;clearErr(this);resetConn()">
+      <div class="field-err" id="e-url"></div>
+      <p class="hint">Settings → API → <b>Project URL</b>.</p>
+    </div>
+    <div class="section">
+      <label for="f-key">Publishable (anon) key</label>
+      <input id="f-key" class="mono" type="text" placeholder="sb_publishable_… or eyJ…" value="${esc(s.key)}"
+        oninput="state.supabase.key=this.value.trim();state.supabase.tested=false;clearErr(this);resetConn()">
+      <div class="field-err" id="e-key"></div>
+      <p class="hint">Settings → API → Project API keys → <b>anon / publishable</b>. This key is safe to ship in
+        the client; it can only do what your Row-Level Security policies allow.</p>
+    </div>
+    <div class="section">
+      <button class="btn sm" id="test-btn" onclick="testConnection()">Test connection</button>
+      <span id="conn-result" style="margin-left:10px;font-size:12px"></span>
+    </div>
+    <div class="note">Connection isn't required to continue. This checks only that your <b>URL and key</b>
+      are valid — you'll create the database tables and verify them in the next step.</div>
+    ${nav()}`;
+  },
+
+  database(){ return `
+    <h2>Create the database tables</h2>
+    <p class="lede">Open your project's <b>SQL Editor</b> (left sidebar), paste the script below into a new query,
+      and run it. It's idempotent — safe to run more than once.</p>
+    <div class="codewrap">
+      <button class="btn sm copy" onclick="copyText(SCHEMA_SQL,this)">Copy SQL</button>
+      <pre id="schema-sql">${esc(SCHEMA_SQL)}</pre>
+    </div>
+    <div class="section">
+      <button class="btn sm" id="verify-btn" onclick="verifyTables()">Verify tables exist</button>
+      <span id="verify-result" style="margin-left:10px;font-size:12px"></span>
+      <p class="hint">Run after the SQL above. Checks your project for the <span class="kbd">aurelia_state</span> table.</p>
+    </div>
+    <div class="note ok"><b>What this creates</b><br>
+      • <b>aurelia_state</b> — shared reveal flags, clock &amp; notes (readable/writable with your anon key).<br>
+      • <b>players</b> &amp; <b>campaign_content</b> — per-player redaction, locked down by RLS so the anon key
+        can't read them. Only the <span class="kbd">get-content</span> Edge Function (service role) ever reads secrets.</div>
+    <p class="lede" style="margin:18px 0 4px"><b>Optional · advanced</b> — skip both of these for a basic shared
+      campaign where everyone sees the same content. Each step says <span class="where">where</span> to run it.</p>
+
+    <details class="adv">
+      <summary><span class="chev">▸</span> A · Hide referee-only content from players (one-time)</summary>
+      <div class="body">
+        <div class="note" style="margin:8px 0 4px"><b>Do I need this? Probably not.</b> Most tables share one view of
+          the world and the referee simply keeps secrets by not reading them aloud — like a paper GM screen. Set this
+          up <b>only</b> if you want players on their <b>own devices</b> to be technically unable to see referee content
+          (NPC stats, hidden notes, the timeline). It needs comfort with a terminal and the repo checked out locally;
+          budget 20–30 minutes. Otherwise skip it — the basic shared campaign (steps above) is the common path.</div>
+        <p>By default everyone who opens the app sees the same content. This routes secret prose &amp; stats
+          (NPC stat blocks, skill checks, referee notes, the GM timeline) through the
+          <span class="kbd">get-content</span> Edge Function, so each <b>player token</b> only ever receives what's
+          tagged for them. Needs <b>Node.js</b> and the <b>Supabase CLI</b>, run from the project folder.</p>
+        <p style="margin-bottom:2px"><b>Link the CLI to your project first</b> (one time) —
+          <a href="https://supabase.com/docs/guides/cli" target="_blank" rel="noopener">install the CLI</a>, then:</p>
+        <div class="cmd"><code>supabase login</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div>
+        <div class="cmd"><code>supabase link --project-ref &lt;your-project-ref&gt;</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div>
+        <p class="sub">Your project-ref is the <span class="kbd">xxxx</span> in <span class="kbd">https://xxxx.supabase.co</span>.</p>
+        <p style="margin-bottom:0"><b>Then, in order:</b></p>
+        <ol>
+          <li><span class="what">Generate the content seed from your app.</span><span class="where">terminal</span>
+            <p class="sub">Reads <span class="kbd">index.html</span> and writes <span class="kbd">supabase/seed/*</span>.</p>
+            <div class="cmd"><code>node tools/extract-content.mjs</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div></li>
+          <li><span class="what">Review what's player-visible.</span><span class="where edit">your editor</span>
+            <p class="sub">Open <span class="kbd">supabase/seed/classification-report.md</span> and confirm the
+              <b>player-visible (“all”) list</b> holds nothing secret. This is the human gate — don't continue until it looks right.</p></li>
+          <li><span class="what">Seed the content.</span><span class="where sql">sql editor</span>
+            <p class="sub">Open <span class="kbd">supabase/seed/campaign_content.seed.sql</span>, paste its contents into a new
+              SQL Editor query, and run it. Idempotent — re-running refreshes values.</p></li>
+          <li><span class="what">Deploy the function with JWT verification <b>off</b>.</span><span class="where">terminal</span>
+            <p class="sub">Your tokens aren't Supabase JWTs, so leaving JWT on would 401 every request before your code runs.</p>
+            <div class="cmd"><code>supabase functions deploy get-content --no-verify-jwt</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div>
+            <p class="sub">Deployed from the dashboard instead? Open the function → Settings → turn <b>off</b> “Verify JWT”, then redeploy.</p></li>
+          <li><span class="what">Verify redaction.</span><span class="where">terminal</span>
+            <p class="sub">A <b>player</b> token must return zero referee fragments; a <b>referee</b> token returns everything;
+              a bad token gets <span class="kbd">401</span>. Exact curl checks are in <span class="kbd">supabase/README.md</span> § Step 5.</p></li>
+          <li><span class="what"><b>Only after</b> redaction checks pass — de-bake the secrets out of the shipped file.</span><span class="where">terminal</span>
+            <p class="sub">Rewrites <span class="kbd">index.html</span> so a player's downloaded copy contains zero secrets. Aborts if any secret isn't covered, so it can't half-strip.</p>
+            <div class="cmd"><code>node tools/strip-secrets.mjs</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div></li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="adv">
+      <summary><span class="chev">▸</span> B · Re-sync the server after you edit campaign content</summary>
+      <div class="body">
+        <p>Only relevant once you've done A. If you later edit the campaign content in <span class="kbd">index.html</span>,
+          the server copy goes stale — run this short loop to push your edits back:</p>
+        <ol>
+          <li><span class="what">Regenerate the seed from the edited file.</span><span class="where">terminal</span>
+            <div class="cmd"><code>node tools/extract-content.mjs</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div></li>
+          <li><span class="what">Re-run the refreshed seed.</span><span class="where sql">sql editor</span>
+            <p class="sub">Paste <span class="kbd">supabase/seed/campaign_content.seed.sql</span> again — it overwrites the existing rows.</p></li>
+          <li><span class="what">Re-verify redaction</span> (player token → 0 referee fragments).<span class="where">terminal</span></li>
+          <li><span class="what">If you ship a de-baked build, re-strip the secrets.</span><span class="where">terminal</span>
+            <div class="cmd"><code>node tools/strip-secrets.mjs</code><button class="btn sm" onclick="copyText(this.previousElementSibling.textContent,this)">Copy</button></div></li>
+        </ol>
+      </div>
+    </details>
+    ${nav()}`;
+  },
+
+  access(){ const a = state.access; return `
+    <h2>Access codes</h2>
+    <p class="lede">Two codes. Both are <b>casual deterrents</b>, not real security — anyone who reads the page
+      source can find them. They stop stray clicks and idle curiosity, nothing more.</p>
+    <div class="section">
+      <label for="f-pcode">Player access code</label>
+      <input id="f-pcode" type="text" autocomplete="off" placeholder="The code you hand to players" value="${esc(a.playerCode)}"
+        oninput="state.access.playerCode=this.value;clearErr(this)">
+      <div class="field-err" id="e-pcode"></div>
+      <p class="hint">Shown on the gate screen. Give it to everyone at the table so they can open the app.</p>
+    </div>
+    <div class="section">
+      <label for="f-dcode">Design Mode passcode <span class="opt">— referee only</span></label>
+      <input id="f-dcode" type="text" autocomplete="off" placeholder="Keep this one to yourself" value="${esc(a.designCode)}"
+        oninput="state.access.designCode=this.value;clearErr(this)">
+      <div class="field-err" id="e-dcode"></div>
+      <p class="hint">Unlocks Design Mode (editing systems, ships, NPCs). Don't share it with players.</p>
+    </div>
+    <div class="note">Make these <b>different</b> from each other, and from anything else you use. They live in
+      the browser, in plain text.</div>
+    ${nav()}`;
+  },
+
+  players(){
+    const rows = state.players.map((p,i) => playerRow(p,i)).join('');
+    return `
+    <h2>Players &amp; tokens</h2>
+    <p class="lede">Each person gets a unique <b>token</b> — a credential that decides what they can see. The
+      <span class="tag">Referee</span> token sees everything; a player token sees only content tagged for them.
+      Tokens are generated below; you'll insert them into the database and share each via an invite link.</p>
+    <div class="section">
+      <div class="players">
+        <div class="ph"><span>Identity (display name)</span><span>Sees content for…</span><span>Role</span><span></span></div>
+        ${rows}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="addPlayer()">+ Add player</button>
+        <button class="btn sm ghost" onclick="regenTokens()">Regenerate all tokens</button>
+      </div>
+      <p class="hint">“Sees content for…” are the audience labels a token may read — usually just the character's own
+        name. Separate multiple with commas. Ignored for the Referee.</p>
+    </div>
+
+    <div class="divider"></div>
+    <h2 style="font-size:15px">Insert tokens into the database</h2>
+    <p class="lede" style="margin-bottom:8px">Run this in the Supabase <b>SQL Editor</b> after creating the tables.
+      Re-running refreshes the rows.</p>
+    <div class="codewrap">
+      <button class="btn sm copy" onclick="copyText(playersSql(),this)">Copy SQL</button>
+      <pre id="players-sql">${esc(playersSql())}</pre>
+    </div>
+
+    <div class="divider"></div>
+    <h2 style="font-size:15px">Invite links</h2>
+    <p class="lede" style="margin-bottom:8px">Send each player <b>their own</b> link. Opening it applies their token
+      automatically (the token rides in the URL <span class="kbd">#fragment</span>, so it never hits a server log).</p>
+    <div class="section">
+      <label for="f-appurl">App URL <span class="opt">— where you host index.html</span></label>
+      <input id="f-appurl" class="mono" type="url" value="${esc(state.campaign.appUrl)}"
+        oninput="state.campaign.appUrl=this.value.trim();refreshInvites()">
+    </div>
+    <div id="invite-list">${inviteList()}</div>
+    <div class="note"><b>Double-check before you send these.</b> Click <b>Open ↗</b> on your own <b>Referee</b> link
+      first — it opens the app in a new tab so you can confirm the link actually loads at your App URL and the token
+      applies. If it 404s or shows a blank page, fix the App URL above before handing links to players.</div>
+    ${nav({ nextLabel:'Review & finish' })}`;
+  },
+
+  finish(){
+    const c = state.campaign, s = state.supabase, a = state.access;
+    const refTok = (state.players.find(p=>p.role==='referee')||{}).token || '—';
+    return `
+    <h2>Review &amp; save</h2>
+    <p class="lede">Check everything below, then save. Settings are written to this browser's storage under the
+      <span class="kbd">aurelia_*</span> keys the app reads.</p>
+    <div class="section">
+      <div class="kv">
+        <span class="k">Campaign</span><span class="v">${esc(c.name||'—')}</span>
+        <span class="k">Referee</span><span class="v">${esc(c.referee||'—')}</span>
+        <span class="k">Imperial date</span><span class="v">${esc(impLabel())}</span>
+        <span class="k">Supabase URL</span><span class="v">${esc(s.url||'—')}</span>
+        <span class="k">Supabase key</span><span class="v">${esc(maskKey(s.key))}</span>
+        <span class="k">Connection</span><span class="v">${s.tested ? '<span class="pill s">✓ verified</span>' : '<span class="pill w">not tested</span>'}</span>
+        <span class="k">Player code</span><span class="v">${esc(a.playerCode||'—')}</span>
+        <span class="k">Design code</span><span class="v">${esc(a.designCode||'—')}</span>
+        <span class="k">Players</span><span class="v">${state.players.length} (${state.players.filter(p=>p.role==='player').length} player, ${state.players.filter(p=>p.role==='referee').length} referee)</span>
+      </div>
+    </div>
+    <div class="note gold"><b>Your referee token</b> — keep this private; it unlocks all referee content.<br>
+      <span class="tokchip">${esc(refTok)}</span></div>
+    <div class="note warn"><b>Before this works end-to-end</b>, make sure you've run the database SQL (step 4)
+      and the token-insert SQL (step 5) in your Supabase project.</div>
+    <div class="note gold"><b>Deploy this with your app — <span class="kbd">config.js</span>.</b> This is what carries
+      your campaign (backend, campaign name, access &amp; design codes) to <i>every</i> player's device. Download it and
+      upload it to the <b>same folder</b> as <span class="kbd">index.html</span> on your host.
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button>
+        <button class="btn sm ghost" onclick="previewConfigJs()">Preview</button>
+      </div></div>
+    <div class="note"><b>One more wiring step.</b> These settings also save to <i>this</i> browser for your own device.
+      But the published app only picks up <span class="kbd">config.js</span> once <span class="kbd">index.html</span> is
+      updated to read <span class="kbd">window.AURELIA_CONFIG</span> (the integration step). Until then it uses its
+      built-in defaults — your invite links route correctly, but the access-code/backend swap lands when that wiring
+      and your <span class="kbd">config.js</span> are both in place.</div>
+    <div class="nav">
+      <button class="btn ghost" onclick="goBack()">‹ Back</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="downloadConfig()">⬇ Backup (.json)</button>
+      <button class="btn primary" onclick="finishSetup()">Save &amp; complete setup ✓</button>
+    </div>
+    <div id="finish-result" style="margin-top:14px"></div>`;
+  },
+};
+
+/* ── Player row markup ────────────────────────────────────────────────────── */
+function playerRow(p,i){
+  const isRef = p.role==='referee';
+  return `<div class="pr ${isRef?'ref':''}">
+    <input type="text" value="${esc(p.identity)}" placeholder="Name" ${isRef?'':''}
+      oninput="state.players[${i}].identity=this.value;syncPlayerDerived()">
+    <input type="text" value="${esc((p.audiences||[]).join(', '))}" placeholder="${isRef?'(sees everything)':'character name(s)'}"
+      ${isRef?'disabled class="dim"':''} oninput="state.players[${i}].audiences=parseAud(this.value);syncPlayerDerived()">
+    <select onchange="state.players[${i}].role=this.value;render()">
+      <option value="player" ${!isRef?'selected':''}>Player</option>
+      <option value="referee" ${isRef?'selected':''}>Referee</option>
+    </select>
+    ${isRef ? '<span></span>' : `<button class="x" title="Remove" onclick="removePlayer(${i})">×</button>`}
+  </div>`;
+}
+
+/* ── Invite list markup ───────────────────────────────────────────────────── */
+function inviteLinkFor(p){
+  const base = (state.campaign.appUrl||'').replace(/#.*$/,'');
+  if(!base) return '';
+  return base + '#token=' + encodeURIComponent(p.token);
+}
+function inviteList(){
+  const cols = 'grid-template-columns:1fr 1.6fr 158px';
+  return `<div class="players"><div class="ph" style="${cols}">
+      <span>Player</span><span>Invite link</span><span></span></div>` +
+    state.players.map((p,i) => {
+      const link = inviteLinkFor(p);
+      const who = p.role==='referee' ? `${esc(p.identity)} <span class="tag">ref</span>` : esc(p.identity||'(unnamed)');
+      return `<div class="pr" style="${cols}">
+        <span style="font-size:12px">${who}</span>
+        <span class="tokchip" style="color:var(--txI)">${esc(link||'— set App URL —')}</span>
+        <span style="display:flex;gap:6px;justify-content:flex-end">
+          <button class="btn sm" onclick="copyText(inviteLinkFor(state.players[${i}]),this)" ${link?'':'disabled'}>Copy</button>
+          <button class="btn sm ghost" onclick="openInvite(${i})" ${link?'':'disabled'} title="Open this link in a new tab">Open ↗</button>
+        </span>
+      </div>`;
+    }).join('') + `</div>`;
+}
+function openInvite(i){ const l = inviteLinkFor(state.players[i]); if(l) window.open(l, '_blank', 'noopener'); }
+function refreshInvites(){ const el = $('#invite-list'); if(el) el.innerHTML = inviteList(); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ACTIONS
+   ════════════════════════════════════════════════════════════════════════════ */
+function clampInt(v,min,max,dflt){ const n = parseInt(v,10); if(isNaN(n)) return dflt; return Math.max(min,Math.min(max,n)); }
+function impLabel(){ return String(state.campaign.impDay).padStart(3,'0') + '-' + state.campaign.impYear; }
+function maskKey(k){ if(!k) return '—'; return k.length<=10 ? k : k.slice(0,6)+'…'+k.slice(-4); }
+function parseAud(v){ return v.split(',').map(s=>s.trim()).filter(Boolean); }
+function clearErr(el){ el.classList.remove('err'); const e = el.parentElement.querySelector('.field-err'); if(e) e.textContent=''; }
+function setErr(id,msg){ const el=$('#'+id); if(el){ el.classList.add('err'); const e=el.parentElement.querySelector('.field-err'); if(e) e.textContent=msg; } }
+
+/* keep the imperial-date preview + any derived UI fresh without a full re-render */
+function syncPlayerDerived(){ const pe=$('#players-sql'); if(pe) pe.textContent=playersSql(); refreshInvites(); }
+
+function addPlayer(){
+  state.players.push({ identity:'', role:'player', audiences:[], token: uuid() });
+  render();
+}
+function removePlayer(i){ state.players.splice(i,1); render(); }
+function regenTokens(){ state.players.forEach(p => p.token = uuid()); render();
+  toast('finish-result',''); }
+
+/* ── Navigation + validation ──────────────────────────────────────────────── */
+function goBack(){ if(state.step>0){ state.step--; render(); } }
+function goNext(){
+  if(!validateStep(STEPS[state.step].id)) return;
+  if(state.step < STEPS.length-1){ state.step++; render(); }
+}
+function validateStep(id){
+  let ok = true;
+  if(id==='campaign'){
+    if(!state.campaign.name.trim()){ setErr('e-name','Give your campaign a name.'); $('#f-name').classList.add('err'); ok=false; }
+  }
+  if(id==='supabase'){
+    const u = state.supabase.url, k = state.supabase.key;
+    if(!u){ setErr('e-url','Enter your project URL.'); ok=false; }
+    else if(!/^https:\/\/.+\.supabase\.(co|in|net)/i.test(u) && !/^https?:\/\//i.test(u)){
+      setErr('e-url','That doesn’t look like a URL (https://…).'); ok=false; }
+    if(!k){ setErr('e-key','Paste your publishable key.'); ok=false; }
+  }
+  if(id==='access'){
+    if(!state.access.playerCode.trim()){ setErr('e-pcode','Set a player access code.'); ok=false; }
+    if(!state.access.designCode.trim()){ setErr('e-dcode','Set a Design Mode passcode.'); ok=false; }
+    else if(state.access.playerCode.trim() && state.access.designCode.trim()===state.access.playerCode.trim()){
+      setErr('e-dcode','Use a different code from the player one.'); ok=false; }
+  }
+  return ok;
+}
+
+/* ── Connection test ──────────────────────────────────────────────────────── */
+function resetConn(){ const r=$('#conn-result'); if(r) r.innerHTML=''; }
+// Step 3 — CREDENTIALS-ONLY check. Deliberately schema-independent so it passes
+// BEFORE the step-4 tables exist: a bad key is rejected (401) at the gateway
+// *before* the table is ever looked up, so a "table missing" (404) response is
+// itself proof that the URL is right and the key is accepted. Whether the
+// campaign tables exist yet is step 4's job (verifyTables()).
+async function testConnection(){
+  const url = state.supabase.url.replace(/\/+$/,''), key = state.supabase.key;
+  const out = $('#conn-result'), btn = $('#test-btn');
+  if(!url || !key){ out.innerHTML = '<span class="pill d">Enter a URL and key first</span>'; return; }
+  out.innerHTML = '<span class="pill">Testing…</span>'; btn.disabled = true;
+  try {
+    const res = await fetch(url + '/rest/v1/aurelia_state?select=key&limit=1', {
+      headers: { apikey: key, Authorization: 'Bearer ' + key }
+    });
+    if(res.status === 401 || res.status === 403){
+      state.supabase.tested = false;
+      out.innerHTML = '<span class="pill d">Key rejected (' + res.status + ') — check the publishable key</span>';
+    } else if(res.ok || res.status === 404){
+      state.supabase.tested = true; // got past auth → credentials are valid (tables may or may not exist yet)
+      out.innerHTML = '<span class="pill s">✓ Connected — URL &amp; key valid</span>';
+    } else {
+      const t = await res.text().catch(()=> '');
+      const missing = /does not exist|PGRST205|find the table/i.test(t);
+      state.supabase.tested = !!missing;
+      out.innerHTML = missing
+        ? '<span class="pill s">✓ Connected — URL &amp; key valid</span>'
+        : '<span class="pill d">Unexpected response (' + res.status + ')</span>';
+    }
+  } catch(e){
+    state.supabase.tested = false;
+    out.innerHTML = '<span class="pill d">Couldn’t reach that URL — check it &amp; your connection</span>';
+  } finally { btn.disabled = false; }
+}
+
+// Step 4 — TABLE-EXISTENCE check, run after pasting the SQL. Same endpoint as
+// the credentials test, but here 200 (rows readable) vs 404 (table missing) is
+// the meaningful signal, because the tables are now supposed to be there.
+async function verifyTables(){
+  const url = state.supabase.url.replace(/\/+$/,''), key = state.supabase.key;
+  const out = $('#verify-result'), btn = $('#verify-btn');
+  if(!url || !key){ out.innerHTML = '<span class="pill d">Add your URL &amp; key in step 3 first</span>'; return; }
+  out.innerHTML = '<span class="pill">Checking…</span>'; btn.disabled = true;
+  try {
+    const res = await fetch(url + '/rest/v1/aurelia_state?select=key&limit=1', {
+      headers: { apikey: key, Authorization: 'Bearer ' + key }
+    });
+    if(res.ok){
+      out.innerHTML = '<span class="pill s">✓ Tables found — you’re set</span>';
+    } else if(res.status === 401 || res.status === 403){
+      out.innerHTML = '<span class="pill d">Key rejected — re-check your key in step 3</span>';
+    } else {
+      const t = await res.text().catch(()=> '');
+      const missing = res.status === 404 || /does not exist|PGRST205|find the table/i.test(t);
+      out.innerHTML = missing
+        ? '<span class="pill w">Not created yet — run the SQL above, then re-check</span>'
+        : '<span class="pill d">Unexpected response (' + res.status + ')</span>';
+    }
+  } catch(e){
+    out.innerHTML = '<span class="pill d">Couldn’t reach Supabase — check step 3</span>';
+  } finally { btn.disabled = false; }
+}
+
+/* ── Generated SQL ────────────────────────────────────────────────────────── */
+const SCHEMA_SQL = `-- ════════════════════════════════════════════════════════════════════
+-- Aurelia RPG Tools — campaign schema.  Run once in the Supabase SQL Editor.
+-- Idempotent: safe to re-run.
+-- ════════════════════════════════════════════════════════════════════
+
+-- ── Shared state: reveal flags, clock, notes (NOT secret) ───────────────
+-- The app reads & writes these with the anon/publishable key, so anon gets
+-- select + insert + update. It only ever holds which areas are "revealed"
+-- and free-text notes — never referee-only prose or stats.
+create table if not exists public.aurelia_state (
+  key        text primary key,
+  value      text,
+  updated_at timestamptz not null default now()
+);
+alter table public.aurelia_state enable row level security;
+drop policy if exists "anon read state"   on public.aurelia_state;
+drop policy if exists "anon write state"  on public.aurelia_state;
+drop policy if exists "anon update state" on public.aurelia_state;
+create policy "anon read state"   on public.aurelia_state for select to anon using (true);
+create policy "anon write state"  on public.aurelia_state for insert to anon with check (true);
+create policy "anon update state" on public.aurelia_state for update to anon using (true) with check (true);
+
+-- ── Players / tokens ────────────────────────────────────────────────────
+-- One row per person. \`token\` is the bearer credential the client sends;
+-- \`audiences\` are the identity labels it may see. The referee row sees all.
+create table if not exists public.players (
+  id         uuid primary key default gen_random_uuid(),
+  token      text not null unique,
+  identity   text not null,
+  role       text not null default 'player' check (role in ('player','referee')),
+  audiences  jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- ── Campaign content fragments (per-player redaction) ───────────────────
+-- Audience-tagged secret prose/stats. Seeded from tools/extract-content.mjs.
+create table if not exists public.campaign_content (
+  id         uuid primary key default gen_random_uuid(),
+  path       text not null,
+  audience   jsonb not null default '"all"'::jsonb,
+  value      jsonb not null,
+  updated_at timestamptz not null default now(),
+  unique (path, audience)
+);
+create index if not exists campaign_content_path_idx on public.campaign_content (path);
+
+-- ── Lock secrets down: RLS on, NO anon policy → anon key reads zero rows ─
+-- Only the get-content Edge Function (service role) ever reads these.
+alter table public.players          enable row level security;
+alter table public.campaign_content enable row level security;
+`;
+
+function sqlStr(s){ return "'" + String(s).replace(/'/g,"''") + "'"; }
+function playersSql(){
+  const vals = state.players
+    .filter(p => p.identity.trim() || p.role==='referee')
+    .map(p => {
+      const aud = p.role==='referee' ? '[]' : JSON.stringify(p.audiences||[]);
+      return `  (${sqlStr(p.token)}, ${sqlStr(p.identity.trim()||'Referee')}, ${sqlStr(p.role)}, ${sqlStr(aud)}::jsonb)`;
+    }).join(',\n');
+  return `-- Tokens for this campaign. Re-running refreshes identity/role/audiences.
+insert into public.players (token, identity, role, audiences)
+values
+${vals}
+on conflict (token) do update
+  set identity = excluded.identity,
+      role     = excluded.role,
+      audiences= excluded.audiences;
+
+-- Sanity check — hand each token out once, to the right person:
+select identity, role, token from public.players order by role desc, identity;`;
+}
+
+/* ── Clipboard + download helpers ─────────────────────────────────────────── */
+function copyText(text, btn){
+  const done = () => { if(btn){ const o=btn.textContent; btn.textContent='Copied ✓'; setTimeout(()=>btn.textContent=o,1400); } };
+  const fail = () => { window.prompt('Copy:', text); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail);
+  else fail();
+}
+function buildConfig(){
+  return {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    campaign: { ...state.campaign },
+    supabase: { url: state.supabase.url, key: state.supabase.key, tested: state.supabase.tested },
+    access:   { ...state.access },
+    players:  state.players.map(p => ({ identity:p.identity, role:p.role, audiences:p.audiences, token:p.token })),
+  };
+}
+function downloadConfig(){
+  triggerDownload(
+    new Blob([JSON.stringify(buildConfig(), null, 2)], { type:'application/json' }),
+    (state.campaign.name || 'aurelia-campaign').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '-config.json'
+  );
+}
+
+// ── Deployable config.js ─────────────────────────────────────────────────────
+// THE artifact that makes a shared deploy work: the referee uploads this next to
+// index.html on their host. index.html loads it first and reads
+// window.AURELIA_CONFIG, so EVERY device that opens the link picks up these
+// campaign-wide values instead of the defaults baked into the file. (localStorage
+// can't do this — it's per-device, so it never reaches players.)
+// Carries only what every device needs: backend + the gate codes + display name.
+// Per-player tokens live in the database; the referee's handle/UI prefs stay in
+// localStorage on the referee's own device, out of this public file.
+function buildConfigJs(){
+  const cfg = {
+    campaignName:  state.campaign.name,
+    accessCode:    state.access.playerCode,
+    designCode:    state.access.designCode,
+    supabaseUrl:   state.supabase.url,
+    supabaseKey:   state.supabase.key,
+    imperialStart: { day: Number(state.campaign.impDay), year: Number(state.campaign.impYear) },
+  };
+  return `/* ─────────────────────────────────────────────────────────────────────────
+   Aurelia RPG Tools — campaign config.  Generated ${new Date().toISOString()}.
+
+   DEPLOY THIS NEXT TO index.html (same folder) on your host. index.html loads it
+   before anything else and reads window.AURELIA_CONFIG, so every device that
+   opens your link picks up these settings — that's what makes the access code and
+   backend YOURS rather than the defaults baked into the shipped file.
+
+   Safe to publish: the Supabase key is a *publishable* key (Row-Level Security
+   gates it), and the access/design codes are casual deterrents — visible in any
+   shipped build by design, not real security. Don't put genuine secrets here.
+   ───────────────────────────────────────────────────────────────────────── */
+window.AURELIA_CONFIG = ${JSON.stringify(cfg, null, 2)};
+`;
+}
+function downloadConfigJs(){
+  triggerDownload(new Blob([buildConfigJs()], { type:'application/javascript' }), 'config.js');
+}
+function previewConfigJs(){
+  toast('finish-result', `<div class="sub" style="margin-bottom:6px">This is your <span class="kbd">config.js</span> — upload it beside <span class="kbd">index.html</span>:</div>
+    <div class="codewrap"><button class="btn sm copy" onclick="copyText(buildConfigJs(),this)">Copy</button><pre>${esc(buildConfigJs())}</pre></div>`);
+}
+function triggerDownload(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ── Persist to the keys the live app reads ───────────────────────────────── */
+function finishSetup(){
+  const cfg = buildConfig();
+  try {
+    localStorage.setItem(K.config,   JSON.stringify(cfg));
+    localStorage.setItem(K.url,      state.supabase.url);
+    localStorage.setItem(K.key,      state.supabase.key);
+    localStorage.setItem(K.campaign, state.campaign.name);
+    localStorage.setItem(K.referee,  state.campaign.referee);
+    localStorage.setItem(K.access,   state.access.playerCode);
+    localStorage.setItem(K.design,   state.access.designCode);
+    localStorage.setItem(K.done,     '1');
+    toast('finish-result', `<div class="note ok"><b>Saved to this browser.</b> Re-run the wizard any time to edit —
+      your answers are remembered. <b>Last step:</b> download <span class="kbd">config.js</span> above and upload it
+      next to <span class="kbd">index.html</span> on your host, so your players get these settings too.
+      <div style="margin-top:10px"><button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button></div></div>`);
+  } catch(e){
+    toast('finish-result', `<div class="note warn"><b>Couldn't save</b> — ${esc(e.message||e)}.
+      Your browser may be blocking storage (private mode?). Use “Download config” instead.</div>`);
+  }
+}
+function toast(id, html){ const el = $('#'+id); if(el) el.innerHTML = html; }
+
+/* live-update the imperial preview as the date fields change */
+document.addEventListener('input', e => {
+  if(['f-day','f-year'].includes(e.target.id)){ const p=$('#imp-preview'); if(p) p.textContent=impLabel(); }
+});
+
+render();
+</script>
+</body>
+</html>

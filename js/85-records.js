@@ -1189,6 +1189,11 @@ makePanelResizable('funds-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');
 makePanelResizable('gen-wrap');
 
+// ── Campaign Pack: assemble the active universe and apply its config to the UI
+//    (theme, terminology, module flags) BEFORE the first render. For the
+//    built-in Archon Gambit pack this is a no-op-equivalent (defaults match). ──
+if(typeof initCampaignPacks === 'function') initCampaignPacks();
+
 buildOrrery();
 renderInit();
 buildQuickAddList();
@@ -1200,7 +1205,7 @@ if(queueLength()) flushQueue(); // push anything parked from a previous offline 
 // ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
 if(typeof HX !== 'undefined'){
   HX.enter();
-  document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+  document.getElementById('hdr-title').textContent = layerLabel('galaxy','The Orion Arm').toUpperCase();
   document.getElementById('breadcrumb').innerHTML = '';
   updateBackBtn();
 }
@@ -1261,6 +1266,7 @@ loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 loadFactionStores().then(() => { rebuildFactionsFromOverlay();   // fold in any referee-added / edited / removed regions
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadFactionHidden().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // player-facing faction visibility
 loadSystemStores().then(() => { rebuildSystemsFromOverlay();   // fold in any referee-added / edited / removed systems
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits
