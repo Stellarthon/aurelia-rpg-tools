@@ -1506,6 +1506,36 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .qe-obj-text{width:100%;font-size:11px;font-family:monospace;background:var(--bg0);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:5px 8px;resize:none;height:36px}
 .qe-obj-refnote{width:100%;font-size:10px;font-family:monospace;background:var(--bg0);color:var(--tx1);border:.5px solid var(--bd0);border-radius:4px;padding:4px 8px;resize:none;height:28px;font-style:italic}
 .qe-obj-done{width:16px;height:16px;flex-shrink:0;margin-top:8px;accent-color:var(--txS);cursor:pointer}
+
+/* ── Splash-screen editor (referee, Design Mode) — mirrors #quest-edit-modal ── */
+#splash-edit-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,0.92);z-index:220;
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+#splash-edit-modal.hidden{display:none}
+#splash-edit-card{
+  background:var(--bg1);border:.5px solid var(--accentGold);border-radius:10px;
+  width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden
+}
+.splash-edit-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+.splash-edit-header .se-ttl{font-size:11px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px}
+.splash-edit-body{flex:1;overflow-y:auto;padding:14px 16px}
+.splash-edit-footer{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:10px 16px;border-top:.5px solid var(--bd0);flex-shrink:0;flex-wrap:wrap
+}
+.splash-edit-footer button{
+  font-size:11px;font-family:monospace;padding:7px 14px;border-radius:5px;cursor:pointer;border:none
+}
+.splash-edit-footer .se-save{background:var(--accentGold);color:#0f1117;font-weight:700}
+.splash-edit-footer .se-reset{background:#3B1A1A;color:#d45050;border:.5px solid #d45050 !important;margin-right:auto}
+.splash-edit-footer .se-preview{background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold) !important}
+.splash-edit-footer .se-cancel{background:var(--bg0);color:var(--tx1)}
+.se-note{font-size:10px;color:var(--tx1);font-style:italic;margin:-2px 0 12px;font-family:monospace;line-height:1.5}
+.se-disabled{opacity:.45}
 .qe-obj-remove{font-size:11px;background:#3B1A1A;color:#d45050;border:.5px solid #d45050;border-radius:50%;width:20px;height:20px;flex-shrink:0;margin-top:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #root.pm-active #health-wrap{display:none!important}
 #health-header{
@@ -2241,6 +2271,229 @@ input#ui-scale-range{
   font-size:10px;color:var(--tx1);font-style:italic
 }
 
+/* ── Inventory (Phase 1 — read-only structured render in the sheet modal) ──── */
+.inv-hint{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:.5px;margin:-4px 0 9px}
+.inv-empty{
+  font-size:11px;color:var(--tx1);background:var(--bg0);border:.5px dashed var(--bd0);
+  border-radius:6px;padding:14px;text-align:center;line-height:1.5
+}
+.inv-group{margin-bottom:12px}
+.inv-group:last-child{margin-bottom:0}
+.inv-group-lbl{
+  font-size:9px;color:var(--tx1);letter-spacing:1px;text-transform:uppercase;
+  font-family:monospace;margin-bottom:6px;display:flex;align-items:center;gap:6px
+}
+.inv-group-count{background:var(--accentGoldBg);color:var(--accentGold);border-radius:9px;padding:0 6px;font-size:9px;font-weight:700}
+.inv-list{display:flex;flex-direction:column;gap:6px}
+.inv-item{
+  background:var(--bg0);border:.5px solid var(--bd0);border-left:3px solid var(--bd0);
+  border-radius:6px;padding:9px 11px;cursor:pointer;min-height:44px;
+  display:flex;flex-direction:column;justify-content:center;transition:border-color .12s
+}
+.inv-item:hover{border-color:var(--tx1)}
+.inv-item-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.inv-item-name{font-size:13px;color:var(--tx0);font-weight:600;flex:1;min-width:0}
+.inv-item-meta{font-size:10px;color:var(--tx1);font-family:monospace;margin-top:3px}
+.inv-badge{
+  font-size:8px;font-family:monospace;text-transform:uppercase;letter-spacing:.5px;
+  border-radius:3px;padding:2px 6px;white-space:nowrap
+}
+.inv-badge-cat{background:var(--bg2);color:var(--tx1)}
+.inv-badge-eq{background:var(--accentGoldBg);color:var(--accentGold);font-weight:700}
+.inv-item-detail{display:none;margin-top:8px;padding-top:8px;border-top:.5px solid var(--bd1)}
+.inv-item.open .inv-item-detail{display:block}
+.inv-d-row{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+.inv-d-k{color:var(--tx1);font-family:monospace;text-transform:uppercase;font-size:9px;letter-spacing:.5px;flex:0 0 auto;padding-top:1px}
+.inv-d-v{color:var(--tx0);font-size:11px;text-align:right;word-break:break-word}
+/* Category accent on the left border (equipped overrides via higher specificity) */
+.inv-cat-weapon{border-left-color:#7a4a4a}
+.inv-cat-armour{border-left-color:#4a6a7a}
+.inv-cat-augment{border-left-color:#6a4a7a}
+.inv-cat-consumable{border-left-color:#4a7a5a}
+.inv-item.is-equipped{border-left-color:var(--accentGold)}
+/* add / remove (Phase 2) */
+.inv-add-btn{
+  margin-top:8px;width:100%;background:transparent;border:1px dashed var(--accentGold);
+  color:var(--accentGold);border-radius:6px;padding:11px;font-size:12px;font-family:monospace;
+  cursor:pointer;min-height:44px
+}
+.inv-add-btn:hover{background:var(--accentGoldBg)}
+.inv-remove-btn{background:transparent;border:none;color:var(--tx1);font-size:13px;cursor:pointer;padding:2px 8px;line-height:1;flex-shrink:0}
+.inv-remove-btn:hover{color:var(--txD)}
+
+/* ── Item Catalogue modal (add picker + referee authoring) ── */
+#catalogue-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,.92);z-index:205;
+  display:none;align-items:center;justify-content:center;padding:20px
+}
+#catalogue-modal.open{display:flex}
+#catalogue-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  max-width:560px;width:100%;max-height:90vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#catalogue-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:.5px solid var(--bd0);flex-shrink:0
+}
+#catalogue-title{font-size:14px;font-weight:700;color:var(--accentGold);font-family:monospace;letter-spacing:1px}
+#catalogue-close{font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;padding:4px 8px;line-height:1}
+#catalogue-close:hover{color:var(--tx0)}
+#catalogue-body{overflow-y:auto;flex:1;padding:14px 18px;-webkit-overflow-scrolling:touch}
+.cat-target{font-size:11px;color:var(--tx1);margin-bottom:10px}
+.cat-target b{color:var(--accentGold)}
+.cat-controls{display:flex;gap:8px;margin-bottom:10px}
+.cat-search{flex:1;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;color:var(--tx0);font-size:13px;padding:9px 11px;outline:none}
+.cat-search:focus{border-color:var(--accentGold)}
+.cat-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.cat-chip{font-size:10px;font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);border-radius:20px;padding:5px 10px;cursor:pointer}
+.cat-chip.on{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold);font-weight:700}
+.cat-new-btn{background:var(--bgI);color:var(--txI);border:.5px solid var(--txI);border-radius:6px;padding:0 12px;font-size:11px;font-family:monospace;cursor:pointer;white-space:nowrap;min-height:38px}
+.cat-empty{font-size:11px;color:var(--tx1);background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:16px;text-align:center;line-height:1.6}
+.cat-row{display:flex;align-items:center;gap:10px;background:var(--bg0);border:.5px solid var(--bd0);border-left:3px solid var(--bd0);border-radius:6px;padding:8px 11px;margin-bottom:6px}
+.cat-row.inv-cat-weapon{border-left-color:#7a4a4a}
+.cat-row.inv-cat-armour{border-left-color:#4a6a7a}
+.cat-row.inv-cat-augment{border-left-color:#6a4a7a}
+.cat-row.inv-cat-consumable{border-left-color:#4a7a5a}
+.cat-row-main{flex:1;min-width:0}
+.cat-row-name{font-size:13px;color:var(--tx0);font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cat-row-meta{font-size:10px;color:var(--tx1);font-family:monospace;margin-top:2px}
+.cat-row-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.cat-add-btn{background:var(--bgS);color:var(--txS);border:.5px solid var(--txS);border-radius:5px;padding:7px 11px;font-size:11px;font-family:monospace;cursor:pointer;min-height:34px;white-space:nowrap}
+.cat-icon-btn{background:var(--bg2);color:var(--tx1);border:.5px solid var(--bd0);border-radius:5px;padding:6px 8px;font-size:12px;cursor:pointer;min-height:34px}
+.cat-icon-btn:hover{color:var(--tx0)}
+.cat-icon-btn.danger:hover{color:var(--txD);border-color:var(--txD)}
+.cat-editor{display:flex;flex-direction:column;gap:10px}
+.cat-back-btn{align-self:flex-start;background:transparent;border:none;color:var(--accentGold);font-family:monospace;font-size:11px;cursor:pointer;padding:0}
+.cat-f{display:flex;flex-direction:column;gap:4px}
+.cat-f-lbl{font-size:9px;color:var(--tx1);letter-spacing:1px;text-transform:uppercase;font-family:monospace}
+.cat-input{background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);font-size:13px;padding:8px 10px;outline:none;font-family:inherit;width:100%;box-sizing:border-box}
+.cat-input:focus{border-color:var(--accentGold)}
+.cat-textarea{resize:vertical;min-height:56px;line-height:1.5}
+.cat-f-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.cat-sub-lbl{font-size:9px;color:var(--accentGold);letter-spacing:1.5px;text-transform:uppercase;font-family:monospace;margin-top:2px;border-top:.5px solid var(--bd1);padding-top:8px}
+.cat-fp-grid{align-items:end}
+.cat-fp-hint{font-size:9px;color:var(--tx1);font-family:monospace;display:flex;flex-direction:column;gap:4px;justify-content:flex-end;text-transform:uppercase;letter-spacing:.5px}
+.cat-mini-btn{background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);border-radius:4px;font-size:9px;font-family:monospace;padding:5px 6px;cursor:pointer}
+.cat-editor-actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:10px;border-top:.5px solid var(--bd1)}
+
+/* ── Encumbrance indicator + equip slots + item actions (Phase 3) ── */
+.enc-bar{background:var(--bg0);border:.5px solid var(--bd0);border-left:3px solid var(--bd0);border-radius:6px;padding:9px 11px;margin-bottom:10px}
+.enc-line{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.enc-badge{font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.enc-dm{font-size:13px;font-family:monospace;font-weight:700}
+.enc-meter{height:7px;background:var(--bg2);border-radius:4px;position:relative;overflow:hidden}
+.enc-meter-fill{height:100%;border-radius:4px;transition:width .2s}
+.enc-cap-mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--tx0);opacity:.55}
+.enc-nums{font-size:9px;color:var(--tx1);font-family:monospace;margin-top:5px}
+.enc-unencumbered{border-left-color:var(--txS)}
+.enc-unencumbered .enc-badge,.enc-unencumbered .enc-dm{color:var(--txS)}
+.enc-unencumbered .enc-meter-fill{background:var(--txS)}
+.enc-encumbered{border-left-color:var(--txW)}
+.enc-encumbered .enc-badge,.enc-encumbered .enc-dm{color:var(--txW)}
+.enc-encumbered .enc-meter-fill{background:var(--txW)}
+.enc-overloaded{border-left-color:var(--txD)}
+.enc-overloaded .enc-badge,.enc-overloaded .enc-dm{color:var(--txD)}
+.enc-overloaded .enc-meter-fill{background:var(--txD)}
+.enc-rules-row{margin:-4px 0 8px}
+.enc-rules-toggle{background:transparent;border:none;color:var(--tx1);font-family:monospace;font-size:10px;cursor:pointer;padding:0}
+.enc-rules-toggle:hover{color:var(--accentGold)}
+.enc-rules{background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.enc-rules-note{font-size:9px;color:var(--tx1);line-height:1.5}
+.eq-slots{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:12px}
+.eq-slot{display:flex;flex-direction:column;gap:2px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;padding:6px 9px;min-height:42px;justify-content:center}
+.eq-slot.filled{border-color:var(--accentGold)}
+.eq-slot-lbl{font-size:8px;color:var(--tx1);text-transform:uppercase;letter-spacing:.5px;font-family:monospace}
+.eq-slot-item{font-size:12px;color:var(--accentGold);font-weight:600;word-break:break-word}
+.eq-slot-empty{font-size:11px;color:var(--tx1);opacity:.6}
+.inv-item.is-stowed{opacity:.72}
+.inv-item-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:.5px solid var(--bd1)}
+.inv-act-btn{flex:1;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:5px;padding:8px;font-size:11px;font-family:monospace;cursor:pointer;min-height:36px}
+.inv-act-btn:hover{border-color:var(--tx1)}
+.inv-act-btn.on{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.inv-act-btn.danger:hover{color:var(--txD);border-color:var(--txD)}
+
+/* ── Container tabs + footprint grid + tiles (Phase 4) ── */
+.inv-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.inv-tab{
+  position:relative;background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);
+  border-radius:6px;padding:7px 12px;font-size:11px;font-family:monospace;cursor:pointer;min-height:38px;
+  display:inline-flex;align-items:center;gap:6px
+}
+.inv-tab.on{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold);font-weight:700}
+.inv-tab.stowed{border-style:dashed}
+.inv-tab.drop-hot{border-color:var(--txS);background:var(--bgS);color:var(--txS);box-shadow:0 0 0 1px var(--txS)}
+.inv-tab-n{background:var(--bg2);color:var(--tx1);border-radius:9px;padding:0 6px;font-size:9px}
+.inv-tab.on .inv-tab-n{background:var(--accentGold);color:var(--bg0)}
+.inv-tab-cfg{flex:0 0 auto;color:var(--tx1)}
+.inv-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,72px);grid-auto-rows:72px;
+  gap:6px;grid-auto-flow:row dense;justify-content:center;margin-bottom:4px
+}
+.inv-tile{
+  background:var(--bg0);border:.5px solid var(--bd0);border-top:3px solid var(--bd0);border-radius:6px;
+  padding:6px 7px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;
+  touch-action:none;-webkit-user-select:none;user-select:none
+}
+.inv-tile:hover{border-color:var(--tx1)}
+.inv-tile.inv-cat-weapon{border-top-color:#7a4a4a}
+.inv-tile.inv-cat-armour{border-top-color:#4a6a7a}
+.inv-tile.inv-cat-augment{border-top-color:#6a4a7a}
+.inv-tile.inv-cat-consumable{border-top-color:#4a7a5a}
+.inv-tile.is-equipped{border-top-color:var(--accentGold)} /* wins over category colour via source order */
+.inv-tile-name{font-size:11px;color:var(--tx0);font-weight:600;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.inv-tile-q{color:var(--tx1);font-weight:400}
+.inv-tile-foot{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:var(--tx1);font-family:monospace}
+.inv-tile-eq{color:var(--accentGold)}
+.inv-tile-dragging{opacity:.35}
+.inv-drag-ghost{
+  position:fixed;z-index:230;transform:translate(-50%,-50%);pointer-events:none;
+  background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold);border-radius:6px;
+  padding:6px 10px;font-size:11px;font-family:monospace;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.5)
+}
+.cont-row{display:flex;align-items:center;gap:8px}
+.cont-row .cat-input{flex:1}
+.cont-carried{font-size:10px;color:var(--tx1);font-family:monospace;display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── Inventory item detail modal (tap a tile) ── */
+#inv-item-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,.92);z-index:210;
+  display:none;align-items:center;justify-content:center;padding:20px
+}
+#inv-item-modal.open{display:flex}
+#inv-item-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  max-width:460px;width:100%;max-height:88vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#inv-item-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:.5px solid var(--bd0);flex-shrink:0}
+#inv-item-modal-title{font-size:14px;font-weight:700;color:var(--accentGold);font-family:monospace;letter-spacing:.5px}
+#inv-item-close{font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;padding:4px 8px;line-height:1}
+#inv-item-close:hover{color:var(--tx0)}
+#inv-item-modal-body{overflow-y:auto;flex:1;padding:14px 18px;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px}
+#inv-item-modal-body .inv-item-detail{display:block;margin:0;padding:0;border:none}
+.inv-modal-actions{display:flex;gap:6px;flex-wrap:wrap}
+.inv-modal-actions .inv-act-btn{flex:1 1 30%}
+.cat-link{background:none;border:none;color:var(--accentGold);cursor:pointer;font-family:monospace;font-size:10px;text-decoration:underline;padding:0}
+.cat-grant{background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx0);border-radius:4px;font-family:monospace;font-size:11px;padding:3px 5px}
+
+/* ── Character portrait (Phase 6) ── */
+.sheet-portrait-row{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.sheet-portrait{
+  position:relative;width:76px;height:76px;flex:0 0 76px;border-radius:10px;overflow:hidden;
+  background:var(--bg0);border:.5px solid var(--bd0);display:flex;align-items:center;justify-content:center
+}
+.sheet-portrait-img{width:100%;height:100%;object-fit:cover;position:relative;z-index:1}
+.sheet-portrait-fallback{position:absolute;z-index:0;font-size:26px;font-weight:700;color:var(--tx1);font-family:monospace;letter-spacing:1px}
+.sheet-portrait:not(.no-img) .sheet-portrait-fallback{display:none}
+.sheet-portrait-actions{display:flex;flex-direction:column;gap:5px}
+.sheet-portrait-btn{
+  background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx0);border-radius:6px;
+  padding:8px 12px;font-size:11px;font-family:monospace;cursor:pointer;min-height:36px
+}
+.sheet-portrait-btn:hover{border-color:var(--accentGold);color:var(--accentGold)}
+.sheet-portrait-hint{font-size:9px;color:var(--tx1);font-family:monospace}
+
 /* Notes tab additions — private/party split */
 .notes-subtabs{display:flex;gap:0;margin-bottom:10px;border-bottom:.5px solid var(--bd0)}
 .notes-subtab{
@@ -2282,6 +2535,166 @@ input#ui-scale-range{
   border-radius:5px;padding:10px;font-size:12px;cursor:pointer;font-family:monospace
 }
 #pw-error{color:#d45050;font-size:10px;margin-top:8px;min-height:14px}
+
+/* ── Splash overlay — reusable welcome screen ──
+   Full-screen welcome that fades in over the app, auto-dismisses after a few
+   seconds, and skips on tap / keypress. Used both for the app-entry welcome
+   (once the access gate clears) and the per-system welcome (first visit to a
+   system). Invisible and click-through until scripts add .show, so a script
+   failure can never trap the viewer behind a blank overlay. */
+.splash{
+  /* Topmost during its brief life — above the persistent referee alert
+     controls (9002), combat modal (9500) and toast layer (9999). */
+  position:fixed;inset:0;z-index:10000;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 40%, rgba(212,168,67,0.10), transparent 62%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, #10131c 0%, #0b0d13 55%, #070810 100%);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .8s ease, visibility .8s ease;
+  overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.splash.show{opacity:1;visibility:visible;pointer-events:auto}
+/* Pre-boot cover: painted opaque on the very first frame (no fade-in) so the
+   app can render/hydrate underneath without the viewer seeing it "pop" in. The
+   fade-OUT transition is restored when the cover is dismissed. */
+.splash.preboot{transition:none}
+
+/* ── Space backdrop ─────────────────────────────────────────────────────────
+   A drifting colour nebula, a near + far parallax starfield, and the occasional
+   shooting star. All GPU-friendly transform/opacity animation; fully disabled
+   under prefers-reduced-motion (see the media block below). */
+
+/* Soft colour clouds, deep behind the stars */
+.splash .splash-nebula{
+  position:absolute;inset:-25%;pointer-events:none;
+  background:
+    radial-gradient(38% 44% at 24% 32%, rgba(83,126,240,.20), transparent 70%),
+    radial-gradient(40% 40% at 78% 62%, rgba(150,86,214,.18), transparent 72%),
+    radial-gradient(46% 42% at 62% 20%, rgba(212,168,67,.12), transparent 70%),
+    radial-gradient(52% 50% at 50% 88%, rgba(40,90,140,.16), transparent 75%);
+  filter:blur(26px);
+  animation:splash-nebula 24s ease-in-out infinite alternate;
+}
+@keyframes splash-nebula{
+  0%  {transform:translate3d(-2%,-1%,0) scale(1)}
+  100%{transform:translate3d(2%,2%,0)  scale(1.1)}
+}
+
+/* Near starfield — two sub-layers (element + ::after): bright, twinkling, drifting */
+.splash .splash-stars,
+.splash .splash-stars::after{
+  content:"";position:absolute;inset:-60%;pointer-events:none;
+  background-image:
+    radial-gradient(1.6px 1.6px at 20% 30%, rgba(255,255,255,.95), transparent),
+    radial-gradient(1.4px 1.4px at 75% 22%, rgba(255,255,255,.75), transparent),
+    radial-gradient(1px 1px     at 40% 70%, rgba(255,255,255,.8),  transparent),
+    radial-gradient(1.3px 1.3px at 85% 62%, rgba(200,220,255,.85), transparent),
+    radial-gradient(1.6px 1.6px at 60% 45%, rgba(255,255,255,.65), transparent),
+    radial-gradient(1px 1px     at 12% 82%, rgba(255,255,255,.75), transparent),
+    radial-gradient(1.3px 1.3px at 90% 40%, rgba(255,240,210,.85), transparent),
+    radial-gradient(1px 1px     at 32% 14%, rgba(255,255,255,.6),  transparent),
+    radial-gradient(1px 1px     at 50% 58%, rgba(255,255,255,.6),  transparent),
+    radial-gradient(1.4px 1.4px at 8%  48%, rgba(220,230,255,.75), transparent),
+    radial-gradient(1px 1px     at 67% 84%, rgba(255,255,255,.65), transparent),
+    radial-gradient(1.3px 1.3px at 95% 12%, rgba(255,255,255,.7),  transparent);
+  background-repeat:repeat;background-size:420px 420px;
+}
+.splash .splash-stars{animation:splash-twinkle 5s ease-in-out infinite, splash-drift-near 150s linear infinite;opacity:.6}
+.splash .splash-stars::after{background-size:300px 300px;animation:splash-twinkle 7s ease-in-out infinite reverse;opacity:.4}
+
+/* Far starfield — dim, small, drifting the other way for parallax depth */
+.splash .splash-stars-far{
+  position:absolute;inset:-60%;pointer-events:none;
+  background-image:
+    radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,.7),  transparent),
+    radial-gradient(1px 1px at 55% 35%, rgba(210,225,255,.6),  transparent),
+    radial-gradient(1px 1px at 82% 18%, rgba(255,255,255,.6),  transparent),
+    radial-gradient(1px 1px at 35% 60%, rgba(255,255,255,.6),  transparent),
+    radial-gradient(1px 1px at 70% 72%, rgba(255,245,225,.6),  transparent),
+    radial-gradient(1px 1px at 92% 55%, rgba(255,255,255,.55), transparent),
+    radial-gradient(1px 1px at 25% 88%, rgba(255,255,255,.55), transparent),
+    radial-gradient(1px 1px at 5%  65%, rgba(210,225,255,.55), transparent);
+  background-repeat:repeat;background-size:640px 640px;
+  animation:splash-twinkle-far 9s ease-in-out infinite, splash-drift-far 240s linear infinite;opacity:.4;
+}
+@keyframes splash-twinkle{0%,100%{opacity:.3}50%{opacity:.68}}
+@keyframes splash-twinkle-far{0%,100%{opacity:.16}50%{opacity:.4}}
+@keyframes splash-drift-near{from{transform:translate3d(0,0,0)}to{transform:translate3d(-160px,-100px,0)}}
+@keyframes splash-drift-far{from{transform:translate3d(0,0,0)}to{transform:translate3d(120px,80px,0)}}
+
+/* Occasional shooting stars streaking across */
+.splash .splash-shoot{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.splash .splash-shoot::before,
+.splash .splash-shoot::after{
+  content:"";position:absolute;height:2px;width:130px;border-radius:2px;left:-15%;
+  background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.95));
+  box-shadow:0 0 8px 1px rgba(180,210,255,.6);opacity:0;
+}
+.splash .splash-shoot::before{top:14%;animation:splash-shoot 9s ease-in 2.5s infinite}
+.splash .splash-shoot::after{top:44%;width:95px;animation:splash-shoot-2 12s ease-in 7s infinite}
+@keyframes splash-shoot{
+  0%  {opacity:0;transform:translate(0,0)          rotate(16deg)}
+  2%  {opacity:1}
+  13% {opacity:1;transform:translate(78vw,28vh)    rotate(16deg)}
+  17% {opacity:0;transform:translate(86vw,31vh)    rotate(16deg)}
+  100%{opacity:0;transform:translate(86vw,31vh)    rotate(16deg)}
+}
+@keyframes splash-shoot-2{
+  0%  {opacity:0;transform:translate(0,0)          rotate(9deg)}
+  2%  {opacity:1}
+  11% {opacity:1;transform:translate(70vw,16vh)    rotate(9deg)}
+  15% {opacity:0;transform:translate(78vw,18vh)    rotate(9deg)}
+  100%{opacity:0;transform:translate(78vw,18vh)    rotate(9deg)}
+}
+
+.splash .splash-content{position:relative;z-index:1;text-align:center;padding:0 24px;max-width:720px}
+.splash .splash-kicker{
+  font-family:monospace;font-size:12px;letter-spacing:5px;text-transform:uppercase;
+  color:var(--tx1);opacity:0
+}
+.splash .splash-title{
+  margin:14px 0 0;font-size:clamp(30px,7vw,58px);font-weight:800;
+  letter-spacing:clamp(3px,1.4vw,10px);line-height:1.05;color:var(--accentGold);
+  text-shadow:0 0 26px rgba(212,168,67,.45), 0 2px 4px rgba(0,0,0,.6);opacity:0
+}
+.splash .splash-rule{
+  width:0;height:1px;margin:22px auto 20px;opacity:0;
+  background:linear-gradient(90deg, transparent, var(--accentGold), transparent)
+}
+.splash .splash-sub{
+  margin:0;font-size:clamp(14px,2.4vw,19px);
+  color:var(--tx0);letter-spacing:.3px;opacity:0
+}
+.splash .splash-sub.italic{font-style:italic}
+.splash .splash-hint{
+  margin-top:34px;font-family:monospace;font-size:10px;letter-spacing:3px;
+  text-transform:uppercase;color:var(--tx1);opacity:0
+}
+
+/* Choreographed entrance — each line rises + fades in as the splash shows */
+.splash.show .splash-kicker{animation:splash-rise .9s ease .15s forwards}
+.splash.show .splash-title {animation:splash-rise 1s ease .35s forwards}
+.splash.show .splash-rule  {animation:splash-line .9s ease .8s forwards}
+.splash.show .splash-sub   {animation:splash-rise 1s ease 1.05s forwards}
+.splash.show .splash-hint  {animation:splash-hint 2s ease 1.8s infinite}
+@keyframes splash-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes splash-line{from{opacity:0;width:0}to{opacity:.7;width:min(260px,60%)}}
+@keyframes splash-hint{0%,100%{opacity:.25}50%{opacity:.7}}
+
+@media (prefers-reduced-motion: reduce){
+  .splash{transition:opacity .3s ease, visibility .3s ease}
+  .splash .splash-nebula,
+  .splash .splash-stars,.splash .splash-stars::after,
+  .splash .splash-stars-far,
+  .splash .splash-shoot::before,.splash .splash-shoot::after{animation:none}
+  .splash .splash-shoot{display:none}   /* meteors are motion by definition */
+  .splash.show .splash-kicker,
+  .splash.show .splash-title,
+  .splash.show .splash-sub,
+  .splash.show .splash-hint{animation:none;opacity:1}
+  .splash.show .splash-rule{animation:none;opacity:.7;width:min(260px,60%)}
+}
 
 /* ── Player refresh button (iOS home-screen apps suspend setInterval, so
      players need a manual way to pull fresh reveal state) ── */

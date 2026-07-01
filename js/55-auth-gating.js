@@ -1,4 +1,142 @@
 // ═══════════════════════════════════════════════════════════════════════════
+// SPLASH OVERLAY — reusable welcome screen
+// ═══════════════════════════════════════════════════════════════════════════
+// A brief full-screen welcome that fades in over the app, auto-dismisses after
+// a few seconds, and can be skipped with a tap or any key. Two callers drive
+// it: showIntroSplash() on app entry, and maybeSystemWelcome() the first time
+// a traveller visits a system (see 10-galaxy.js). Purely cosmetic — the app
+// boots underneath regardless, so this can never block access.
+
+// ── Splash config (referee-editable, shared) ────────────────────────────────
+// The built-in copy lives in SPLASH_DEFAULTS. The referee can edit the text and
+// turn either splash on/off from Design Mode (see openSplashEditor in
+// 65-design-mode.js); those edits are shared campaign state (Supabase key
+// 'splash-config') so every player picks them up, exactly like reveal-status.
+// getSplashConfig() always merges saved values over the defaults, so a missing
+// or partial override never leaves a field blank.
+const SPLASH_DEFAULTS = {
+  intro: { enabled:true, kicker:'Aurelian System', title:'WELCOME TRAVELLER',
+           sub:'May the stars ever be full of wonder.', hint:'Tap anywhere to begin' },
+  system:{ enabled:true, kicker:'', sub:'Welcome Traveller', hint:'Tap anywhere to continue' },
+};
+let splashConfig = null;   // raw saved overrides; null until first load
+function getSplashConfig(){
+  const o = splashConfig || {};
+  return {
+    intro:  Object.assign({}, SPLASH_DEFAULTS.intro,  o.intro  || {}),
+    system: Object.assign({}, SPLASH_DEFAULTS.system, o.system || {}),
+  };
+}
+async function loadSplashConfig(){
+  try { const r = await supaStorage.get('splash-config', true); splashConfig = (r && r.value != null) ? JSON.parse(r.value) : {}; }
+  catch(e){ splashConfig = {}; }   // offline / first run → fall back to defaults
+}
+async function saveSplashConfig(){
+  try { await supaStorage.set('splash-config', JSON.stringify(splashConfig || {}), true); }
+  catch(e){ console.error('Splash config save failed', e); }
+}
+
+let _splashTimer = null, _splashArm = null;
+function _splashEnd(){ dismissSplash(); }
+
+// Arm the auto-dismiss + skip-to-dismiss. Skip is armed only after the entrance
+// settles, so the click/key that opened the splash doesn't instantly close it.
+// Shared by showSplash() and the pre-boot adopt path (see showIntroSplash).
+function armSplashDismissal(duration){
+  const el = document.getElementById('app-splash');
+  if(!el) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  _splashTimer = setTimeout(dismissSplash, reduce ? 1400 : (duration || 3800));
+  _splashArm = setTimeout(() => {
+    if(el.classList.contains('show')){
+      document.addEventListener('keydown', _splashEnd);
+      el.addEventListener('click', _splashEnd);
+    }
+  }, 500);
+}
+
+// opts: { kicker, title, sub, hint, italicSub, duration }
+function showSplash(opts){
+  opts = opts || {};
+  const el = document.getElementById('app-splash');
+  if(!el) return;
+  const setLine = (sel, text) => {
+    const n = el.querySelector(sel);
+    if(!n) return;
+    n.textContent = text || '';
+    n.style.display = text ? '' : 'none';   // collapse empty lines (e.g. no kicker)
+  };
+  setLine('.splash-kicker', opts.kicker);
+  setLine('.splash-title',  opts.title);
+  setLine('.splash-sub',    opts.sub);
+  setLine('.splash-hint',   opts.hint);
+  const sub = el.querySelector('.splash-sub');
+  if(sub) sub.classList.toggle('italic', !!opts.italicSub);
+  el.setAttribute('aria-label', opts.title || 'Welcome');
+
+  // Restart cleanly if a previous splash is still up (e.g. system after intro),
+  // and drop any pre-boot cover so this show fades in normally.
+  document.removeEventListener('keydown', _splashEnd);
+  el.removeEventListener('click', _splashEnd);
+  el.classList.remove('show', 'preboot');
+  void el.offsetWidth;                       // reflow, so the entrance replays
+  el.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => el.classList.add('show'));
+  armSplashDismissal(opts.duration);
+}
+function dismissSplash(){
+  const el = document.getElementById('app-splash');
+  if(!el || !el.classList.contains('show')) return;
+  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  try { clearTimeout(window.__introPrebootSafety); } catch(e){}
+  if(el.classList.contains('preboot')){
+    el.classList.remove('preboot');          // restore the transition...
+    void el.offsetWidth;                      // ...and reflow so removing .show fades out
+  }
+  el.classList.remove('show');               // fades out via the CSS transition
+  el.setAttribute('aria-hidden', 'true');
+  document.removeEventListener('keydown', _splashEnd);
+  el.removeEventListener('click', _splashEnd);
+}
+
+// Prime splashConfig synchronously from the last-synced value in the local
+// cache, so the intro can honour the referee's on/off + text without waiting on
+// a network round-trip. The async loadSplashConfig()/poll refresh it afterward.
+function primeSplashConfigFromCache(){
+  if(splashConfig !== null) return;
+  try {
+    const raw = (typeof supaStorage !== 'undefined' && supaStorage.cacheGet) ? supaStorage.cacheGet('splash-config') : null;
+    if(raw != null) splashConfig = JSON.parse(raw);
+  } catch(e){ /* leave null → getSplashConfig() falls back to defaults */ }
+}
+
+// App-entry welcome — shown once the access gate clears (players + referee),
+// using the referee's shared config. For a returning viewer the splash is
+// already painted by the inline pre-boot cover (see index.html) so the app
+// never "pops" in visibly; in that case we adopt the live cover instead of
+// re-showing it (which would flash the app for a frame).
+let _introShown = false;
+function showIntroSplash(){
+  if(_introShown) return;                     // only ever once per page load
+  _introShown = true;
+  primeSplashConfigFromCache();
+  const c = getSplashConfig().intro;
+  const prebooted = (typeof window !== 'undefined' && window.__introPreboot);
+  if(!c.enabled){
+    if(prebooted) dismissSplash();             // stale cover from an old cached config → drop it
+    return;                                     // referee turned the intro off
+  }
+  if(prebooted){
+    window.__introPreboot = false;
+    try { clearTimeout(window.__introPrebootSafety); } catch(e){}
+    armSplashDismissal(3800);                   // cover is already up with this content — just time it out
+  } else {
+    showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACCESS GATE
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTE: this is a casual deterrent, not real security. Anyone who views the
@@ -13,6 +151,7 @@ function checkPassword(){
   if(input.value === ACCESS_CODE){
     try { localStorage.setItem('aurelia_access', '1'); } catch(e){}
     document.getElementById('pw-gate').classList.add('hidden');
+    showIntroSplash();
   } else {
     input.classList.add('wrong');
     err.textContent = 'Incorrect code — try again.';
@@ -24,6 +163,7 @@ function checkPassword(){
   try {
     if(localStorage.getItem('aurelia_access') === '1'){
       document.getElementById('pw-gate').classList.add('hidden');
+      showIntroSplash();
     }
   } catch(e){}
 })();
@@ -301,6 +441,13 @@ async function pollRevealState(){
         renderClock();
       }
     }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Pick up the referee's splash-screen edits (text / on-off). No re-render
+  // needed — the new config is read live the next time a splash is shown.
+  try {
+    const resSplash = await supaStorage.get('splash-config', true);
+    if(resSplash.ok){ splashConfig = resSplash.value != null ? JSON.parse(resSplash.value) : {}; }
   } catch(e){ /* silent — next poll will retry */ }
 
   // Also pick up any Design Mode content edits the referee has made
