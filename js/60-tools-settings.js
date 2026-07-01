@@ -1086,6 +1086,7 @@ async function openSheet(characterName){
   const data = await loadSheet(characterName);
   await loadInventory();
   await loadEncSettings();
+  await loadContainers();
   migrateSheetGear(characterName, data);   // one-time free-text → structured items (safe: raw text preserved)
   sheetCurrentData = data;
   renderSheetForm(data);
@@ -1287,58 +1288,62 @@ function _catLabel(cat){
   return ({ weapon:'Weapon', armour:'Armour', gear:'Gear', augment:'Augment', consumable:'Consumable' })[cat] || 'Gear';
 }
 function renderInventorySection(characterName){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
   const items = invItemsFor(characterName);
   const editable = canEditInv(characterName);
-  const carried = items.filter(it => !it.stowed);
-  const stowed  = items.filter(it => it.stowed);
-  const group = (label, list) => list.length ? `<div class="inv-group">
-      <div class="inv-group-lbl">${label}<span class="inv-group-count">${list.length}</span></div>
-      <div class="inv-list">${list.map(it => renderInvTile(it, characterName, editable)).join('')}</div>
-    </div>` : '';
   const cname = String(characterName || '').replace(/'/g, "\\'");
   const addBtn = editable ? `<button class="inv-add-btn" onclick="openCatalogue('${cname}')">＋ Add item</button>` : '';
   const rulesRow = isReferee() ? `<div class="enc-rules-row"><button class="enc-rules-toggle" onclick="toggleEncRules()">⚙ Encumbrance rules</button></div>` : '';
-  const body = items.length
-    ? (renderEquipSlots(characterName) + group('Carried', carried) + group('Stowed', stowed))
-    : `<div class="inv-empty">No items yet.${editable ? ' Tap “＋ Add item” to add from the catalogue.' : ''}</div>`;
+  if(!items.length){
+    return `<div class="sheet-section" id="sheet-inv-section">
+      <div class="sheet-section-lbl">Inventory</div>
+      ${renderEncIndicator(characterName)}${rulesRow}${renderEncRulesEditor()}
+      <div class="inv-empty">No items yet.${editable ? ' Tap “＋ Add item” to add from the catalogue.' : ''}</div>
+      ${addBtn}
+    </div>`;
+  }
+  const active = invGetActiveContainer(characterName);
+  const tabs = CONTAINERS.map(c => {
+    const n = items.filter(it => itemContainer(it) === c.id).length;
+    return `<button class="inv-tab${c.id === active ? ' on' : ''}${c.carried ? '' : ' stowed'}" data-container="${c.id}"
+        onclick="invSetContainer('${cname}','${c.id}')">${ea(c.name)}<span class="inv-tab-n">${n}</span></button>`;
+  }).join('');
+  const contToggle = isReferee() ? `<button class="inv-tab inv-tab-cfg" title="Manage containers" onclick="toggleContainersEditor()">⚙</button>` : '';
+  const inContainer = items.filter(it => itemContainer(it) === active);
+  const grid = inContainer.length
+    ? `<div class="inv-grid">${inContainer.map(it => renderInvTile(it, characterName, editable)).join('')}</div>`
+    : `<div class="inv-empty">This container is empty.</div>`;
   return `<div class="sheet-section" id="sheet-inv-section">
     <div class="sheet-section-lbl">Inventory</div>
     ${renderEncIndicator(characterName)}
     ${rulesRow}
     ${renderEncRulesEditor()}
-    <div class="inv-hint">${editable ? 'Tap an item for stats &amp; actions · ✕ to remove' : 'Read-only · tap an item for its stat block'}</div>
-    ${body}
+    ${renderEquipSlots(characterName)}
+    <div class="inv-tabs">${tabs}${contToggle}</div>
+    ${renderContainersEditor()}
+    <div class="inv-hint">${editable ? 'Tap a tile for stats &amp; actions · drag a tile onto a tab to move it' : 'Read-only · tap a tile for its stat block'}</div>
+    ${grid}
     ${addBtn}
   </div>`;
 }
+// A footprint-sized tile in the container grid. Tap opens the item modal
+// (stats + actions, §4.2); drag onto a container tab moves it (§4.1).
 function renderInvTile(it, characterName, editable){
   const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
   const s = it.snapshot || {};
   const cat = s.category || 'gear';
-  const name = ea((it.state && it.state.customName) || s.name || 'Item');
-  const meta = [];
-  if(s.tl !== '' && s.tl != null) meta.push('TL' + ea(String(s.tl)));
-  meta.push((Number(s.mass) || 0) + 'kg');
-  const q = Number(it.qty) || 1; if(q > 1) meta.push('×' + q);
-  meta.push((s.w || 1) + '×' + (s.h || 1));
-  const eqBadge = it.equipped
-    ? `<span class="inv-badge inv-badge-eq">Equipped${it.slot ? (' · ' + ea(slotLabel(it.slot))) : ''}</span>` : '';
+  const rawName = (it.state && it.state.customName) || s.name || 'Item';
+  const rot = it.rot ? 1 : 0;
+  const w = rot ? (s.h || 1) : (s.w || 1);
+  const h = rot ? (s.w || 1) : (s.h || 1);
+  const q = Number(it.qty) || 1;
   const cname = String(characterName || '').replace(/'/g, "\\'");
-  const removeBtn = editable
-    ? `<button class="inv-remove-btn" title="Remove" onclick="event.stopPropagation(); invRemoveItem('${cname}','${it.iid}')">✕</button>` : '';
-  const actions = editable ? `<div class="inv-item-actions">
-      <button class="inv-act-btn" onclick="event.stopPropagation(); invToggleStow('${cname}','${it.iid}')">${it.stowed ? '↑ Unstow' : '↓ Stow'}</button>
-      ${it.stowed ? '' : `<button class="inv-act-btn${it.equipped ? ' on' : ''}" onclick="event.stopPropagation(); ${it.equipped ? `invUnequip('${cname}','${it.iid}')` : `invEquip('${cname}','${it.iid}','')`}">${it.equipped ? '✓ Equipped — unequip' : 'Equip'}</button>`}
-    </div>` : '';
-  return `<div class="inv-item inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}${it.stowed ? ' is-stowed' : ''}" onclick="this.classList.toggle('open')">
-    <div class="inv-item-head">
-      <span class="inv-item-name">${name}</span>
-      ${eqBadge}
-      <span class="inv-badge inv-badge-cat">${ea(_catLabel(cat))}</span>
-      ${removeBtn}
-    </div>
-    <div class="inv-item-meta">${meta.join(' · ')}</div>
-    ${renderInvItemDetail(it, actions)}
+  return `<div class="inv-tile inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}" style="grid-column:span ${w};grid-row:span ${h}"
+      data-name="${eatt(rawName)}" title="${eatt(rawName)}"
+      onpointerdown="invTilePointerDown(event,'${cname}','${it.iid}')">
+    <div class="inv-tile-name">${ea(rawName)}${q > 1 ? ` <span class="inv-tile-q">×${q}</span>` : ''}</div>
+    <div class="inv-tile-foot"><span>${(Number(s.mass) || 0)}kg</span>${it.equipped ? '<span class="inv-tile-eq" title="Equipped">▣</span>' : ''}</div>
   </div>`;
 }
 function renderInvItemDetail(it, extraHtml){
@@ -1394,7 +1399,7 @@ async function invAddFromCatalogue(characterName, defId){
   };
   invBucket(characterName).items.push(makeInvItem(snap, { defId: def.id }));
   await saveInventory();
-  refreshSheetInventory();
+  refreshInvViews();
   if(typeof showToast === 'function') showToast('Added ' + (def.name || 'item') + (characterName !== myIdentity ? (' → ' + characterName) : ''));
 }
 
@@ -1405,7 +1410,7 @@ async function invRemoveItem(characterName, iid){
   const it = b.items.find(x => x.iid === iid);
   b.items = b.items.filter(x => x.iid !== iid);
   await saveInventory();
-  refreshSheetInventory();
+  refreshInvViews();
   if(it && typeof showToast === 'function') showToast('Removed ' + ((it.snapshot && it.snapshot.name) || 'item'));
 }
 
@@ -1654,21 +1659,35 @@ async function invEquip(characterName, iid, slotKey){
   const it = items.find(x => x.iid === iid); if(!it) return;
   const slot = slotKey || invDefaultSlot(characterName, it);
   items.forEach(x => { if(x.slot === slot && x.iid !== iid){ x.equipped = false; x.slot = null; } });
-  it.equipped = true; it.slot = slot; it.stowed = false;
-  await saveInventory(); refreshSheetInventory();
+  it.equipped = true; it.slot = slot;
+  if(itemStowed(it)) it.container = firstCarriedContainerId();  // a worn item is carried, not stowed
+  await saveInventory(); refreshInvViews();
 }
 async function invUnequip(characterName, iid){
   if(!canEditInv(characterName)) return;
   const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
   it.equipped = false; it.slot = null;
-  await saveInventory(); refreshSheetInventory();
+  await saveInventory(); refreshInvViews();
 }
-async function invToggleStow(characterName, iid){
+async function invMoveToContainer(characterName, iid, containerId){
+  if(!canEditInv(characterName)) return;
+  if(!containerById(containerId)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.container = containerId;
+  if(!containerCarried(containerId)){ it.equipped = false; it.slot = null; }  // stowed gear can't be worn/wielded
+  await saveInventory(); refreshInvViews();
+}
+async function invRotate(characterName, iid){
   if(!canEditInv(characterName)) return;
   const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
-  it.stowed = !it.stowed;
-  if(it.stowed){ it.equipped = false; it.slot = null; }
-  await saveInventory(); refreshSheetInventory();
+  it.rot = it.rot ? 0 : 1;
+  await saveInventory(); refreshInvViews();
+}
+// Refresh the sheet's inventory section AND the item modal (if open).
+function refreshInvViews(){
+  refreshSheetInventory();
+  const m = document.getElementById('inv-item-modal');
+  if(m && m.classList.contains('open')) renderInvItemModal();
 }
 function renderEquipSlots(characterName){
   const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
@@ -1715,7 +1734,7 @@ function encEditField(field, value){
 function toggleEncRules(){ encRulesOpen = !encRulesOpen; refreshSheetInventory(); }
 
 function carriedMass(characterName){
-  return invItemsFor(characterName).reduce((sum, it) => sum + (it.stowed ? 0 : invItemMass(it)), 0);
+  return invItemsFor(characterName).reduce((sum, it) => sum + (itemStowed(it) ? 0 : invItemMass(it)), 0);
 }
 function currentSheetStats(){
   const s = sheetCurrentData || {};
@@ -1775,5 +1794,183 @@ function updateEncIndicator(){
   if(!sheetCurrentCharacter) return;
   const el = document.getElementById('enc-indicator');
   if(el) el.outerHTML = renderEncIndicator(sheetCurrentCharacter);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — containers + grid (Phase 4, §4.1)
+// ───────────────────────────────────────────────────────────────────────────
+// Container tabs + footprint-sized tiles (Referee decision). Containers are a
+// shared, referee-editable set (default Backpack/Belt/Ship's Locker); carried
+// containers encumber, the locker is stowed (excluded). Each item instance
+// carries a `container` id; legacy items without one derive from the old stowed
+// flag. Move by dragging a tile onto a tab OR via the item modal's picker; tap a
+// tile for its stat block + actions (§4.2).
+const DEFAULT_CONTAINERS = [
+  { id:'backpack', name:'Backpack',      carried:true  },
+  { id:'belt',     name:'Belt',          carried:true  },
+  { id:'locker',   name:"Ship's Locker", carried:false }
+];
+let CONTAINERS = DEFAULT_CONTAINERS.map(c => Object.assign({}, c));
+
+async function loadContainers(){
+  try {
+    const r = await supaStorage.get('containers', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    CONTAINERS = (Array.isArray(v) && v.length) ? v : DEFAULT_CONTAINERS.map(c => Object.assign({}, c));
+  } catch(e){ CONTAINERS = DEFAULT_CONTAINERS.map(c => Object.assign({}, c)); }
+}
+async function saveContainers(){
+  try { await supaStorage.set('containers', JSON.stringify(CONTAINERS), true); }
+  catch(e){ console.error('Containers save failed', e); }
+}
+function containerById(id){ return CONTAINERS.find(c => c.id === id) || null; }
+function containerCarried(id){ const c = containerById(id); return c ? !!c.carried : true; }
+function firstCarriedContainerId(){ const c = CONTAINERS.find(x => x.carried) || CONTAINERS[0]; return c ? c.id : 'backpack'; }
+function firstStowedContainerId(){ const c = CONTAINERS.find(x => !x.carried); return c ? c.id : (CONTAINERS[0] ? CONTAINERS[0].id : 'locker'); }
+function itemContainer(it){
+  if(it.container && containerById(it.container)) return it.container;
+  if(it.container) return firstCarriedContainerId();                       // referenced container was deleted
+  return it.stowed ? firstStowedContainerId() : firstCarriedContainerId(); // legacy pre-Phase-4 item
+}
+function itemStowed(it){ return !containerCarried(itemContainer(it)); }
+
+let invActiveContainer = {};   // characterName → active container id (session only)
+function invGetActiveContainer(characterName){
+  const cur = invActiveContainer[characterName];
+  if(cur && containerById(cur)) return cur;
+  return CONTAINERS[0] ? CONTAINERS[0].id : 'backpack';
+}
+function invSetContainer(characterName, containerId){ invActiveContainer[characterName] = containerId; refreshSheetInventory(); }
+
+// ── Referee container manager ─────────────────────────────────────────────────
+let containersEditorOpen = false;
+function toggleContainersEditor(){ containersEditorOpen = !containersEditorOpen; refreshSheetInventory(); }
+function containerAdd(){
+  if(!isReferee()) return;
+  CONTAINERS.push({ id:'cont_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36), name:'New Container', carried:true });
+  saveContainers(); refreshSheetInventory();
+}
+function containerEditField(id, field, value){
+  if(!isReferee()) return;
+  const c = containerById(id); if(!c) return;
+  if(field === 'carried') c.carried = !!value; else c[field] = value;
+  saveContainers(); refreshSheetInventory();
+}
+function containerRemove(id){
+  if(!isReferee()) return;
+  if(CONTAINERS.length <= 1) return;
+  const c = containerById(id); if(!c) return;
+  if(!confirm('Delete container "' + (c.name || '') + '"? Items in it move to the first container.')) return;
+  CONTAINERS = CONTAINERS.filter(x => x.id !== id);
+  saveContainers(); refreshSheetInventory();
+}
+function renderContainersEditor(){
+  if(!isReferee() || !containersEditorOpen) return '';
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const rows = CONTAINERS.map(c => `<div class="cont-row">
+      <input class="cat-input" value="${eatt(c.name)}" onchange="containerEditField('${c.id}','name',this.value)">
+      <label class="cont-carried"><input type="checkbox" ${c.carried ? 'checked' : ''} onchange="containerEditField('${c.id}','carried',this.checked)"> carried</label>
+      <button class="cat-icon-btn danger" title="Delete" onclick="containerRemove('${c.id}')">🗑</button>
+    </div>`).join('');
+  return `<div class="enc-rules">
+    <div class="enc-rules-note">Containers — carried ones count toward encumbrance; unchecked = stowed (e.g. the ship's locker, excluded).</div>
+    ${rows}
+    <button class="cat-new-btn" style="align-self:flex-start" onclick="containerAdd()">＋ Container</button>
+  </div>`;
+}
+
+// ── Item detail modal (tap a tile) — stat block + actions ─────────────────────
+let invModalChar = null, invModalIid = null;
+function openInvItemModal(characterName, iid){
+  invModalChar = characterName; invModalIid = iid;
+  const m = document.getElementById('inv-item-modal'); if(!m) return;
+  m.classList.add('open');
+  renderInvItemModal();
+}
+function closeInvItemModal(){
+  const m = document.getElementById('inv-item-modal'); if(m) m.classList.remove('open');
+  invModalChar = null; invModalIid = null;
+}
+function renderInvItemModal(){
+  const body = document.getElementById('inv-item-modal-body'); if(!body) return;
+  const it = (invModalChar != null) ? invItemsFor(invModalChar).find(x => x.iid === invModalIid) : null;
+  if(!it){ closeInvItemModal(); return; }
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const editable = canEditInv(invModalChar);
+  const cname = String(invModalChar || '').replace(/'/g, "\\'");
+  const title = document.getElementById('inv-item-modal-title');
+  if(title) title.textContent = ((it.state && it.state.customName) || s.name || 'Item');
+  const rot = it.rot ? 1 : 0, w = rot ? (s.h || 1) : (s.w || 1), h = rot ? (s.w || 1) : (s.h || 1);
+  const contSelect = editable ? `<label class="cat-f"><span class="cat-f-lbl">Container</span>
+      <select class="cat-input" onchange="invMoveToContainer('${cname}','${it.iid}',this.value)">
+        ${CONTAINERS.map(c => `<option value="${c.id}"${itemContainer(it) === c.id ? ' selected' : ''}>${ea(c.name)}${c.carried ? '' : ' (stowed)'}</option>`).join('')}
+      </select></label>` : '';
+  const actions = editable ? `<div class="inv-modal-actions">
+      <button class="inv-act-btn${it.equipped ? ' on' : ''}" onclick="${it.equipped ? `invUnequip('${cname}','${it.iid}')` : `invEquip('${cname}','${it.iid}','')`}">${it.equipped ? '✓ Equipped — unequip' : 'Equip'}</button>
+      <button class="inv-act-btn" onclick="invRotate('${cname}','${it.iid}')">↻ Rotate · ${w}×${h}</button>
+      <button class="inv-act-btn danger" onclick="invRemoveItem('${cname}','${it.iid}')">✕ Remove</button>
+    </div>` : '';
+  body.innerHTML = `${renderInvItemDetail(it)}${contSelect}${actions}`;
+}
+
+// ── Drag-or-tap: tap opens the modal; drag (mouse threshold / touch long-press)
+//    onto a container tab moves the item. Works on touch + mouse. ─────────────
+let _invDrag = null;
+function cleanupInvDragListeners(){
+  window.removeEventListener('pointermove', invTilePointerMove);
+  window.removeEventListener('pointerup', invTilePointerUp);
+  window.removeEventListener('pointercancel', invTilePointerUp);
+}
+function invTilePointerDown(e, characterName, iid){
+  if(e.pointerType === 'mouse' && e.button !== 0) return;
+  const d = { characterName, iid, el: e.currentTarget, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId, dragging: false, ghost: null, timer: null };
+  _invDrag = d;
+  d.timer = setTimeout(() => { if(_invDrag === d && !d.dragging) invBeginDrag(); }, 240); // touch long-press → drag
+  window.addEventListener('pointermove', invTilePointerMove);
+  window.addEventListener('pointerup', invTilePointerUp);
+  window.addEventListener('pointercancel', invTilePointerUp);
+}
+function invBeginDrag(){
+  const d = _invDrag; if(!d || d.dragging) return;
+  clearTimeout(d.timer);
+  if(!canEditInv(d.characterName)) return;   // read-only viewers can tap (open modal) but not move
+  d.dragging = true;
+  if(d.el) d.el.classList.add('inv-tile-dragging');
+  const g = document.createElement('div');
+  g.className = 'inv-drag-ghost';
+  g.textContent = (d.el && d.el.getAttribute('data-name')) || 'Item';
+  document.body.appendChild(g);
+  d.ghost = g;
+  try { d.el.setPointerCapture(d.pointerId); } catch(err){}
+}
+function invTilePointerMove(e){
+  const d = _invDrag; if(!d) return;
+  if(!d.dragging){
+    const dist = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
+    if(e.pointerType === 'mouse'){ if(dist > 6) invBeginDrag(); }
+    else if(dist > 12){ clearTimeout(d.timer); _invDrag = null; cleanupInvDragListeners(); return; } // touch move before long-press = scroll
+    if(!_invDrag || !_invDrag.dragging) return;
+  }
+  e.preventDefault();
+  if(d.ghost){ d.ghost.style.left = e.clientX + 'px'; d.ghost.style.top = e.clientY + 'px'; }
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const tab = el && el.closest ? el.closest('.inv-tab[data-container]') : null;
+  document.querySelectorAll('.inv-tab.drop-hot').forEach(t => t.classList.remove('drop-hot'));
+  if(tab) tab.classList.add('drop-hot');
+}
+function invTilePointerUp(e){
+  const d = _invDrag;
+  cleanupInvDragListeners();
+  _invDrag = null;
+  if(!d) return;
+  clearTimeout(d.timer);
+  if(d.ghost) d.ghost.remove();
+  if(d.el) d.el.classList.remove('inv-tile-dragging');
+  document.querySelectorAll('.inv-tab.drop-hot').forEach(t => t.classList.remove('drop-hot'));
+  if(!d.dragging){ openInvItemModal(d.characterName, d.iid); return; }   // it was a tap
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const tab = el && el.closest ? el.closest('.inv-tab[data-container]') : null;
+  if(tab){ const cid = tab.getAttribute('data-container'); if(cid) invMoveToContainer(d.characterName, d.iid, cid); }
 }
 

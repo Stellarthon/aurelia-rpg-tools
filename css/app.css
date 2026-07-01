@@ -2381,6 +2381,70 @@ input#ui-scale-range{
 .inv-act-btn{flex:1;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:5px;padding:8px;font-size:11px;font-family:monospace;cursor:pointer;min-height:36px}
 .inv-act-btn:hover{border-color:var(--tx1)}
 .inv-act-btn.on{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+.inv-act-btn.danger:hover{color:var(--txD);border-color:var(--txD)}
+
+/* ── Container tabs + footprint grid + tiles (Phase 4) ── */
+.inv-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.inv-tab{
+  position:relative;background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);
+  border-radius:6px;padding:7px 12px;font-size:11px;font-family:monospace;cursor:pointer;min-height:38px;
+  display:inline-flex;align-items:center;gap:6px
+}
+.inv-tab.on{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold);font-weight:700}
+.inv-tab.stowed{border-style:dashed}
+.inv-tab.drop-hot{border-color:var(--txS);background:var(--bgS);color:var(--txS);box-shadow:0 0 0 1px var(--txS)}
+.inv-tab-n{background:var(--bg2);color:var(--tx1);border-radius:9px;padding:0 6px;font-size:9px}
+.inv-tab.on .inv-tab-n{background:var(--accentGold);color:var(--bg0)}
+.inv-tab-cfg{flex:0 0 auto;color:var(--tx1)}
+.inv-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,72px);grid-auto-rows:72px;
+  gap:6px;grid-auto-flow:row dense;justify-content:center;margin-bottom:4px
+}
+.inv-tile{
+  background:var(--bg0);border:.5px solid var(--bd0);border-top:3px solid var(--bd0);border-radius:6px;
+  padding:6px 7px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;
+  touch-action:none;-webkit-user-select:none;user-select:none
+}
+.inv-tile:hover{border-color:var(--tx1)}
+.inv-tile.is-equipped{border-top-color:var(--accentGold)}
+.inv-tile.inv-cat-weapon{border-top-color:#7a4a4a}
+.inv-tile.inv-cat-armour{border-top-color:#4a6a7a}
+.inv-tile.inv-cat-augment{border-top-color:#6a4a7a}
+.inv-tile.inv-cat-consumable{border-top-color:#4a7a5a}
+.inv-tile.is-equipped{border-top-color:var(--accentGold)}
+.inv-tile-name{font-size:11px;color:var(--tx0);font-weight:600;line-height:1.2;overflow:hidden}
+.inv-tile-q{color:var(--tx1);font-weight:400}
+.inv-tile-foot{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:var(--tx1);font-family:monospace}
+.inv-tile-eq{color:var(--accentGold)}
+.inv-tile-dragging{opacity:.35}
+.inv-drag-ghost{
+  position:fixed;z-index:230;transform:translate(-50%,-50%);pointer-events:none;
+  background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold);border-radius:6px;
+  padding:6px 10px;font-size:11px;font-family:monospace;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.5)
+}
+.cont-row{display:flex;align-items:center;gap:8px}
+.cont-row .cat-input{flex:1}
+.cont-carried{font-size:10px;color:var(--tx1);font-family:monospace;display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── Inventory item detail modal (tap a tile) ── */
+#inv-item-modal{
+  position:fixed;inset:0;background:rgba(7,10,16,.92);z-index:210;
+  display:none;align-items:center;justify-content:center;padding:20px
+}
+#inv-item-modal.open{display:flex}
+#inv-item-card{
+  background:var(--bg1);border:.5px solid var(--bd0);border-radius:10px;
+  max-width:460px;width:100%;max-height:88vh;display:flex;flex-direction:column;
+  box-shadow:0 8px 40px rgba(0,0,0,.6)
+}
+#inv-item-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:.5px solid var(--bd0);flex-shrink:0}
+#inv-item-modal-title{font-size:14px;font-weight:700;color:var(--accentGold);font-family:monospace;letter-spacing:.5px}
+#inv-item-close{font-size:16px;color:var(--tx1);background:transparent;border:none;cursor:pointer;padding:4px 8px;line-height:1}
+#inv-item-close:hover{color:var(--tx0)}
+#inv-item-modal-body{overflow-y:auto;flex:1;padding:14px 18px;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px}
+#inv-item-modal-body .inv-item-detail{display:block;margin:0;padding:0;border:none}
+.inv-modal-actions{display:flex;gap:6px;flex-wrap:wrap}
+.inv-modal-actions .inv-act-btn{flex:1 1 30%}
 
 /* Notes tab additions — private/party split */
 .notes-subtabs{display:flex;gap:0;margin-bottom:10px;border-bottom:.5px solid var(--bd0)}
