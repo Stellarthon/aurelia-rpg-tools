@@ -14,14 +14,35 @@
 
 let sheetCurrentCharacter = null; // which character's sheet is currently open in the modal
 let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
+let sheetStatus = [];             // active Traveller 2e status-effect ids for the open sheet
 
 function emptySheet(){
   return {
     name: '', age: '',
     str: 7, dex: 7, end: 7, intl: 7, edu: 7, soc: 7,
-    skills: '', equipment: '', weapons: '', notes: ''
+    skills: '', equipment: '', weapons: '', notes: '',
+    status: []   // active Traveller 2e status-effect ids (see TRAVELLER_STATUS_FX)
   };
 }
+
+// Curated Traveller 2e conditions the character sheet can flag. `harm:true`
+// tints the active chip red (a genuine detriment); situational ones stay gold.
+const TRAVELLER_STATUS_FX = [
+  { id:'stunned',      ico:'💫', name:'Stunned',        harm:true,  desc:'Reduced actions; DM− until it wears off' },
+  { id:'wounded',      ico:'🩸', name:'Wounded',        harm:true,  desc:'A physical characteristic driven to/near 0' },
+  { id:'unconscious',  ico:'😵', name:'Unconscious',    harm:true,  desc:'Out of the fight — cannot take actions' },
+  { id:'fatigued',     ico:'🥵', name:'Fatigued',       harm:true,  desc:'DM−1 to all checks until you rest' },
+  { id:'diseased',     ico:'🦠', name:'Diseased',       harm:true,  desc:'Ongoing characteristic damage' },
+  { id:'poisoned',     ico:'☠️', name:'Poisoned',       harm:true,  desc:'Toxin effect in progress' },
+  { id:'drugged',      ico:'💊', name:'Drugged',        harm:false, desc:'Under a stim/drug effect' },
+  { id:'prone',        ico:'🤕', name:'Prone',          harm:false, desc:'Knocked down — DM− melee, harder to hit at range' },
+  { id:'encumbered',   ico:'🎒', name:'Encumbered',     harm:false, desc:'Heavy load — DM− to physical tasks' },
+  { id:'lowg',         ico:'🌌', name:'Low / Zero-G',   harm:false, desc:'Untrained: DM−2 to physical tasks' },
+  { id:'highg',        ico:'⬇️', name:'High-G',         harm:false, desc:'DM− and faster fatigue' },
+  { id:'vacuum',       ico:'🌬️', name:'Vacuum',         harm:true,  desc:'Suffocation / exposure damage each round' },
+  { id:'radiation',    ico:'☢️', name:'Radiation',      harm:true,  desc:'Accumulating rads — END/characteristic risk' },
+  { id:'onfire',       ico:'🔥', name:'On Fire',        harm:true,  desc:'3D damage per round until extinguished' }
+];
 
 function charDM(score){
   const n = parseInt(score) || 0;
@@ -160,6 +181,36 @@ function onUIScaleCommit(idx){
 
 // Apply saved scale on load
 applyUIScale(getUIScale());
+
+// ── Traveller quick-nav bar scale (tablet-friendly sizing) ──────────────────
+// Drives the --tvscale CSS variable that sizes the #tvbar buttons. Stored per
+// device, like the text-size scale above.
+const TVBAR_SCALE_STEPS = [90, 100, 115, 130, 150];
+const TVBAR_SCALE_DEFAULT = 100;
+let _tvbarScaleCache = null;
+function getTvbarScale(){
+  if(_tvbarScaleCache !== null) return _tvbarScaleCache;
+  try { const v = parseInt(localStorage.getItem('aurelia_tvbar_scale'), 10);
+    if(TVBAR_SCALE_STEPS.includes(v)){ _tvbarScaleCache = v; return v; } } catch(e){}
+  _tvbarScaleCache = TVBAR_SCALE_DEFAULT; return TVBAR_SCALE_DEFAULT;
+}
+function applyTvbarScale(pct){ document.documentElement.style.setProperty('--tvscale', pct / 100); }
+function onTvbarScaleInput(idx){
+  const pct = TVBAR_SCALE_STEPS[parseInt(idx, 10)] || TVBAR_SCALE_DEFAULT;
+  _tvbarScaleCache = pct; applyTvbarScale(pct);
+  const fill = document.getElementById('tvbar-scale-fill');
+  if(fill) fill.style.width = (parseInt(idx,10) / (TVBAR_SCALE_STEPS.length-1) * 100) + '%';
+  const valEl = document.querySelector('.tvbar-scale-value');
+  if(valEl) valEl.textContent = pct + '%';
+}
+function onTvbarScaleCommit(idx){
+  const pct = TVBAR_SCALE_STEPS[parseInt(idx, 10)] || TVBAR_SCALE_DEFAULT;
+  _tvbarScaleCache = pct; applyTvbarScale(pct);
+  try { localStorage.setItem('aurelia_tvbar_scale', pct); } catch(e){}
+  renderSettingsMenu(isReferee());
+}
+// Apply saved quick-nav scale on load
+applyTvbarScale(getTvbarScale());
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SEARCH
@@ -446,6 +497,11 @@ function renderSettingsMenu(showArchon){
   const curScale = getUIScale();
   const scaleIdx = scaleSteps.indexOf(curScale);
   const fillPct = scaleIdx < 0 ? 40 : (scaleIdx / (scaleSteps.length - 1)) * 100;
+  // Traveller quick-nav bar size (for tablets)
+  const tvSteps = TVBAR_SCALE_STEPS;
+  const tvCur = getTvbarScale();
+  const tvIdx = tvSteps.indexOf(tvCur);
+  const tvFill = tvIdx < 0 ? 40 : (tvIdx / (tvSteps.length - 1)) * 100;
   let html = `
     <div class="settings-section-lbl">Display</div>
     <div class="settings-row">
@@ -466,6 +522,22 @@ function renderSettingsMenu(showArchon){
       </div>
       <div class="ui-scale-steps">
         ${scaleSteps.map(s => `<span class="ui-scale-step"${s===curScale?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
+      </div>
+    </div>
+    <div class="ui-scale-row">
+      <div class="ui-scale-labels">
+        <span class="ui-scale-label">📱 Quick-Nav Bar (Traveller mode)</span>
+        <span class="ui-scale-value tvbar-scale-value">${tvCur}%</span>
+      </div>
+      <div class="ui-scale-track">
+        <div class="ui-scale-fill" id="tvbar-scale-fill" style="width:${tvFill}%"></div>
+        <input id="tvbar-scale-range" type="range" min="0" max="${tvSteps.length - 1}"
+          value="${tvIdx < 0 ? 1 : tvIdx}"
+          oninput="onTvbarScaleInput(this.value)"
+          onchange="onTvbarScaleCommit(this.value)">
+      </div>
+      <div class="ui-scale-steps">
+        ${tvSteps.map(s => `<span class="ui-scale-step"${s===tvCur?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
       </div>
     </div>`;
 
@@ -1079,12 +1151,53 @@ async function openSheet(characterName){
   modal.classList.remove('hidden');
 
   const data = await loadSheet(characterName);
+  sheetStatus = Array.isArray(data.status) ? data.status.slice() : [];
   renderSheetForm(data);
+  renderSheetFundsAside(characterName);
+  renderSheetStatusAside();
 }
 
 function closeSheet(){
   document.getElementById('sheet-modal').classList.add('hidden');
   sheetCurrentCharacter = null;
+}
+
+// ── Funds box (left aside) — reads the live funds system (85-records.js) ──
+function renderSheetFundsAside(characterName){
+  const el = document.getElementById('sheet-funds-body'); if(!el) return;
+  const fmt = (typeof fmtCr === 'function') ? fmtCr : (n => 'Cr' + (n||0));
+  const party = (typeof funds !== 'undefined' && funds) ? (Number(funds.party)||0) : 0;
+  const purse = (typeof purseOf === 'function') ? purseOf(characterName) : 0;
+  el.innerHTML = `
+    <div class="csheet-fund"><div class="lbl">${escHtml(characterName)} · purse</div><div class="val">${fmt(purse)}</div></div>
+    <div class="csheet-fund party"><div class="lbl">Party fund · shared</div><div class="val">${fmt(party)}</div></div>
+    <button class="csheet-fund-link" onclick="closeSheet(); if(typeof toggleFundsPanel==='function' && !fundsPanelOpen) toggleFundsPanel();">Open funds ledger →</button>`;
+}
+
+// ── Status effects (right aside) — toggleable Traveller 2e conditions ──
+function renderSheetStatusAside(){
+  const el = document.getElementById('sheet-status-body'); if(!el) return;
+  const active = new Set(sheetStatus);
+  const chips = TRAVELLER_STATUS_FX.map(fx => {
+    const on = active.has(fx.id);
+    return `<button class="status-fx-chip${on?' on':''}${fx.harm?' harm':''}" onclick="toggleSheetStatus('${fx.id}')" title="${escHtml(fx.desc)}">
+        <span class="ico">${fx.ico}</span>
+        <span class="txt"><span class="nm">${escHtml(fx.name)}</span><span class="ds">${escHtml(fx.desc)}</span></span>
+      </button>`;
+  }).join('');
+  const activeCount = sheetStatus.length;
+  el.innerHTML = `<div class="status-fx">${chips}</div>
+    <div class="status-fx-note">${activeCount ? activeCount + ' effect' + (activeCount>1?'s':'') + ' active. Tap to clear.' : 'No conditions applied. Tap one to apply it.'}</div>`;
+}
+
+function toggleSheetStatus(id){
+  if(!sheetCurrentCharacter) return;
+  const i = sheetStatus.indexOf(id);
+  if(i >= 0) sheetStatus.splice(i, 1); else sheetStatus.push(id);
+  renderSheetStatusAside();
+  // Persist immediately alongside the current form values so a status change
+  // never depends on the player also clicking Save.
+  saveSheet(sheetCurrentCharacter, collectSheetData());
 }
 
 function renderSheetForm(data){
@@ -1137,22 +1250,28 @@ function updateSheetDM(key){
   dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
 }
 
+// Reads the whole sheet (form fields + active status effects) into one blob.
+// Shared by the Save button and the status-effect toggles so neither clobbers
+// the other's data.
+function collectSheetData(){
+  const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+  const num = id => parseInt(val(id)) || 0;
+  return {
+    name: val('sheet-f-name'),
+    age: val('sheet-f-age'),
+    str: num('sheet-f-str'), dex: num('sheet-f-dex'), end: num('sheet-f-end'),
+    intl: num('sheet-f-intl'), edu: num('sheet-f-edu'), soc: num('sheet-f-soc'),
+    skills: val('sheet-f-skills'),
+    weapons: val('sheet-f-weapons'),
+    equipment: val('sheet-f-equipment'),
+    notes: val('sheet-f-notes'),
+    status: sheetStatus.slice()
+  };
+}
+
 async function saveCurrentSheet(){
   if(!sheetCurrentCharacter) return;
-  const data = {
-    name: document.getElementById('sheet-f-name').value,
-    age: document.getElementById('sheet-f-age').value,
-    str: parseInt(document.getElementById('sheet-f-str').value)||0,
-    dex: parseInt(document.getElementById('sheet-f-dex').value)||0,
-    end: parseInt(document.getElementById('sheet-f-end').value)||0,
-    intl: parseInt(document.getElementById('sheet-f-intl').value)||0,
-    edu: parseInt(document.getElementById('sheet-f-edu').value)||0,
-    soc: parseInt(document.getElementById('sheet-f-soc').value)||0,
-    skills: document.getElementById('sheet-f-skills').value,
-    weapons: document.getElementById('sheet-f-weapons').value,
-    equipment: document.getElementById('sheet-f-equipment').value,
-    notes: document.getElementById('sheet-f-notes').value
-  };
+  const data = collectSheetData();
   await saveSheet(sheetCurrentCharacter, data);
   const msg = document.getElementById('sheet-save-msg');
   msg.style.display = 'inline';

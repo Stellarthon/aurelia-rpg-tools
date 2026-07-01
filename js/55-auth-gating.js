@@ -356,6 +356,20 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Faction visibility — players see the referee hide/reveal spoiler regions
+  try {
+    const rfh = await supaStorage.get('faction-hidden', true);
+    if(rfh.ok){
+      // No stored value yet → fall back to the spoilers-hidden default, never {}.
+      const fresh = rfh.value != null ? JSON.parse(rfh.value)
+        : (typeof FACTION_HIDDEN_DEFAULT !== 'undefined' ? { ...FACTION_HIDDEN_DEFAULT } : {});
+      if(typeof factionHidden !== 'undefined' && JSON.stringify(fresh) !== JSON.stringify(factionHidden)){
+        factionHidden = fresh;
+        if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Galaxy systems — players see referee-added / edited / removed star systems
   try {
     const rsa = await supaStorage.get('system-additions', true);
@@ -616,6 +630,7 @@ function resetCampaign(){
   factionAdditions = {};
   factionDeletions = {};
   factionPropertyOverrides = {};
+  factionHidden = { archon:true, vast:true };   // back to spoilers-hidden default
   weaponAdditions = [];
   weaponDeletions = {};
   weaponPropertyOverrides = {};
@@ -643,6 +658,7 @@ function resetCampaign(){
   saveFactionAdditions();
   saveFactionDeletions();
   saveFactionPropertyOverrides();
+  saveFactionHidden();
   saveWeaponAdditions();
   saveWeaponDeletions();
   saveWeaponPropertyOverrides();

@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- Decorative starfield behind every view (populated by buildStarfield at boot) -->
+<div id="starfield" aria-hidden="true"></div>
 <div id="pw-gate">
   <div id="pw-card">
     <h3>AURELIA REFEREE TOOL</h3>
@@ -336,6 +338,17 @@
     </div>
   </div>
 
+  <!-- ── Traveller quick-nav bar (player mode only; shown across every view) ──
+       A flex child of #root so it reserves space at the bottom of whichever
+       view is active. Scales via the --tvscale root variable (Settings). -->
+  <div id="tvbar" role="navigation" aria-label="Quick navigation">
+    <button class="tv-btn" onclick="openSheetMenu()" title="Character sheet"><span class="ico">📋</span><span class="lbl">Sheet</span></button>
+    <button class="tv-btn" onclick="toggleShipPanel()" title="Ship status"><span class="ico">🚀</span><span class="lbl">Ship</span></button>
+    <button class="tv-btn" onclick="toggleQuestPanel()" title="Mission log"><span class="ico">📜</span><span class="lbl">Missions</span></button>
+    <button class="tv-btn" onclick="toggleFundsPanel()" title="Funds"><span class="ico">💰</span><span class="lbl">Funds</span></button>
+    <button class="tv-btn" onclick="toggleQref()" title="Quick reference rules"><span class="ico">📖</span><span class="lbl">Rules</span></button>
+  </div>
+
 
   <!-- ── Event Log (floating panel) ── -->
   <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
@@ -355,19 +368,31 @@
 
   <!-- ── Character sheet modal ── -->
   <div id="sheet-modal" class="hidden" onclick="if(event.target===this) closeSheet()">
-    <div id="sheet-card">
-      <div id="sheet-card-header">
-        <span id="sheet-card-title">CHARACTER SHEET</span>
-        <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
+    <div id="sheet-layout" onclick="if(event.target===this) closeSheet()">
+      <!-- Funds box (left) — party fund + this character's purse, from the funds system -->
+      <aside id="sheet-funds-aside" class="sheet-aside">
+        <div class="sheet-aside-head">💰 Funds</div>
+        <div class="sheet-aside-body" id="sheet-funds-body"></div>
+      </aside>
+      <div id="sheet-card">
+        <div id="sheet-card-header">
+          <span id="sheet-card-title">CHARACTER SHEET</span>
+          <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
+        </div>
+        <div id="sheet-card-body"></div>
+        <div id="sheet-card-footer">
+          <span id="sheet-readonly-notice"></span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span id="sheet-save-msg">✓ Saved</span>
+            <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
+          </span>
+        </div>
       </div>
-      <div id="sheet-card-body"></div>
-      <div id="sheet-card-footer">
-        <span id="sheet-readonly-notice"></span>
-        <span style="display:flex;align-items:center;gap:10px">
-          <span id="sheet-save-msg">✓ Saved</span>
-          <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
-        </span>
-      </div>
+      <!-- Status effects (right) — Traveller 2e conditions applied to this character -->
+      <aside id="sheet-status-aside" class="sheet-aside">
+        <div class="sheet-aside-head">⚠ Status Effects</div>
+        <div class="sheet-aside-body" id="sheet-status-body"></div>
+      </aside>
     </div>
   </div>
 

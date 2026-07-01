@@ -1233,6 +1233,7 @@ loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 loadFactionStores().then(() => { rebuildFactionsFromOverlay();   // fold in any referee-added / edited / removed regions
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadFactionHidden().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // player-facing faction visibility
 loadSystemStores().then(() => { rebuildSystemsFromOverlay();   // fold in any referee-added / edited / removed systems
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits

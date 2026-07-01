@@ -541,3 +541,29 @@ function a11yEnhance(root){
 // hoist a later file's function declarations across the file boundary, so this must
 // run last (see docs/ARCHITECTURE.md, the load-order rule).
 try { if(localStorage.getItem("aurelia_pm")==="1"){ startPolling(); startAlertPolling(); startCombatPolling(); } } catch(e){}
+
+// ── Background starfield ────────────────────────────────────────────────────
+// Decorative only: fills #starfield with a mix of static and slowly twinkling
+// dots so every view sits over a subtle star field. Runs once at boot; the
+// dots are percentage-positioned so they reflow with the viewport for free.
+(function buildStarfield(){
+  const host = document.getElementById('starfield');
+  if(!host || host.childElementCount) return;
+  const N = 150;
+  const bits = [];
+  for(let i = 0; i < N; i++){
+    const x  = (Math.random() * 100).toFixed(2);
+    const y  = (Math.random() * 100).toFixed(2);
+    const sz = (Math.random() * 1.8 + 0.6).toFixed(2);
+    const op = (Math.random() * 0.5 + 0.35).toFixed(2);
+    // ~55% twinkle, the rest sit static and dim to give the field some depth.
+    if(Math.random() < 0.55){
+      const dur = (Math.random() * 5 + 2.5).toFixed(2);
+      const delay = (Math.random() * 6).toFixed(2);
+      bits.push(`<span class="star" style="left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;animation-duration:${dur}s;animation-delay:-${delay}s"></span>`);
+    } else {
+      bits.push(`<span class="star" style="left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;animation:none;opacity:${op}"></span>`);
+    }
+  }
+  host.innerHTML = bits.join('');
+})();
