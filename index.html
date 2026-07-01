@@ -13,6 +13,23 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- ── Splash overlay — reusable welcome screen ──
+     Drives two moments: the app-entry welcome ("WELCOME TRAVELLER") once the
+     access gate clears, and a per-system welcome ("[SYSTEM NAME] / Welcome
+     Traveller") the first time a traveller visits each system. Content is
+     filled by showSplash(); it fades in over the app, auto-dismisses, and
+     skips on tap or keypress. Purely decorative: if scripts never reveal it,
+     it stays invisible and the app is fully usable underneath. -->
+<div id="app-splash" class="splash" role="dialog" aria-label="Welcome" aria-hidden="true">
+  <div class="splash-stars" aria-hidden="true"></div>
+  <div class="splash-content">
+    <div class="splash-kicker"></div>
+    <h1 class="splash-title"></h1>
+    <div class="splash-rule"></div>
+    <p class="splash-sub"></p>
+    <div class="splash-hint"></div>
+  </div>
+</div>
 <div id="pw-gate">
   <div id="pw-card">
     <h3>AURELIA REFEREE TOOL</h3>

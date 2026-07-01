@@ -2225,6 +2225,36 @@ function enterSystem(systemId){
     renderSystemOverview();
     buildOrrery();
     updateBackBtn();
+    maybeSystemWelcome(systemId);
+  });
+}
+
+// ── Per-system welcome ──────────────────────────────────────────────────────
+// The first time a traveller drops into a given system, greet them with the
+// system name over "Welcome Traveller". First-visit state is per-device
+// (localStorage), so every player gets their own welcome, and it never fires
+// for the referee (who navigates constantly while prepping). Cosmetic only.
+function systemVisited(id){
+  try { return !!(JSON.parse(localStorage.getItem('aurelia_visited_systems') || '{}'))[id]; }
+  catch(e){ return false; }
+}
+function markSystemVisited(id){
+  try {
+    const v = JSON.parse(localStorage.getItem('aurelia_visited_systems') || '{}');
+    v[id] = true;
+    localStorage.setItem('aurelia_visited_systems', JSON.stringify(v));
+  } catch(e){}
+}
+function maybeSystemWelcome(sysId){
+  if(typeof isReferee === 'function' && isReferee()) return;   // travellers only
+  if(typeof showSplash !== 'function') return;                 // splash unavailable
+  if(!sysId || !SYSTEMS[sysId] || systemVisited(sysId)) return;
+  markSystemVisited(sysId);
+  showSplash({
+    title: currentSystemName().toUpperCase(),
+    sub:   'Welcome Traveller',
+    hint:  'Tap anywhere to continue',
+    duration: 3400,
   });
 }
 
