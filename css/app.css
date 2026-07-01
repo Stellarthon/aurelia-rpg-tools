@@ -2555,6 +2555,10 @@ input#ui-scale-range{
   overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 .splash.show{opacity:1;visibility:visible;pointer-events:auto}
+/* Pre-boot cover: painted opaque on the very first frame (no fade-in) so the
+   app can render/hydrate underneath without the viewer seeing it "pop" in. The
+   fade-OUT transition is restored when the cover is dismissed. */
+.splash.preboot{transition:none}
 
 /* Two staggered starfield layers drifting behind the text */
 .splash .splash-stars,

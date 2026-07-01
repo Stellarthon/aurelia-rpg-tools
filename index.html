@@ -30,6 +30,46 @@
     <div class="splash-hint"></div>
   </div>
 </div>
+<script>
+// ── Pre-boot splash cover ──────────────────────────────────────────────────
+// Paint the welcome splash on the very FIRST frame — before the app scripts
+// run and draw — so a returning viewer never sees the UI "pop" into existence.
+// Runs inline during parse (no dependency on the app JS). Only covers when the
+// viewer is already past the access gate; otherwise the opaque gate hides the
+// boot and we must not cover it. The app's showIntroSplash() then adopts this
+// cover and fades it out once boot has settled. Defaults mirror
+// SPLASH_DEFAULTS.intro in js/55-auth-gating.js.
+(function(){
+  try {
+    if(localStorage.getItem('aurelia_access') !== '1') return;   // gate will handle it
+    var el = document.getElementById('app-splash');
+    if(!el) return;
+    var intro = {};
+    try { var raw = localStorage.getItem('aurelia_cache_splash-config'); if(raw){ var cfg = JSON.parse(raw); if(cfg && cfg.intro) intro = cfg.intro; } } catch(e){}
+    if(intro.enabled === false) return;                          // referee turned the intro off
+    var pick = function(v, d){ return v != null ? v : d; };
+    var lines = {
+      '.splash-kicker': pick(intro.kicker, 'Aurelian System'),
+      '.splash-title':  pick(intro.title,  'WELCOME TRAVELLER'),
+      '.splash-sub':    pick(intro.sub,    'May the stars ever be full of wonder.'),
+      '.splash-hint':   pick(intro.hint,   'Tap anywhere to begin')
+    };
+    for(var sel in lines){
+      var n = el.querySelector(sel);
+      if(n){ n.textContent = lines[sel] || ''; n.style.display = lines[sel] ? '' : 'none'; }
+    }
+    var sub = el.querySelector('.splash-sub'); if(sub) sub.classList.add('italic');
+    el.setAttribute('aria-hidden', 'false');
+    el.setAttribute('aria-label', lines['.splash-title'] || 'Welcome');
+    el.classList.add('show', 'preboot');                         // opaque on the first frame, no fade-in
+    window.__introPreboot = true;
+    // Safety net: if the app JS never loads/arms the dismissal, uncover anyway.
+    window.__introPrebootSafety = setTimeout(function(){
+      try { el.classList.remove('preboot'); el.classList.remove('show'); el.setAttribute('aria-hidden','true'); } catch(e){}
+    }, 8000);
+  } catch(e){ /* non-fatal — app renders normally without the pre-boot cover */ }
+})();
+</script>
 <div id="pw-gate">
   <div id="pw-card">
     <h3>AURELIA REFEREE TOOL</h3>
