@@ -13,6 +13,21 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- ── Intro splash — "Welcome, Traveller" (players + referee) ──
+     Shown once the access gate clears / on load for returning viewers.
+     Fades in over the app, auto-dismisses, and skips on tap or keypress.
+     Purely decorative: if scripts never reveal it, it stays invisible and
+     the app is fully usable underneath. -->
+<div id="intro-splash" role="dialog" aria-label="Welcome, Traveller" aria-hidden="true">
+  <div class="intro-stars" aria-hidden="true"></div>
+  <div class="intro-content">
+    <div class="intro-kicker">Aurelian System</div>
+    <h1 class="intro-title">WELCOME, TRAVELLER</h1>
+    <div class="intro-rule"></div>
+    <p class="intro-sub">May the stars ever be full of wonder.</p>
+    <div class="intro-hint">Tap anywhere to begin</div>
+  </div>
+</div>
 <div id="pw-gate">
   <div id="pw-card">
     <h3>AURELIA REFEREE TOOL</h3>
