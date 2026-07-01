@@ -317,6 +317,12 @@ function openBodyCreator(force){
   bodyEditTargetId = null;
   document.getElementById('body-creator-title').textContent = '✦ Add Body';
   document.getElementById('body-creator-tabs').style.display = 'flex';
+  // The "Random (UWP)" tab exists only when the active Campaign Pack's
+  // world-schema provider supports generation; provider:'none' hides it so a
+  // non-Traveller universe isn't offered a UWP roller it can't use.
+  const genOn = (typeof pkWorldSchema !== 'function') || (pkWorldSchema().provider === 'traveller-uwp');
+  const randTab = document.getElementById('body-tab-random');
+  if(randTab) randTab.style.display = genOn ? '' : 'none';
   document.getElementById('body-creator-modal').classList.add('open');
   setBodyCreatorMode('manual');
 }
@@ -340,10 +346,29 @@ function renderBodyCreatorBody(){
 }
 
 // ── Shared field helpers ───────────────────────────────────────────────────
+// Ids covered by the built-in body classes / disc renderers; pack object types
+// with one of these ids don't clutter the dropdown (the built-in class already
+// represents them). Referee-defined types (any other id) are appended.
+const BODY_BUILTIN_TYPE_IDS = ['star','world','ice','rock','moon','gasgiant','belt'];
+function bodyCustomTypes(){
+  return (typeof pkObjectTypes === 'function')
+    ? pkObjectTypes().filter(t => t.id && BODY_BUILTIN_TYPE_IDS.indexOf(t.id) < 0)
+    : [];
+}
 function bodyClassSelect(selected){
+  const extra = bodyCustomTypes().map(t => ['type:' + t.id, t.label || t.id]);
+  const opts = BODY_CLASS_OPTIONS.concat(extra);
   return `<select class="body-select" id="body-f-class" onchange="onBodyClassChange()">${
-    BODY_CLASS_OPTIONS.map(([v,l]) => `<option value="${v}"${v===selected?' selected':''}>${l}</option>`).join('')
+    opts.map(([v,l]) => `<option value="${v}"${v===selected?' selected':''}>${escHtml(l)}</option>`).join('')
   }</select>`;
+}
+// Maps a class dropdown value (built-in class or "type:<packTypeId>") to the
+// built-in layout class the form's row-toggling / flag logic understands.
+function bodyClassNormalize(raw){
+  if((raw||'').indexOf('type:') !== 0) return raw || 'planet';
+  const t = (typeof pkObjectTypes==='function') ? pkObjectTypes().find(x => x.id === raw.slice(5)) : null;
+  const disc = t && t.disc;
+  return disc==='star'?'star' : disc==='moon'?'moon' : disc==='belt'?'belt' : disc==='gasgiant'?'gasgiant' : 'planet';
 }
 function bodyParentSelect(selected){
   const opts = getBodies().filter(b => !b.isMoon).map(b =>
@@ -382,7 +407,7 @@ function bodyOrbitSelect(selected){
   return `<select class="body-select" id="body-f-orbit">${opts}</select>`;
 }
 function onBodyClassChange(){
-  const cls = (document.getElementById('body-f-class')||{}).value;
+  const cls = bodyClassNormalize((document.getElementById('body-f-class')||{}).value);
   const parentRow = document.getElementById('body-parent-row');
   const orbitRow = document.getElementById('body-orbit-row');
   const beltRow = document.getElementById('body-belt-row');
@@ -399,6 +424,23 @@ function nextFreeOrbitSlot(){
   return 12;
 }
 
+// Provider-aware world-profile inputs: the single UWP field for the Traveller
+// schema (default, unchanged), or one input per referee-defined schema field
+// (stored on body.fields) for a custom universe.
+function renderBodyProfileFields(d){
+  const ws = (typeof pkWorldSchema === 'function') ? pkWorldSchema() : { provider:'traveller-uwp' };
+  if(ws.provider === 'traveller-uwp'){
+    return `<div class="npc-form-row">
+      <label class="npc-form-lbl">UWP</label>
+      <input type="text" class="npc-form-input" id="body-f-uwp" value="${escAttr(d.uwpString)}" placeholder="e.g. B867976-C or — " style="font-family:monospace">
+    </div>`;
+  }
+  const bf = (d && d.fields) || {};
+  return (ws.fields||[]).map(f => `<div class="npc-form-row">
+      <label class="npc-form-lbl">${escHtml(f.label||f.key)}</label>
+      <input type="text" class="npc-form-input" id="body-f-fld-${f.key}" value="${escAttr(bf[f.key])}">
+    </div>`).join('');
+}
 // ── Manual form ────────────────────────────────────────────────────────────
 function renderBodyManualForm(prefill){
   const d = prefill || bodyCreatorDraft || {};
@@ -427,10 +469,7 @@ function renderBodyManualForm(prefill){
       <label class="npc-form-lbl">Type label (free text)</label>
       <input type="text" class="npc-form-input" id="body-f-type" value="${escAttr(d.type)}" placeholder="e.g. Terrestrial · Ice-Rock">
     </div>
-    <div class="npc-form-row">
-      <label class="npc-form-lbl">UWP</label>
-      <input type="text" class="npc-form-input" id="body-f-uwp" value="${escAttr(d.uwpString)}" placeholder="e.g. B867976-C or — " style="font-family:monospace">
-    </div>
+    ${renderBodyProfileFields(d)}
     <div class="body-uwp-grid">
       <div class="npc-form-row"><label class="npc-form-lbl">Orbit (AU / note)</label>
         <input type="text" class="npc-form-input" id="body-f-orbitau" value="${escAttr(d.orbitAU)}" placeholder="e.g. 2.4 AU"></div>
@@ -492,7 +531,13 @@ function applyBodyClass(obj, cls){
 
 function collectBodyForm(){
   const g = id => (document.getElementById(id)||{}).value;
-  const cls = g('body-f-class') || 'planet';
+  const rawCls = g('body-f-class') || 'planet';
+  // A "type:<id>" selection is a referee-defined object type; normalise it to a
+  // built-in layout class for the flag logic and remember the pack type so the
+  // body carries its typeId + disc.
+  const packType = (rawCls.indexOf('type:')===0 && typeof pkObjectTypes==='function')
+    ? pkObjectTypes().find(x => x.id === rawCls.slice(5)) : null;
+  const cls = bodyClassNormalize(rawCls);
   const name = (g('body-f-name')||'').trim();
   let type = (g('body-f-type')||'').trim();
   if(cls === 'belt' && !/asteroid belt/i.test(type)) type = type ? (type + ' · Asteroid Belt') : 'Asteroid Belt';
@@ -536,6 +581,20 @@ function collectBodyForm(){
   // class consistently across the orrery and close-up views). "planet" stays
   // null so ocean / ice / rock can still be derived from the type label.
   obj.discStyle = ({ belt:'belt', gasgiant:'gasgiant', star:'star', moon:'moon' })[cls] || null;
+  // Referee-defined object type: stamp the typeId + its disc, and default the
+  // free-text type label to the type's name when the referee left it blank.
+  if(packType){
+    obj.typeId = packType.id;
+    if(packType.disc) obj.discStyle = packType.disc;
+    if(!(g('body-f-type')||'').trim()) obj.type = packType.label || obj.type;
+  }
+  // Custom world schema: collect the referee-defined fields onto body.fields.
+  const ws0 = (typeof pkWorldSchema === 'function') ? pkWorldSchema() : { provider:'traveller-uwp' };
+  if(ws0.provider !== 'traveller-uwp'){
+    const bf = {};
+    (ws0.fields||[]).forEach(f => { const v = g('body-f-fld-'+f.key); if(v != null && String(v).trim() !== '') bf[f.key] = String(v).trim(); });
+    obj.fields = bf;
+  }
   return obj;
 }
 
@@ -673,14 +732,18 @@ function openBodyEditor(id){
   bodyCreatorMode = 'manual';
   // Honour an explicit discStyle first (set by prior edits) so the editor opens
   // on the class the body actually renders as, then fall back to the type text.
-  const cls = b.isStar?'star' : b.isMoon?'moon'
+  // A body tagged with a referee-defined (non-built-in) object type re-opens on
+  // that type; otherwise fall back to the built-in class detection.
+  const isCustomType = b.typeId && bodyCustomTypes().some(t => t.id === b.typeId);
+  const cls = isCustomType ? ('type:' + b.typeId)
+    : b.isStar?'star' : b.isMoon?'moon'
     : (b.discStyle==='belt' || /asteroid belt/i.test(b.type||''))?'belt'
     : (b.discStyle==='gasgiant' || /gas giant/i.test(b.type||''))?'gasgiant' : 'planet';
   bodyCreatorDraft = {
     name:b.name, type:b.type, tag:b.tag||'', color:b.color, orbitAU:b.orbitAU,
     uwpString:b.uwpString, diameter:b.diameter, period:b.period, hook:!!b.hook,
     desc:b.desc, refNote:b.refNote, readAloud:b.readAloud, parentId:b.parentId,
-    orbitPos:b.orbitPos, beltDensity:b.beltDensity, bodyClass:cls
+    orbitPos:b.orbitPos, beltDensity:b.beltDensity, bodyClass:cls, fields:b.fields
   };
   document.getElementById('body-creator-title').textContent = '✦ Edit Body Properties';
   document.getElementById('body-creator-tabs').style.display = 'none';
@@ -706,7 +769,7 @@ async function commitBodyEdit(id, obj){
     // Base body — store only the changed metadata fields as overrides so the
     // body's checks/events/npcs and identity stay anchored to the base data.
     const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
-    const fields = ['name','type','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
+    const fields = ['name','type','typeId','fields','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
     const ov = {};
     fields.forEach(f => {
       const nv = obj[f];

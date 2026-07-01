@@ -16,13 +16,17 @@ let sheetCurrentCharacter = null; // which character's sheet is currently open i
 let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
 let sheetStatus = [];             // active Traveller 2e status-effect ids for the open sheet
 
+// Characteristics come from the active Campaign Pack (UPP by default). Falls
+// back to the Traveller six before the pack engine loads.
+function sheetAttrKeys(){
+  return (typeof pkAttributes === 'function' && pkAttributes().length) ? pkAttributes() : [
+    {key:'str',label:'STR'},{key:'dex',label:'DEX'},{key:'end',label:'END'},
+    {key:'intl',label:'INT'},{key:'edu',label:'EDU'},{key:'soc',label:'SOC'}];
+}
 function emptySheet(){
-  return {
-    name: '', age: '',
-    str: 7, dex: 7, end: 7, intl: 7, edu: 7, soc: 7,
-    skills: '', equipment: '', weapons: '', notes: '',
-    status: []   // active Traveller 2e status-effect ids (see TRAVELLER_STATUS_FX)
-  };
+  const s = { name:'', age:'', skills:'', equipment:'', weapons:'', notes:'', status:[] };
+  sheetAttrKeys().forEach(a => s[a.key] = 7);
+  return s;
 }
 
 // Curated Traveller 2e conditions the character sheet can flag. `harm:true`
@@ -45,6 +49,8 @@ const TRAVELLER_STATUS_FX = [
 ];
 
 function charDM(score){
+  // Route through the campaign's modifier ladder (Traveller by default).
+  if(typeof dmForScore === 'function') return dmForScore(score);
   const n = parseInt(score) || 0;
   if(n <= 0) return -3;
   if(n <= 2) return -2;
@@ -425,26 +431,53 @@ const ARCHON_BANDS = [
   { min:-Infinity, max:-11,cls:'unworthy',    label:'Unworthy',                   desc:'Experiment declared a failure. The Collective intervenes directly.' },
 ];
 
-let archonLog = [];        // array of scored action entries
-let archonDraft = { coop:0, comp:0, wisd:0, inno:0 }; // current stepper state
+// ── Generic meter engine (pack-driven) ─────────────────────────────────────
+// The morality tracker is now one instance of a GENERAL meter defined by the
+// active Campaign Pack (pkMeters()). Each meter carries its own axes, bands,
+// colours, visibility and storage key, so a referee can rename it (e.g.
+// "Light / Dark Side"), re-axis it, recolour it, run several at once, or remove
+// it entirely — all as pack data. The built-in Archon meter behaves exactly as
+// before (same axes/bands and the 'aurelia_archon' storage key). ARCHON_AXES /
+// ARCHON_BANDS above remain the seed the default pack folds into meters[0].
+let currentMeterId = null;        // which meter's entry form is active in the menu
+let meterDrafts = {};             // { meterId: {axisKey: val} }
+let meterLogs = {};               // { storageKey: [entries] }
 
+function getMeters(){ return (typeof pkMeters === 'function') ? pkMeters() : []; }
+function getCurrentMeter(){ const ms = getMeters(); return ms.find(m => m.id === currentMeterId) || ms[0] || null; }
+function meterAxes(m){ return (m && m.axes) || []; }
+function meterBandsNorm(m){
+  return ((m && m.bands) || []).map(b => ({ ...b,
+    min: (b.min == null ? -Infinity : b.min), max: (b.max == null ? Infinity : b.max) }));
+}
+function meterRange(m){ return (m && m.axisRange) || 5; }
+function meterStoreKey(m){ return (m && m.storageKey) || ('meter-' + ((m && m.id) || 'x')); }
+function meterColors(m){ return (m && m.colors) || { pos:'#4caf82', neg:'#d45050' }; }
+function blankMeterDraft(m){ const d = {}; meterAxes(m).forEach(a => d[a.key] = 0); return d; }
+function getMeterDraft(m){ if(!m) return {}; if(!meterDrafts[m.id]) meterDrafts[m.id] = blankMeterDraft(m); return meterDrafts[m.id]; }
+
+// Per-meter log persistence (localStorage; the Archon meter keeps its old key).
 function loadArchonLog(){
-  try {
-    const raw = localStorage.getItem('aurelia_archon');
-    if(raw) archonLog = JSON.parse(raw);
-  } catch(e){ archonLog = []; }
-}
-
-function saveArchonLog(){
-  try { localStorage.setItem('aurelia_archon', JSON.stringify(archonLog)); }
-  catch(e){}
-}
-
-function archonAxisTotals(){
-  const totals = { coop:0, comp:0, wisd:0, inno:0 };
-  archonLog.forEach(e => {
-    ARCHON_AXES.forEach(a => { totals[a.key] += (e.axes[a.key]||0); });
+  meterLogs = {};
+  getMeters().forEach(m => {
+    try { const raw = localStorage.getItem(meterStoreKey(m)); meterLogs[meterStoreKey(m)] = raw ? JSON.parse(raw) : []; }
+    catch(e){ meterLogs[meterStoreKey(m)] = []; }
   });
+}
+function meterLog(m){
+  const k = meterStoreKey(m);
+  if(!meterLogs[k]){ try { const raw = localStorage.getItem(k); meterLogs[k] = raw ? JSON.parse(raw) : []; } catch(e){ meterLogs[k] = []; } }
+  return meterLogs[k];
+}
+function saveMeterLog(m){ try { localStorage.setItem(meterStoreKey(m), JSON.stringify(meterLog(m))); } catch(e){} }
+// Kept for the boot call site; the per-meter saves happen inline now.
+function saveArchonLog(){ const m = getCurrentMeter(); if(m) saveMeterLog(m); }
+
+function archonAxisTotals(m){
+  m = m || getCurrentMeter();
+  const totals = {};
+  meterAxes(m).forEach(a => totals[a.key] = 0);
+  meterLog(m).forEach(e => { meterAxes(m).forEach(a => { totals[a.key] += (e.axes[a.key]||0); }); });
   return totals;
 }
 
@@ -452,9 +485,9 @@ function archonGrandTotal(totals){
   return Object.values(totals).reduce((s,v) => s+v, 0);
 }
 
-function archonClassification(total){
-  return ARCHON_BANDS.find(b => total >= b.min && total <= b.max)
-    || ARCHON_BANDS[ARCHON_BANDS.length-1];
+function archonClassification(total, m){
+  const bands = meterBandsNorm(m || getCurrentMeter());
+  return bands.find(b => total >= b.min && total <= b.max) || bands[bands.length-1] || { cls:'', label:'', desc:'' };
 }
 
 function archonScoreLabel(n){
@@ -462,12 +495,13 @@ function archonScoreLabel(n){
   return `${n}`;
 }
 
-function archonAxisBarHTML(key, val, maxAbsTotal){
+function archonAxisBarHTML(key, val, maxAbsTotal, colors){
   // Bar centred at 50% — left half is negative, right half is positive
+  colors = colors || { pos:'#4caf82', neg:'#d45050' };
   const clamp = maxAbsTotal || 1;
   const pct = Math.min(Math.abs(val) / clamp * 50, 50);
   const isPos = val >= 0;
-  const colour = val > 0 ? '#4caf82' : val < 0 ? '#d45050' : 'transparent';
+  const colour = val > 0 ? colors.pos : val < 0 ? colors.neg : 'transparent';
   const left = isPos ? '50%' : `${50 - pct}%`;
   const width = `${pct}%`;
   return `
@@ -574,27 +608,43 @@ function renderSettingsMenu(showArchon){
 // Builds the Archon morality block (totals, axes, log, draft form). Extracted
 // so the Referee menu renders the same widget that used to live in Settings.
 function renderArchonSectionHTML(){
-  // ── Archon Morality Tracker section ──
-  const totals = archonAxisTotals();
+  // Pack-driven: renders whichever meter(s) the active Campaign Pack defines.
+  if(typeof moduleOn === 'function' && !moduleOn('morality')) return '';
+  const meters = getMeters();
+  if(!meters.length){
+    return `<div class="settings-section-lbl">Meters</div>
+      <div class="archon-empty">No meters in this campaign. Add one in Design ▸ Campaign ▸ Campaign Settings ▸ Meters.</div>`;
+  }
+  const m      = getCurrentMeter();
+  const colors = meterColors(m);
+  const axes   = meterAxes(m);
+  const totals = archonAxisTotals(m);
   const grand  = archonGrandTotal(totals);
-  const band   = archonClassification(grand);
+  const band   = archonClassification(grand, m);
   const maxAbs = Math.max(...Object.values(totals).map(Math.abs), 1);
+  const draft  = getMeterDraft(m);
+  const log    = meterLog(m);
 
-  const axesHTML = ARCHON_AXES.map(a => {
-    const v = totals[a.key];
+  const selector = meters.length > 1 ? `
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      ${meters.map(mm => `<button onclick="selectMeter('${mm.id}')" style="font-size:10px;font-family:monospace;padding:3px 8px;border-radius:4px;cursor:pointer;border:.5px solid var(--bd0);background:${mm.id===m.id?'var(--accentGoldBg)':'transparent'};color:${mm.id===m.id?'var(--accentGold)':'var(--tx1)'}">${escArchon(mm.label)}</button>`).join('')}
+    </div>` : '';
+
+  const axesHTML = axes.map(a => {
+    const v = totals[a.key] || 0;
     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
     return `
       <div class="archon-axis-row">
-        <span class="archon-axis-name">${a.label}</span>
-        ${archonAxisBarHTML(a.key, v, maxAbs)}
+        <span class="archon-axis-name">${escArchon(a.label)}</span>
+        ${archonAxisBarHTML(a.key, v, maxAbs, colors)}
         <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
       </div>`;
   }).join('');
 
-  const logHTML = archonLog.length
-    ? [...archonLog].reverse().map(e => {
-        const axisDesc = ARCHON_AXES
-          .filter(a => e.axes[a.key] !== 0)
+  const logHTML = log.length
+    ? [...log].reverse().map(e => {
+        const axisDesc = axes
+          .filter(a => e.axes[a.key] !== 0 && e.axes[a.key] !== undefined)
           .map(a => `${a.label} (${archonScoreLabel(e.axes[a.key])})`)
           .join(', ');
         const scoreCls = e.total >= 0 ? 'pos' : 'neg';
@@ -610,13 +660,12 @@ function renderArchonSectionHTML(){
       }).join('')
     : `<div class="archon-empty">No actions logged yet.</div>`;
 
-  // Draft stepper state
-  const steppers = ARCHON_AXES.map(a => {
-    const v = archonDraft[a.key];
+  const steppers = axes.map(a => {
+    const v = draft[a.key] || 0;
     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
     return `
       <div class="archon-axis-input-row">
-        <span class="archon-axis-input-lbl">${a.label}</span>
+        <span class="archon-axis-input-lbl">${escArchon(a.label)}</span>
         <div class="archon-axis-stepper">
           <button onclick="archonStep('${a.key}',-1)">−</button>
           <span class="archon-axis-score ${cls}">${archonScoreLabel(v)}</span>
@@ -625,12 +674,12 @@ function renderArchonSectionHTML(){
       </div>`;
   }).join('');
 
-  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftTotal = Object.values(draft).reduce((s,v)=>s+v,0);
   const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
 
   return `
-    <div class="settings-section-lbl">Archon Collective — Morality</div>
-
+    <div class="settings-section-lbl">${escArchon(m.label)}</div>
+    ${selector}
     <div class="archon-total-row">
       <span class="archon-total-score">${archonScoreLabel(grand)}</span>
       <span class="archon-classification archon-class-${band.cls}">
@@ -665,14 +714,18 @@ function escArchon(s){
 
 // ── Stepper ───────────────────────────────────────────────────────────────
 
+function selectMeter(id){ currentMeterId = id; renderRefereeMenu(); }
+
 function archonStep(key, delta){
-  archonDraft[key] = Math.max(-5, Math.min(5, (archonDraft[key]||0) + delta));
-  // Partial update: only refresh the stepper spans and draft total — 
+  const m = getCurrentMeter(); if(!m) return;
+  const draft = getMeterDraft(m);
+  const rng = meterRange(m);
+  draft[key] = Math.max(-rng, Math.min(rng, (draft[key]||0) + delta));
+  // Partial update: only refresh the stepper spans and draft total —
   // avoids full card re-render which changes card height and loses textarea
-  ARCHON_AXES.forEach(a => {
-    const v = archonDraft[a.key];
+  meterAxes(m).forEach(a => {
+    const v = draft[a.key] || 0;
     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-    // Each stepper span has a unique position; find it by its sibling buttons
     const steppers = document.querySelectorAll('.archon-axis-stepper');
     steppers.forEach(s => {
       const lbl = s.closest('.archon-axis-input-row')?.querySelector('.archon-axis-input-lbl');
@@ -685,8 +738,7 @@ function archonStep(key, delta){
       }
     });
   });
-  // Update draft total
-  const draftTotal = Object.values(archonDraft).reduce((s,v)=>s+v,0);
+  const draftTotal = Object.values(draft).reduce((s,v)=>s+v,0);
   const draftCls = draftTotal > 0 ? 'pos' : draftTotal < 0 ? 'neg' : 'zero';
   const totalSpan = document.querySelector('.archon-add-form .archon-axis-score');
   if(totalSpan){
@@ -696,7 +748,7 @@ function archonStep(key, delta){
 }
 
 function archonResetDraft(){
-  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  const m = getCurrentMeter(); if(m) meterDrafts[m.id] = blankMeterDraft(m);
   renderRefereeMenu();
   // textarea is intentionally cleared on reset
 }
@@ -704,24 +756,26 @@ function archonResetDraft(){
 // ── Submit / delete ───────────────────────────────────────────────────────
 
 function submitArchonEntry(){
+  const m = getCurrentMeter(); if(!m) return;
   const actionEl = document.getElementById('archon-action-input');
   const action = actionEl ? actionEl.value.trim() : '';
   if(!action){
     actionEl && (actionEl.style.borderColor = '#d45050');
     return;
   }
-  const axes = { ...archonDraft };
+  const axes = { ...getMeterDraft(m) };
   const total = Object.values(axes).reduce((s,v)=>s+v,0);
-  archonLog.push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
-  saveArchonLog();
-  archonDraft = { coop:0, comp:0, wisd:0, inno:0 };
+  meterLog(m).push({ id:'a'+Date.now(), action, axes, total, ts: Date.now() });
+  saveMeterLog(m);
+  meterDrafts[m.id] = blankMeterDraft(m);
   renderRefereeMenu();
-  showToast('Morality action logged');
+  showToast('Logged to ' + m.label);
 }
 
 function deleteArchonEntry(id){
-  archonLog = archonLog.filter(e => e.id !== id);
-  saveArchonLog();
+  const m = getCurrentMeter(); if(!m) return;
+  meterLogs[meterStoreKey(m)] = meterLog(m).filter(e => e.id !== id);
+  saveMeterLog(m);
   renderRefereeMenu();
 }
 
@@ -764,7 +818,7 @@ function renderRefereeMenu(){
       </div>
     </div>` : '';
   card.innerHTML = `
-    <div class="settings-section-lbl">Referee Tools</div>
+    <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Tools</div>
     <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
       <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
       <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
@@ -809,7 +863,14 @@ function renderDesignMenu(){
   const undoN = designUndoStack.length, redoN = designRedoStack.length;
   const lastUndo = undoN ? designUndoStack[undoN-1].label : '';
   const lastRedo = redoN ? designRedoStack[redoN-1].label : '';
+  const campTitle = (typeof _activePack !== 'undefined' && _activePack) ? _activePack.title : 'Archon Gambit';
   card.innerHTML = `
+    <div class="settings-section-lbl">Campaign</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openCampaignStudio('campaigns')">
+      <span class="settings-row-label">🌐 Campaign Studio</span>
+      <span style="font-size:9px;color:var(--accentGold);font-family:monospace">${escHtml(campTitle)} →</span>
+    </div>
+    <div class="archon-divider"></div>
     <div class="settings-section-lbl">Design Tools</div>
     <div class="settings-row" style="cursor:${undoN?'pointer':'default'};opacity:${undoN?1:0.45}" ${undoN?'onclick="designUndo()"':''}>
       <span class="settings-row-label">↶ Undo${undoN?' — '+escHtml(lastUndo):''}</span>
@@ -829,7 +890,7 @@ function renderDesignMenu(){
       <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>
     </div>
     <div class="archon-divider"></div>
-    <div class="settings-section-lbl">Referee Boxes</div>
+    <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Boxes</div>
     ${renderBoxManagerHTML()}`;
 }
 
@@ -899,7 +960,27 @@ async function designRedo(){
 // backup is a JSON dump of those rows. Export pulls every campaign row (skipping
 // per-device private notes + local cache keys); import writes them back through
 // supaStorage.set and reloads so every loader re-reads the restored state.
-const CAMPAIGN_EXPORT_VERSION = 1;
+const CAMPAIGN_EXPORT_VERSION = 2;
+
+// Campaign-local state that lives in localStorage (not the shared KV store) and
+// so would otherwise NOT travel with an export: the referee box-type registry
+// and every meter's logged history. Bundled into the export and restored on
+// import so a shared campaign carries its meters and boxes too.
+function collectCampaignLocalState(){
+  const out = { boxTypes:null, meterLogs:{} };
+  try { out.boxTypes = JSON.parse(localStorage.getItem('aurelia_box_types') || 'null'); } catch(e){}
+  try {
+    (typeof getMeters === 'function' ? getMeters() : []).forEach(m => {
+      const k = meterStoreKey(m); const raw = localStorage.getItem(k); if(raw) out.meterLogs[k] = raw;
+    });
+  } catch(e){}
+  return out;
+}
+function restoreCampaignLocalState(ls){
+  if(!ls) return;
+  try { if(ls.boxTypes) localStorage.setItem('aurelia_box_types', JSON.stringify(ls.boxTypes)); } catch(e){}
+  try { if(ls.meterLogs) Object.keys(ls.meterLogs).forEach(k => localStorage.setItem(k, ls.meterLogs[k])); } catch(e){}
+}
 async function exportCampaign(){
   if(!isReferee()){ if(typeof showToast==='function') showToast('Referee only','error'); return; }
   if(typeof showToast==='function') showToast('Exporting campaign…','info');
@@ -914,14 +995,25 @@ async function exportCampaign(){
     if(typeof showToast==='function') showToast('Export failed — could not reach the campaign store ('+(e.message||'offline')+')','error');
     return;
   }
+  // Only export the ACTIVE campaign's rows. The built-in campaign is un-prefixed
+  // (skip any camp:* rows belonging to other campaigns); authored campaigns keep
+  // only their camp:<id>: rows, prefix-stripped so the file is campaign-portable.
+  const prefix = (typeof campaignKeyPrefix === 'function') ? campaignKeyPrefix() : '';
   const keys = {};
   (Array.isArray(rows)?rows:[]).forEach(r => {
     if(!r || r.key==null) return;
-    if(/^note-private-/.test(r.key)) return;       // per-device personal notes — not shared campaign state
-    keys[r.key] = r.value;
+    let k = r.key;
+    if(prefix){ if(k.indexOf(prefix) !== 0) return; k = k.slice(prefix.length); }
+    else if(k.indexOf('camp:') === 0) return;
+    if(/^note-private-/.test(k)) return;           // per-device personal notes — not shared campaign state
+    keys[k] = r.value;
   });
   const blob = { app:'archon-gambit', kind:'campaign', version:CAMPAIGN_EXPORT_VERSION,
-    exportedAt:new Date().toISOString(), count:Object.keys(keys).length, keys };
+    exportedAt:new Date().toISOString(),
+    campaignId: (typeof activeCampaignId !== 'undefined' ? activeCampaignId : 'archon-gambit'),
+    pack: (typeof exportPackObject === 'function' ? exportPackObject() : null),
+    localState: collectCampaignLocalState(),
+    count:Object.keys(keys).length, keys };
   const json = JSON.stringify(blob, null, 2);
   const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
   const a = document.createElement('a');
@@ -950,9 +1042,18 @@ function importCampaign(){
     let ok=0, fail=0;
     for(const k of names){
       const v = keys[k];
-      const r = await supaStorage.set(k, v==null?'':String(v), true);
+      const r = await supaStorage.set(k, v==null?'':String(v), true);   // set() namespaces to the active campaign
       if(r && r.ok) ok++; else fail++;
     }
+    // Restore the bundled pack config + campaign-local state (meters / boxes).
+    if(blob.pack && typeof validateAndMigratePack === 'function'){
+      const res = validateAndMigratePack(blob.pack);
+      if(res.ok && typeof _activePack !== 'undefined' && _activePack){
+        _activePack.config = res.pack.config;
+        if(typeof saveActivePackConfig === 'function') saveActivePackConfig();
+      }
+    }
+    if(blob.localState) restoreCampaignLocalState(blob.localState);
     if(typeof showToast==='function') showToast(`Imported ${ok} key${ok===1?'':'s'}${fail?` (${fail} queued offline)`:''} — reloading…`);
     setTimeout(()=>location.reload(), 900);
   };
@@ -1178,7 +1279,8 @@ function renderSheetFundsAside(characterName){
 function renderSheetStatusAside(){
   const el = document.getElementById('sheet-status-body'); if(!el) return;
   const active = new Set(sheetStatus);
-  const chips = TRAVELLER_STATUS_FX.map(fx => {
+  const statusFx = (typeof pkStatusFx === 'function') ? pkStatusFx() : TRAVELLER_STATUS_FX;
+  const chips = statusFx.map(fx => {
     const on = active.has(fx.id);
     return `<button class="status-fx-chip${on?' on':''}${fx.harm?' harm':''}" onclick="toggleSheetStatus('${fx.id}')" title="${escHtml(fx.desc)}">
         <span class="ico">${fx.ico}</span>
@@ -1202,10 +1304,7 @@ function toggleSheetStatus(id){
 
 function renderSheetForm(data){
   const body = document.getElementById('sheet-card-body');
-  const chars = [
-    ['STR','str'], ['DEX','dex'], ['END','end'],
-    ['INT','intl'], ['EDU','edu'], ['SOC','soc']
-  ];
+  const chars = sheetAttrKeys().map(a => [a.label, a.key]);
   body.innerHTML = `
     <div class="sheet-name-row">
       <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
@@ -1214,13 +1313,13 @@ function renderSheetForm(data){
     <div class="sheet-section">
       <div class="sheet-section-lbl">Characteristics</div>
       <div class="sheet-char-grid">
-        ${chars.map(([label,key]) => `
+        ${chars.map(([label,key]) => { const v = (data[key]!=null?data[key]:7); return `
           <div class="sheet-char-box">
             <div class="sheet-char-label">${label}</div>
-            <input type="number" class="sheet-char-input" id="sheet-f-${key}" value="${data[key]}" oninput="updateSheetDM('${key}')">
-            <div class="sheet-char-dm" id="sheet-dm-${key}">DM ${charDM(data[key])>=0?'+':''}${charDM(data[key])}</div>
+            <input type="number" class="sheet-char-input" id="sheet-f-${key}" value="${v}" oninput="updateSheetDM('${key}')">
+            <div class="sheet-char-dm" id="sheet-dm-${key}">DM ${charDM(v)>=0?'+':''}${charDM(v)}</div>
           </div>
-        `).join('')}
+        `; }).join('')}
       </div>
     </div>
     <div class="sheet-section">
@@ -1256,17 +1355,17 @@ function updateSheetDM(key){
 function collectSheetData(){
   const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   const num = id => parseInt(val(id)) || 0;
-  return {
+  const out = {
     name: val('sheet-f-name'),
     age: val('sheet-f-age'),
-    str: num('sheet-f-str'), dex: num('sheet-f-dex'), end: num('sheet-f-end'),
-    intl: num('sheet-f-intl'), edu: num('sheet-f-edu'), soc: num('sheet-f-soc'),
     skills: val('sheet-f-skills'),
     weapons: val('sheet-f-weapons'),
     equipment: val('sheet-f-equipment'),
     notes: val('sheet-f-notes'),
     status: sheetStatus.slice()
   };
+  sheetAttrKeys().forEach(a => { out[a.key] = num('sheet-f-' + a.key); });
+  return out;
 }
 
 async function saveCurrentSheet(){
