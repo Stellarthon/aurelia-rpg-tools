@@ -38,6 +38,24 @@ async function saveSplashConfig(){
 
 let _splashTimer = null, _splashArm = null;
 function _splashEnd(){ dismissSplash(); }
+
+// Arm the auto-dismiss + skip-to-dismiss. Skip is armed only after the entrance
+// settles, so the click/key that opened the splash doesn't instantly close it.
+// Shared by showSplash() and the pre-boot adopt path (see showIntroSplash).
+function armSplashDismissal(duration){
+  const el = document.getElementById('app-splash');
+  if(!el) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  _splashTimer = setTimeout(dismissSplash, reduce ? 1400 : (duration || 3800));
+  _splashArm = setTimeout(() => {
+    if(el.classList.contains('show')){
+      document.addEventListener('keydown', _splashEnd);
+      el.addEventListener('click', _splashEnd);
+    }
+  }, 500);
+}
+
 // opts: { kicker, title, sub, hint, italicSub, duration }
 function showSplash(opts){
   opts = opts || {};
@@ -57,30 +75,25 @@ function showSplash(opts){
   if(sub) sub.classList.toggle('italic', !!opts.italicSub);
   el.setAttribute('aria-label', opts.title || 'Welcome');
 
-  // Restart cleanly if a previous splash is still up (e.g. system after intro).
-  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  // Restart cleanly if a previous splash is still up (e.g. system after intro),
+  // and drop any pre-boot cover so this show fades in normally.
   document.removeEventListener('keydown', _splashEnd);
   el.removeEventListener('click', _splashEnd);
-  el.classList.remove('show');
+  el.classList.remove('show', 'preboot');
   void el.offsetWidth;                       // reflow, so the entrance replays
   el.setAttribute('aria-hidden', 'false');
   requestAnimationFrame(() => el.classList.add('show'));
-
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  _splashTimer = setTimeout(dismissSplash, reduce ? 1400 : (opts.duration || 3800));
-  // Arm skip-to-dismiss only after the entrance settles, so the click or key
-  // that triggered the splash doesn't instantly close it.
-  _splashArm = setTimeout(() => {
-    if(el.classList.contains('show')){
-      document.addEventListener('keydown', _splashEnd);
-      el.addEventListener('click', _splashEnd);
-    }
-  }, 500);
+  armSplashDismissal(opts.duration);
 }
 function dismissSplash(){
   const el = document.getElementById('app-splash');
   if(!el || !el.classList.contains('show')) return;
   clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  try { clearTimeout(window.__introPrebootSafety); } catch(e){}
+  if(el.classList.contains('preboot')){
+    el.classList.remove('preboot');          // restore the transition...
+    void el.offsetWidth;                      // ...and reflow so removing .show fades out
+  }
   el.classList.remove('show');               // fades out via the CSS transition
   el.setAttribute('aria-hidden', 'true');
   document.removeEventListener('keydown', _splashEnd);
@@ -99,15 +112,28 @@ function primeSplashConfigFromCache(){
 }
 
 // App-entry welcome — shown once the access gate clears (players + referee),
-// using the referee's shared config.
+// using the referee's shared config. For a returning viewer the splash is
+// already painted by the inline pre-boot cover (see index.html) so the app
+// never "pops" in visibly; in that case we adopt the live cover instead of
+// re-showing it (which would flash the app for a frame).
 let _introShown = false;
 function showIntroSplash(){
   if(_introShown) return;                     // only ever once per page load
   _introShown = true;
   primeSplashConfigFromCache();
   const c = getSplashConfig().intro;
-  if(!c.enabled) return;                       // referee turned the intro off
-  showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
+  const prebooted = (typeof window !== 'undefined' && window.__introPreboot);
+  if(!c.enabled){
+    if(prebooted) dismissSplash();             // stale cover from an old cached config → drop it
+    return;                                     // referee turned the intro off
+  }
+  if(prebooted){
+    window.__introPreboot = false;
+    try { clearTimeout(window.__introPrebootSafety); } catch(e){}
+    armSplashDismissal(3800);                   // cover is already up with this content — just time it out
+  } else {
+    showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
