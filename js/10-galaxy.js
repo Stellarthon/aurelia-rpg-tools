@@ -2236,7 +2236,7 @@ function goGalaxy(){
     });
     const gv = document.getElementById('view-galaxy');
     gv.classList.remove('v-hidden'); gv.style.display = 'flex';
-    document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+    document.getElementById('hdr-title').textContent = layerLabel('galaxy','The Orion Arm').toUpperCase();
     document.getElementById('breadcrumb').innerHTML = '';
     updateBackBtn();
     if(typeof HX!=='undefined') HX.enter();   // hex-jump galaxy layer: read shared state, render, fit
@@ -2269,7 +2269,7 @@ function enterSystem(systemId){
     if(ov) ov.classList.remove('v-hidden');
     const stBtn = document.getElementById('btn-view-station');
     if(stBtn) stBtn.classList.add('v-hidden');
-    document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' SYSTEM';
+    document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' ' + layerShort('system','System').toUpperCase();
     setBreadcrumb([{label:'The Orion Arm', fn:'goGalaxy'}], currentSystemName());
     renderSystemOverview();
     buildOrrery();
@@ -2469,5 +2469,12 @@ async function generateSystem(sysId){
 }
 
 function currentSystem(){ return SYSTEMS[currentSystemId]; }
-function baseBodiesFor(sysId){ return (SYSTEMS[sysId] ? SYSTEMS[sysId].base : []); }
+function baseBodiesFor(sysId){
+  // Read the active Campaign Pack's content; for the built-in Archon Gambit pack
+  // content.systems IS the SYSTEMS constant (same reference) so behaviour is
+  // identical, while an authored campaign supplies its own (or empty) systems.
+  const c = (typeof activePackContent === 'function') ? activePackContent() : null;
+  if(c && c.systems && c.systems[sysId]) return c.systems[sysId].base || [];
+  return (typeof SYSTEMS !== 'undefined' && SYSTEMS[sysId]) ? SYSTEMS[sysId].base : [];
+}
 
