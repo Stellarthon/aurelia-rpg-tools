@@ -14,6 +14,7 @@
 
 let sheetCurrentCharacter = null; // which character's sheet is currently open in the modal
 let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
+let sheetCurrentData = null;      // the loaded sheet blob for the open character — lets saveCurrentSheet preserve fields not shown as inputs (weapons/equipment legacy, invMigrated, portrait)
 
 function emptySheet(){
   return {
@@ -1079,6 +1080,9 @@ async function openSheet(characterName){
   modal.classList.remove('hidden');
 
   const data = await loadSheet(characterName);
+  await loadInventory();
+  migrateSheetGear(characterName, data);   // one-time free-text → structured items (safe: raw text preserved)
+  sheetCurrentData = data;
   renderSheetForm(data);
 }
 
@@ -1114,14 +1118,7 @@ function renderSheetForm(data){
       <div class="sheet-section-lbl">Skills</div>
       <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
     </div>
-    <div class="sheet-section">
-      <div class="sheet-section-lbl">Weapons</div>
-      <textarea class="sheet-textarea" id="sheet-f-weapons" placeholder="e.g. Snub pistol, close range, 3d6-3 damage, 6 rounds...">${data.weapons||''}</textarea>
-    </div>
-    <div class="sheet-section">
-      <div class="sheet-section-lbl">Equipment</div>
-      <textarea class="sheet-textarea" id="sheet-f-equipment" placeholder="e.g. Vacc suit (form-fitting, 6kg), Comm unit, Medkit...">${data.equipment||''}</textarea>
-    </div>
+    ${renderInventorySection(sheetCurrentCharacter)}
     <div class="sheet-section">
       <div class="sheet-section-lbl">Notes</div>
       <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
@@ -1139,7 +1136,10 @@ function updateSheetDM(key){
 
 async function saveCurrentSheet(){
   if(!sheetCurrentCharacter) return;
-  const data = {
+  // Spread the loaded blob first so fields with no form input (the migrated
+  // legacy gear text, invMigrated flag, future portrait) survive the save;
+  // the form fields below overwrite the ones the user can actually edit.
+  const data = Object.assign({}, sheetCurrentData || {}, {
     name: document.getElementById('sheet-f-name').value,
     age: document.getElementById('sheet-f-age').value,
     str: parseInt(document.getElementById('sheet-f-str').value)||0,
@@ -1149,13 +1149,196 @@ async function saveCurrentSheet(){
     edu: parseInt(document.getElementById('sheet-f-edu').value)||0,
     soc: parseInt(document.getElementById('sheet-f-soc').value)||0,
     skills: document.getElementById('sheet-f-skills').value,
-    weapons: document.getElementById('sheet-f-weapons').value,
-    equipment: document.getElementById('sheet-f-equipment').value,
     notes: document.getElementById('sheet-f-notes').value
-  };
+  });
+  sheetCurrentData = data;
   await saveSheet(sheetCurrentCharacter, data);
   const msg = document.getElementById('sheet-save-msg');
   msg.style.display = 'inline';
   setTimeout(() => { msg.style.display = 'none'; }, 1500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY  (Phase 1 — read-only structured render + safe free-text migration)
+// ───────────────────────────────────────────────────────────────────────────
+// Per-character gear, stored exactly like the character sheet: one shared JSON
+// blob in aurelia_state under key 'inventory', keyed by character (funds-style)
+// so the referee sees all five in one fetch and can edit any, while players
+// see/edit only their own — honour system, client-side gated, the same model
+// as sheet-${name} and funds. No new table, no RLS (see docs/inventory-phase-0-
+// audit.md §1.2/§3). Phase 1 is READ-ONLY: it renders items and performs a
+// one-time migration of the old free-text Weapons/Equipment fields into
+// structured instances (raw text preserved, so nothing typed is ever lost).
+// Add/remove + the referee catalogue land in Phase 2, equip + advisory
+// encumbrance in Phase 3, the drag grid in Phase 4.
+
+// Worn/wielded slots — single source of truth (used from Phase 3).
+const EQUIP_SLOTS = [
+  ['armour','Armour'], ['primary','Primary Weapon'], ['secondary','Sidearm'],
+  ['aug','Augment'], ['misc','Other']
+];
+function slotLabel(key){ const s = EQUIP_SLOTS.find(x => x[0] === key); return s ? s[1] : key; }
+
+let INVENTORY = { byChar: {} };
+let _invIdSeq = 0;
+
+async function loadInventory(){
+  try {
+    const res = await supaStorage.get('inventory', true);
+    const v = res.value != null ? JSON.parse(res.value) : null;
+    INVENTORY = (v && typeof v === 'object' && v.byChar && typeof v.byChar === 'object') ? v : { byChar: {} };
+  } catch(e){ INVENTORY = { byChar: {} }; }
+}
+async function saveInventory(){
+  try { await supaStorage.set('inventory', JSON.stringify(INVENTORY), true); }
+  catch(e){ console.error('Inventory save failed', e); }
+}
+
+function invBucket(characterName){
+  if(!INVENTORY.byChar) INVENTORY.byChar = {};
+  const b = INVENTORY.byChar[characterName] || (INVENTORY.byChar[characterName] = { items: [] });
+  if(!Array.isArray(b.items)) b.items = [];
+  return b;
+}
+function invItemsFor(characterName){
+  const b = INVENTORY.byChar && INVENTORY.byChar[characterName];
+  return (b && Array.isArray(b.items)) ? b.items : [];
+}
+function invNewId(){ return 'inv_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36); }
+
+// Homebrew footprint auto-suggest from Mass (kg) — referee-editable per item
+// once the catalogue authoring UI lands (Phase 2). Deliberately coarse: a hint
+// that keeps the grid layout roughly consistent with mass, not a rule.
+function footprintFromMass(kg){
+  const m = Number(kg) || 0;
+  if(m <= 2)  return { w:1, h:1 };
+  if(m <= 4)  return { w:1, h:2 };
+  if(m <= 8)  return { w:2, h:2 };
+  if(m <= 15) return { w:2, h:3 };
+  return { w:3, h:3 };
+}
+
+// Total mass contributed by one instance (mass × qty) — the Phase-3 encumbrance
+// engine sums this over the carried (non-stowed) items.
+function invItemMass(it){
+  const m = (it && it.snapshot && Number(it.snapshot.mass)) || 0;
+  const q = (it && Number(it.qty)) || 1;
+  return m * q;
+}
+
+// Build a structured instance from a snapshot (a catalogue def in Phase 2, or a
+// one-off here). Snapshot is frozen at add-time so later catalogue edits/deletes
+// never corrupt an owned item.
+function makeInvItem(snapshot, overrides){
+  const snap = Object.assign({ name:'', category:'gear', tl:'', mass:0, cost:0 }, snapshot || {});
+  if(snap.w == null || snap.h == null){ const f = footprintFromMass(snap.mass); snap.w = f.w; snap.h = f.h; }
+  return Object.assign({
+    iid: invNewId(), defId: null, snapshot: snap,
+    qty: 1, stowed: false, equipped: false, slot: null,
+    state: { ammo: null, charge: null, damaged: false, customName: '' }
+  }, overrides || {});
+}
+
+// ── One-time free-text → structured migration (safe: raw text preserved) ──────
+// Runs once per character (guarded by data.invMigrated + only when there is text
+// to migrate). Splits the legacy Weapons/Equipment textareas into instances,
+// keeps the FULL originals in data._legacyGear AND each item's snapshot.notes,
+// then clears the free-text fields. Called from openSheet after both blobs load.
+function _splitGearLines(text, splitCommas){
+  if(!text) return [];
+  let parts = String(text).split(/[\n;]+/);
+  if(splitCommas) parts = parts.reduce((acc, p) => acc.concat(p.split(/,(?![^(]*\))/)), []); // split on top-level commas only — keep "(form-fitting, 6kg)" intact
+  return parts.map(s => s.trim()).filter(Boolean);
+}
+function _gearLabel(line){
+  let name = String(line).split(/[,(]/)[0].trim() || String(line).trim();
+  return name.length > 48 ? name.slice(0, 47) + '…' : name;
+}
+function _gearMassKg(line){
+  const m = String(line).match(/(\d+(?:\.\d+)?)\s*kg\b/i);
+  return m ? Number(m[1]) : 0;
+}
+function migrateSheetGear(characterName, data){
+  if(!data || data.invMigrated) return;
+  const weaponsTxt = (data.weapons || '').trim();
+  const equipTxt   = (data.equipment || '').trim();
+  data.invMigrated = true;                 // don't reprocess this character again
+  if(!weaponsTxt && !equipTxt) return;     // nothing to migrate — leave blob unwritten
+  const bucket = invBucket(characterName);
+  _splitGearLines(weaponsTxt, false).forEach(line =>
+    bucket.items.push(makeInvItem({ name:_gearLabel(line), category:'weapon', mass:_gearMassKg(line), notes:line })));
+  _splitGearLines(equipTxt, true).forEach(line =>
+    bucket.items.push(makeInvItem({ name:_gearLabel(line), category:'gear', mass:_gearMassKg(line), notes:line })));
+  data._legacyGear = { weapons: data.weapons || '', equipment: data.equipment || '' }; // verbatim safety net
+  data.weapons = '';
+  data.equipment = '';
+  saveSheet(characterName, data);          // persist cleared fields + invMigrated flag
+  saveInventory();                          // commit the new instances
+}
+
+// ── Read-only render (inside the character-sheet modal) ───────────────────────
+function _catLabel(cat){
+  return ({ weapon:'Weapon', armour:'Armour', gear:'Gear', augment:'Augment', consumable:'Consumable' })[cat] || 'Gear';
+}
+function renderInventorySection(characterName){
+  const items = invItemsFor(characterName);
+  const carried = items.filter(it => !it.stowed);
+  const stowed  = items.filter(it => it.stowed);
+  const group = (label, list) => list.length ? `<div class="inv-group">
+      <div class="inv-group-lbl">${label}<span class="inv-group-count">${list.length}</span></div>
+      <div class="inv-list">${list.map(renderInvTile).join('')}</div>
+    </div>` : '';
+  const body = items.length
+    ? (group('Carried', carried) + group('Stowed', stowed))
+    : `<div class="inv-empty">No items yet — add / remove and the item catalogue arrive in the next update.</div>`;
+  return `<div class="sheet-section">
+    <div class="sheet-section-lbl">Inventory</div>
+    <div class="inv-hint">Read-only · tap an item for its stat block</div>
+    ${body}
+  </div>`;
+}
+function renderInvTile(it){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const cat = s.category || 'gear';
+  const name = ea((it.state && it.state.customName) || s.name || 'Item');
+  const meta = [];
+  if(s.tl !== '' && s.tl != null) meta.push('TL' + ea(String(s.tl)));
+  meta.push((Number(s.mass) || 0) + 'kg');
+  const q = Number(it.qty) || 1; if(q > 1) meta.push('×' + q);
+  meta.push((s.w || 1) + '×' + (s.h || 1));
+  const eqBadge = it.equipped
+    ? `<span class="inv-badge inv-badge-eq">Equipped${it.slot ? (' · ' + ea(slotLabel(it.slot))) : ''}</span>` : '';
+  return `<div class="inv-item inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}" onclick="this.classList.toggle('open')">
+    <div class="inv-item-head">
+      <span class="inv-item-name">${name}</span>
+      ${eqBadge}
+      <span class="inv-badge inv-badge-cat">${ea(_catLabel(cat))}</span>
+    </div>
+    <div class="inv-item-meta">${meta.join(' · ')}</div>
+    ${renderInvItemDetail(it)}
+  </div>`;
+}
+function renderInvItemDetail(it){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const rows = [];
+  const add = (k, v) => { if(v !== '' && v != null) rows.push(
+    `<div class="inv-d-row"><span class="inv-d-k">${k}</span><span class="inv-d-v">${ea(String(v))}</span></div>`); };
+  add('Category', _catLabel(s.category));
+  add('TL', s.tl);
+  add('Mass', (Number(s.mass) || 0) + ' kg');
+  if(s.cost !== '' && s.cost != null) add('Cost', 'Cr' + (Number(s.cost) || 0).toLocaleString());
+  add('Footprint', (s.w || 1) + '×' + (s.h || 1) + ' cells');
+  if(s.category === 'weapon'){ add('Range', s.range); add('Damage', s.damage); add('Magazine', s.magazine); add('Traits', s.traits); add('Skill', s.skill); }
+  if(s.category === 'armour'){ add('Protection', s.protection); add('Rad', s.rad); add('Req STR', s.reqStr); }
+  const q = Number(it.qty) || 1; if(q > 1) add('Quantity', q);
+  if(it.state){
+    if(it.state.ammo != null)   add('Ammo', it.state.ammo);
+    if(it.state.charge != null) add('Charge', it.state.charge);
+    if(it.state.damaged)        add('Condition', 'Damaged');
+  }
+  add('Notes', s.notes || s.desc);
+  return `<div class="inv-item-detail">${rows.join('') || '<div class="inv-d-row"><span class="inv-d-v">No further details.</span></div>'}</div>`;
 }
 
