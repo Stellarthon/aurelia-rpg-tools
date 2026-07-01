@@ -1,4 +1,77 @@
 // ═══════════════════════════════════════════════════════════════════════════
+// SPLASH OVERLAY — reusable welcome screen
+// ═══════════════════════════════════════════════════════════════════════════
+// A brief full-screen welcome that fades in over the app, auto-dismisses after
+// a few seconds, and can be skipped with a tap or any key. Two callers drive
+// it: showIntroSplash() on app entry, and maybeSystemWelcome() the first time
+// a traveller visits a system (see 10-galaxy.js). Purely cosmetic — the app
+// boots underneath regardless, so this can never block access.
+let _splashTimer = null, _splashArm = null;
+function _splashEnd(){ dismissSplash(); }
+// opts: { kicker, title, sub, hint, italicSub, duration }
+function showSplash(opts){
+  opts = opts || {};
+  const el = document.getElementById('app-splash');
+  if(!el) return;
+  const setLine = (sel, text) => {
+    const n = el.querySelector(sel);
+    if(!n) return;
+    n.textContent = text || '';
+    n.style.display = text ? '' : 'none';   // collapse empty lines (e.g. no kicker)
+  };
+  setLine('.splash-kicker', opts.kicker);
+  setLine('.splash-title',  opts.title);
+  setLine('.splash-sub',    opts.sub);
+  setLine('.splash-hint',   opts.hint);
+  const sub = el.querySelector('.splash-sub');
+  if(sub) sub.classList.toggle('italic', !!opts.italicSub);
+  el.setAttribute('aria-label', opts.title || 'Welcome');
+
+  // Restart cleanly if a previous splash is still up (e.g. system after intro).
+  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  document.removeEventListener('keydown', _splashEnd);
+  el.removeEventListener('click', _splashEnd);
+  el.classList.remove('show');
+  void el.offsetWidth;                       // reflow, so the entrance replays
+  el.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => el.classList.add('show'));
+
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  _splashTimer = setTimeout(dismissSplash, reduce ? 1400 : (opts.duration || 3800));
+  // Arm skip-to-dismiss only after the entrance settles, so the click or key
+  // that triggered the splash doesn't instantly close it.
+  _splashArm = setTimeout(() => {
+    if(el.classList.contains('show')){
+      document.addEventListener('keydown', _splashEnd);
+      el.addEventListener('click', _splashEnd);
+    }
+  }, 500);
+}
+function dismissSplash(){
+  const el = document.getElementById('app-splash');
+  if(!el || !el.classList.contains('show')) return;
+  clearTimeout(_splashTimer); clearTimeout(_splashArm);
+  el.classList.remove('show');               // fades out via the CSS transition
+  el.setAttribute('aria-hidden', 'true');
+  document.removeEventListener('keydown', _splashEnd);
+  el.removeEventListener('click', _splashEnd);
+}
+
+// App-entry welcome — shown once the access gate clears (players + referee).
+let _introShown = false;
+function showIntroSplash(){
+  if(_introShown) return;                     // only ever once per page load
+  _introShown = true;
+  showSplash({
+    kicker: 'Aurelian System',
+    title:  'WELCOME TRAVELLER',
+    sub:    'May the stars ever be full of wonder.',
+    italicSub: true,
+    hint:   'Tap anywhere to begin',
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACCESS GATE
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTE: this is a casual deterrent, not real security. Anyone who views the
@@ -13,6 +86,7 @@ function checkPassword(){
   if(input.value === ACCESS_CODE){
     try { localStorage.setItem('aurelia_access', '1'); } catch(e){}
     document.getElementById('pw-gate').classList.add('hidden');
+    showIntroSplash();
   } else {
     input.classList.add('wrong');
     err.textContent = 'Incorrect code — try again.';
@@ -24,6 +98,7 @@ function checkPassword(){
   try {
     if(localStorage.getItem('aurelia_access') === '1'){
       document.getElementById('pw-gate').classList.add('hidden');
+      showIntroSplash();
     }
   } catch(e){}
 })();

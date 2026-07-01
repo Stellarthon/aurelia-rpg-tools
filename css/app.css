@@ -2506,6 +2506,89 @@ input#ui-scale-range{
 }
 #pw-error{color:#d45050;font-size:10px;margin-top:8px;min-height:14px}
 
+/* ── Splash overlay — reusable welcome screen ──
+   Full-screen welcome that fades in over the app, auto-dismisses after a few
+   seconds, and skips on tap / keypress. Used both for the app-entry welcome
+   (once the access gate clears) and the per-system welcome (first visit to a
+   system). Invisible and click-through until scripts add .show, so a script
+   failure can never trap the viewer behind a blank overlay. */
+.splash{
+  /* Topmost during its brief life — above the persistent referee alert
+     controls (9002), combat modal (9500) and toast layer (9999). */
+  position:fixed;inset:0;z-index:10000;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 40%, rgba(212,168,67,0.10), transparent 62%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, #10131c 0%, #0b0d13 55%, #070810 100%);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .8s ease, visibility .8s ease;
+  overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.splash.show{opacity:1;visibility:visible;pointer-events:auto}
+
+/* Two staggered starfield layers drifting behind the text */
+.splash .splash-stars,
+.splash .splash-stars::after{
+  content:"";position:absolute;inset:-50%;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,.9), transparent),
+    radial-gradient(1.5px 1.5px at 75% 22%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,.8), transparent),
+    radial-gradient(1px 1px at 85% 62%, rgba(200,220,255,.7), transparent),
+    radial-gradient(1.5px 1.5px at 60% 45%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1px 1px at 12% 82%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1px 1px at 90% 40%, rgba(255,240,210,.7), transparent),
+    radial-gradient(1px 1px at 32% 14%, rgba(255,255,255,.6), transparent);
+  background-repeat:repeat;background-size:520px 520px;
+}
+.splash .splash-stars{animation:splash-twinkle 5s ease-in-out infinite;opacity:.5}
+.splash .splash-stars::after{background-size:340px 340px;animation:splash-twinkle 7s ease-in-out infinite reverse;opacity:.35}
+@keyframes splash-twinkle{0%,100%{opacity:.25}50%{opacity:.6}}
+
+.splash .splash-content{position:relative;text-align:center;padding:0 24px;max-width:720px}
+.splash .splash-kicker{
+  font-family:monospace;font-size:12px;letter-spacing:5px;text-transform:uppercase;
+  color:var(--tx1);opacity:0
+}
+.splash .splash-title{
+  margin:14px 0 0;font-size:clamp(30px,7vw,58px);font-weight:800;
+  letter-spacing:clamp(3px,1.4vw,10px);line-height:1.05;color:var(--accentGold);
+  text-shadow:0 0 26px rgba(212,168,67,.45), 0 2px 4px rgba(0,0,0,.6);opacity:0
+}
+.splash .splash-rule{
+  width:0;height:1px;margin:22px auto 20px;opacity:0;
+  background:linear-gradient(90deg, transparent, var(--accentGold), transparent)
+}
+.splash .splash-sub{
+  margin:0;font-size:clamp(14px,2.4vw,19px);
+  color:var(--tx0);letter-spacing:.3px;opacity:0
+}
+.splash .splash-sub.italic{font-style:italic}
+.splash .splash-hint{
+  margin-top:34px;font-family:monospace;font-size:10px;letter-spacing:3px;
+  text-transform:uppercase;color:var(--tx1);opacity:0
+}
+
+/* Choreographed entrance — each line rises + fades in as the splash shows */
+.splash.show .splash-kicker{animation:splash-rise .9s ease .15s forwards}
+.splash.show .splash-title {animation:splash-rise 1s ease .35s forwards}
+.splash.show .splash-rule  {animation:splash-line .9s ease .8s forwards}
+.splash.show .splash-sub   {animation:splash-rise 1s ease 1.05s forwards}
+.splash.show .splash-hint  {animation:splash-hint 2s ease 1.8s infinite}
+@keyframes splash-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes splash-line{from{opacity:0;width:0}to{opacity:.7;width:min(260px,60%)}}
+@keyframes splash-hint{0%,100%{opacity:.25}50%{opacity:.7}}
+
+@media (prefers-reduced-motion: reduce){
+  .splash{transition:opacity .3s ease, visibility .3s ease}
+  .splash .splash-stars,.splash .splash-stars::after{animation:none}
+  .splash.show .splash-kicker,
+  .splash.show .splash-title,
+  .splash.show .splash-sub,
+  .splash.show .splash-hint{animation:none;opacity:1}
+  .splash.show .splash-rule{animation:none;opacity:.7;width:min(260px,60%)}
+}
+
 /* ── Player refresh button (iOS home-screen apps suspend setInterval, so
      players need a manual way to pull fresh reveal state) ── */
 
