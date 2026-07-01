@@ -1104,6 +1104,7 @@ function renderSheetForm(data){
     ['INT','intl'], ['EDU','edu'], ['SOC','soc']
   ];
   body.innerHTML = `
+    ${renderPortrait(sheetCurrentCharacter, data)}
     <div class="sheet-name-row">
       <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
       <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${(data.age||'').replace(/"/g,'&quot;')}">
@@ -1141,23 +1142,23 @@ function updateSheetDM(key){
   if(key === 'str' || key === 'end') updateEncIndicator();  // live encumbrance as STR/END are edited
 }
 
+// Merge the current form inputs over the loaded blob, preserving any fields with
+// no input (legacy gear text, invMigrated flag, portraitVer). Shared by the Save
+// button and the portrait upload so neither clobbers the other's changes.
+function collectSheetData(){
+  const data = Object.assign({}, sheetCurrentData || {});
+  const g = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  if(document.getElementById('sheet-f-name') != null){
+    data.name = g('sheet-f-name'); data.age = g('sheet-f-age');
+    data.str = parseInt(g('sheet-f-str')) || 0; data.dex = parseInt(g('sheet-f-dex')) || 0; data.end = parseInt(g('sheet-f-end')) || 0;
+    data.intl = parseInt(g('sheet-f-intl')) || 0; data.edu = parseInt(g('sheet-f-edu')) || 0; data.soc = parseInt(g('sheet-f-soc')) || 0;
+    data.skills = g('sheet-f-skills'); data.notes = g('sheet-f-notes');
+  }
+  return data;
+}
 async function saveCurrentSheet(){
   if(!sheetCurrentCharacter) return;
-  // Spread the loaded blob first so fields with no form input (the migrated
-  // legacy gear text, invMigrated flag, future portrait) survive the save;
-  // the form fields below overwrite the ones the user can actually edit.
-  const data = Object.assign({}, sheetCurrentData || {}, {
-    name: document.getElementById('sheet-f-name').value,
-    age: document.getElementById('sheet-f-age').value,
-    str: parseInt(document.getElementById('sheet-f-str').value)||0,
-    dex: parseInt(document.getElementById('sheet-f-dex').value)||0,
-    end: parseInt(document.getElementById('sheet-f-end').value)||0,
-    intl: parseInt(document.getElementById('sheet-f-intl').value)||0,
-    edu: parseInt(document.getElementById('sheet-f-edu').value)||0,
-    soc: parseInt(document.getElementById('sheet-f-soc').value)||0,
-    skills: document.getElementById('sheet-f-skills').value,
-    notes: document.getElementById('sheet-f-notes').value
-  });
+  const data = collectSheetData();
   sheetCurrentData = data;
   await saveSheet(sheetCurrentCharacter, data);
   const msg = document.getElementById('sheet-save-msg');
@@ -1375,9 +1376,7 @@ function renderInvItemDetail(it, extraHtml){
 // Who may edit a character's inventory: the referee (any), or the player whose
 // device identity matches (their own) — the same honour gate as the sheet. The
 // KV table is not RLS-enforced; this mirrors funds/notes exactly (Phase 0 §1.2).
-function canEditInv(characterName){
-  return isReferee() || (!!myIdentity && myIdentity === characterName);
-}
+function canEditInv(characterName){ return canEditChar(characterName); }
 
 // Re-render just the inventory <section> in the open sheet, so add/remove leave
 // the rest of the form (and any unsaved characteristic edits) untouched.
@@ -1533,9 +1532,13 @@ function renderCatalogueBrowser(){
   const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
   const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
   const ref = isReferee();
-  const note = catalogueTargetChar
-    ? `<div class="cat-target">Adding to <b>${ea(catalogueTargetChar)}</b> — tap ＋ Add</div>`
-    : (ref ? `<div class="cat-target">Authoring the shared item library</div>` : '');
+  let note;
+  if(catalogueTargetChar){
+    note = `<div class="cat-target">Adding to <b>${ea(catalogueTargetChar)}</b> — tap ＋ Add${ref ? ` · <button class="cat-link" onclick="catSetTarget('')">done</button>` : ''}</div>`;
+  } else if(ref){
+    const opts = (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).map(n => `<option value="${eatt(n)}">${ea(n)}</option>`).join('');
+    note = `<div class="cat-target">Authoring the shared library · <label>grant to <select class="cat-grant" onchange="if(this.value)catSetTarget(this.value)"><option value="">—</option>${opts}</select></label></div>`;
+  } else { note = ''; }
   const chips = ['all'].concat(ITEM_CATEGORIES).map(c =>
     `<button class="cat-chip${catalogueCatFilter === c ? ' on' : ''}" onclick="catSetFilter('${c}')">${c === 'all' ? 'All' : ea(_catLabel(c))}</button>`).join('');
   const newBtn = ref ? `<button class="cat-new-btn" onclick="catAdd()">＋ New item</button>` : '';
@@ -1972,5 +1975,89 @@ function invTilePointerUp(e){
   const el = document.elementFromPoint(e.clientX, e.clientY);
   const tab = el && el.closest ? el.closest('.inv-tab[data-container]') : null;
   if(tab){ const cid = tab.getAttribute('data-container'); if(cid) invMoveToContainer(d.characterName, d.iid, cid); }
+}
+function catSetTarget(name){ catalogueTargetChar = name || null; renderCatalogueModal(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHARACTER PORTRAIT  (Phase 6, §4.7 — Supabase Storage 'portraits' bucket)
+// ───────────────────────────────────────────────────────────────────────────
+// Players upload their own character's portrait, the referee any — same honour
+// gate as the sheet/inventory. The client center-crops + resizes to a 512² JPEG
+// before upload (well under the 2 MB bucket limit); a version stamp on the sheet
+// blob (portraitVer) makes every device load the latest via the shared public
+// URL. Storage plumbing lives in js/50-supabase.js (portraitUrlFor /
+// uploadPortraitBlob), per the data-layer ownership rule.
+function canEditChar(characterName){ return isReferee() || (!!myIdentity && myIdentity === characterName); }
+function portraitInitials(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return (((parts[0] || '')[0] || '') + ((parts[1] || '')[0] || '')).toUpperCase() || '?';
+}
+function renderPortrait(characterName, data){
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const editable = canEditChar(characterName);
+  const ver = data && data.portraitVer;
+  const img = ver
+    ? `<img class="sheet-portrait-img" src="${portraitUrlFor(characterName, ver)}" alt="${eatt(characterName)}" onerror="this.remove();var p=document.getElementById('sheet-portrait');if(p)p.classList.add('no-img')">`
+    : '';
+  return `<div class="sheet-portrait-row" id="sheet-portrait-row">
+    <div class="sheet-portrait${ver ? '' : ' no-img'}" id="sheet-portrait">
+      ${img}<span class="sheet-portrait-fallback">${ea(portraitInitials(characterName))}</span>
+    </div>
+    ${editable ? `<div class="sheet-portrait-actions">
+      <button class="sheet-portrait-btn" onclick="triggerPortraitUpload()">${ver ? 'Change photo' : 'Upload photo'}</button>
+      <input type="file" id="portrait-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onPortraitFile(event)">
+      <div class="sheet-portrait-hint" id="portrait-hint">JPG / PNG / WebP · cropped square</div>
+    </div>` : ''}
+  </div>`;
+}
+function refreshPortrait(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('sheet-portrait-row');
+  if(el) el.outerHTML = renderPortrait(sheetCurrentCharacter, sheetCurrentData || {});
+}
+function triggerPortraitUpload(){ const f = document.getElementById('portrait-file'); if(f) f.click(); }
+function resizePortrait(file, size){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+async function onPortraitFile(e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';           // allow re-picking the same file later
+  if(!file || !sheetCurrentCharacter) return;
+  if(!canEditChar(sheetCurrentCharacter)) return;
+  const hint = document.getElementById('portrait-hint');
+  const setHint = t => { if(hint) hint.textContent = t; };
+  if(file.size > 12 * 1024 * 1024){ setHint('Source image too large (max 12 MB).'); return; }
+  try {
+    setHint('Processing…');
+    const blob = await resizePortrait(file, 512);
+    setHint('Uploading…');
+    await uploadPortraitBlob(sheetCurrentCharacter, blob);
+    const data = collectSheetData();               // keep any in-progress form edits
+    data.portraitVer = Date.now();
+    sheetCurrentData = data;
+    await saveSheet(sheetCurrentCharacter, data);
+    refreshPortrait();
+    if(typeof showToast === 'function') showToast('Portrait updated');
+  } catch(err){
+    console.error('Portrait upload failed', err);
+    setHint('Upload failed — try again.');
+    if(typeof showToast === 'function') showToast('Portrait upload failed');
+  }
 }
 
