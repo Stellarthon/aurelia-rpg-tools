@@ -1112,6 +1112,34 @@ async function saveFactionAdditions(){ try { await supaStorage.set('faction-addi
 async function saveFactionDeletions(){ try { await supaStorage.set('faction-deletions', JSON.stringify(factionDeletions), true); } catch(e){ console.error('Faction deletions save failed', e); } }
 async function saveFactionPropertyOverrides(){ try { await supaStorage.set('faction-prop-overrides', JSON.stringify(factionPropertyOverrides), true); } catch(e){ console.error('Faction prop overrides save failed', e); } }
 
+// ── Player-facing faction visibility (referee-controlled) ────────────────────
+// Some regions are lore spoilers (The Vast, the Archon Collective). The referee
+// can hide a whole faction from players: to players a hidden region's systems
+// read as "Uncharted" (name, colour, territory blob and faction tag all
+// redacted) and the region drops out of the Regions list — the same shared
+// blob + poll mechanism the area reveal control uses. The referee always sees
+// the truth plus the toggle state. Default: the two spoiler factions start
+// hidden, every other region visible.
+// The spoilers-hidden default must survive an absent stored value: until the
+// referee explicitly saves a visibility state, EVERYONE (players polling
+// included) falls back to this, or The Vast / Archon Collective would leak.
+const FACTION_HIDDEN_DEFAULT = { archon:true, vast:true };
+let factionHidden = { ...FACTION_HIDDEN_DEFAULT };
+async function loadFactionHidden(){
+  try { const r = await supaStorage.get('faction-hidden', true);
+    factionHidden = (r && r.value != null) ? (JSON.parse(r.value) || {}) : { ...FACTION_HIDDEN_DEFAULT };
+  } catch(e){ factionHidden = { ...FACTION_HIDDEN_DEFAULT }; }
+}
+async function saveFactionHidden(){ try { await supaStorage.set('faction-hidden', JSON.stringify(factionHidden), true); } catch(e){ console.error('Faction hidden save failed', e); } }
+function toggleFactionHidden(id){
+  if(typeof isReferee === 'function' && !isReferee()) return; // referee-only
+  factionHidden[id] = !factionHidden[id];
+  saveFactionHidden();                              // fire-and-forget; players pick it up on their next poll
+  if(typeof HX !== 'undefined') HX.refresh();       // referee's own view updates immediately
+  if(typeof showToast === 'function'){ const nm = (GALAXY_FACTIONS[id]||{}).name || id;
+    showToast('“' + nm + '” ' + (factionHidden[id] ? 'hidden from' : 'revealed to') + ' players', 'info'); }
+}
+
 function effectiveFactions(){
   const out = {};
   Object.keys(GALAXY_FACTIONS_BASE).forEach(id => {
@@ -1323,6 +1351,13 @@ const HX = (function(){
   const disp=s=>String((s&&(s.label||s.star))||'').replace(' ★','');
   const eh=s=>(typeof escHtml==='function'?escHtml(String(s)):String(s));
   function ref(){ return typeof isReferee!=='function' || isReferee(); }
+  // Faction visibility: to a player a referee-hidden faction is redacted to the
+  // neutral "Uncharted" region so its name / colour / territory can't spoil it.
+  // The referee always sees the truth.
+  function facHidden(facId){ return !ref() && typeof factionHidden!=='undefined' && !!factionHidden[facId]; }
+  function effFac(facId){ const F=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
+    if(facHidden(facId)) return F.uncharted || {name:'Uncharted', color:'#9fb0c8'};
+    return F[facId] || {name:'Independent', color:'#9fb0c8'}; }
 
   // ── Hex math (flat-top axial, 1 hex = 1 parsec) ──
   function hexDist(a,b){return (Math.abs(a.q-b.q)+Math.abs(a.r-b.r)+Math.abs(a.q+a.r-b.q-b.r))/2;}
@@ -1613,7 +1648,7 @@ const HX = (function(){
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
     if(showTerr){ const tg=NS('g',{}); g.appendChild(tg); const byFac={};
-      SYS.forEach(s=>{ if(s.fac==='independent'||s.fac==='uncharted'||!FAC[s.fac]) return; (byFac[s.fac]=byFac[s.fac]||[]).push(s); });
+      SYS.forEach(s=>{ if(s.fac==='independent'||s.fac==='uncharted'||!FAC[s.fac]||facHidden(s.fac)) return; (byFac[s.fac]=byFac[s.fac]||[]).push(s); });
       Object.keys(byFac).forEach(f=>{ const fac=FAC[f]; const pts=byFac[f].map(s=>axialPx(s.q,s.r));
         const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
         let rad=0; pts.forEach(p=>rad=Math.max(rad,Math.hypot(p.x-cx,p.y-cy))); rad+=RPX*1.5;
@@ -1643,6 +1678,18 @@ const HX = (function(){
         if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
           hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
+    // Corp territory — when a house is selected in the econ console, ring its HQ + expanded worlds in
+    // its house colour (HQ = solid ring + label; expansions = dashed, growing with the invest count).
+    if(typeof window!=='undefined' && window.econCorpSel && typeof ECON!=='undefined'){
+      try{ const c=ECON.corps()[window.econCorpSel];
+        if(c){ const col=c.color||'#ff9a3c', cg=NS('g',{'pointer-events':'none'}); const counts={};
+          if(c.home) counts[c.home]=0; (c.invests||[]).forEach(iv=>{ counts[iv.world]=(counts[iv.world]||0)+1; });
+          Object.keys(counts).forEach(wid=>{ const s=BY_ID[wid]; if(!s) return; const p=axialPx(s.q,s.r), isHome=wid===c.home, rad=11+Math.min(6,counts[wid]*2);
+            cg.appendChild(NS('circle',{cx:p.x,cy:p.y,r:rad,fill:col,'fill-opacity':0.06,stroke:col,'stroke-opacity':0.85,'stroke-width':isHome?1.8:1.1,'stroke-dasharray':isHome?'none':'3,3'}));
+            if(isHome){ const t=NS('text',{x:p.x,y:p.y-rad-3,'text-anchor':'middle',fill:col,'font-family':'monospace','font-size':8.5,'font-weight':700,opacity:0.9}); t.textContent='◆ '+(''+c.name).split(' ')[0].toUpperCase(); cg.appendChild(t); } });
+          g.appendChild(cg); }
+      }catch(e){}
+    }
     if(selected&&selected!==origin){ const route=bestRoute(origin,selected);
       if(route&&route.length>1){ const plan=fuelPlan(route);
         for(let i=0;i<route.length-1;i++){ const pa=axialPx(route[i].q,route[i].r),pb=axialPx(route[i+1].q,route[i+1].r);
@@ -1652,7 +1699,7 @@ const HX = (function(){
         if(plan.strandedAt!=null){ const sp=route[plan.strandedAt], p=axialPx(sp.q,sp.r);
           g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:8,class:'hx-strand-dot'}));
           const t=NS('text',{x:p.x,y:p.y+22,'text-anchor':'middle',class:'hx-fuel-warn'}); t.textContent='⚠ STRANDED'; g.appendChild(t); } } }
-    SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=(FAC[s.fac]||{color:'#9fb0c8'}).color;
+    SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
         if(fa==='none') ring.setAttribute('stroke-dasharray','2,2'); g.appendChild(ring); }
@@ -1763,9 +1810,11 @@ const HX = (function(){
       let x=pts[0].x, y=pts[0].y;
       if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
         const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
-      // Highlight the SELECTED trader's route (picked in the econ console); dim the rest.
-      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id);
-      const anySel=(typeof window!=='undefined' && !!window.econTraderSel), dim=anySel&&!sel;
+      // Highlight the SELECTED trader's route, OR every convoy of the SELECTED corporation
+      // (econCorpSel = a backing id like 'corp:omnisynth'); dim the rest. Picked in the econ console.
+      const corpSel=(typeof window!=='undefined' && window.econCorpSel && a.backing===window.econCorpSel);
+      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id) || corpSel;
+      const anySel=(typeof window!=='undefined' && (!!window.econTraderSel || !!window.econCorpSel)), dim=anySel&&!sel;
       const col=sel?'#ffe27a':'#f4d35e', z=sel?6:4.2, gg=NS('g',{'pointer-events':'none'});
       if(sel) gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':3,opacity:0.22,'stroke-linejoin':'round'}));   // glow
       gg.appendChild(NS('polyline',{points:pts.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:col,'stroke-width':sel?1.6:0.8,opacity:sel?0.95:(dim?0.12:0.3),'stroke-dasharray':sel?'none':'2,3'}));
@@ -1879,7 +1928,7 @@ const HX = (function(){
   function renderSel(){ const el=document.getElementById('hx-sel-block'); if(!el) return;
     if(!origin){ el.innerHTML=''; return; }
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
-    const s=selected, fac=s?(FAC[s.fac]||{name:'Independent',color:'#9fb0c8'}):null, dHex=s?hexDist(s,origin):0; let html='';
+    const s=selected, fac=s?effFac(s.fac):null, dHex=s?hexDist(s,origin):0; let html='';
     // Each panel section is a collapsible <details> dropdown. `sec()` closes the
     // previously-open section and opens a new one; open/closed state is keyed and
     // persisted in secState so it survives the frequent full-innerHTML re-renders.
@@ -1896,10 +1945,12 @@ const HX = (function(){
       if(unch) html+=`<div class="hx-kv"><span class="k">Uncharted stars</span><span class="v">${unch}</span></div>`;
       html+=`<div class="hx-kv"><span class="k">Your location</span><span class="v" style="color:#f4d35e">${eh(disp(origin))}</span></div>`;
       const counts={}; SYS.forEach(x=>{ if(x.uncharted) return; counts[x.fac]=(counts[x.fac]||0)+1; });
-      const regKeys=Object.keys(FAC).filter(k=>counts[k]&&k!=='uncharted').sort((a,b)=>counts[b]-counts[a]);
-      if(regKeys.length){ html+=`<div class="hx-small" style="margin:8px 0 3px;color:var(--tx1)">Regions</div>`;
-        regKeys.forEach(k=>{ const f=FAC[k]||{};
-          html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d">${counts[k]}</span></div>`; }); }
+      let regKeys=Object.keys(FAC).filter(k=>counts[k]&&k!=='uncharted').sort((a,b)=>counts[b]-counts[a]);
+      if(!ref()) regKeys=regKeys.filter(k=>!facHidden(k));   // players never see a hidden region listed
+      if(regKeys.length){ html+=`<div class="hx-small" style="margin:8px 0 3px;color:var(--tx1)">Regions${ref()?' · <span style="opacity:.75">👁 tap to hide/reveal for players</span>':''}</div>`;
+        regKeys.forEach(k=>{ const f=FAC[k]||{}; const hid=(typeof factionHidden!=='undefined'&&!!factionHidden[k]);
+          const eye=ref()?`<button class="hx-fac-eye ${hid?'hidden-fac':'shown-fac'}" title="${hid?'Hidden from players — tap to reveal':'Visible to players — tap to hide'}" onclick="event.stopPropagation();toggleFactionHidden('${k}')">${hid?'🙈':'👁'}</button>`:'';
+          html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
       html+=`<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
     } else {
     html+=sec('sel','Selected System',true);
@@ -1918,6 +1969,14 @@ const HX = (function(){
     html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
     html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
     const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    // Corporate presence — which trading houses are HQ'd or have expanded here (player-visible, like trade codes).
+    if(typeof ECON!=='undefined' && ECON.isMarketId && ECON.isMarketId(s.id)){
+      try{ const corps=Object.values(ECON.corps()).filter(c=>!c.defunct && (c.home===s.id || (c.invests||[]).some(iv=>iv.world===s.id)));
+        if(corps.length){ const parts=corps.map(c=>{ const n=(c.invests||[]).filter(iv=>iv.world===s.id).length, role=c.home===s.id?(n?`HQ +${n}`:'HQ'):`${n} op${n===1?'':'s'}`;
+            return `<span style="color:${c.color||'#ff9a3c'}">${eh((''+c.name).split(' ')[0])}</span> <span style="opacity:.65">(${role})</span>`; }).join(', ');
+          html+=`<div class="hx-kv"><span class="k">Corporate presence</span><span class="v" style="text-align:right">${parts}</span></div>`; }
+      }catch(e){}
+    }
     // Living-economy world condition + black market (referee always; players once they've called here, like market data)
     if(typeof ECON!=='undefined' && ECON.active() && (ref() || isVisited(s))){
       const wst=ECON.worldStatus(s.id), WM=ECON.WS_META||{};
@@ -1956,7 +2015,7 @@ const HX = (function(){
       }
       html+=sec('cargo','Speculative Cargo → '+eh(disp(s)),false);
       const srcMkt=hasMarket(origin), dstMkt=hasMarket(s);
-      if(!srcMkt||!dstMkt){ const dead=!srcMkt?origin:s, df=FAC[dead.fac];
+      if(!srcMkt||!dstMkt){ const dead=!srcMkt?origin:s, df=effFac(dead.fac);
         html+=`<div class="hx-small">No open market — ${eh((df&&df.name)||'this region')} keeps no commercial trade or refuelling at ${eh(disp(dead))}.</div>`; }
       else if(!ref() && !isVisited(s)){
         html+=`<div class="hx-small">○ Market data sealed — cargo prices for ${eh(disp(s))} appear only once the party has called there in person.</div>`; }
@@ -2187,7 +2246,7 @@ function goGalaxy(){
     });
     const gv = document.getElementById('view-galaxy');
     gv.classList.remove('v-hidden'); gv.style.display = 'flex';
-    document.getElementById('hdr-title').textContent = 'THE ORION ARM';
+    document.getElementById('hdr-title').textContent = layerLabel('galaxy','The Orion Arm').toUpperCase();
     document.getElementById('breadcrumb').innerHTML = '';
     updateBackBtn();
     if(typeof HX!=='undefined') HX.enter();   // hex-jump galaxy layer: read shared state, render, fit
@@ -2220,7 +2279,7 @@ function enterSystem(systemId){
     if(ov) ov.classList.remove('v-hidden');
     const stBtn = document.getElementById('btn-view-station');
     if(stBtn) stBtn.classList.add('v-hidden');
-    document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' SYSTEM';
+    document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' ' + layerShort('system','System').toUpperCase();
     setBreadcrumb([{label:'The Orion Arm', fn:'goGalaxy'}], currentSystemName());
     renderSystemOverview();
     buildOrrery();
@@ -2439,5 +2498,12 @@ async function generateSystem(sysId){
 }
 
 function currentSystem(){ return SYSTEMS[currentSystemId]; }
-function baseBodiesFor(sysId){ return (SYSTEMS[sysId] ? SYSTEMS[sysId].base : []); }
+function baseBodiesFor(sysId){
+  // Read the active Campaign Pack's content; for the built-in Archon Gambit pack
+  // content.systems IS the SYSTEMS constant (same reference) so behaviour is
+  // identical, while an authored campaign supplies its own (or empty) systems.
+  const c = (typeof activePackContent === 'function') ? activePackContent() : null;
+  if(c && c.systems && c.systems[sysId]) return c.systems[sysId].base || [];
+  return (typeof SYSTEMS !== 'undefined' && SYSTEMS[sysId]) ? SYSTEMS[sysId].base : [];
+}
 
