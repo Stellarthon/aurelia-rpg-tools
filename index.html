@@ -382,6 +382,17 @@
     </div>
   </div>
 
+  <!-- ── Inventory item detail modal (tap a grid tile) ── -->
+  <div id="inv-item-modal" onclick="if(event.target===this)closeInvItemModal()">
+    <div id="inv-item-card">
+      <div id="inv-item-hdr">
+        <span id="inv-item-modal-title">Item</span>
+        <button id="inv-item-close" aria-label="Close" onclick="closeInvItemModal()">✕</button>
+      </div>
+      <div id="inv-item-modal-body"></div>
+    </div>
+  </div>
+
   <!-- ── Design Mode inline editor ── -->
   <div id="design-edit-panel" class="hidden" onclick="if(event.target===this) closeDesignEdit()">
     <div id="design-edit-card">
