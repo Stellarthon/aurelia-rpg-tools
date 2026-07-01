@@ -15,6 +15,7 @@
 let sheetCurrentCharacter = null; // which character's sheet is currently open in the modal
 let sheetIsReadOnlyView = false;  // true if referee is viewing but hasn't selected edit... (sheets are always editable by whoever can open them)
 let sheetStatus = [];             // active Traveller 2e status-effect ids for the open sheet
+let sheetCurrentData = null;      // the loaded sheet blob for the open character — lets saveCurrentSheet preserve fields not shown as inputs (weapons/equipment legacy, invMigrated, portrait)
 
 // Characteristics come from the active Campaign Pack (UPP by default). Falls
 // back to the Traveller six before the pack engine loads.
@@ -881,6 +882,14 @@ function renderDesignMenu(){
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">${redoN}</span>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openCatalogue(null)">
+      <span class="settings-row-label">🎒 Item Catalogue</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
+      <span class="settings-row-label">🌠 Splash Screens</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -1253,6 +1262,11 @@ async function openSheet(characterName){
 
   const data = await loadSheet(characterName);
   sheetStatus = Array.isArray(data.status) ? data.status.slice() : [];
+  await loadInventory();
+  await loadEncSettings();
+  await loadContainers();
+  migrateSheetGear(characterName, data);   // one-time free-text → structured items (safe: raw text preserved)
+  sheetCurrentData = data;
   renderSheetForm(data);
   renderSheetFundsAside(characterName);
   renderSheetStatusAside();
@@ -1260,7 +1274,10 @@ async function openSheet(characterName){
 
 function closeSheet(){
   document.getElementById('sheet-modal').classList.add('hidden');
+  if(typeof closeInvItemModal === 'function') closeInvItemModal();  // don't orphan child modals over a closed sheet
+  if(typeof closeCatalogue === 'function') closeCatalogue();
   sheetCurrentCharacter = null;
+  sheetCurrentData = null;
 }
 
 // ── Funds box (left aside) — reads the live funds system (85-records.js) ──
@@ -1306,6 +1323,7 @@ function renderSheetForm(data){
   const body = document.getElementById('sheet-card-body');
   const chars = sheetAttrKeys().map(a => [a.label, a.key]);
   body.innerHTML = `
+    ${renderPortrait(sheetCurrentCharacter, data)}
     <div class="sheet-name-row">
       <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
       <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${(data.age||'').replace(/"/g,'&quot;')}">
@@ -1326,14 +1344,7 @@ function renderSheetForm(data){
       <div class="sheet-section-lbl">Skills</div>
       <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
     </div>
-    <div class="sheet-section">
-      <div class="sheet-section-lbl">Weapons</div>
-      <textarea class="sheet-textarea" id="sheet-f-weapons" placeholder="e.g. Snub pistol, close range, 3d6-3 damage, 6 rounds...">${data.weapons||''}</textarea>
-    </div>
-    <div class="sheet-section">
-      <div class="sheet-section-lbl">Equipment</div>
-      <textarea class="sheet-textarea" id="sheet-f-equipment" placeholder="e.g. Vacc suit (form-fitting, 6kg), Comm unit, Medkit...">${data.equipment||''}</textarea>
-    </div>
+    ${renderInventorySection(sheetCurrentCharacter)}
     <div class="sheet-section">
       <div class="sheet-section-lbl">Notes</div>
       <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
@@ -1347,33 +1358,927 @@ function updateSheetDM(key){
   if(!input || !dmEl) return;
   const dm = charDM(input.value);
   dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
+  if(key === 'str' || key === 'end') updateEncIndicator();  // live encumbrance as STR/END are edited
 }
 
-// Reads the whole sheet (form fields + active status effects) into one blob.
-// Shared by the Save button and the status-effect toggles so neither clobbers
-// the other's data.
+// Merge the current form inputs over the loaded blob, preserving any fields with
+// no input (legacy gear text, invMigrated flag, portraitVer, status). Attributes
+// come from the active Campaign Pack (sheetAttrKeys) so a custom pack's
+// characteristics save too. Shared by the Save button, the status-effect toggles
+// and the portrait upload so none clobbers the others' changes.
 function collectSheetData(){
-  const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
-  const num = id => parseInt(val(id)) || 0;
-  const out = {
-    name: val('sheet-f-name'),
-    age: val('sheet-f-age'),
-    skills: val('sheet-f-skills'),
-    weapons: val('sheet-f-weapons'),
-    equipment: val('sheet-f-equipment'),
-    notes: val('sheet-f-notes'),
-    status: sheetStatus.slice()
-  };
-  sheetAttrKeys().forEach(a => { out[a.key] = num('sheet-f-' + a.key); });
-  return out;
+  const data = Object.assign({}, sheetCurrentData || {});
+  const g = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  if(document.getElementById('sheet-f-name') != null){
+    data.name = g('sheet-f-name'); data.age = g('sheet-f-age');
+    sheetAttrKeys().forEach(a => { data[a.key] = parseInt(g('sheet-f-' + a.key)) || 0; });
+    data.skills = g('sheet-f-skills'); data.notes = g('sheet-f-notes');
+  }
+  data.status = sheetStatus.slice();
+  return data;
 }
-
 async function saveCurrentSheet(){
   if(!sheetCurrentCharacter) return;
   const data = collectSheetData();
+  sheetCurrentData = data;
   await saveSheet(sheetCurrentCharacter, data);
   const msg = document.getElementById('sheet-save-msg');
   msg.style.display = 'inline';
   setTimeout(() => { msg.style.display = 'none'; }, 1500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY  (Phase 1 — read-only structured render + safe free-text migration)
+// ───────────────────────────────────────────────────────────────────────────
+// Per-character gear, stored exactly like the character sheet: one shared JSON
+// blob in aurelia_state under key 'inventory', keyed by character (funds-style)
+// so the referee sees all five in one fetch and can edit any, while players
+// see/edit only their own — honour system, client-side gated, the same model
+// as sheet-${name} and funds. No new table, no RLS (see docs/inventory-phase-0-
+// audit.md §1.2/§3). Phase 1 is READ-ONLY: it renders items and performs a
+// one-time migration of the old free-text Weapons/Equipment fields into
+// structured instances (raw text preserved, so nothing typed is ever lost).
+// Add/remove + the referee catalogue land in Phase 2, equip + advisory
+// encumbrance in Phase 3, the drag grid in Phase 4.
+
+// Worn/wielded slots — single source of truth (used from Phase 3).
+const EQUIP_SLOTS = [
+  ['armour','Armour'], ['primary','Primary Weapon'], ['secondary','Sidearm'],
+  ['aug','Augment'], ['misc','Other']
+];
+function slotLabel(key){ const s = EQUIP_SLOTS.find(x => x[0] === key); return s ? s[1] : key; }
+
+let INVENTORY = { byChar: {} };
+let _invIdSeq = 0;
+
+async function loadInventory(){
+  try {
+    const res = await supaStorage.get('inventory', true);
+    const v = res.value != null ? JSON.parse(res.value) : null;
+    INVENTORY = (v && typeof v === 'object' && v.byChar && typeof v.byChar === 'object') ? v : { byChar: {} };
+  } catch(e){ INVENTORY = { byChar: {} }; }
+}
+async function saveInventory(){
+  try { await supaStorage.set('inventory', JSON.stringify(INVENTORY), true); }
+  catch(e){ console.error('Inventory save failed', e); }
+}
+
+function invBucket(characterName){
+  if(!INVENTORY.byChar) INVENTORY.byChar = {};
+  const b = INVENTORY.byChar[characterName] || (INVENTORY.byChar[characterName] = { items: [] });
+  if(!Array.isArray(b.items)) b.items = [];
+  return b;
+}
+function invItemsFor(characterName){
+  const b = INVENTORY.byChar && INVENTORY.byChar[characterName];
+  return (b && Array.isArray(b.items)) ? b.items : [];
+}
+function invNewId(){ return 'inv_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36); }
+
+// Homebrew footprint auto-suggest from Mass (kg) — referee-editable per item
+// once the catalogue authoring UI lands (Phase 2). Deliberately coarse: a hint
+// that keeps the grid layout roughly consistent with mass, not a rule.
+function footprintFromMass(kg){
+  const m = Number(kg) || 0;
+  if(m <= 2)  return { w:1, h:1 };
+  if(m <= 4)  return { w:1, h:2 };
+  if(m <= 8)  return { w:2, h:2 };
+  if(m <= 15) return { w:2, h:3 };
+  return { w:3, h:3 };
+}
+
+// Total mass contributed by one instance (mass × qty) — the Phase-3 encumbrance
+// engine sums this over the carried (non-stowed) items.
+function invItemMass(it){
+  const m = (it && it.snapshot && Number(it.snapshot.mass)) || 0;
+  const q = (it && Number(it.qty)) || 1;
+  return m * q;
+}
+
+// Build a structured instance from a snapshot (a catalogue def in Phase 2, or a
+// one-off here). Snapshot is frozen at add-time so later catalogue edits/deletes
+// never corrupt an owned item.
+function makeInvItem(snapshot, overrides){
+  const snap = Object.assign({ name:'', category:'gear', tl:'', mass:0, cost:0 }, snapshot || {});
+  if(snap.w == null || snap.h == null){ const f = footprintFromMass(snap.mass); snap.w = f.w; snap.h = f.h; }
+  return Object.assign({
+    iid: invNewId(), defId: null, snapshot: snap,
+    qty: 1, stowed: false, equipped: false, slot: null,
+    state: { ammo: null, charge: null, damaged: false, customName: '' }
+  }, overrides || {});
+}
+
+// ── One-time free-text → structured migration (safe: raw text preserved) ──────
+// Runs once per character (guarded by data.invMigrated + only when there is text
+// to migrate). Splits the legacy Weapons/Equipment textareas into instances,
+// keeps the FULL originals in data._legacyGear AND each item's snapshot.notes,
+// then clears the free-text fields. Called from openSheet after both blobs load.
+function _splitGearLines(text, splitCommas){
+  if(!text) return [];
+  let parts = String(text).split(/[\n;]+/);
+  if(splitCommas) parts = parts.reduce((acc, p) => acc.concat(p.split(/,(?![^(]*\))/)), []); // split on top-level commas only — keep "(form-fitting, 6kg)" intact
+  return parts.map(s => s.trim()).filter(Boolean);
+}
+function _gearLabel(line){
+  let name = String(line).split(/[,(]/)[0].trim() || String(line).trim();
+  return name.length > 48 ? name.slice(0, 47) + '…' : name;
+}
+function _gearMassKg(line){
+  const m = String(line).match(/(\d+(?:\.\d+)?)\s*kg\b/i);
+  return m ? Number(m[1]) : 0;
+}
+function migrateSheetGear(characterName, data){
+  if(!data || data.invMigrated) return;
+  const weaponsTxt = (data.weapons || '').trim();
+  const equipTxt   = (data.equipment || '').trim();
+  data.invMigrated = true;                 // don't reprocess this character again
+  if(!weaponsTxt && !equipTxt) return;     // nothing to migrate — leave blob unwritten
+  const bucket = invBucket(characterName);
+  _splitGearLines(weaponsTxt, false).forEach(line =>
+    bucket.items.push(makeInvItem({ name:_gearLabel(line), category:'weapon', mass:_gearMassKg(line), notes:line })));
+  _splitGearLines(equipTxt, true).forEach(line =>
+    bucket.items.push(makeInvItem({ name:_gearLabel(line), category:'gear', mass:_gearMassKg(line), notes:line })));
+  data._legacyGear = { weapons: data.weapons || '', equipment: data.equipment || '' }; // verbatim safety net
+  data.weapons = '';
+  data.equipment = '';
+  saveSheet(characterName, data);          // persist cleared fields + invMigrated flag
+  saveInventory();                          // commit the new instances
+}
+
+// ── Read-only render (inside the character-sheet modal) ───────────────────────
+function _catLabel(cat){
+  return ({ weapon:'Weapon', armour:'Armour', gear:'Gear', augment:'Augment', consumable:'Consumable' })[cat] || 'Gear';
+}
+function renderInventorySection(characterName){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const items = invItemsFor(characterName);
+  const editable = canEditInv(characterName);
+  const cname = String(characterName || '').replace(/'/g, "\\'");
+  const addBtn = editable ? `<button class="inv-add-btn" onclick="openCatalogue('${cname}')">＋ Add item</button>` : '';
+  const rulesRow = isReferee() ? `<div class="enc-rules-row"><button class="enc-rules-toggle" onclick="toggleEncRules()">⚙ Encumbrance rules</button></div>` : '';
+  if(!items.length){
+    return `<div class="sheet-section" id="sheet-inv-section">
+      <div class="sheet-section-lbl">Inventory</div>
+      ${renderEncIndicator(characterName)}${rulesRow}${renderEncRulesEditor()}
+      <div class="inv-empty">No items yet.${editable ? ' Tap “＋ Add item” to add from the catalogue.' : ''}</div>
+      ${addBtn}
+    </div>`;
+  }
+  const active = invGetActiveContainer(characterName);
+  const tabs = CONTAINERS.map(c => {
+    const n = items.filter(it => itemContainer(it) === c.id).length;
+    return `<button class="inv-tab${c.id === active ? ' on' : ''}${c.carried ? '' : ' stowed'}" data-container="${c.id}"
+        onclick="invSetContainer('${cname}','${c.id}')">${ea(c.name)}<span class="inv-tab-n">${n}</span></button>`;
+  }).join('');
+  const contToggle = isReferee() ? `<button class="inv-tab inv-tab-cfg" title="Manage containers" onclick="toggleContainersEditor()">⚙</button>` : '';
+  const inContainer = items.filter(it => itemContainer(it) === active);
+  const grid = inContainer.length
+    ? `<div class="inv-grid">${inContainer.map(it => renderInvTile(it, characterName, editable)).join('')}</div>`
+    : `<div class="inv-empty">This container is empty.</div>`;
+  return `<div class="sheet-section" id="sheet-inv-section">
+    <div class="sheet-section-lbl">Inventory</div>
+    ${renderEncIndicator(characterName)}
+    ${rulesRow}
+    ${renderEncRulesEditor()}
+    ${renderEquipSlots(characterName)}
+    <div class="inv-tabs">${tabs}${contToggle}</div>
+    ${renderContainersEditor()}
+    <div class="inv-hint">${editable ? 'Tap a tile for stats &amp; actions · drag a tile onto a tab to move it' : 'Read-only · tap a tile for its stat block'}</div>
+    ${grid}
+    ${addBtn}
+  </div>`;
+}
+// A footprint-sized tile in the container grid. Tap opens the item modal
+// (stats + actions, §4.2); drag onto a container tab moves it (§4.1).
+function renderInvTile(it, characterName, editable){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const cat = s.category || 'gear';
+  const rawName = (it.state && it.state.customName) || s.name || 'Item';
+  const rot = it.rot ? 1 : 0;
+  const w = rot ? (s.h || 1) : (s.w || 1);
+  const h = rot ? (s.w || 1) : (s.h || 1);
+  const q = Number(it.qty) || 1;
+  const cname = String(characterName || '').replace(/'/g, "\\'");
+  return `<div class="inv-tile inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}" style="grid-column:span ${w};grid-row:span ${h}"
+      data-name="${eatt(rawName)}" title="${eatt(rawName)}"
+      onpointerdown="invTilePointerDown(event,'${cname}','${it.iid}')">
+    <div class="inv-tile-name">${ea(rawName)}${q > 1 ? ` <span class="inv-tile-q">×${q}</span>` : ''}</div>
+    <div class="inv-tile-foot"><span>${(Number(s.mass) || 0)}kg</span>${it.equipped ? '<span class="inv-tile-eq" title="Equipped">▣</span>' : ''}</div>
+  </div>`;
+}
+function renderInvItemDetail(it, extraHtml){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const rows = [];
+  const add = (k, v) => { if(v !== '' && v != null) rows.push(
+    `<div class="inv-d-row"><span class="inv-d-k">${k}</span><span class="inv-d-v">${ea(String(v))}</span></div>`); };
+  add('Category', _catLabel(s.category));
+  add('TL', s.tl);
+  add('Mass', (Number(s.mass) || 0) + ' kg');
+  if(s.cost !== '' && s.cost != null) add('Cost', 'Cr' + (Number(s.cost) || 0).toLocaleString());
+  add('Footprint', (s.w || 1) + '×' + (s.h || 1) + ' cells');
+  if(s.category === 'weapon'){ add('Range', s.range); add('Damage', s.damage); add('Magazine', s.magazine); add('Traits', s.traits); add('Skill', s.skill); }
+  if(s.category === 'armour'){ add('Protection', s.protection); add('Rad', s.rad); add('Req STR', s.reqStr); }
+  const q = Number(it.qty) || 1; if(q > 1) add('Quantity', q);
+  if(it.state){
+    if(it.state.ammo != null)   add('Ammo', it.state.ammo);
+    if(it.state.charge != null) add('Charge', it.state.charge);
+    if(it.state.damaged)        add('Condition', 'Damaged');
+  }
+  add('Notes', s.notes || s.desc);
+  return `<div class="inv-item-detail">${rows.join('') || '<div class="inv-d-row"><span class="inv-d-v">No further details.</span></div>'}${extraHtml || ''}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — editing (Phase 2: honour-based add / remove)
+// ───────────────────────────────────────────────────────────────────────────
+// Who may edit a character's inventory: the referee (any), or the player whose
+// device identity matches (their own) — the same honour gate as the sheet. The
+// KV table is not RLS-enforced; this mirrors funds/notes exactly (Phase 0 §1.2).
+function canEditInv(characterName){ return canEditChar(characterName); }
+
+// Re-render just the inventory <section> in the open sheet, so add/remove leave
+// the rest of the form (and any unsaved characteristic edits) untouched.
+function refreshSheetInventory(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('sheet-inv-section');
+  if(el) el.outerHTML = renderInventorySection(sheetCurrentCharacter);
+}
+
+async function invAddFromCatalogue(characterName, defId){
+  if(!canEditInv(characterName)) return;
+  const def = catById(defId); if(!def) return;
+  // Freeze a snapshot so later catalogue edits/deletes never mutate an owned item.
+  const snap = {
+    name:def.name, category:def.category || 'gear', tl:def.tl, mass:Number(def.mass) || 0, cost:Number(def.cost) || 0,
+    w:def.w || 1, h:def.h || 1, desc:def.desc || '', notes:def.notes || '',
+    range:def.range || '', damage:def.damage || '', magazine:def.magazine || '', magazineCost:def.magazineCost || '',
+    traits:def.traits || '', skill:def.skill || '', protection:def.protection || '', rad:def.rad || '', reqStr:def.reqStr || ''
+  };
+  invBucket(characterName).items.push(makeInvItem(snap, { defId: def.id }));
+  await saveInventory();
+  refreshInvViews();
+  if(typeof showToast === 'function') showToast('Added ' + (def.name || 'item') + (characterName !== myIdentity ? (' → ' + characterName) : ''));
+}
+
+async function invRemoveItem(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const b = INVENTORY.byChar && INVENTORY.byChar[characterName];
+  if(!b || !Array.isArray(b.items)) return;
+  const it = b.items.find(x => x.iid === iid);
+  b.items = b.items.filter(x => x.iid !== iid);
+  await saveInventory();
+  refreshInvViews();
+  if(it && typeof showToast === 'function') showToast('Removed ' + ((it.snapshot && it.snapshot.name) || 'item'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ITEM CATALOGUE  (referee-authored library — SHIPS EMPTY; §4.8)
+// ───────────────────────────────────────────────────────────────────────────
+// A reusable library of item definitions the referee authors once and players
+// add to their sheets (§4.5). Stored as a plain array under the shared KV key
+// 'item-catalogue' — no seed, no pre-loaded rulebook data. Same façade + honour
+// model as everything else. The picker is shared: players get search + one-tap
+// Add; referees also get New/Edit/Duplicate/Delete via a category-adaptive form.
+// Modelled on the ship weapon catalogue (js/80-combat.js).
+const ITEM_CATEGORIES = ['weapon','armour','gear','augment','consumable'];
+let ITEM_CATALOGUE = [];
+
+async function loadItemCatalogue(){
+  try {
+    const r = await supaStorage.get('item-catalogue', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    ITEM_CATALOGUE = Array.isArray(v) ? v : [];
+  } catch(e){ ITEM_CATALOGUE = []; }
+}
+async function saveItemCatalogue(){
+  try { await supaStorage.set('item-catalogue', JSON.stringify(ITEM_CATALOGUE), true); }
+  catch(e){ console.error('Catalogue save failed', e); }
+}
+function catById(id){ return ITEM_CATALOGUE.find(d => d.id === id) || null; }
+function catNewId(){ return 'itm_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36); }
+function emptyItemDef(){
+  return { id:catNewId(), name:'', category:'gear', tl:'', mass:0, cost:0, w:1, h:1, fpManual:false,
+    desc:'', notes:'', range:'', damage:'', magazine:'', magazineCost:'', traits:'', skill:'',
+    protection:'', rad:'', reqStr:'' };
+}
+
+function catAdd(){
+  if(!isReferee()) return;
+  const d = emptyItemDef();
+  ITEM_CATALOGUE.push(d);
+  catalogueEditingId = d.id;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catDuplicate(id){
+  if(!isReferee()) return;
+  const s = catById(id); if(!s) return;
+  const d = Object.assign(JSON.parse(JSON.stringify(s)), { id:catNewId(), name:((s.name || 'Item') + ' (copy)') });
+  ITEM_CATALOGUE.push(d);
+  catalogueEditingId = d.id;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catRemove(id){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  if(!confirm('Delete "' + (d.name || 'item') + '" from the catalogue?\n\nItems already on characters keep their own copy.')) return;
+  ITEM_CATALOGUE = ITEM_CATALOGUE.filter(x => x.id !== id);
+  if(catalogueEditingId === id) catalogueEditingId = null;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+function catEditField(id, field, value){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  if(field === 'mass'){ d.mass = Number(value) || 0; if(!d.fpManual){ const f = footprintFromMass(d.mass); d.w = f.w; d.h = f.h; } }
+  else if(field === 'cost'){ d.cost = Number(value) || 0; }
+  else if(field === 'tl'){ d.tl = (value === '' ? '' : (Number(value) || 0)); }
+  else if(field === 'w' || field === 'h'){ d[field] = Math.max(1, Number(value) || 1); d.fpManual = true; }
+  else { d[field] = value; }
+  saveItemCatalogue();
+  if(field === 'category' || field === 'mass') renderCatalogueModal(); // category swaps the specific fields; mass re-derives footprint
+}
+function catAutoFootprint(id){
+  if(!isReferee()) return;
+  const d = catById(id); if(!d) return;
+  const f = footprintFromMass(d.mass); d.w = f.w; d.h = f.h; d.fpManual = false;
+  saveItemCatalogue();
+  renderCatalogueModal();
+}
+
+// ── Catalogue modal (shared: add picker + referee authoring) ──────────────────
+let catalogueTargetChar = null;   // character to add to (null = referee manage / author)
+let catalogueSearch = '';
+let catalogueCatFilter = 'all';
+let catalogueEditingId = null;
+
+function openCatalogue(targetChar){
+  catalogueTargetChar = targetChar || null;
+  catalogueEditingId = null;
+  catalogueSearch = '';
+  catalogueCatFilter = 'all';
+  const m = document.getElementById('catalogue-modal');
+  if(m) m.classList.add('open');
+  const body = document.getElementById('catalogue-body');
+  if(body) body.innerHTML = '<div class="cat-empty">Loading…</div>';
+  loadItemCatalogue().then(renderCatalogueModal);
+}
+function closeCatalogue(){
+  const m = document.getElementById('catalogue-modal');
+  if(m) m.classList.remove('open');
+  catalogueEditingId = null;
+}
+function catSetFilter(c){ catalogueCatFilter = c; renderCatalogueModal(); }
+function catSetSearch(v){
+  catalogueSearch = v;
+  const list = document.getElementById('catalogue-list');
+  if(list) list.innerHTML = renderCatalogueList();   // list-only refresh keeps the search box focused
+}
+function catOpenEditor(id){ if(!isReferee()) return; catalogueEditingId = id; renderCatalogueModal(); }
+function catBackToList(){ catalogueEditingId = null; renderCatalogueModal(); }
+function catAddToChar(defId){ if(catalogueTargetChar) invAddFromCatalogue(catalogueTargetChar, defId); }
+
+function renderCatalogueModal(){
+  const body = document.getElementById('catalogue-body');
+  if(!body) return;
+  body.innerHTML = (catalogueEditingId && isReferee())
+    ? renderCatalogueEditor(catById(catalogueEditingId))
+    : renderCatalogueBrowser();
+}
+function renderCatalogueBrowser(){
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const ref = isReferee();
+  let note;
+  if(catalogueTargetChar){
+    note = `<div class="cat-target">Adding to <b>${ea(catalogueTargetChar)}</b> — tap ＋ Add${ref ? ` · <button class="cat-link" onclick="catSetTarget('')">done</button>` : ''}</div>`;
+  } else if(ref){
+    const opts = (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).map(n => `<option value="${eatt(n)}">${ea(n)}</option>`).join('');
+    note = `<div class="cat-target">Authoring the shared library · <label>grant to <select class="cat-grant" onchange="if(this.value)catSetTarget(this.value)"><option value="">—</option>${opts}</select></label></div>`;
+  } else { note = ''; }
+  const chips = ['all'].concat(ITEM_CATEGORIES).map(c =>
+    `<button class="cat-chip${catalogueCatFilter === c ? ' on' : ''}" onclick="catSetFilter('${c}')">${c === 'all' ? 'All' : ea(_catLabel(c))}</button>`).join('');
+  const newBtn = ref ? `<button class="cat-new-btn" onclick="catAdd()">＋ New item</button>` : '';
+  return `${note}
+    <div class="cat-controls">
+      <input id="cat-search" class="cat-search" placeholder="Search items…" value="${eatt(catalogueSearch)}" oninput="catSetSearch(this.value)">
+      ${newBtn}
+    </div>
+    <div class="cat-chips">${chips}</div>
+    <div id="catalogue-list">${renderCatalogueList()}</div>`;
+}
+function renderCatalogueList(){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const ref = isReferee();
+  if(!ITEM_CATALOGUE.length){
+    return `<div class="cat-empty">${ref
+      ? 'The catalogue is empty — nothing is pre-loaded. Tap “＋ New item” to author your first entry.'
+      : 'No items in the catalogue yet. Ask your referee to add some.'}</div>`;
+  }
+  const q = catalogueSearch.trim().toLowerCase();
+  let list = ITEM_CATALOGUE.slice();
+  if(catalogueCatFilter !== 'all') list = list.filter(d => (d.category || 'gear') === catalogueCatFilter);
+  if(q) list = list.filter(d =>
+    (d.name || '').toLowerCase().includes(q) ||
+    (d.category || '').toLowerCase().includes(q) ||
+    (d.traits || '').toLowerCase().includes(q));
+  list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  if(!list.length) return `<div class="cat-empty">No matches.</div>`;
+  return list.map(d => {
+    const meta = [];
+    if(d.tl !== '' && d.tl != null) meta.push('TL' + ea(String(d.tl)));
+    meta.push((Number(d.mass) || 0) + 'kg');
+    if(Number(d.cost)) meta.push('Cr' + Number(d.cost).toLocaleString());
+    meta.push((d.w || 1) + '×' + (d.h || 1));
+    const addBtn = catalogueTargetChar ? `<button class="cat-add-btn" onclick="catAddToChar('${d.id}')">＋ Add</button>` : '';
+    const refBtns = ref
+      ? `<button class="cat-icon-btn" title="Edit" onclick="catOpenEditor('${d.id}')">✎</button><button class="cat-icon-btn" title="Duplicate" onclick="catDuplicate('${d.id}')">⧉</button><button class="cat-icon-btn danger" title="Delete" onclick="catRemove('${d.id}')">🗑</button>`
+      : '';
+    return `<div class="cat-row inv-cat-${d.category || 'gear'}">
+      <div class="cat-row-main">
+        <div class="cat-row-name">${ea(d.name || '(unnamed)')}<span class="inv-badge inv-badge-cat">${ea(_catLabel(d.category))}</span></div>
+        <div class="cat-row-meta">${meta.join(' · ')}</div>
+      </div>
+      <div class="cat-row-actions">${addBtn}${refBtns}</div>
+    </div>`;
+  }).join('');
+}
+function renderCatalogueEditor(d){
+  if(!d){ catalogueEditingId = null; return renderCatalogueBrowser(); }
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const cat = d.category || 'gear';
+  const catOpts = ITEM_CATEGORIES.map(c => `<option value="${c}"${c === cat ? ' selected' : ''}>${_catLabel(c)}</option>`).join('');
+  const fld = (label, key, val, opts) => { opts = opts || {}; return `<label class="cat-f">
+      <span class="cat-f-lbl">${label}</span>
+      <input class="cat-input"${opts.type ? ` type="${opts.type}"` : ''} value="${eatt(val == null ? '' : val)}"${opts.ph ? ` placeholder="${eatt(opts.ph)}"` : ''} onchange="catEditField('${d.id}','${key}',this.value)">
+    </label>`; };
+  let specific = '';
+  if(cat === 'weapon'){
+    specific = `<div class="cat-sub-lbl">Weapon</div><div class="cat-f-grid">
+      ${fld('Range','range',d.range,{ph:'e.g. Ranged'})}
+      ${fld('Damage','damage',d.damage,{ph:'e.g. 3D-3'})}
+      ${fld('Magazine','magazine',d.magazine,{ph:'rounds'})}
+      ${fld('Mag. cost (Cr)','magazineCost',d.magazineCost,{type:'number'})}
+      ${fld('Traits','traits',d.traits,{ph:'e.g. Auto 2'})}
+      ${fld('Skill','skill',d.skill,{ph:'e.g. Gun Combat (slug)'})}
+    </div>`;
+  } else if(cat === 'armour'){
+    specific = `<div class="cat-sub-lbl">Armour</div><div class="cat-f-grid">
+      ${fld('Protection','protection',d.protection,{ph:'e.g. 8'})}
+      ${fld('Rad protection','rad',d.rad)}
+      ${fld('Required STR','reqStr',d.reqStr)}
+    </div>`;
+  }
+  return `<div class="cat-editor">
+    <button class="cat-back-btn" onclick="catBackToList()">← Catalogue</button>
+    <label class="cat-f"><span class="cat-f-lbl">Name</span>
+      <input class="cat-input" value="${eatt(d.name)}" placeholder="Item name" onchange="catEditField('${d.id}','name',this.value)"></label>
+    <label class="cat-f"><span class="cat-f-lbl">Category</span>
+      <select class="cat-input" onchange="catEditField('${d.id}','category',this.value)">${catOpts}</select></label>
+    <div class="cat-f-grid">
+      ${fld('TL','tl',d.tl,{type:'number'})}
+      ${fld('Mass (kg)','mass',d.mass,{type:'number'})}
+      ${fld('Cost (Cr)','cost',d.cost,{type:'number'})}
+    </div>
+    <div class="cat-f-grid cat-fp-grid">
+      ${fld('Footprint W','w',d.w,{type:'number'})}
+      ${fld('Footprint H','h',d.h,{type:'number'})}
+      <div class="cat-fp-hint">${d.fpManual ? 'manual' : 'auto from mass'}<button class="cat-mini-btn" onclick="catAutoFootprint('${d.id}')">↻ from mass</button></div>
+    </div>
+    ${specific}
+    <label class="cat-f"><span class="cat-f-lbl">Description / effect</span>
+      <textarea class="cat-input cat-textarea" onchange="catEditField('${d.id}','desc',this.value)">${ea(d.desc || '')}</textarea></label>
+    <label class="cat-f"><span class="cat-f-lbl">Notes</span>
+      <textarea class="cat-input cat-textarea" onchange="catEditField('${d.id}','notes',this.value)">${ea(d.notes || '')}</textarea></label>
+    <div class="cat-editor-actions">
+      <button class="cat-icon-btn danger" onclick="catRemove('${d.id}')">🗑 Delete</button>
+      <button class="cat-new-btn" onclick="catBackToList()">Done</button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — equip / stow (Phase 3, §4.3)
+// ───────────────────────────────────────────────────────────────────────────
+// One item per slot; equipping implies carried (clears stowed) and bumps any
+// current occupant. Stowing clears equipped (stowed gear isn't worn/wielded).
+function invSlotOccupant(characterName, slotKey){
+  return invItemsFor(characterName).find(it => it.equipped && it.slot === slotKey) || null;
+}
+function invDefaultSlot(characterName, it){
+  const cat = (it.snapshot && it.snapshot.category) || 'gear';
+  if(cat === 'armour')  return 'armour';
+  if(cat === 'augment') return 'aug';
+  if(cat === 'weapon')  return invSlotOccupant(characterName, 'primary') ? 'secondary' : 'primary';
+  return 'misc';
+}
+async function invEquip(characterName, iid, slotKey){
+  if(!canEditInv(characterName)) return;
+  const items = invItemsFor(characterName);
+  const it = items.find(x => x.iid === iid); if(!it) return;
+  const slot = slotKey || invDefaultSlot(characterName, it);
+  items.forEach(x => { if(x.slot === slot && x.iid !== iid){ x.equipped = false; x.slot = null; } });
+  it.equipped = true; it.slot = slot;
+  if(itemStowed(it)) it.container = firstCarriedContainerId();  // a worn item is carried, not stowed
+  await saveInventory(); refreshInvViews();
+}
+async function invUnequip(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.equipped = false; it.slot = null;
+  await saveInventory(); refreshInvViews();
+}
+async function invMoveToContainer(characterName, iid, containerId){
+  if(!canEditInv(characterName)) return;
+  if(!containerById(containerId)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.container = containerId;
+  if(!containerCarried(containerId)){ it.equipped = false; it.slot = null; }  // stowed gear can't be worn/wielded
+  await saveInventory(); refreshInvViews();
+}
+async function invRotate(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.rot = it.rot ? 0 : 1;
+  await saveInventory(); refreshInvViews();
+}
+// Refresh the sheet's inventory section AND the item modal (if open).
+function refreshInvViews(){
+  refreshSheetInventory();
+  const m = document.getElementById('inv-item-modal');
+  if(m && m.classList.contains('open')) renderInvItemModal();
+}
+function renderEquipSlots(characterName){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const rows = EQUIP_SLOTS.map(([key, label]) => {
+    const occ = invSlotOccupant(characterName, key);
+    const val = occ
+      ? `<span class="eq-slot-item">${ea((occ.state && occ.state.customName) || (occ.snapshot && occ.snapshot.name) || 'Item')}</span>`
+      : `<span class="eq-slot-empty">— empty —</span>`;
+    return `<div class="eq-slot${occ ? ' filled' : ''}"><span class="eq-slot-lbl">${label}</span>${val}</div>`;
+  }).join('');
+  return `<div class="eq-slots">${rows}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — encumbrance engine (Phase 3, §4.4 — advisory, configurable)
+// ───────────────────────────────────────────────────────────────────────────
+// Traveller-faithful in SHAPE, referee-CONFIGURABLE in values (Referee decision).
+// capacity = perSTR·STR + perEND·END + base (kg); carried = Σ non-stowed mass×qty
+// (worn armour counts in FULL, per the Referee's ruling — so no special-case).
+// unencumbered ≤ capacity < encumbered ≤ capacity·heavyMult < overloaded. A DM is
+// SURFACED, never blocking. Defaults are PLACEHOLDERS — set via the ⚙ editor to
+// your Core Rulebook values; nothing rulebook-specific is hard-coded.
+const ENC_DEFAULTS = { perStr:1, perEnd:1, base:0, heavyMult:2, encDM:-1, overDM:-2 };
+let ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS);
+let encRulesOpen = false;
+
+async function loadEncSettings(){
+  try {
+    const r = await supaStorage.get('enc-settings', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS, (v && typeof v === 'object') ? v : {});
+  } catch(e){ ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS); }
+}
+async function saveEncSettings(){
+  try { await supaStorage.set('enc-settings', JSON.stringify(ENC_SETTINGS), true); }
+  catch(e){ console.error('Encumbrance settings save failed', e); }
+}
+function encEditField(field, value){
+  if(!isReferee()) return;
+  ENC_SETTINGS[field] = Number(value) || 0;
+  saveEncSettings();
+  refreshSheetInventory();
+}
+function toggleEncRules(){ encRulesOpen = !encRulesOpen; refreshSheetInventory(); }
+
+function carriedMass(characterName){
+  return invItemsFor(characterName).reduce((sum, it) => sum + (itemStowed(it) ? 0 : invItemMass(it)), 0);
+}
+function currentSheetStats(){
+  const s = sheetCurrentData || {};
+  const g = (id, fb) => { const el = document.getElementById(id); return el ? el.value : fb; };
+  return { str: parseInt(g('sheet-f-str', s.str)) || 0, end: parseInt(g('sheet-f-end', s.end)) || 0 };
+}
+function encCapacity(stats){
+  return (ENC_SETTINGS.perStr * stats.str) + (ENC_SETTINGS.perEnd * stats.end) + ENC_SETTINGS.base;
+}
+function encStatus(characterName){
+  const stats = currentSheetStats();
+  const carried = carriedMass(characterName);
+  const cap = Math.max(0, encCapacity(stats));
+  const heavy = cap * (ENC_SETTINGS.heavyMult || 2);
+  let level = 'unencumbered', dm = 0;
+  if(cap > 0 && carried > heavy){ level = 'overloaded'; dm = ENC_SETTINGS.overDM; }
+  else if(cap > 0 && carried > cap){ level = 'encumbered'; dm = ENC_SETTINGS.encDM; }
+  return { carried, cap, heavy, level, dm, stats };
+}
+function fmtKg(n){ return (Math.round(n * 100) / 100) + ''; }
+function renderEncIndicator(characterName){
+  const st = encStatus(characterName);
+  const label = { unencumbered:'Unencumbered', encumbered:'Encumbered', overloaded:'Overloaded' }[st.level];
+  const pct = st.heavy > 0 ? Math.min(100, (st.carried / st.heavy) * 100) : (st.carried > 0 ? 100 : 0);
+  const capPct = st.heavy > 0 ? Math.min(100, (st.cap / st.heavy) * 100) : 0;
+  const dmTxt = 'DM ' + (st.dm >= 0 ? '+' : '') + st.dm;
+  const note = st.cap > 0
+    ? `${fmtKg(st.carried)} / ${fmtKg(st.cap)} kg · overload &gt; ${fmtKg(st.heavy)} kg`
+    : `${fmtKg(st.carried)} kg carried · set STR/END + rules for a threshold`;
+  return `<div class="enc-bar enc-${st.level}" id="enc-indicator">
+    <div class="enc-line"><span class="enc-badge">${label}</span><span class="enc-dm">${dmTxt}</span></div>
+    <div class="enc-meter"><div class="enc-meter-fill" style="width:${pct}%"></div><div class="enc-cap-mark" style="left:${capPct}%"></div></div>
+    <div class="enc-nums">${note}</div>
+  </div>`;
+}
+function renderEncRulesEditor(){
+  if(!isReferee() || !encRulesOpen) return '';
+  const num = (label, field, step) => `<label class="cat-f">
+      <span class="cat-f-lbl">${label}</span>
+      <input class="cat-input" type="number"${step ? ` step="${step}"` : ''} value="${ENC_SETTINGS[field]}" onchange="encEditField('${field}',this.value)">
+    </label>`;
+  return `<div class="enc-rules">
+    <div class="enc-rules-note">Placeholders — set to your Core Rulebook values. Capacity = perSTR·STR + perEND·END + base (kg); overloaded above capacity × the overload factor. Advisory only — never blocks.</div>
+    <div class="cat-f-grid">
+      ${num('kg / STR','perStr','0.1')}
+      ${num('kg / END','perEnd','0.1')}
+      ${num('base kg','base','0.1')}
+    </div>
+    <div class="cat-f-grid">
+      ${num('overload ×','heavyMult','0.1')}
+      ${num('encumbered DM','encDM','1')}
+      ${num('overloaded DM','overDM','1')}
+    </div>
+  </div>`;
+}
+function updateEncIndicator(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('enc-indicator');
+  if(el) el.outerHTML = renderEncIndicator(sheetCurrentCharacter);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — containers + grid (Phase 4, §4.1)
+// ───────────────────────────────────────────────────────────────────────────
+// Container tabs + footprint-sized tiles (Referee decision). Containers are a
+// shared, referee-editable set (default Backpack/Belt/Ship's Locker); carried
+// containers encumber, the locker is stowed (excluded). Each item instance
+// carries a `container` id; legacy items without one derive from the old stowed
+// flag. Move by dragging a tile onto a tab OR via the item modal's picker; tap a
+// tile for its stat block + actions (§4.2).
+const DEFAULT_CONTAINERS = [
+  { id:'backpack', name:'Backpack',      carried:true  },
+  { id:'belt',     name:'Belt',          carried:true  },
+  { id:'locker',   name:"Ship's Locker", carried:false }
+];
+let CONTAINERS = DEFAULT_CONTAINERS.map(c => Object.assign({}, c));
+
+async function loadContainers(){
+  try {
+    const r = await supaStorage.get('containers', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    CONTAINERS = (Array.isArray(v) && v.length) ? v : DEFAULT_CONTAINERS.map(c => Object.assign({}, c));
+  } catch(e){ CONTAINERS = DEFAULT_CONTAINERS.map(c => Object.assign({}, c)); }
+}
+async function saveContainers(){
+  try { await supaStorage.set('containers', JSON.stringify(CONTAINERS), true); }
+  catch(e){ console.error('Containers save failed', e); }
+}
+function containerById(id){ return CONTAINERS.find(c => c.id === id) || null; }
+function containerCarried(id){ const c = containerById(id); return c ? !!c.carried : true; }
+function firstCarriedContainerId(){ const c = CONTAINERS.find(x => x.carried) || CONTAINERS[0]; return c ? c.id : 'backpack'; }
+function firstStowedContainerId(){ const c = CONTAINERS.find(x => !x.carried); return c ? c.id : (CONTAINERS[0] ? CONTAINERS[0].id : 'locker'); }
+function itemContainer(it){
+  if(it.container && containerById(it.container)) return it.container;
+  if(it.container) return firstCarriedContainerId();                       // referenced container was deleted
+  return it.stowed ? firstStowedContainerId() : firstCarriedContainerId(); // legacy pre-Phase-4 item
+}
+function itemStowed(it){ return !containerCarried(itemContainer(it)); }
+
+let invActiveContainer = {};   // characterName → active container id (session only)
+function invGetActiveContainer(characterName){
+  const cur = invActiveContainer[characterName];
+  if(cur && containerById(cur)) return cur;
+  return CONTAINERS[0] ? CONTAINERS[0].id : 'backpack';
+}
+function invSetContainer(characterName, containerId){ invActiveContainer[characterName] = containerId; refreshSheetInventory(); }
+
+// ── Referee container manager ─────────────────────────────────────────────────
+let containersEditorOpen = false;
+function toggleContainersEditor(){ containersEditorOpen = !containersEditorOpen; refreshSheetInventory(); }
+function containerAdd(){
+  if(!isReferee()) return;
+  CONTAINERS.push({ id:'cont_' + Date.now().toString(36) + '_' + (_invIdSeq++).toString(36), name:'New Container', carried:true });
+  saveContainers(); refreshSheetInventory();
+}
+function containerEditField(id, field, value){
+  if(!isReferee()) return;
+  const c = containerById(id); if(!c) return;
+  if(field === 'carried') c.carried = !!value; else c[field] = value;
+  saveContainers(); refreshSheetInventory();
+}
+function containerRemove(id){
+  if(!isReferee()) return;
+  if(CONTAINERS.length <= 1) return;
+  const c = containerById(id); if(!c) return;
+  if(!confirm('Delete container "' + (c.name || '') + '"? Items in it move to the first container.')) return;
+  CONTAINERS = CONTAINERS.filter(x => x.id !== id);
+  saveContainers(); refreshSheetInventory();
+}
+function renderContainersEditor(){
+  if(!isReferee() || !containersEditorOpen) return '';
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const rows = CONTAINERS.map(c => `<div class="cont-row">
+      <input class="cat-input" value="${eatt(c.name)}" onchange="containerEditField('${c.id}','name',this.value)">
+      <label class="cont-carried"><input type="checkbox" ${c.carried ? 'checked' : ''} onchange="containerEditField('${c.id}','carried',this.checked)"> carried</label>
+      <button class="cat-icon-btn danger" title="Delete" onclick="containerRemove('${c.id}')">🗑</button>
+    </div>`).join('');
+  return `<div class="enc-rules">
+    <div class="enc-rules-note">Containers — carried ones count toward encumbrance; unchecked = stowed (e.g. the ship's locker, excluded).</div>
+    ${rows}
+    <button class="cat-new-btn" style="align-self:flex-start" onclick="containerAdd()">＋ Container</button>
+  </div>`;
+}
+
+// ── Item detail modal (tap a tile) — stat block + actions ─────────────────────
+let invModalChar = null, invModalIid = null;
+function openInvItemModal(characterName, iid){
+  invModalChar = characterName; invModalIid = iid;
+  const m = document.getElementById('inv-item-modal'); if(!m) return;
+  m.classList.add('open');
+  renderInvItemModal();
+}
+function closeInvItemModal(){
+  const m = document.getElementById('inv-item-modal'); if(m) m.classList.remove('open');
+  invModalChar = null; invModalIid = null;
+}
+function renderInvItemModal(){
+  const body = document.getElementById('inv-item-modal-body'); if(!body) return;
+  const it = (invModalChar != null) ? invItemsFor(invModalChar).find(x => x.iid === invModalIid) : null;
+  if(!it){ closeInvItemModal(); return; }
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const s = it.snapshot || {};
+  const editable = canEditInv(invModalChar);
+  const cname = String(invModalChar || '').replace(/'/g, "\\'");
+  const title = document.getElementById('inv-item-modal-title');
+  if(title) title.textContent = ((it.state && it.state.customName) || s.name || 'Item');
+  const rot = it.rot ? 1 : 0, w = rot ? (s.h || 1) : (s.w || 1), h = rot ? (s.w || 1) : (s.h || 1);
+  const contSelect = editable ? `<label class="cat-f"><span class="cat-f-lbl">Container</span>
+      <select class="cat-input" onchange="invMoveToContainer('${cname}','${it.iid}',this.value)">
+        ${CONTAINERS.map(c => `<option value="${c.id}"${itemContainer(it) === c.id ? ' selected' : ''}>${ea(c.name)}${c.carried ? '' : ' (stowed)'}</option>`).join('')}
+      </select></label>` : '';
+  const actions = editable ? `<div class="inv-modal-actions">
+      <button class="inv-act-btn${it.equipped ? ' on' : ''}" onclick="${it.equipped ? `invUnequip('${cname}','${it.iid}')` : `invEquip('${cname}','${it.iid}','')`}">${it.equipped ? '✓ Equipped — unequip' : 'Equip'}</button>
+      <button class="inv-act-btn" onclick="invRotate('${cname}','${it.iid}')">↻ Rotate · ${w}×${h}</button>
+      <button class="inv-act-btn danger" onclick="invRemoveItem('${cname}','${it.iid}')">✕ Remove</button>
+    </div>` : '';
+  body.innerHTML = `${renderInvItemDetail(it)}${contSelect}${actions}`;
+}
+
+// ── Drag-or-tap: tap opens the modal; drag (mouse threshold / touch long-press)
+//    onto a container tab moves the item. Works on touch + mouse. ─────────────
+let _invDrag = null;
+function cleanupInvDragListeners(){
+  window.removeEventListener('pointermove', invTilePointerMove);
+  window.removeEventListener('pointerup', invTilePointerUp);
+  window.removeEventListener('pointercancel', invTilePointerUp);
+}
+function invTilePointerDown(e, characterName, iid){
+  if(e.pointerType === 'mouse' && e.button !== 0) return;
+  const d = { characterName, iid, el: e.currentTarget, x0: e.clientX, y0: e.clientY, pointerId: e.pointerId, dragging: false, ghost: null, timer: null };
+  _invDrag = d;
+  if(e.pointerType !== 'mouse') d.timer = setTimeout(() => { if(_invDrag === d && !d.dragging) invBeginDrag(); }, 240); // touch/pen long-press → drag (mouse uses the move threshold)
+  window.addEventListener('pointermove', invTilePointerMove);
+  window.addEventListener('pointerup', invTilePointerUp);
+  window.addEventListener('pointercancel', invTilePointerUp);
+}
+function invBeginDrag(){
+  const d = _invDrag; if(!d || d.dragging) return;
+  clearTimeout(d.timer);
+  if(!canEditInv(d.characterName)) return;   // read-only viewers can tap (open modal) but not move
+  d.dragging = true;
+  if(d.el) d.el.classList.add('inv-tile-dragging');
+  const g = document.createElement('div');
+  g.className = 'inv-drag-ghost';
+  g.textContent = (d.el && d.el.getAttribute('data-name')) || 'Item';
+  document.body.appendChild(g);
+  d.ghost = g;
+  try { d.el.setPointerCapture(d.pointerId); } catch(err){}
+}
+function invTilePointerMove(e){
+  const d = _invDrag; if(!d) return;
+  if(!d.dragging){
+    const dist = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
+    if(e.pointerType === 'mouse'){ if(dist > 6) invBeginDrag(); }
+    else if(dist > 12){ clearTimeout(d.timer); _invDrag = null; cleanupInvDragListeners(); return; } // touch move before long-press = scroll
+    if(!_invDrag || !_invDrag.dragging) return;
+  }
+  e.preventDefault();
+  if(d.ghost){ d.ghost.style.left = e.clientX + 'px'; d.ghost.style.top = e.clientY + 'px'; }
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const tab = el && el.closest ? el.closest('.inv-tab[data-container]') : null;
+  document.querySelectorAll('.inv-tab.drop-hot').forEach(t => t.classList.remove('drop-hot'));
+  if(tab) tab.classList.add('drop-hot');
+}
+function invTilePointerUp(e){
+  const d = _invDrag;
+  cleanupInvDragListeners();
+  _invDrag = null;
+  if(!d) return;
+  clearTimeout(d.timer);
+  if(d.ghost) d.ghost.remove();
+  if(d.el) d.el.classList.remove('inv-tile-dragging');
+  document.querySelectorAll('.inv-tab.drop-hot').forEach(t => t.classList.remove('drop-hot'));
+  if(!d.dragging){ openInvItemModal(d.characterName, d.iid); return; }   // it was a tap
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const tab = el && el.closest ? el.closest('.inv-tab[data-container]') : null;
+  if(tab){ const cid = tab.getAttribute('data-container'); if(cid) invMoveToContainer(d.characterName, d.iid, cid); }
+}
+function catSetTarget(name){ catalogueTargetChar = name || null; renderCatalogueModal(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHARACTER PORTRAIT  (Phase 6, §4.7 — Supabase Storage 'portraits' bucket)
+// ───────────────────────────────────────────────────────────────────────────
+// Players upload their own character's portrait, the referee any — same honour
+// gate as the sheet/inventory. The client center-crops + resizes to a 512² JPEG
+// before upload (well under the 2 MB bucket limit); a version stamp on the sheet
+// blob (portraitVer) makes every device load the latest via the shared public
+// URL. Storage plumbing lives in js/50-supabase.js (portraitUrlFor /
+// uploadPortraitBlob), per the data-layer ownership rule.
+function canEditChar(characterName){ return isReferee() || (!!myIdentity && myIdentity === characterName); }
+function portraitInitials(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return (((parts[0] || '')[0] || '') + ((parts[1] || '')[0] || '')).toUpperCase() || '?';
+}
+function renderPortrait(characterName, data){
+  const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const editable = canEditChar(characterName);
+  const ver = data && data.portraitVer;
+  const img = ver
+    ? `<img class="sheet-portrait-img" src="${portraitUrlFor(characterName, ver)}" alt="${eatt(characterName)}" onerror="this.remove();var p=document.getElementById('sheet-portrait');if(p)p.classList.add('no-img')">`
+    : '';
+  return `<div class="sheet-portrait-row" id="sheet-portrait-row">
+    <div class="sheet-portrait${ver ? '' : ' no-img'}" id="sheet-portrait">
+      ${img}<span class="sheet-portrait-fallback">${ea(portraitInitials(characterName))}</span>
+    </div>
+    ${editable ? `<div class="sheet-portrait-actions">
+      <button class="sheet-portrait-btn" onclick="triggerPortraitUpload()">${ver ? 'Change photo' : 'Upload photo'}</button>
+      <input type="file" id="portrait-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onPortraitFile(event)">
+      <div class="sheet-portrait-hint" id="portrait-hint">JPG / PNG / WebP · cropped square</div>
+    </div>` : ''}
+  </div>`;
+}
+function refreshPortrait(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('sheet-portrait-row');
+  if(el) el.outerHTML = renderPortrait(sheetCurrentCharacter, sheetCurrentData || {});
+}
+function triggerPortraitUpload(){ const f = document.getElementById('portrait-file'); if(f) f.click(); }
+function resizePortrait(file, size){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+async function onPortraitFile(e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';           // allow re-picking the same file later
+  if(!file || !sheetCurrentCharacter) return;
+  if(!canEditChar(sheetCurrentCharacter)) return;
+  const hint = document.getElementById('portrait-hint');
+  const setHint = t => { if(hint) hint.textContent = t; };
+  if(file.size > 12 * 1024 * 1024){ setHint('Source image too large (max 12 MB).'); return; }
+  try {
+    setHint('Processing…');
+    const blob = await resizePortrait(file, 512);
+    setHint('Uploading…');
+    await uploadPortraitBlob(sheetCurrentCharacter, blob);
+    const data = collectSheetData();               // keep any in-progress form edits
+    data.portraitVer = Date.now();
+    sheetCurrentData = data;
+    await saveSheet(sheetCurrentCharacter, data);
+    refreshPortrait();
+    if(typeof showToast === 'function') showToast('Portrait updated');
+  } catch(err){
+    console.error('Portrait upload failed', err);
+    setHint('Upload failed — try again.');
+    if(typeof showToast === 'function') showToast('Portrait upload failed');
+  }
 }
 

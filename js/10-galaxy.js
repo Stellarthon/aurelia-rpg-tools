@@ -1977,6 +1977,13 @@ const HX = (function(){
           html+=`<div class="hx-kv"><span class="k">Corporate presence</span><span class="v" style="text-align:right">${parts}</span></div>`; }
       }catch(e){}
     }
+    // Living-economy world condition + black market (referee always; players once they've called here, like market data)
+    if(typeof ECON!=='undefined' && ECON.active() && (ref() || isVisited(s))){
+      const wst=ECON.worldStatus(s.id), WM=ECON.WS_META||{};
+      if(wst && wst.kind && WM[wst.kind]) html+=`<div class="hx-kv"><span class="k">Condition</span><span class="v" style="color:${WM[wst.kind].color}">${WM[wst.kind].icon} ${WM[wst.kind].label}${wst.sev>1?' '+('I'.repeat(wst.sev)):''}</span></div>`;
+      const cbd=ECON.contraband(s.id);
+      if(cbd && cbd.good) html+=`<div class="hx-kv"><span class="k">Black market</span><span class="v" style="color:#b48cd6">☣ ${eh((''+cbd.good).replace('Common ',''))} +${Math.round(((cbd.premium||1.6)-1)*100)}%</span></div>`;
+    }
     if(s===origin){
       html+=`<div class="hx-kv"><span class="k">Status</span><span class="v" style="color:#f4d35e">◆ Current location${typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?' · '+formatImperial(imperialDate):''}</span></div>`;
       if(fuelAt(s)!=='none' && fuelAboard<fuelMax && ref())
@@ -2017,6 +2024,9 @@ const HX = (function(){
         else { ops.forEach(o=>{ html+=`<div class="hx-reach-item" style="cursor:default"><span class="hx-reach-name">${eh(o.good)}</span><span class="d">${kCr(o.buyP)} → ${kCr(o.sellP)} · <b style="color:#3f9d5a">+${kCr(o.profit)}/t</b></span></div>`; });
           const best=ops[0]; html+=`<div class="hx-kv"><span class="k">Best load · ${eh(best.good)} × ${cargoHold}t</span><span class="v" style="color:#3f9d5a">+${kCr(best.profit*cargoHold)}</span></div>`;
           html+=`<div class="hx-small" style="color:var(--tx1);margin-top:4px">Prices as of ${eh(typeof formatImperial==='function'?formatImperial(imperialDate):'now')} (Broker-${broker}); they drift week to week. Play rolls 3D6 per buy/sell.</div>`; } }
+      { const cbd=(typeof ECON!=='undefined'&&ECON.active())?ECON.contraband(s.id):null;
+        if(cbd && cbd.good && (ref()||isVisited(s)))
+          html+=`<div class="hx-small" style="color:#b48cd6;margin-top:4px">☣ Black market — ${eh((''+cbd.good).replace('Common ',''))} moves off the books here at ~+${Math.round(((cbd.premium||1.6)-1)*100)}% over list since the restriction. Arrange the buy with the referee.</div>`; }
       if(ref() && (srcMkt&&dstMkt)){ html+= isVisited(s)
         ? `<div class="hx-small" style="color:#4caf82;margin-top:4px">✓ Party has called here — market visible to players.</div>`
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
@@ -2274,6 +2284,25 @@ function enterSystem(systemId){
     renderSystemOverview();
     buildOrrery();
     updateBackBtn();
+    maybeSystemWelcome(systemId);
+  });
+}
+
+// ── Per-system welcome ──────────────────────────────────────────────────────
+// Greet the viewer with the system name over "Welcome Traveller" each time they
+// drop into a system from the galaxy. Shown to everyone (players + referee); the
+// referee can turn it off or edit the copy from the splash editor. Cosmetic.
+function maybeSystemWelcome(sysId){
+  if(typeof showSplash !== 'function') return;                 // splash unavailable
+  if(!sysId || !SYSTEMS[sysId]) return;
+  const c = (typeof getSplashConfig === 'function') ? getSplashConfig().system : null;
+  if(c && c.enabled === false) return;   // referee turned it off
+  showSplash({
+    kicker: c ? c.kicker : '',
+    title:  currentSystemName().toUpperCase(),   // the system name is always the headline
+    sub:    c ? c.sub  : 'Welcome Traveller',
+    hint:   c ? c.hint : 'Tap anywhere to continue',
+    duration: 3400,
   });
 }
 
