@@ -1208,6 +1208,7 @@ loadRevealState().then(() => {
   if(currentView === 'station'){ buildStationSVG(); renderDetail(); }
 });
 loadClockState().then(() => { renderClock(); });
+loadSplashConfig(); // referee's shared splash text / on-off state (welcome screens)
 // Secure per-player content (Stage 2): no-op unless a token is stored. When on,
 // strips baked-in secrets and applies only this token's server-authorised data.
 ingestTokenFromUrl();     // apply a token from an invite link (#token=…) before hydrating
