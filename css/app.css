@@ -2347,6 +2347,41 @@ input#ui-scale-range{
 .cat-mini-btn{background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);border-radius:4px;font-size:9px;font-family:monospace;padding:5px 6px;cursor:pointer}
 .cat-editor-actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:10px;border-top:.5px solid var(--bd1)}
 
+/* ── Encumbrance indicator + equip slots + item actions (Phase 3) ── */
+.enc-bar{background:var(--bg0);border:.5px solid var(--bd0);border-left:3px solid var(--bd0);border-radius:6px;padding:9px 11px;margin-bottom:10px}
+.enc-line{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.enc-badge{font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.enc-dm{font-size:13px;font-family:monospace;font-weight:700}
+.enc-meter{height:7px;background:var(--bg2);border-radius:4px;position:relative;overflow:hidden}
+.enc-meter-fill{height:100%;border-radius:4px;transition:width .2s}
+.enc-cap-mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--tx0);opacity:.55}
+.enc-nums{font-size:9px;color:var(--tx1);font-family:monospace;margin-top:5px}
+.enc-unencumbered{border-left-color:var(--txS)}
+.enc-unencumbered .enc-badge,.enc-unencumbered .enc-dm{color:var(--txS)}
+.enc-unencumbered .enc-meter-fill{background:var(--txS)}
+.enc-encumbered{border-left-color:var(--txW)}
+.enc-encumbered .enc-badge,.enc-encumbered .enc-dm{color:var(--txW)}
+.enc-encumbered .enc-meter-fill{background:var(--txW)}
+.enc-overloaded{border-left-color:var(--txD)}
+.enc-overloaded .enc-badge,.enc-overloaded .enc-dm{color:var(--txD)}
+.enc-overloaded .enc-meter-fill{background:var(--txD)}
+.enc-rules-row{margin:-4px 0 8px}
+.enc-rules-toggle{background:transparent;border:none;color:var(--tx1);font-family:monospace;font-size:10px;cursor:pointer;padding:0}
+.enc-rules-toggle:hover{color:var(--accentGold)}
+.enc-rules{background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.enc-rules-note{font-size:9px;color:var(--tx1);line-height:1.5}
+.eq-slots{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:12px}
+.eq-slot{display:flex;flex-direction:column;gap:2px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;padding:6px 9px;min-height:42px;justify-content:center}
+.eq-slot.filled{border-color:var(--accentGold)}
+.eq-slot-lbl{font-size:8px;color:var(--tx1);text-transform:uppercase;letter-spacing:.5px;font-family:monospace}
+.eq-slot-item{font-size:12px;color:var(--accentGold);font-weight:600;word-break:break-word}
+.eq-slot-empty{font-size:11px;color:var(--tx1);opacity:.6}
+.inv-item.is-stowed{opacity:.72}
+.inv-item-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:.5px solid var(--bd1)}
+.inv-act-btn{flex:1;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:5px;padding:8px;font-size:11px;font-family:monospace;cursor:pointer;min-height:36px}
+.inv-act-btn:hover{border-color:var(--tx1)}
+.inv-act-btn.on{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+
 /* Notes tab additions — private/party split */
 .notes-subtabs{display:flex;gap:0;margin-bottom:10px;border-bottom:.5px solid var(--bd0)}
 .notes-subtab{

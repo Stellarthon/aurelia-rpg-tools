@@ -1085,6 +1085,7 @@ async function openSheet(characterName){
 
   const data = await loadSheet(characterName);
   await loadInventory();
+  await loadEncSettings();
   migrateSheetGear(characterName, data);   // one-time free-text → structured items (safe: raw text preserved)
   sheetCurrentData = data;
   renderSheetForm(data);
@@ -1136,6 +1137,7 @@ function updateSheetDM(key){
   if(!input || !dmEl) return;
   const dm = charDM(input.value);
   dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
+  if(key === 'str' || key === 'end') updateEncIndicator();  // live encumbrance as STR/END are edited
 }
 
 async function saveCurrentSheet(){
@@ -1295,12 +1297,16 @@ function renderInventorySection(characterName){
     </div>` : '';
   const cname = String(characterName || '').replace(/'/g, "\\'");
   const addBtn = editable ? `<button class="inv-add-btn" onclick="openCatalogue('${cname}')">＋ Add item</button>` : '';
+  const rulesRow = isReferee() ? `<div class="enc-rules-row"><button class="enc-rules-toggle" onclick="toggleEncRules()">⚙ Encumbrance rules</button></div>` : '';
   const body = items.length
-    ? (group('Carried', carried) + group('Stowed', stowed))
+    ? (renderEquipSlots(characterName) + group('Carried', carried) + group('Stowed', stowed))
     : `<div class="inv-empty">No items yet.${editable ? ' Tap “＋ Add item” to add from the catalogue.' : ''}</div>`;
   return `<div class="sheet-section" id="sheet-inv-section">
     <div class="sheet-section-lbl">Inventory</div>
-    <div class="inv-hint">${editable ? 'Tap an item for its stat block · ✕ to remove' : 'Read-only · tap an item for its stat block'}</div>
+    ${renderEncIndicator(characterName)}
+    ${rulesRow}
+    ${renderEncRulesEditor()}
+    <div class="inv-hint">${editable ? 'Tap an item for stats &amp; actions · ✕ to remove' : 'Read-only · tap an item for its stat block'}</div>
     ${body}
     ${addBtn}
   </div>`;
@@ -1320,7 +1326,11 @@ function renderInvTile(it, characterName, editable){
   const cname = String(characterName || '').replace(/'/g, "\\'");
   const removeBtn = editable
     ? `<button class="inv-remove-btn" title="Remove" onclick="event.stopPropagation(); invRemoveItem('${cname}','${it.iid}')">✕</button>` : '';
-  return `<div class="inv-item inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}" onclick="this.classList.toggle('open')">
+  const actions = editable ? `<div class="inv-item-actions">
+      <button class="inv-act-btn" onclick="event.stopPropagation(); invToggleStow('${cname}','${it.iid}')">${it.stowed ? '↑ Unstow' : '↓ Stow'}</button>
+      ${it.stowed ? '' : `<button class="inv-act-btn${it.equipped ? ' on' : ''}" onclick="event.stopPropagation(); ${it.equipped ? `invUnequip('${cname}','${it.iid}')` : `invEquip('${cname}','${it.iid}','')`}">${it.equipped ? '✓ Equipped — unequip' : 'Equip'}</button>`}
+    </div>` : '';
+  return `<div class="inv-item inv-cat-${cat}${it.equipped ? ' is-equipped' : ''}${it.stowed ? ' is-stowed' : ''}" onclick="this.classList.toggle('open')">
     <div class="inv-item-head">
       <span class="inv-item-name">${name}</span>
       ${eqBadge}
@@ -1328,10 +1338,10 @@ function renderInvTile(it, characterName, editable){
       ${removeBtn}
     </div>
     <div class="inv-item-meta">${meta.join(' · ')}</div>
-    ${renderInvItemDetail(it)}
+    ${renderInvItemDetail(it, actions)}
   </div>`;
 }
-function renderInvItemDetail(it){
+function renderInvItemDetail(it, extraHtml){
   const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
   const s = it.snapshot || {};
   const rows = [];
@@ -1351,7 +1361,7 @@ function renderInvItemDetail(it){
     if(it.state.damaged)        add('Condition', 'Damaged');
   }
   add('Notes', s.notes || s.desc);
-  return `<div class="inv-item-detail">${rows.join('') || '<div class="inv-d-row"><span class="inv-d-v">No further details.</span></div>'}</div>`;
+  return `<div class="inv-item-detail">${rows.join('') || '<div class="inv-d-row"><span class="inv-d-v">No further details.</span></div>'}${extraHtml || ''}</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1621,5 +1631,149 @@ function renderCatalogueEditor(d){
       <button class="cat-new-btn" onclick="catBackToList()">Done</button>
     </div>
   </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — equip / stow (Phase 3, §4.3)
+// ───────────────────────────────────────────────────────────────────────────
+// One item per slot; equipping implies carried (clears stowed) and bumps any
+// current occupant. Stowing clears equipped (stowed gear isn't worn/wielded).
+function invSlotOccupant(characterName, slotKey){
+  return invItemsFor(characterName).find(it => it.equipped && it.slot === slotKey) || null;
+}
+function invDefaultSlot(characterName, it){
+  const cat = (it.snapshot && it.snapshot.category) || 'gear';
+  if(cat === 'armour')  return 'armour';
+  if(cat === 'augment') return 'aug';
+  if(cat === 'weapon')  return invSlotOccupant(characterName, 'primary') ? 'secondary' : 'primary';
+  return 'misc';
+}
+async function invEquip(characterName, iid, slotKey){
+  if(!canEditInv(characterName)) return;
+  const items = invItemsFor(characterName);
+  const it = items.find(x => x.iid === iid); if(!it) return;
+  const slot = slotKey || invDefaultSlot(characterName, it);
+  items.forEach(x => { if(x.slot === slot && x.iid !== iid){ x.equipped = false; x.slot = null; } });
+  it.equipped = true; it.slot = slot; it.stowed = false;
+  await saveInventory(); refreshSheetInventory();
+}
+async function invUnequip(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.equipped = false; it.slot = null;
+  await saveInventory(); refreshSheetInventory();
+}
+async function invToggleStow(characterName, iid){
+  if(!canEditInv(characterName)) return;
+  const it = invItemsFor(characterName).find(x => x.iid === iid); if(!it) return;
+  it.stowed = !it.stowed;
+  if(it.stowed){ it.equipped = false; it.slot = null; }
+  await saveInventory(); refreshSheetInventory();
+}
+function renderEquipSlots(characterName){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const rows = EQUIP_SLOTS.map(([key, label]) => {
+    const occ = invSlotOccupant(characterName, key);
+    const val = occ
+      ? `<span class="eq-slot-item">${ea((occ.state && occ.state.customName) || (occ.snapshot && occ.snapshot.name) || 'Item')}</span>`
+      : `<span class="eq-slot-empty">— empty —</span>`;
+    return `<div class="eq-slot${occ ? ' filled' : ''}"><span class="eq-slot-lbl">${label}</span>${val}</div>`;
+  }).join('');
+  return `<div class="eq-slots">${rows}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY — encumbrance engine (Phase 3, §4.4 — advisory, configurable)
+// ───────────────────────────────────────────────────────────────────────────
+// Traveller-faithful in SHAPE, referee-CONFIGURABLE in values (Referee decision).
+// capacity = perSTR·STR + perEND·END + base (kg); carried = Σ non-stowed mass×qty
+// (worn armour counts in FULL, per the Referee's ruling — so no special-case).
+// unencumbered ≤ capacity < encumbered ≤ capacity·heavyMult < overloaded. A DM is
+// SURFACED, never blocking. Defaults are PLACEHOLDERS — set via the ⚙ editor to
+// your Core Rulebook values; nothing rulebook-specific is hard-coded.
+const ENC_DEFAULTS = { perStr:1, perEnd:1, base:0, heavyMult:2, encDM:-1, overDM:-2 };
+let ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS);
+let encRulesOpen = false;
+
+async function loadEncSettings(){
+  try {
+    const r = await supaStorage.get('enc-settings', true);
+    const v = r.value != null ? JSON.parse(r.value) : null;
+    ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS, (v && typeof v === 'object') ? v : {});
+  } catch(e){ ENC_SETTINGS = Object.assign({}, ENC_DEFAULTS); }
+}
+async function saveEncSettings(){
+  try { await supaStorage.set('enc-settings', JSON.stringify(ENC_SETTINGS), true); }
+  catch(e){ console.error('Encumbrance settings save failed', e); }
+}
+function encEditField(field, value){
+  if(!isReferee()) return;
+  ENC_SETTINGS[field] = Number(value) || 0;
+  saveEncSettings();
+  refreshSheetInventory();
+}
+function toggleEncRules(){ encRulesOpen = !encRulesOpen; refreshSheetInventory(); }
+
+function carriedMass(characterName){
+  return invItemsFor(characterName).reduce((sum, it) => sum + (it.stowed ? 0 : invItemMass(it)), 0);
+}
+function currentSheetStats(){
+  const s = sheetCurrentData || {};
+  const g = (id, fb) => { const el = document.getElementById(id); return el ? el.value : fb; };
+  return { str: parseInt(g('sheet-f-str', s.str)) || 0, end: parseInt(g('sheet-f-end', s.end)) || 0 };
+}
+function encCapacity(stats){
+  return (ENC_SETTINGS.perStr * stats.str) + (ENC_SETTINGS.perEnd * stats.end) + ENC_SETTINGS.base;
+}
+function encStatus(characterName){
+  const stats = currentSheetStats();
+  const carried = carriedMass(characterName);
+  const cap = Math.max(0, encCapacity(stats));
+  const heavy = cap * (ENC_SETTINGS.heavyMult || 2);
+  let level = 'unencumbered', dm = 0;
+  if(cap > 0 && carried > heavy){ level = 'overloaded'; dm = ENC_SETTINGS.overDM; }
+  else if(cap > 0 && carried > cap){ level = 'encumbered'; dm = ENC_SETTINGS.encDM; }
+  return { carried, cap, heavy, level, dm, stats };
+}
+function fmtKg(n){ return (Math.round(n * 100) / 100) + ''; }
+function renderEncIndicator(characterName){
+  const st = encStatus(characterName);
+  const label = { unencumbered:'Unencumbered', encumbered:'Encumbered', overloaded:'Overloaded' }[st.level];
+  const pct = st.heavy > 0 ? Math.min(100, (st.carried / st.heavy) * 100) : (st.carried > 0 ? 100 : 0);
+  const capPct = st.heavy > 0 ? Math.min(100, (st.cap / st.heavy) * 100) : 0;
+  const dmTxt = 'DM ' + (st.dm >= 0 ? '+' : '') + st.dm;
+  const note = st.cap > 0
+    ? `${fmtKg(st.carried)} / ${fmtKg(st.cap)} kg · overload &gt; ${fmtKg(st.heavy)} kg`
+    : `${fmtKg(st.carried)} kg carried · set STR/END + rules for a threshold`;
+  return `<div class="enc-bar enc-${st.level}" id="enc-indicator">
+    <div class="enc-line"><span class="enc-badge">${label}</span><span class="enc-dm">${dmTxt}</span></div>
+    <div class="enc-meter"><div class="enc-meter-fill" style="width:${pct}%"></div><div class="enc-cap-mark" style="left:${capPct}%"></div></div>
+    <div class="enc-nums">${note}</div>
+  </div>`;
+}
+function renderEncRulesEditor(){
+  if(!isReferee() || !encRulesOpen) return '';
+  const num = (label, field, step) => `<label class="cat-f">
+      <span class="cat-f-lbl">${label}</span>
+      <input class="cat-input" type="number"${step ? ` step="${step}"` : ''} value="${ENC_SETTINGS[field]}" onchange="encEditField('${field}',this.value)">
+    </label>`;
+  return `<div class="enc-rules">
+    <div class="enc-rules-note">Placeholders — set to your Core Rulebook values. Capacity = perSTR·STR + perEND·END + base (kg); overloaded above capacity × the overload factor. Advisory only — never blocks.</div>
+    <div class="cat-f-grid">
+      ${num('kg / STR','perStr','0.1')}
+      ${num('kg / END','perEnd','0.1')}
+      ${num('base kg','base','0.1')}
+    </div>
+    <div class="cat-f-grid">
+      ${num('overload ×','heavyMult','0.1')}
+      ${num('encumbered DM','encDM','1')}
+      ${num('overloaded DM','overDM','1')}
+    </div>
+  </div>`;
+}
+function updateEncIndicator(){
+  if(!sheetCurrentCharacter) return;
+  const el = document.getElementById('enc-indicator');
+  if(el) el.outerHTML = renderEncIndicator(sheetCurrentCharacter);
 }
 
