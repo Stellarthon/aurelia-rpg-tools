@@ -753,6 +753,10 @@ function renderDesignMenu(){
       <span class="settings-row-label">🎒 Item Catalogue</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
+      <span class="settings-row-label">🌠 Splash Screens</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>

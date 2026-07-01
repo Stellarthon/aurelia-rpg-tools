@@ -2249,11 +2249,14 @@ function maybeSystemWelcome(sysId){
   if(typeof isReferee === 'function' && isReferee()) return;   // travellers only
   if(typeof showSplash !== 'function') return;                 // splash unavailable
   if(!sysId || !SYSTEMS[sysId] || systemVisited(sysId)) return;
+  const c = (typeof getSplashConfig === 'function') ? getSplashConfig().system : null;
+  if(c && c.enabled === false) return;   // referee turned it off — don't consume the first-visit flag
   markSystemVisited(sysId);
   showSplash({
-    title: currentSystemName().toUpperCase(),
-    sub:   'Welcome Traveller',
-    hint:  'Tap anywhere to continue',
+    kicker: c ? c.kicker : '',
+    title:  currentSystemName().toUpperCase(),   // the system name is always the headline
+    sub:    c ? c.sub  : 'Welcome Traveller',
+    hint:   c ? c.hint : 'Tap anywhere to continue',
     duration: 3400,
   });
 }

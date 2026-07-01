@@ -775,3 +775,114 @@ function restoreHistoryEntry(idx){
   document.getElementById('design-history-list').classList.add('hidden');
 }
 
+// ── Splash-screen editor (referee, Design Mode) ─────────────────────────────
+// Lets the referee turn each welcome splash on/off and edit its copy. Edits go
+// to a working draft; Save commits to the shared config (SPLASH_DEFAULTS /
+// getSplashConfig / saveSplashConfig live in 55-auth-gating.js) so every player
+// picks up the new text and on/off state on their next poll. Preview shows the
+// draft live without saving.
+let splashDraft = null;
+
+function openSplashEditor(){
+  if(!isReferee()) return;
+  const start = () => {
+    splashDraft = JSON.parse(JSON.stringify(getSplashConfig()));
+    renderSplashEditor();
+    document.getElementById('splash-edit-modal').classList.remove('hidden');
+  };
+  // Make sure we edit the shared config, not stale defaults, if it hasn't loaded yet.
+  if(typeof splashConfig !== 'undefined' && splashConfig === null && typeof loadSplashConfig === 'function'){
+    loadSplashConfig().then(start).catch(start);
+  } else { start(); }
+}
+function closeSplashEditor(){
+  const m = document.getElementById('splash-edit-modal');
+  if(m) m.classList.add('hidden');
+}
+function splashSetField(section, key, value){
+  if(splashDraft && splashDraft[section]) splashDraft[section][key] = value;
+}
+function splashToggleEnabled(section){
+  if(splashDraft && splashDraft[section]){ splashDraft[section].enabled = !splashDraft[section].enabled; renderSplashEditor(); }
+}
+function resetSplashDraft(){
+  splashDraft = JSON.parse(JSON.stringify({ intro: SPLASH_DEFAULTS.intro, system: SPLASH_DEFAULTS.system }));
+  renderSplashEditor();
+}
+function previewSplash(which){
+  if(!splashDraft || typeof showSplash !== 'function') return;
+  if(which === 'intro'){
+    const c = splashDraft.intro;
+    showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
+  } else {
+    const c = splashDraft.system;
+    const nm = (typeof currentSystemName === 'function') ? currentSystemName().toUpperCase() : 'SYSTEM NAME';
+    showSplash({ kicker:c.kicker, title:nm, sub:c.sub, hint:c.hint, duration:3400 });
+  }
+}
+function saveSplashEditor(){
+  if(!splashDraft) return;
+  splashConfig = JSON.parse(JSON.stringify(splashDraft));   // apply in-memory immediately
+  closeSplashEditor();
+  if(typeof showToast === 'function') showToast('Splash screens saved.');
+  if(typeof saveSplashConfig === 'function') saveSplashConfig();  // persist + share in the background (caches offline, retries)
+}
+function renderSplashEditor(){
+  const card = document.getElementById('splash-edit-card');
+  if(!card || !splashDraft) return;
+  const d = splashDraft;
+  const attr = s => escHtml(s || '').replace(/"/g, '&quot;');   // escHtml doesn't cover quotes
+  const toggle = section => {
+    const on = d[section].enabled !== false;
+    return `<div class="theme-toggle ${on?'on':''}" role="switch" tabindex="0" aria-checked="${on}"
+      onclick="splashToggleEnabled('${section}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();splashToggleEnabled('${section}');}"><div class="theme-toggle-knob"></div></div>`;
+  };
+  const field = (section, key, label, ph) => `
+    <div class="design-field-group">
+      <div class="design-field-label">${label}</div>
+      <input type="text" class="design-field-input" value="${attr(d[section][key])}" placeholder="${attr(ph)}"
+        oninput="splashSetField('${section}','${key}',this.value)">
+    </div>`;
+  const previewBtn = which => `<button onclick="previewSplash('${which}')" style="margin-top:2px;font-size:10px;font-family:monospace;background:var(--accentGoldBg);color:var(--accentGold);border:.5px solid var(--accentGold);border-radius:5px;padding:6px 12px;cursor:pointer">▶ Preview</button>`;
+  const introOff = d.intro.enabled === false, sysOff = d.system.enabled === false;
+  card.innerHTML = `
+    <div class="splash-edit-header">
+      <span class="se-ttl">🌠 SPLASH SCREENS</span>
+      <button onclick="closeSplashEditor()" aria-label="Close" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+    </div>
+    <div class="splash-edit-body">
+      <div class="settings-section-lbl">App-entry welcome</div>
+      <div class="settings-row">
+        <span class="settings-row-label">Show on load</span>
+        ${toggle('intro')}
+      </div>
+      <div class="se-note">Shown once when a player loads in, after the access code.</div>
+      <div class="${introOff?'se-disabled':''}">
+        ${field('intro','kicker','Small line above',"Aurelian System")}
+        ${field('intro','title','Title',"WELCOME TRAVELLER")}
+        ${field('intro','sub','Subtitle',"May the stars ever be full of wonder.")}
+        ${field('intro','hint','Bottom hint',"Tap anywhere to begin")}
+        ${previewBtn('intro')}
+      </div>
+
+      <div class="settings-section-lbl" style="margin-top:14px">Per-system welcome</div>
+      <div class="settings-row">
+        <span class="settings-row-label">Show on first visit</span>
+        ${toggle('system')}
+      </div>
+      <div class="se-note">Shown the first time a traveller enters each system. The system's own name is always the title.</div>
+      <div class="${sysOff?'se-disabled':''}">
+        ${field('system','kicker','Small line above name',"(optional)")}
+        ${field('system','sub','Subtitle',"Welcome Traveller")}
+        ${field('system','hint','Bottom hint',"Tap anywhere to continue")}
+        ${previewBtn('system')}
+      </div>
+    </div>
+    <div class="splash-edit-footer">
+      <button class="se-reset" onclick="resetSplashDraft()">Reset to defaults</button>
+      <button class="se-cancel" onclick="closeSplashEditor()">Cancel</button>
+      <button class="se-save" onclick="saveSplashEditor()">Save</button>
+    </div>`;
+}
+
