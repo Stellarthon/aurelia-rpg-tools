@@ -149,6 +149,7 @@ function renderQref(){
   const body = document.getElementById('qref-body');
   if(!body) return;
   if(!_rulesLoaded){ loadRulesIndex().then(() => { if(qrefOpen) renderQref(); }); }
+  if(!_rbLoaded){ loadRulebookConfig().then(() => { if(qrefOpen) renderQref(); }); }
   const query = (document.getElementById('qref-search')?.value || '').toLowerCase().trim();
 
   let html = '';
@@ -213,6 +214,7 @@ function deleteRuleRef(id){
 }
 function rulesIndexHTML(query){
   const ref = (typeof isReferee === 'function') && isReferee();
+  const up = !!(rulebookConfig && rulebookConfig.uploaded);
   const items = rulesIndex.filter(r => {
     if(!query) return true;
     return ((r.topic||'')+' '+(r.book||'')+' '+(r.page||'')+' '+(r.note||'')).toLowerCase().includes(query);
@@ -220,8 +222,15 @@ function rulesIndexHTML(query){
   let cards = '';
   if(items.length){
     cards = items.map(r => {
-      const cite = (r.book || r.page)
-        ? `<span class="rr-cite">${escQH(r.book||'')}${r.book&&r.page?' ':''}${r.page?('p.'+escQH(r.page)):''}</span>` : '';
+      const bookTxt = r.book ? `<span class="rr-cite">${escQH(r.book)}</span>` : '';
+      let pageEl = '';
+      if(r.page){
+        const pg = escQH(r.page);
+        pageEl = up
+          ? `<button class="rr-page" onclick="openRulebook('${(r.page||'').replace(/[^0-9A-Za-z .\-]/g,'')}')" title="Open your rulebook at this page">p.${pg} ↗</button>`
+          : `<span class="rr-cite">p.${pg}</span>`;
+      }
+      const cite = (bookTxt || pageEl) ? `<span class="rr-cite-wrap">${bookTxt}${pageEl}</span>` : '';
       const del = ref ? `<button class="rr-del" onclick="deleteRuleRef('${r.id}')" title="Delete">✕</button>` : '';
       return `<div class="rr-card">${del}
         <div class="rr-card-main"><span class="rr-topic">${escQH(r.topic)}</span>${cite}</div>
@@ -244,13 +253,77 @@ function rulesIndexHTML(query){
       <button class="cal-add-btn" onclick="addRuleRef()">+ Add page reference</button>
       <div class="rr-hint">Stores only topic + book + page — never rulebook text, so the app stays copyright-clean.</div>
     </div>` : '';
-  if(!cards && !form) return '';
+  const bar = (typeof rulebookBarHTML === 'function') ? rulebookBarHTML() : '';
+  if(!cards && !form && !bar) return '';
   return `<div class="qref-section">
     <div class="qref-section-title">📑 Page References${ref ? ' (referee)' : ''}</div>
-    ${cards}${form}
+    ${bar}${cards}${form}
   </div>`;
 }
 // escQH is defined in js/70 (loaded earlier); used here at render time.
+
+// ── BYO rulebook — upload (referee) + open at page (everyone) ────────────────
+// The referee uploads their own legally-owned rulebook PDF to the private
+// per-campaign Storage bucket (js/50 uploadRulebookBlob); a small shared config
+// ('rulebook-config') tells every device it exists + its display name + a
+// cache-bust version. Opened in the browser's native PDF viewer; a cited page
+// deep-links via '#page=N'. Never ships in the repo — user content only.
+let rulebookConfig = {};   // { uploaded, name, ver } for the active campaign
+let _rbLoaded = false;
+let _rbBusy = false;
+
+async function loadRulebookConfig(){
+  try { const r = await supaStorage.get('rulebook-config', true); if(r.value != null) rulebookConfig = JSON.parse(r.value) || {}; }
+  catch(e){ rulebookConfig = {}; }
+  _rbLoaded = true;
+}
+async function saveRulebookConfig(){
+  try { await supaStorage.set('rulebook-config', JSON.stringify(rulebookConfig), true); }
+  catch(e){ console.error('Rulebook config save failed:', e); }
+}
+function rbCampaign(){ return (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default'; }
+function openRulebook(page){
+  if(!rulebookConfig || !rulebookConfig.uploaded){ showToast('No rulebook uploaded yet', 'error'); return; }
+  if(typeof rulebookUrlFor !== 'function'){ showToast('Rulebook viewer unavailable', 'error'); return; }
+  const url = rulebookUrlFor(rbCampaign(), rulebookConfig.ver) + (page ? ('#page=' + encodeURIComponent(page)) : '');
+  try { window.open(url, '_blank', 'noopener'); } catch(e){ location.href = url; }
+}
+function onRulebookFile(input){
+  if(!isReferee()) return;
+  const file = input && input.files && input.files[0];
+  if(!file){ return; }
+  if(file.type && file.type !== 'application/pdf'){ showToast('Please choose a PDF', 'error'); input.value = ''; return; }
+  if(file.size > 80 * 1024 * 1024){ showToast('PDF too large (max 80 MB)', 'error'); input.value = ''; return; }
+  if(_rbBusy) return;
+  _rbBusy = true; showToast('Uploading rulebook…', 'info');
+  uploadRulebookBlob(rbCampaign(), file)
+    .then(() => { rulebookConfig = { uploaded: true, name: file.name, ver: Date.now() }; return saveRulebookConfig(); })
+    .then(() => { showToast('Rulebook uploaded'); if(qrefOpen) renderQref(); })
+    .catch(err => { showToast('Upload failed — is the rulebooks bucket set up? (migration 0003)', 'error'); console.error(err); })
+    .finally(() => { _rbBusy = false; if(input) input.value = ''; });
+}
+function removeRulebookRef(){
+  if(!isReferee()) return;
+  if(!confirm('Forget the uploaded rulebook? The file stays in storage; this just hides it from the group.')) return;
+  rulebookConfig = {};
+  saveRulebookConfig();
+  if(qrefOpen) renderQref();
+}
+function rulebookBarHTML(){
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const up = !!(rulebookConfig && rulebookConfig.uploaded);
+  if(up){
+    let h = `<div class="rb-bar"><button class="rb-open" onclick="openRulebook()">📖 Open rulebook</button>`;
+    h += `<span class="rb-name" title="${escQH(rulebookConfig.name||'')}">${escQH(rulebookConfig.name||'Rulebook')}</span>`;
+    if(ref) h += `<label class="rb-replace">Replace<input type="file" accept="application/pdf" style="display:none" onchange="onRulebookFile(this)"></label><button class="rb-forget" onclick="removeRulebookRef()" title="Forget">✕</button>`;
+    return h + `</div>`;
+  }
+  if(ref){
+    return `<div class="rb-bar"><label class="rb-open">⬆ Upload your rulebook (PDF)<input type="file" accept="application/pdf" style="display:none" onchange="onRulebookFile(this)"></label></div>
+      <div class="rr-hint">Your own legally-owned PDF, stored for your group and never shipped in the app. Page references below then open it at the right page. (Needs the <code>rulebooks</code> bucket — supabase/migrations/0003.)</div>`;
+  }
+  return '';
+}
 
 // Escape closes qref — now handled by kbdDispatch
 

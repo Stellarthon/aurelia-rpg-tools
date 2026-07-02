@@ -98,6 +98,32 @@ async function uploadPortraitBlob(characterName, blob){
   return true;
 }
 
+// ── BYO rulebook (Supabase Storage 'rulebooks' bucket) ───────────────────────
+// The referee's OWN, legally-owned rulebook PDF — one object per campaign
+// (rulebooks/<campaignId>.pdf), overwritten on re-upload; migration
+// 0003_rulebooks_bucket.sql. USER-SUPPLIED, never shipped in the repo, so the
+// codebase stays copyright-clean. A version stamp in the shared 'rulebook-config'
+// key cache-busts the public URL across devices. Opened in the browser's native
+// PDF viewer (no PDF.js dependency); '#page=N' jumps to a cited page.
+const RULEBOOK_BASE = SUPABASE_URL + '/storage/v1/object/public/rulebooks/';
+function rulebookSlug(campaignId){
+  return String(campaignId || 'default').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
+}
+function rulebookPath(campaignId){ return rulebookSlug(campaignId) + '.pdf'; }
+function rulebookUrlFor(campaignId, ver){
+  const url = RULEBOOK_BASE + encodeURIComponent(rulebookPath(campaignId));
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadRulebookBlob(campaignId, file){
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/rulebooks/' + encodeURIComponent(rulebookPath(campaignId)), {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'application/pdf' },
+    body: file
+  });
+  if(!res.ok) throw new Error('Rulebook upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
 // ───────────────────────────────────────────────────────────────────────────
