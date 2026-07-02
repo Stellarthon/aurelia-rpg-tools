@@ -1244,6 +1244,23 @@ async function saveRouteBlocks(){
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
+// ── Territory hex paint (referee-defined, shared) ───────────────────────────
+// A map of hex → colour ("q,r" → "#rrggbb"), painted by the referee with the
+// map's colour picker (see hxTogglePaint / paintPick in the HX engine). Rendered
+// as translucent coloured hexes in the territory overlay, on top of the
+// auto-derived region tint. Shared campaign state, like route blocks and reveal
+// flags, so every player sees the same painted borders. Colours only — never a
+// faction identity — so painting can't leak a hidden region's spoilers.
+let hexPaint = {};
+async function loadHexPaint(){
+  try { const r = await supaStorage.get('hex-paint', true); hexPaint = (r.value != null) ? (JSON.parse(r.value) || {}) : {}; }
+  catch(e){ hexPaint = {}; }
+}
+async function saveHexPaint(){
+  try { await supaStorage.set('hex-paint', JSON.stringify(hexPaint || {}), true); }
+  catch(e){ console.error('Hex paint save failed:', e); }
+}
+
 // A lane counts as blocked only while the kill-switch (enabled) is on. Blocks are
 // a visual/story signal for nav crew — they do NOT alter the route planner
 // (advisory only, per docs/phase-2-feasibility-study.md §5); the referee narrates
@@ -1625,6 +1642,7 @@ const HX = (function(){
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
+  let paintMode=false, paintColor='#4aa3ff'; // referee territory brush: armed while tapping hexes to paint/erase them
   const RPX=26, LABEL_ZOOM_F=1.3;
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
@@ -1680,14 +1698,33 @@ const HX = (function(){
     svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible());
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
-    if(showTerr){ const tg=NS('g',{}); g.appendChild(tg); const byFac={};
+    if(showTerr){ const tg=NS('g',{'pointer-events':'none'}); g.appendChild(tg);
+      const painted=(typeof hexPaint!=='undefined'&&hexPaint)?hexPaint:{};
+      const byFac={};
       SYS.forEach(s=>{ if(s.fac==='independent'||s.fac==='uncharted'||!FAC[s.fac]||facHidden(s.fac)) return; (byFac[s.fac]=byFac[s.fac]||[]).push(s); });
-      Object.keys(byFac).forEach(f=>{ const fac=FAC[f]; const pts=byFac[f].map(s=>axialPx(s.q,s.r));
+      // Region territory, drawn as translucent coloured HEXES (was one big
+      // "sphere" per region): fill each member system's hex plus its empty
+      // neighbours, so the cluster reads as a hex-tiled sector. A referee-painted
+      // cell wins over the auto tint, and another region's star hex is never
+      // recoloured.
+      Object.keys(byFac).forEach(f=>{ const fac=FAC[f]; const cells=new Set();
+        byFac[f].forEach(s=>{ cells.add(s.q+','+s.r);
+          DIRS.forEach(d=>{ const nk=(s.q+d[0])+','+(s.r+d[1]); if(!BY_KEY[nk]) cells.add(nk); }); });
+        cells.forEach(k=>{ if(painted[k]) return;                        // manual paint overrides the auto tint
+          const occ=BY_KEY[k]; if(occ && occ.fac!==f) return;           // don't tint a different region's star hex
+          const c=k.split(','), q=+c[0], r=+c[1], p=axialPx(q,r);
+          tg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:fac.color,'fill-opacity':0.11,stroke:fac.color,'stroke-opacity':0.22,'stroke-width':0.75})); });
+        const pts=byFac[f].map(s=>axialPx(s.q,s.r));
         const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
         let rad=0; pts.forEach(p=>rad=Math.max(rad,Math.hypot(p.x-cx,p.y-cy))); rad+=RPX*1.5;
-        tg.appendChild(NS('circle',{cx,cy,r:rad,fill:fac.color,'fill-opacity':0.07,stroke:fac.color,'stroke-opacity':0.3,'stroke-width':1,'stroke-dasharray':'5,5'}));
         const lab=NS('text',{x:cx,y:cy-rad+12,'text-anchor':'middle',fill:fac.color,'fill-opacity':0.55,'font-family':'monospace','font-size':9.5,'font-weight':700,'letter-spacing':1.2});
-        lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); }); }
+        lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); });
+      // Referee-painted hexes: a manual translucent colour wash over any cell,
+      // rendered on top of the region tint. Shared to every viewer.
+      Object.keys(painted).forEach(k=>{ const c=k.split(','), q=+c[0], r=+c[1];
+        if(!isFinite(q)||!isFinite(r)) return; const col=painted[k]; if(!col) return;
+        const p=axialPx(q,r);
+        tg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:col,'fill-opacity':0.28,stroke:col,'stroke-opacity':0.55,'stroke-width':1})); }); }
     let minQ=99,maxQ=-99,minR=99,maxR=-99;
     SYS.forEach(s=>{minQ=Math.min(minQ,s.q);maxQ=Math.max(maxQ,s.q);minR=Math.min(minR,s.r);maxR=Math.max(maxR,s.r);});
     const gr=gridRange(1,{minQ,maxQ,minR,maxR});   // tile the visible viewport (infinite/pannable), not a fixed box
@@ -1784,6 +1821,16 @@ const HX = (function(){
         const cell=NS('polygon',{points:hexPoly(p.x,p.y),fill:'#9B59B6','fill-opacity':0.10,stroke:'#9B59B6','stroke-opacity':0.55,'stroke-width':1,'stroke-dasharray':'3,3',style:'cursor:pointer'});
         cell.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; placePick(q,r); });   // ignore the tap that ends a pan
         pl.appendChild(cell); } }
+    // Referee territory brush: tile every visible hex as a tap target so the ref
+    // can paint/erase borders. Already-painted cells preview their colour; empty
+    // ones show a faint outline in the current brush colour. Topmost so it wins.
+    if(paintMode){ const pg=NS('g',{}); g.appendChild(pg);
+      const painted=(typeof hexPaint!=='undefined'&&hexPaint)?hexPaint:{};
+      for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
+        const key=q+','+r, p=axialPx(q,r), cur=painted[key]||null;
+        const cell=NS('polygon',{points:hexPoly(p.x,p.y),fill:cur||paintColor,'fill-opacity':cur?0.34:0.05,stroke:paintColor,'stroke-opacity':0.6,'stroke-width':1,'stroke-dasharray':'3,2',style:'cursor:crosshair'});
+        cell.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; paintPick(q,r); });   // ignore the tap that ends a pan
+        pg.appendChild(cell); } }
   }
 
   // ── Living-economy overlay: where goods flow, and where the Independent traders are ──
@@ -2267,6 +2314,36 @@ const HX = (function(){
   function placePick(q,r){ const cb=placeCb; placeMode=false; placeCb=null; render(); renderSel(); if(cb) cb(q,r); }
   window.hxCancelPlace=cancelPlace;
 
+  // ── Referee territory brush ──
+  // Tap a hex to paint it the current brush colour; tap it again in the same
+  // colour to erase it. Painted cells are shared campaign state (see hexPaint /
+  // saveHexPaint), so every player sees the borders the referee draws.
+  function paintPick(q,r){
+    if(typeof isReferee==='function' && !isReferee()) return;   // referee-only tool
+    if(typeof hexPaint==='undefined') return;
+    const key=q+','+r, same=hexPaint[key] && String(hexPaint[key]).toLowerCase()===String(paintColor).toLowerCase();
+    if(same) delete hexPaint[key]; else hexPaint[key]=paintColor;
+    if(typeof saveHexPaint==='function') saveHexPaint();
+    render();
+  }
+  window.hxTogglePaint=()=>{
+    if(typeof isReferee==='function' && !isReferee()) return;
+    paintMode=!paintMode;
+    if(paintMode && !showTerr){ showTerr=true;   // paint lives in the territory overlay — make sure it's visible
+      const tb=document.getElementById('hx-terr-toggle'); if(tb){ tb.textContent='Territories: ON'; tb.classList.remove('off'); } }
+    const b=document.getElementById('hx-paint-toggle'); if(b){ b.textContent='🖌 Paint: '+(paintMode?'ON':'OFF'); b.classList.toggle('on',paintMode); }
+    toast(paintMode?'Paint mode ON — tap hexes to colour them; tap again to erase.':'Paint mode off.');
+    render();
+  };
+  window.hxSetPaintColor=c=>{ if(c) paintColor=c; if(paintMode) render(); };
+  window.hxClearPaint=()=>{
+    if(typeof isReferee==='function' && !isReferee()) return;
+    if(typeof hexPaint==='undefined') return;
+    if(!Object.keys(hexPaint).length){ toast('No painted hexes to clear.'); return; }
+    if(typeof confirm==='function' && !confirm('Clear all painted territory hexes?')) return;
+    hexPaint={}; if(typeof saveHexPaint==='function') saveHexPaint(); render();
+  };
+
   // ── World economic facts — the physical inputs the living economy derives an
   //    UNCONFIGURED world's production/consumption from, so procedurally generated
   //    worlds join the market automatically (ECON.derivedProfile). Reuses the SAME
@@ -2353,6 +2430,10 @@ function maybeSystemWelcome(sysId){
     sub:    c ? c.sub  : 'Welcome Traveller',
     hint:   c ? c.hint : 'Tap anywhere to continue',
     duration: 3400,
+    // Cover the system view on the same frame it renders — the welcome comes
+    // FIRST, then fades out to reveal the system, instead of fading in a beat
+    // after the view has already popped into place.
+    instant: true,
   });
 }
 
