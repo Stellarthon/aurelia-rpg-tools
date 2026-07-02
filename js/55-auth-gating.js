@@ -996,10 +996,16 @@ function updateStationLocks(){
 const KNOWN_CHARACTERS = ['Rhett Calder','Cassia Velen','Dr Curculion','Riley','Riven Dahl'];
 
 function checkIdentity(){
-  if(isReferee()) return; // referee never needs an identity
   try {
     myIdentity = localStorage.getItem('aurelia_identity');
   } catch(e){}
+  if(isReferee()){
+    // Referee is never *forced* to pick a character, but if one was chosen we
+    // restore it and surface the "Playing as" control so they can keep
+    // switching which character they view as (and Sheets opens it directly).
+    if(myIdentity) renderWhoAmI();
+    return;
+  }
   if(!myIdentity){
     showIdentityModal();
   } else {
@@ -1033,7 +1039,11 @@ function renderWhoAmI(){
   const headerBtn = document.getElementById('header-whoami-btn');
   const headerName = document.getElementById('header-whoami-name');
   if(headerBtn){
-    if(myIdentity && !isReferee()){
+    // Show "Playing as X" whenever a character is selected — for the referee
+    // too, since character selection now lives entirely on this control (the
+    // Sheets button jumps straight to the active sheet and no longer offers a
+    // picker). Referees use it to switch which character they're viewing as.
+    if(myIdentity){
       headerName.textContent = myIdentity;
       headerBtn.classList.remove('hidden');
     } else {
