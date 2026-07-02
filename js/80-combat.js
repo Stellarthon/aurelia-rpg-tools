@@ -504,10 +504,24 @@ function applyCombatDamage(targetId, weapon, effect){
   const armour = Number(st.armourRating) || 0;
   const raw = rollDamage(weapon, effect);
   const dmg = Math.max(0, raw - armour);            // armour subtracts from rolled damage (verified)
+  const res = applyNetDamage(targetId, dmg, effect);
+  if(!res) return null;
+  const crits = res.crits;
+  const critTxt = crits.filter(Boolean).length ? ` + ${crits.filter(Boolean).length} critical(s): ${crits.filter(Boolean).map(c=>`${c.location} sev ${c.severity}`).join(', ')}` : '';
+  return { raw, armour, dmg, hull: res.hull, structure: res.structure, crits,
+           summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${res.hull}/${res.maxHull}${critTxt}` };
+}
+
+// Apply a resolved (post-armour) damage amount through Hull → Structure overflow,
+// the Sustained-Damage crit thresholds, the Effect≥6 crit, the destruction check
+// and the player Red Alert wiring. The single damage pipeline shared by the
+// full attack loop (applyCombatDamage) and the quick-resolve path.
+function applyNetDamage(targetId, dmg, effect){
+  const tgt = combatShipById(targetId); if(!tgt) return null;
+  const st = combatStatsOf(tgt); if(!st) return null;
   // Apply to Hull first, overflow to Structure (verified: Hull breached → Structure).
   const beforeHull = Number(st.hullPoints) || 0;
-  let remaining = dmg;
-  let hull = beforeHull - remaining;
+  let hull = beforeHull - Math.max(0, Number(dmg) || 0);
   let struct = Number(st.structurePoints) || 0;
   if(hull < 0){ struct += hull; hull = 0; }          // overflow eats Structure
   st.hullPoints = hull;
@@ -540,9 +554,7 @@ function applyCombatDamage(targetId, weapon, effect){
     if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert();
     if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
   }
-  const critTxt = crits.filter(Boolean).length ? ` + ${crits.filter(Boolean).length} critical(s): ${crits.filter(Boolean).map(c=>`${c.location} sev ${c.severity}`).join(', ')}` : '';
-  return { raw, armour, dmg, hull: st.hullPoints, structure: st.structurePoints, crits,
-           summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${st.hullPoints}/${maxHull}${critTxt}` };
+  return { crits, hull: st.hullPoints, structure: st.structurePoints, maxHull };
 }
 function rollCritLocation(){ return MGT2E.critLocation[combatRoll2D().sum]; }
 function applyCrit(targetId, location, severity){
@@ -718,7 +730,7 @@ function renderCombat(){
   }
 
   // Referee controls + hazard tooling + roster/fleet deployment
-  if(ref){ out.push(renderCombatControls(enc)); out.push(renderHazardControls()); out.push(renderShipRoster(true)); }
+  if(ref){ out.push(renderCombatControls(enc)); out.push(renderQuickResolve(enc)); out.push(renderHazardControls()); out.push(renderShipRoster(true)); }
 
   // Battle log
   out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
@@ -896,7 +908,10 @@ function renderCombatControls(enc){
       </div>`;
   }
   if(enc.status !== 'active') {
-    return `<div class="cbt-controls"><div class="cbt-ctl-row"><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ New Encounter</button></div></div>`;
+    return `<div class="cbt-controls"><div class="cbt-ctl-row">
+      <button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ New Encounter</button>
+      <button class="cbt-btn danger" onclick="uiEndEncounter()">Clear board</button>
+    </div></div>`;
   }
 
   const act = combatActiveShip();
@@ -959,6 +974,82 @@ function renderCombatControls(enc){
         <button class="cbt-btn danger" onclick="uiEndEncounter()">End</button>
       </div>
     </div>`;
+}
+
+// ── Quick-resolve (§7.1) ────────────────────────────────────────────────────
+// For a minor skirmish that doesn't warrant stepping every phase: apply a flat
+// damage amount (through the same Hull→Structure→crit pipeline), drop a ship, or
+// call the encounter with a recorded outcome. Referee-only; the full loop stays
+// the default for set-piece battles.
+function quickResolveDamage(targetId, amount, ignoreArmour){
+  if(!isReferee() || !combatEncounter) return null;
+  const tgt = combatShipById(targetId); if(!tgt) return null;
+  const st = combatStatsOf(tgt); if(!st) return null;
+  const armour = ignoreArmour ? 0 : (Number(st.armourRating) || 0);
+  const amt = Math.max(0, Number(amount) || 0);
+  const dmg = Math.max(0, amt - armour);
+  const res = applyNetDamage(targetId, dmg, 0); if(!res) return null;
+  const critTxt = res.crits.filter(Boolean).length ? ` + ${res.crits.filter(Boolean).length} crit(s)` : '';
+  combatLog('attack', `Quick-resolve: ${tgt.name} takes ${dmg} damage${armour ? ` (${amt} − ${armour} armour)` : ''} → Hull ${res.hull}/${res.maxHull}${critTxt}.`, { targetId });
+  saveCombatEncounter();
+  return res;
+}
+function quickDestroy(targetId){
+  if(!isReferee() || !combatEncounter) return;
+  const tgt = combatShipById(targetId); if(!tgt) return;
+  tgt.status = 'destroyed';
+  const st = combatStatsOf(tgt); if(st){ st.hullPoints = 0; st.structurePoints = 0; }
+  if(tgt.ref === 'player'){ saveShipState(); if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert(); if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel(); }
+  combatLog('system', `Quick-resolve: ${tgt.name} is destroyed.`, { targetId });
+  saveCombatEncounter();
+}
+// Call the fight without clearing it: mark it ended + record the outcome so the
+// result shows on the players' board. The referee clears with "Clear board".
+function quickResolveEnd(outcome, note){
+  if(!isReferee() || !combatEncounter) return;
+  combatLog('system', `Quick-resolve — ${outcome || 'Resolved'}${note ? `: ${note}` : ''}.`);
+  combatEncounter.status = 'ended';
+  saveCombatEncounter();
+}
+
+const COMBAT_QR_OUTCOMES = ['Party victory', 'Enemy disabled', 'Enemy fled', 'Party withdrew', 'Mutual disengage'];
+function renderQuickResolve(enc){
+  if(!enc || enc.status !== 'active') return '';
+  const live = enc.ships.filter(s => s.status !== 'destroyed');
+  if(live.length < 2) return '';
+  const opts = live.map(s => `<option value="${s.id}">${escQH(redactedShipName(s))}</option>`).join('');
+  return `<details class="cbt-quick"><summary>⚡ Quick resolve</summary>
+    <div class="cbt-quick-body">
+      <div class="cbt-quick-note">Minor skirmish? Apply damage or call the result without stepping every phase.</div>
+      <div class="cbt-ctl-row">
+        <select class="cbt-sel" id="cbt-qr-target" style="flex:1;min-width:90px">${opts}</select>
+        <input class="cbt-num" id="cbt-qr-dmg" type="number" min="0" placeholder="dmg" style="width:64px">
+        <button class="cbt-btn fire" onclick="uiQuickDamage()">Apply</button>
+        <button class="cbt-btn danger" onclick="uiQuickDestroy()">Destroy</button>
+      </div>
+      <div class="cbt-ctl-row" style="margin-top:4px">
+        <select class="cbt-sel" id="cbt-qr-outcome" style="flex:1;min-width:90px">${COMBAT_QR_OUTCOMES.map(o => `<option>${escQH(o)}</option>`).join('')}</select>
+        <input class="cbt-sel" id="cbt-qr-note" type="text" placeholder="note (optional)" style="flex:1;min-width:70px">
+        <button class="cbt-btn primary" onclick="uiQuickEnd()">Call it</button>
+      </div>
+    </div>
+  </details>`;
+}
+function uiQuickDamage(){
+  const t = document.getElementById('cbt-qr-target'), d = document.getElementById('cbt-qr-dmg');
+  if(!t || !d) return;
+  const amt = Number(d.value) || 0; if(amt <= 0) return;
+  quickResolveDamage(t.value, amt); d.value = ''; renderCombat();
+}
+function uiQuickDestroy(){
+  const t = document.getElementById('cbt-qr-target'); if(!t) return;
+  const s = combatShipById(t.value); if(!s) return;
+  if(confirm(`Destroy ${s.name}?`)){ quickDestroy(t.value); renderCombat(); }
+}
+function uiQuickEnd(){
+  const o = document.getElementById('cbt-qr-outcome'), n = document.getElementById('cbt-qr-note');
+  if(!o) return;
+  if(confirm(`Call the encounter — ${o.value}?`)){ quickResolveEnd(o.value, n ? n.value.trim() : ''); renderCombat(); }
 }
 
 function renderCombatLog(enc){

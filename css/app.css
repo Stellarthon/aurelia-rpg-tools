@@ -1348,6 +1348,12 @@ textarea{font-family:var(--font)}
 .cbt-btn.fire{background:#3B1A1A;color:#ff6b6b;border-color:#5a2222}
 .cbt-sel,.cbt-num{font-size:10px;font-family:monospace;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 6px}
 .cbt-num{width:52px}
+/* Quick resolve */
+.cbt-quick{background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:2px 8px}
+.cbt-quick>summary{font-size:9px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase;cursor:pointer;padding:5px 0;list-style:none}
+.cbt-quick>summary::-webkit-details-marker{display:none}
+.cbt-quick-body{display:flex;flex-direction:column;gap:5px;padding:2px 0 7px}
+.cbt-quick-note{font-size:9px;color:var(--tx1);font-style:italic}
 /* Battle log */
 .cbt-log{display:flex;flex-direction:column;gap:4px;background:var(--bg0);border-radius:6px;padding:7px 8px}
 .cbt-log-entry{font-size:10px;line-height:1.5;color:var(--tx0);font-family:monospace;border-left:2px solid var(--bd0);padding:2px 7px}
