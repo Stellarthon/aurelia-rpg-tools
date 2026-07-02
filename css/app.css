@@ -1748,12 +1748,14 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #econ-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
 #econ-btn:hover{background:var(--bd0);color:var(--tx0)}
 #econ-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
-/* Journal & NPCs were the only header nav buttons without their own #id rule,
-   so the base `button{background:none;border:none}` left them boxless. Give them
-   the same dark chrome (bg + border + hover + open states) as every sibling. */
-#journal-btn,#npc-btn,#more-btn{font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;flex-shrink:0;white-space:nowrap}
-#journal-btn:hover,#npc-btn:hover,#more-btn:hover{background:var(--bd0);color:var(--tx0)}
-#journal-btn.panel-open,#npc-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+/* These header nav buttons had no #id rule of their own, so the base
+   `button{background:none;border:none}` left them boxless. Give them the same
+   dark chrome (bg + border + hover + open states) as every sibling so the whole
+   toolbar reads consistently. (Downtime/Wiki/Contacts also live in the ⋯ More
+   menu now, where `.more-item` out-specifies this rule — harmless either way.) */
+#journal-btn,#npc-btn,#more-btn,#downtime-btn,#turnorder-btn,#handouts-btn,#wiki-btn,#contacts-btn,#cargo-btn{font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#journal-btn:hover,#npc-btn:hover,#more-btn:hover,#downtime-btn:hover,#turnorder-btn:hover,#handouts-btn:hover,#wiki-btn:hover,#contacts-btn:hover,#cargo-btn:hover{background:var(--bd0);color:var(--tx0)}
+#journal-btn.panel-open,#npc-btn.panel-open,#downtime-btn.panel-open,#turnorder-btn.panel-open,#handouts-btn.panel-open,#wiki-btn.panel-open,#contacts-btn.panel-open,#cargo-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#econ-wrap{right:0;top:54px;width:330px}}
 
 /* ── Quest editor modal ── */
