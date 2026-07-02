@@ -47,8 +47,17 @@ mutating the production `aurelia_state`):
 | Rules & gear catalogue seed — Layer 1 (§5.6) | ⏳ content task (referee-entered gear; nothing generic to ship) |
 
 **Tier-1 is functionally complete.** Everything code-buildable is shipped; the only
-open Tier-1 line is Layer-1 catalogue *content* (referee-entered gear, by design). Next
-up is Tier 2 — headline: **BYO-rulebook PDF upload** (§5.6 Layer 3).
+open Tier-1 line is Layer-1 catalogue *content* (referee-entered gear, by design).
+
+Tier-2 progress:
+
+| Item | Status |
+|---|---|
+| BYO-rulebook PDF upload — Layer 3 (§5.6) | ✅ shipped — referee uploads own PDF to a private `rulebooks` bucket; page references deep-link the native viewer via `#page=N`. ⚠️ **deploy step:** apply `supabase/migrations/0003_rulebooks_bucket.sql`; then verify upload + open on a device |
+| "Since last session" digest (§6) | ⏳ not yet |
+| Referee-facilitated trade helper (§5.5) | ⏳ not yet |
+| Printable char/ship sheet (§5.7) | ⏳ not yet |
+| Handout / evidence push (§5.8) | ⏳ not yet |
 
 ---
 
