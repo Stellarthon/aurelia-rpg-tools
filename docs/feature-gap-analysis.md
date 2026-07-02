@@ -43,8 +43,12 @@ mutating the production `aurelia_state`):
 | Shared turn-order board, redacted + referee-gated (§5.1) | ✅ shipped |
 | Rules & gear page references — Layer 2 (§5.6) | ✅ shipped (`rules-index` key, in the Rules panel) |
 | Ship's log (§6) | ✅ **already present** — the "Captain's Log" section renders `shipState.jumpLog` in the galaxy panel (`js/10:2100`); not a gap |
+| Finish route-blocking (§5.2) | ✅ shipped — referee block-mode + kill-switch, dashed-red 🔒 for nav crew; ⚠️ SVG rendering needs an on-device visual check (headless can't build the gated map) |
 | Rules & gear catalogue seed — Layer 1 (§5.6) | ⏳ content task (referee-entered gear; nothing generic to ship) |
-| Finish route-blocking (§5.2) | ⏳ remaining — needs SVG lane rendering + click-to-block in `js/10`; best done with a visual check |
+
+**Tier-1 is functionally complete.** Everything code-buildable is shipped; the only
+open Tier-1 line is Layer-1 catalogue *content* (referee-entered gear, by design). Next
+up is Tier 2 — headline: **BYO-rulebook PDF upload** (§5.6 Layer 3).
 
 ---
 
