@@ -610,6 +610,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Downtime — players see the referee resolve their between-jump actions live
+  try {
+    const resDT = await supaStorage.get('downtime', true);
+    if(resDT.ok){
+      const freshDT = resDT.value != null ? JSON.parse(resDT.value) || [] : [];
+      if(JSON.stringify(freshDT) !== JSON.stringify(downtime)){
+        downtime = freshDT;
+        if(downtimePanelOpen) renderDowntimePanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Rules & gear page references — players see referee-authored citations live
   try {
     const resRR = await supaStorage.get('rules-index', true);
