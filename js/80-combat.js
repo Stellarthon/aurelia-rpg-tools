@@ -655,7 +655,20 @@ function renderCombat(){
   if(badge) badge.textContent = enc.status === 'active'
     ? `R${enc.round} · ${enc.phase.toUpperCase()}` : enc.status.toUpperCase();
 
+  // Player heads-up guardrail (Q2 — no shared TV): players default to a minimal,
+  // glanceable readout (whose turn · your hull/alert · range to contacts). The
+  // radar + battle FX are the referee's spectacle; they stay off player devices
+  // unless a player deliberately opts into the full tactical view, so eyes stay
+  // up at the table mid-scene.
+  if(!ref && combatHeadsUp){
+    body.innerHTML = renderCombatHeadsUp(enc);
+    combatFXScan(); // keep the FX cursor current so a later switch to full view has no backlog
+    return;
+  }
+
   const out = [];
+  // Players in the full tactical view get a one-tap way back to the calm readout.
+  if(!ref) out.push(`<div class="cbt-headsup-bar"><span class="cbt-hu-title">Full tactical</span><button class="cbt-btn" onclick="toggleCombatHeadsUp()" title="Return to the minimal heads-up view — keeps eyes up at the table">📥 Heads-up view</button></div>`);
 
   // Status bar
   if(enc.status === 'active'){
@@ -700,6 +713,55 @@ function renderCombat(){
 
   body.innerHTML = out.join('');
   combatFXScan(); // replay any new battle-log events as abstract FX (Phase 5)
+}
+
+// ── Player heads-up view (minimal, glanceable — the §7.1 guardrail) ─────────
+// Whose turn · your ship's condition · range to each contact, as static text.
+// No radar sweep, no beam/impact FX — those live on the referee's screen so the
+// drama stays in narration and player phones don't pull eyes down mid-scene.
+function renderCombatHeadsUp(enc){
+  const player = enc.ships.find(s => s.ref === 'player');
+  const others = enc.ships.filter(s => s.ref !== 'player');
+  const act = combatActiveShip();
+  const out = [];
+  out.push(`<div class="cbt-headsup-bar"><span class="cbt-hu-title">Heads-up</span>
+    <button class="cbt-btn" onclick="toggleCombatHeadsUp()" title="Show the full tactical scope + battle effects">🔭 Full tactical view</button></div>`);
+
+  if(enc.status === 'active'){
+    const yourTurn = act && act.ref === 'player';
+    out.push(`<div class="cbt-statusbar">
+      <span class="cbt-chip live">Round <b>${enc.round}</b></span>
+      <span class="cbt-chip">Phase <b>${escQH(enc.phase)}</b></span>
+      <span class="cbt-chip${yourTurn ? ' cbt-hu-yourturn' : ''}">Active <b>${act ? escQH(redactedShipName(act)) : '—'}</b>${yourTurn ? ' — <b>you</b>' : ''}</span>
+    </div>`);
+  }
+
+  // Your ship — hull / structure / crits (reuse the ship card, controls off).
+  if(player){
+    out.push(`<div class="cbt-sec-tab">Your ship</div>`);
+    out.push(renderCombatShip(player, false));
+  }
+
+  // Range to each visible contact — plain chips, no scope.
+  const myPairs = player ? combatRangePairs().filter(p => p.aId === player.id || p.bId === player.id) : [];
+  if(myPairs.length){
+    out.push(`<div class="cbt-sec-tab">Range to contacts</div>`);
+    out.push(`<div class="cbt-hu-ranges">${myPairs.map(p => {
+      const other = p.aId === player.id ? p.b : p.a;
+      return `<span class="cbt-hu-range"><b>${escQH(other)}</b><span class="cbt-hu-band">${escQH(p.band)}</span></span>`;
+    }).join('')}</div>`);
+  } else if(others.length){
+    out.push(`<div class="cbt-hu-note">${others.length} contact${others.length > 1 ? 's' : ''} on scope.</div>`);
+  }
+
+  // Active hazards — glanceable, read-only.
+  const hz = combatHazardChips();
+  if(hz) out.push(hz);
+
+  // Recent battle log — text only, no motion.
+  out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
+  out.push(renderCombatLog(enc));
+  return out.join('');
 }
 
 // Players never hold an unrevealed enemy, but guard the name anyway.
@@ -1443,6 +1505,16 @@ let combatSfxEnabled = true;
 try { combatSfxEnabled = localStorage.getItem('aurelia_combat_sfx') !== '0'; } catch(e){}
 const combatReducedMotion = (typeof matchMedia === 'function') && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Heads-up guardrail (§7.1): players default to the minimal glanceable view; the
+// referee is always full. Per-device preference, so a player can opt in/out.
+let combatHeadsUp = true;
+try { combatHeadsUp = localStorage.getItem('aurelia_combat_headsup') !== '0'; } catch(e){}
+function toggleCombatHeadsUp(){
+  combatHeadsUp = !combatHeadsUp;
+  try { localStorage.setItem('aurelia_combat_headsup', combatHeadsUp ? '1' : '0'); } catch(e){}
+  renderCombat();
+}
+
 function toggleCombatSfx(){
   combatSfxEnabled = !combatSfxEnabled;
   try { localStorage.setItem('aurelia_combat_sfx', combatSfxEnabled ? '1' : '0'); } catch(e){}
@@ -1458,7 +1530,11 @@ function combatFXScan(){
   if(idx < 0){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // log reset/trimmed — re-prime quietly
   const fresh = log.slice(idx + 1);
   if(!fresh.length) return;
-  combatFXLastId = fresh[fresh.length - 1].id;
+  combatFXLastId = fresh[fresh.length - 1].id;  // advance the cursor regardless, so heads-up ↔ full toggles never replay a backlog
+  // Heads-up guardrail: players in the minimal view get the state, not the motion
+  // (and, since sound rides on playCombatFX, no beeps either) — the referee's
+  // screen keeps the spectacle.
+  if(!isReferee() && combatHeadsUp) return;
   // Only animate while the panel is actually visible.
   const wrap = document.getElementById('combat-wrap');
   if(!wrap || wrap.classList.contains('hidden') || combatCollapsed) return;
