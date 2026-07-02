@@ -115,6 +115,16 @@ const NON_SECRET = new Set([
   'ARCHON_BANDS', 'NPC_GEN', 'ORACLE_GOODS', 'ORACLE_PLACES', 'RUMOUR_TEMPLATES',
   'RUMOUR_RELIABILITY', 'ENCOUNTER_TABLES', 'ENCOUNTER_DIFF', 'ORACLE_WHERE',
   'ORACLE_DANGER', 'QREF_DATA',
+  // Engine config + generator templates, intentionally shipped. These carry
+  // field-name-like keys that REF_FIELD_RE matches, but the keys are UI labels /
+  // parameterised template fields, NOT campaign secrets (verified in-repo):
+  //  · PACK_DEFAULTS   — franchise-agnostic pack defaults; the only trigger is its
+  //    terminology map's label keys refNote:'Referee Note' / npcs:'NPCs'
+  //    (js/05-campaign-pack.js) — labels, not data.
+  //  · CORP_CONTRACT   — parameterised corp-job templates ({corp}/{target}/{reward}
+  //    placeholders, same class as the ORACLE_*/RUMOUR_* generators above)
+  //    (js/85-records.js) — no campaign-specific content.
+  'PACK_DEFAULTS', 'CORP_CONTRACT',
 ]);
 const REF_FIELD_RE = /\b(npcs|checks|refnotes|refNote|rsr|events|hook):/;
 {

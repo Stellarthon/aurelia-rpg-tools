@@ -125,6 +125,7 @@
       <div id="search-results"></div>
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
+    <button id="journal-btn" onclick="toggleJournalPanel()" title="Session Journal — saved recaps">📓 Journal</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
@@ -405,6 +406,8 @@
     <button class="tv-btn" onclick="openSheetMenu()" title="Character sheet"><span class="ico">📋</span><span class="lbl">Sheet</span></button>
     <button class="tv-btn" onclick="toggleShipPanel()" title="Ship status"><span class="ico">🚀</span><span class="lbl">Ship</span></button>
     <button class="tv-btn" onclick="toggleQuestPanel()" title="Mission log"><span class="ico">📜</span><span class="lbl">Missions</span></button>
+    <button class="tv-btn" onclick="toggleJournalPanel()" title="Session journal — previously on…"><span class="ico">📓</span><span class="lbl">Journal</span></button>
+    <button class="tv-btn" onclick="toggleTurnOrderPanel()" title="Turn order (during combat)"><span class="ico">🎯</span><span class="lbl">Turns</span></button>
     <button class="tv-btn" onclick="toggleFundsPanel()" title="Funds"><span class="ico">💰</span><span class="lbl">Funds</span></button>
     <button class="tv-btn" onclick="toggleQref()" title="Quick reference rules"><span class="ico">📖</span><span class="lbl">Rules</span></button>
   </div>
@@ -575,6 +578,7 @@
           <div class="session-section-title">Session Recap</div>
           <div class="session-btn-row">
             <button class="session-btn primary" onclick="generateSessionRecap()">✨ Generate recap</button>
+            <button class="session-btn" onclick="saveRecapToJournal()">📓 Save to Journal</button>
           </div>
           <div id="session-recap-output" class="session-recap-output" style="display:none"></div>
         </div>
@@ -637,6 +641,10 @@
         <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
           <input type="checkbox" id="init-roll-mode" style="accent-color:var(--accentGold)">
           Roll 2D6 + mod automatically
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px" title="Show a read-only turn order (names + whose turn) on players' devices. NPC health, scores, and your notes stay private.">
+          <input type="checkbox" id="init-share-players" onchange="toggleInitShare(this.checked)" style="accent-color:var(--accentGold)">
+          Share turn order with players
         </label>
       </div>
       <div id="init-addrow">
@@ -708,6 +716,29 @@
       <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Mission</button>
     </div>
     <div class="panel-resize-handle" id="quest-resize"></div>
+  </div>
+
+  <div id="journal-wrap" class="hidden">
+    <div id="journal-header" onclick="toggleJournalCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📓 SESSION JOURNAL</span>
+      </div>
+      <span id="journal-toggle">▼</span>
+    </div>
+    <div id="journal-body"></div>
+    <div class="panel-resize-handle" id="journal-resize"></div>
+  </div>
+
+  <div id="turnorder-wrap" class="hidden">
+    <div id="turnorder-header" onclick="toggleTurnOrderCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🎯 TURN ORDER</span>
+        <span id="turnorder-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="turnorder-toggle">▼</span>
+    </div>
+    <div id="turnorder-body"></div>
+    <div class="panel-resize-handle" id="turnorder-resize"></div>
   </div>
 
   <div id="ship-wrap" class="hidden">

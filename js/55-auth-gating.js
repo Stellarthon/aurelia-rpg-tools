@@ -551,6 +551,48 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Shared turn order — players get the referee's redacted initiative board live,
+  // and the panel auto-opens the moment the referee shares one.
+  try {
+    const resTO = await supaStorage.get('initiative', true);
+    if(resTO.ok){
+      const freshTO = resTO.value != null ? (JSON.parse(resTO.value) || {shared:false,turnId:null,rows:[]}) : {shared:false,turnId:null,rows:[]};
+      if(JSON.stringify(freshTO) !== JSON.stringify(playerInit)){
+        const wasShared = playerInit.shared;
+        playerInit = freshTO;
+        if(playerInit.shared && !wasShared && !turnOrderPanelOpen){
+          toggleTurnOrderPanel();      // reveal the board when combat begins
+        } else if(turnOrderPanelOpen){
+          renderTurnOrder();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Session journal — players see new saved recaps ("Previously on…") appear live
+  try {
+    const resJ = await supaStorage.get('session-log', true);
+    if(resJ.ok){
+      const freshJ = resJ.value != null ? JSON.parse(resJ.value) || [] : [];
+      if(JSON.stringify(freshJ) !== JSON.stringify(sessionLog)){
+        sessionLog = freshJ;
+        if(journalPanelOpen) renderJournalPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Rules & gear page references — players see referee-authored citations live
+  try {
+    const resRR = await supaStorage.get('rules-index', true);
+    if(resRR.ok){
+      const freshRR = resRR.value != null ? JSON.parse(resRR.value) || [] : [];
+      if(JSON.stringify(freshRR) !== JSON.stringify(rulesIndex)){
+        rulesIndex = freshRR; _rulesLoaded = true;
+        if(qrefOpen) renderQref();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);

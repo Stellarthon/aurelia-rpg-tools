@@ -1244,6 +1244,39 @@ async function saveRouteBlocks(){
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
+// A lane counts as blocked only while the kill-switch (enabled) is on. Blocks are
+// a visual/story signal for nav crew — they do NOT alter the route planner
+// (advisory only, per docs/phase-2-feasibility-study.md §5); the referee narrates
+// the gate. Referee sets them; Rhett/Cass see them; other players see plain lanes.
+let gxBlockMode = false; // referee "tap a lane to close/open it" mode
+function isLaneBlocked(k){ return !!(routeBlocks.enabled && routeBlocks.blocks && routeBlocks.blocks[k]); }
+function gxArmBlock(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  gxBlockMode = !gxBlockMode;
+  showToast(gxBlockMode ? 'Block mode ON — tap a jump lane to close/open it' : 'Block mode off');
+  if(typeof HX !== 'undefined') HX.refresh();
+}
+function gxToggleBlock(k){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  routeBlocks.blocks = routeBlocks.blocks || {};
+  if(routeBlocks.blocks[k]){ delete routeBlocks.blocks[k]; showToast('Jump lane reopened'); }
+  else {
+    let reason = '';
+    try { const r = prompt('Reason nav crew sees (blank = "Route closed"):', ''); if(r === null) return; reason = r.trim(); } catch(e){}
+    routeBlocks.blocks[k] = { reason, explain: true };
+    showToast('Jump lane closed');
+  }
+  saveRouteBlocks();
+  if(typeof HX !== 'undefined') HX.refresh();
+}
+function gxToggleBlocksEnabled(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  routeBlocks.enabled = !routeBlocks.enabled;
+  saveRouteBlocks();
+  showToast(routeBlocks.enabled ? 'Route blocks active' : 'Route blocks disabled (kill-switch)');
+  if(typeof HX !== 'undefined') HX.refresh();
+}
+
 // ═══ WORLD GENERATOR — one rules-correct MgT2e UWP + trade-code engine ═══════
 // Single source of truth shared by BOTH the galaxy map (HX.uwpOf — seeded,
 // per-device-deterministic) and the Add-Body / system auto-generators (Math.random).
@@ -1674,9 +1707,22 @@ const HX = (function(){
         const line=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-lane'});
         if(flyable){ line.setAttribute('stroke-dasharray','none'); line.setAttribute('opacity',touches?'0.95':'0.5'); }
         else { line.setAttribute('opacity',touches?'0.55':'0.18'); }
-        if(touches) line.setAttribute('stroke-width','1.6'); laneLayer.appendChild(line);
-        if(editing){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
-          hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true; if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); }); laneLayer.appendChild(hit); } }); }
+        if(touches) line.setAttribute('stroke-width','1.6');
+        // Route block: the referee + nav crew (Rhett/Cass) see a closed lane as
+        // dashed red with a lock; other players see an ordinary lane.
+        const blk=(typeof isLaneBlocked==='function')&&isLaneBlocked(L.key);
+        const showBlk=blk&&(ref()||(typeof canSee==='function'&&typeof SHIP_NAV_AUDIENCE!=='undefined'&&canSee(SHIP_NAV_AUDIENCE)));
+        if(showBlk){ line.setAttribute('stroke','#d45050'); line.setAttribute('stroke-dasharray','5,4'); line.setAttribute('opacity','0.92'); line.setAttribute('stroke-width',touches?'2':'1.5'); }
+        laneLayer.appendChild(line);
+        if(showBlk){ const mx=(pa.x+pb.x)/2, my=(pa.y+pb.y)/2;
+          const lock=NS('text',{x:mx,y:my+3,'text-anchor':'middle',style:'font-size:11px;fill:#ff9b9b;pointer-events:none'}); lock.textContent='🔒';
+          const bd=routeBlocks.blocks&&routeBlocks.blocks[L.key]; const tt=NS('title',{});
+          tt.textContent=(bd&&bd.explain!==false&&bd.reason)?bd.reason:'Route closed'; lock.appendChild(tt); laneLayer.appendChild(lock); }
+        const canHit=editing||(ref()&&typeof gxBlockMode!=='undefined'&&gxBlockMode);
+        if(canHit){ const hit=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:'transparent','stroke-width':6,style:'cursor:pointer'});
+          hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true;
+            if(typeof gxBlockMode!=='undefined'&&gxBlockMode){ if(typeof gxToggleBlock==='function') gxToggleBlock(L.key); }
+            else if(editing){ if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); } }); laneLayer.appendChild(hit); } }); }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
     // Corp territory — when a house is selected in the econ console, ring its HQ + expanded worlds in
     // its house colour (HQ = solid ring + label; expansions = dashed, growing with the invest count).
@@ -2037,7 +2083,11 @@ const HX = (function(){
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
         : (s ? `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`
              : `<div class="hx-small">Select a star, then tap a destination to draw a jump lane between it and another.</div>`);
-      html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`; }
+      html+=`<div class="hx-small">Add a lane from any star — select it, then tap the destination. Tap a lane to remove it. No need to fly there.</div>`;
+      const nblk=(routeBlocks&&routeBlocks.blocks)?Object.keys(routeBlocks.blocks).length:0;
+      html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn"${gxBlockMode?' style="border-color:#d45050;color:#ff9b9b"':''} onclick="gxArmBlock()">${gxBlockMode?'✓ Block mode ON — tap a lane to close/open':'🔒 Close / reopen jump lanes'}</button></div>`;
+      html+=`<div class="hx-btn-row"><button class="hx-act-btn"${routeBlocks.enabled?'':' style="border-color:#caa83b;color:#e8c65a"'} onclick="gxToggleBlocksEnabled()">${routeBlocks.enabled?('Blocks active · '+nblk+' closed — tap to lift all'):('Kill-switch OFF · '+nblk+' held')}</button></div>`;
+      html+=`<div class="hx-small">Closed lanes show dashed-red with 🔒 to you and nav crew (Rhett, Cass); other players see an ordinary lane. Blocks are a story signal — the route planner itself is unchanged.</div>`; }
     if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
       html+=sec('dsys','Design — System',false,'color:#9B59B6');
       if(typeof HX!=='undefined'&&HX.placing&&HX.placing()){

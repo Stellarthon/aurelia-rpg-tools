@@ -231,12 +231,20 @@ async function saveDiscoveryLog(){
 
 // Which fog stage does the CURRENT viewer see for this entry? null = not visible.
 function discViewerStage(e){
+  // pending = a player-submitted rumour awaiting referee moderation. Strictly
+  // gated: only the referee (to approve/reject) and the author (to see it is
+  // "awaiting") — never any other player, and never leaked into the fog.
+  if(e.state === 'pending'){
+    if(isReferee()) return 'pending';
+    if(e.submittedBy && e.submittedBy === myIdentity) return 'pending';
+    return null;
+  }
   if(isReferee()) return 'known';
   if(e.state === 'hidden') return null;
   if(!canSee(e.visibleTo)) return null;
   return e.state; // 'rumoured' | 'known'
 }
-function discStateLabel(s){ return {hidden:'Hidden',rumoured:'Rumoured',known:'Known'}[s] || s; }
+function discStateLabel(s){ return {hidden:'Hidden',rumoured:'Rumoured',known:'Known',pending:'Pending'}[s] || s; }
 
 function toggleDiscoveryPanel(){
   discPanelOpen = !discPanelOpen;
@@ -257,6 +265,26 @@ function renderDiscCard(e, ref){
   const stage = ref ? e.state : discViewerStage(e);
   const cat = DISC_CATEGORIES.find(c => c[0] === e.category);
   const catTag = `<span class="disc-cat cat-${e.category || 'lore'}">${cat ? cat[1] : (e.category || '')}</span>`;
+
+  // Player-submitted rumour awaiting moderation: referee gets approve/reject;
+  // the author sees only an "awaiting" marker; no one else reaches this card.
+  if(stage === 'pending'){
+    const who = escQH(e.submittedBy || 'a player');
+    const bodyTxt = e.body ? escQH(e.body).replace(/\n/g,'<br>') : '';
+    const ctl = ref
+      ? `<div class="disc-ctl">
+           <button class="disc-mini approve" onclick="approveRumour('${e.id}')" title="Approve → enters the fog as a rumour">✓ Approve</button>
+           <button class="disc-mini del" onclick="rejectRumour('${e.id}')" title="Reject &amp; delete">✕ Reject</button>
+         </div>`
+      : `<div class="disc-pending-note">📥 Awaiting Referee</div>`;
+    return `<div class="disc-card state-pending">
+      <div class="disc-card-hd">${catTag}<span class="disc-title">${escQH(e.title)}</span></div>
+      ${ref ? `<div class="disc-pending-by">Submitted by ${who}</div>` : ''}
+      ${bodyTxt ? `<div class="disc-body-txt">${bodyTxt}</div>` : ''}
+      ${ctl}
+    </div>`;
+  }
+
   let bodyHTML;
   if(!ref && stage === 'rumoured'){
     bodyHTML = `<span class="disc-redacted">▓▓▓ UNCONFIRMED — details unknown ▓▓▓</span>`;
@@ -312,11 +340,11 @@ function renderDiscoveryPanel(){
     list = `<div class="cal-empty">${ref ? 'No entries yet. Add lore, intel, or clues below.' : 'Nothing uncovered yet.'}</div>`;
   } else {
     // Order: known first, then rumoured, then hidden (referee view); within, keep insertion order.
-    const rank = s => (s === 'known' ? 0 : s === 'rumoured' ? 1 : 2);
+    const rank = s => (s === 'pending' ? -1 : s === 'known' ? 0 : s === 'rumoured' ? 1 : 2);
     const sorted = visible.slice().sort((a, b) => rank(ref ? a.state : discViewerStage(a)) - rank(ref ? b.state : discViewerStage(b)));
     list = sorted.map(e => renderDiscCard(e, ref)).join('');
   }
-  body.innerHTML = list + (ref ? renderDiscForm() : '');
+  body.innerHTML = list + (ref ? renderDiscForm() : (myIdentity ? renderDiscSubmitForm() : ''));
 }
 
 function saveDiscEntry(){
@@ -361,6 +389,59 @@ function cycleDiscVis(id){
   else e.visibleTo = 'all';
   saveDiscoveryLog();
   renderDiscoveryPanel();
+}
+
+// ── Player-submitted rumours (the `pending` fog state) ─────────────────────
+// An identified player may submit a rumour (title/category/body only — no
+// state/visibility controls). It is stored `pending` and is invisible to every
+// other player until the referee approves it (→ enters the fog as `rumoured`)
+// or rejects it (deleted). Honour-system write, same as notes/funds.
+function renderDiscSubmitForm(){
+  const catOpts = DISC_CATEGORIES.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('');
+  return `<div class="disc-add">
+    <div class="disc-add-ttl">Submit a rumour</div>
+    <input id="disc-sub-title" placeholder="What did you hear?" maxlength="100">
+    <div class="disc-add-row">
+      <select id="disc-sub-cat">${catOpts}</select>
+    </div>
+    <textarea id="disc-sub-body" rows="2" placeholder="Details / where it came from…"></textarea>
+    <div class="disc-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="submitRumour()">📤 Submit to Referee</button>
+    </div>
+    <div class="disc-sub-hint">The referee reviews it before anyone else sees it.</div>
+  </div>`;
+}
+function submitRumour(){
+  if(isReferee() || !myIdentity) return;
+  const t = document.getElementById('disc-sub-title'); if(!t) return;
+  const title = t.value.trim(); if(!title) return;
+  const category = document.getElementById('disc-sub-cat').value;
+  const bodyTxt = document.getElementById('disc-sub-body').value.trim();
+  discoveryLog.push({
+    id: 'disc_' + Date.now().toString(36), title, category, body: bodyTxt,
+    state: 'pending', submittedBy: myIdentity, visibleTo: 'all',
+    createdAt: imperialNow(), revealedAt: null
+  });
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+  showToast('Rumour submitted to the Referee');
+}
+function approveRumour(id){
+  if(!isReferee()) return;
+  const e = discoveryLog.find(x => x.id === id); if(!e) return;
+  e.state = 'rumoured';           // enters the shared fog as a rumour
+  delete e.submittedBy;
+  if(!e.revealedAt) e.revealedAt = imperialNow();
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+  showToast('Rumour approved');
+}
+function rejectRumour(id){
+  if(!isReferee()) return;
+  discoveryLog = discoveryLog.filter(e => e.id !== id);
+  saveDiscoveryLog();
+  renderDiscoveryPanel();
+  showToast('Rumour rejected', 'info');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1161,6 +1242,106 @@ async function deleteQuest(){
   showToast('Quest deleted', 'info');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION JOURNAL — persisted, player-visible session recaps ("Previously on…")
+// ═══════════════════════════════════════════════════════════════════════════
+// The session-recap generator (generateSessionRecap, js/92) is ephemeral. The
+// journal persists a recap as a dated entry so continuity carries between
+// sessions. Shared key 'session-log' (shared:true), same pattern as quest-log:
+// the referee writes, players poll and read; entries are visibility-gated via
+// canSee(visibleTo) (default 'all'). Lives here (load pos 85) so the boot-time
+// loadSessionLog() below resolves — it must be defined before it is called.
+//   entry = { id, realDate, imperialDate:{day,year}|null, title, body, visibleTo }
+
+let sessionLog = [];
+let journalPanelOpen = false;
+let journalCollapsed = false;
+
+async function loadSessionLog(){
+  try {
+    const res = await supaStorage.get('session-log', true);
+    if(res.value != null) sessionLog = JSON.parse(res.value) || [];
+  } catch(e){ sessionLog = []; }
+}
+async function saveSessionLog(){
+  try { await supaStorage.set('session-log', JSON.stringify(sessionLog), true); }
+  catch(e){ console.error('Session journal save failed:', e); }
+}
+
+function toggleJournalPanel(){
+  journalPanelOpen = !journalPanelOpen;
+  const wrap = document.getElementById('journal-wrap');
+  const btn = document.getElementById('journal-btn');
+  if(!wrap) return;
+  wrap.classList.toggle('hidden', !journalPanelOpen);
+  if(btn) btn.classList.toggle('panel-open', journalPanelOpen);
+  if(journalPanelOpen) renderJournalPanel();
+}
+function toggleJournalCollapse(){
+  const hdr = document.getElementById('journal-header');
+  if(hdr && hdr.dataset.suppressClick === '1') return;
+  journalCollapsed = !journalCollapsed;
+  document.getElementById('journal-toggle').textContent = journalCollapsed ? '▲' : '▼';
+  document.getElementById('journal-body').classList.toggle('collapsed', journalCollapsed);
+  document.getElementById('journal-wrap').classList.toggle('panel-collapsed', journalCollapsed);
+}
+
+// Referee: persist the current generated recap as a dated journal entry.
+// Reads the recap already produced into #session-recap-output by
+// generateSessionRecap() — so it reuses that generator rather than re-inventing.
+function saveRecapToJournal(){
+  if(!isReferee()) return;
+  const out = document.getElementById('session-recap-output');
+  const body = ((out && out.textContent) || '').trim();
+  if(!body){ showToast('Generate a recap first', 'error'); return; }
+  const imp = (typeof imperialNow === 'function') ? imperialNow() : null;
+  const title = 'Session — ' + (imp ? formatImperial(imp) : new Date().toLocaleDateString());
+  sessionLog.push({
+    id: 'sess_' + Math.random().toString(36).slice(2, 9),
+    realDate: new Date().toISOString().slice(0, 10),
+    imperialDate: imp,
+    title, body, visibleTo: 'all'
+  });
+  saveSessionLog();
+  showToast('Saved to session journal');
+  if(journalPanelOpen) renderJournalPanel();
+}
+
+function deleteJournalEntry(id){
+  if(!isReferee()) return;
+  if(!confirm('Delete this journal entry? This cannot be undone.')) return;
+  sessionLog = sessionLog.filter(e => e.id !== id);
+  saveSessionLog();
+  renderJournalPanel();
+}
+
+function renderJournalPanel(){
+  const ref = isReferee();
+  const body = document.getElementById('journal-body');
+  if(!body) return;
+  // newest first; players only see entries their identity is permitted to
+  const visible = sessionLog
+    .filter(e => ref || (typeof canSee === 'function' ? canSee(e.visibleTo) : true))
+    .slice().reverse();
+  if(!visible.length){
+    body.innerHTML = `<div class="journal-empty">${ref
+      ? 'No saved recaps yet. Open Session Tools, “Generate recap”, then “Save to Journal”.'
+      : 'No session recaps yet.'}</div>`;
+    return;
+  }
+  body.innerHTML = visible.map(e => {
+    const when = e.imperialDate ? formatImperial(e.imperialDate) : (e.realDate || '');
+    const del = ref ? `<button class="journal-del" onclick="deleteJournalEntry('${e.id}')" title="Delete entry">✕</button>` : '';
+    return `<div class="journal-entry">
+      <div class="journal-entry-head">
+        <span class="journal-entry-title">${escQH(e.title)}</span>
+        <span class="journal-entry-date">${escQH(when)}</span>${del}
+      </div>
+      <div class="journal-entry-body">${escQH(e.body).replace(/\n/g,'<br>')}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── Player polling extension ──────────────────────────────────────────────
 // Wired into the existing pollRevealState() call chain — see that function
 
@@ -1172,6 +1353,10 @@ makePanelDraggable('health-wrap', 'health-header');
 makePanelResizable('health-wrap');
 makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
+makePanelDraggable('journal-wrap', 'journal-header');
+makePanelResizable('journal-wrap');
+makePanelDraggable('turnorder-wrap', 'turnorder-header');
+makePanelResizable('turnorder-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1252,6 +1437,8 @@ loadTextureCatalog().then(() => {
   if(typeof buildOrrery === 'function') buildOrrery();
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
+loadSessionLog(); // session journal renders on-demand when its panel is opened
+loadTurnOrder(); // shared read-only turn order (players); referee is the source
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter

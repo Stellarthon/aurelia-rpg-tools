@@ -148,6 +148,7 @@ function closeQref(){
 function renderQref(){
   const body = document.getElementById('qref-body');
   if(!body) return;
+  if(!_rulesLoaded){ loadRulesIndex().then(() => { if(qrefOpen) renderQref(); }); }
   const query = (document.getElementById('qref-search')?.value || '').toLowerCase().trim();
 
   let html = '';
@@ -165,9 +166,91 @@ function renderQref(){
       </div>`;
   });
 
-  if(!html) html = '<p class="qref-note" style="text-align:center;padding:20px 0">No matches found.</p>';
+  const rrHtml = rulesIndexHTML(query);   // referee-authored page references (licensing-safe)
+  if(!html && !rrHtml){
+    html = '<p class="qref-note" style="text-align:center;padding:20px 0">No matches found.</p>';
+  } else {
+    html += rrHtml;
+  }
   body.innerHTML = html;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULES & GEAR PAGE REFERENCES — referee-authored "where to look" index
+// ═══════════════════════════════════════════════════════════════════════════
+// Licensing-safe by design: stores ONLY topic + book + page (+ optional note) —
+// facts, never rulebook prose — so the repo stays copyright-clean and open-source
+// ready. Rendered as searchable cards inside the existing Rules panel; players
+// poll them live (js/55). Layer 3 (BYO-rulebook PDF) can later deep-link a page.
+// Shared key 'rules-index' (shared:true), same honour-system pattern as the rest.
+let rulesIndex = [];
+let _rulesLoaded = false;
+
+async function loadRulesIndex(){
+  try { const r = await supaStorage.get('rules-index', true); if(r.value != null) rulesIndex = JSON.parse(r.value) || []; }
+  catch(e){ rulesIndex = []; }
+  _rulesLoaded = true;
+}
+async function saveRulesIndex(){
+  try { await supaStorage.set('rules-index', JSON.stringify(rulesIndex), true); }
+  catch(e){ console.error('Rules index save failed:', e); }
+}
+function addRuleRef(){
+  if(!isReferee()) return;
+  const gv = id => (document.getElementById(id)?.value || '').trim();
+  const topic = gv('rr-topic'); if(!topic) return;
+  rulesIndex.push({ id:'rr_'+Date.now().toString(36), topic, book:gv('rr-book'), page:gv('rr-page'), note:gv('rr-note') });
+  rulesIndex.sort((a,b) => (a.topic||'').localeCompare(b.topic||''));
+  saveRulesIndex();
+  renderQref();
+  showToast('Page reference added');
+}
+function deleteRuleRef(id){
+  if(!isReferee()) return;
+  rulesIndex = rulesIndex.filter(r => r.id !== id);
+  saveRulesIndex();
+  renderQref();
+}
+function rulesIndexHTML(query){
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const items = rulesIndex.filter(r => {
+    if(!query) return true;
+    return ((r.topic||'')+' '+(r.book||'')+' '+(r.page||'')+' '+(r.note||'')).toLowerCase().includes(query);
+  });
+  let cards = '';
+  if(items.length){
+    cards = items.map(r => {
+      const cite = (r.book || r.page)
+        ? `<span class="rr-cite">${escQH(r.book||'')}${r.book&&r.page?' ':''}${r.page?('p.'+escQH(r.page)):''}</span>` : '';
+      const del = ref ? `<button class="rr-del" onclick="deleteRuleRef('${r.id}')" title="Delete">✕</button>` : '';
+      return `<div class="rr-card">${del}
+        <div class="rr-card-main"><span class="rr-topic">${escQH(r.topic)}</span>${cite}</div>
+        ${r.note ? `<div class="rr-note">${escQH(r.note)}</div>` : ''}
+      </div>`;
+    }).join('');
+  } else if(query){
+    cards = '<div class="qref-note" style="padding:4px 0">No page references match.</div>';
+  } else if(!ref){
+    cards = '<div class="qref-note" style="padding:4px 0">No page references yet.</div>';
+  }
+  const form = ref ? `
+    <div class="rr-add">
+      <input id="rr-topic" placeholder="Topic (e.g. Autopistol, Grappling)" maxlength="60">
+      <div class="rr-add-row">
+        <input id="rr-book" placeholder="Book (e.g. Core Rulebook)" maxlength="40">
+        <input id="rr-page" placeholder="Page" maxlength="12" style="max-width:74px">
+      </div>
+      <input id="rr-note" placeholder="Optional note" maxlength="80">
+      <button class="cal-add-btn" onclick="addRuleRef()">+ Add page reference</button>
+      <div class="rr-hint">Stores only topic + book + page — never rulebook text, so the app stays copyright-clean.</div>
+    </div>` : '';
+  if(!cards && !form) return '';
+  return `<div class="qref-section">
+    <div class="qref-section-title">📑 Page References${ref ? ' (referee)' : ''}</div>
+    ${cards}${form}
+  </div>`;
+}
+// escQH is defined in js/70 (loaded earlier); used here at render time.
 
 // Escape closes qref — now handled by kbdDispatch
 

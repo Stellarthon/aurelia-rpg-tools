@@ -5,6 +5,7 @@ let combatants = []; // {id, name, score, dex, int, ambush:null|'atk'|'def', dow
 let currentTurnIdx = -1; // -1 = no active turn pointer
 let initCollapsed = false;
 let combatantIdSeed = 1;
+let initShared = false; // referee: is a redacted turn-order pushed to players' devices?
 
 try {
   const saved = JSON.parse(localStorage.getItem('aurelia_combatants')||'null');
@@ -12,15 +13,17 @@ try {
     combatants = saved.list;
     currentTurnIdx = saved.turnIdx ?? -1;
     combatantIdSeed = saved.seed || (combatants.length+1);
+    initShared = !!saved.shared;
   }
 } catch(e){}
 
 function saveCombatants(){
   try {
     localStorage.setItem('aurelia_combatants', JSON.stringify({
-      list: combatants, turnIdx: currentTurnIdx, seed: combatantIdSeed
+      list: combatants, turnIdx: currentTurnIdx, seed: combatantIdSeed, shared: initShared
     }));
   } catch(e){}
+  pushSharedInitiative(); // referee-only inside; mirrors a REDACTED board to players
 }
 
 // Initiative rolls the campaign's resolution dice (2d6 by default; a pack can
@@ -234,6 +237,8 @@ function renderInit(){
   const count = document.getElementById('init-count');
   if(!body) return;
   count.textContent = combatants.length;
+  const shareCb = document.getElementById('init-share-players');
+  if(shareCb) shareCb.checked = initShared;
 
   if(!combatants.length){
     body.innerHTML = '<div class="init-empty">No combatants yet. Add by name or use a quick-add button below.</div>';
@@ -386,6 +391,91 @@ function buildQuickAddList(){
   wrap.innerHTML = list.map(n =>
     `<button class="init-quick-btn" onclick="quickAddNPC('${n.name.replace(/'/g,"\\\\'")}',${n.dex},${n.int})">+ ${n.name}</button>`
   ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED TURN ORDER — a redacted, read-only board on players' devices
+// ═══════════════════════════════════════════════════════════════════════════
+// The referee tracker above stays referee-only. When the referee flips "Share
+// turn order with players", saveCombatants() mirrors a REDACTED payload to the
+// shared 'initiative' key: names, order, whose turn, and down/active — but NEVER
+// health, notes, scores, or DEX/INT (those stay on the referee's device). Players
+// poll it (js/55) into playerInit and render a glanceable read-only "Turn Order"
+// panel. Ambush setups and NPC HP never leave the table; the default-off toggle
+// is the safety — nothing is shared until the referee chooses.
+
+let _lastSharedInit = null;   // last redacted JSON written, to skip redundant writes
+let playerInit = { shared:false, turnId:null, rows:[] };
+let turnOrderPanelOpen = false;
+let turnOrderCollapsed = false;
+
+// Referee: toggle sharing on/off (called from the init-foot checkbox).
+function toggleInitShare(on){
+  initShared = !!on;
+  saveCombatants();   // persists the flag + pushes (or clears) the shared board
+}
+
+// Referee: write the redacted board to the shared key (or clear it when off).
+function pushSharedInitiative(){
+  if(typeof supaStorage === 'undefined') return;
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const payload = initShared ? {
+    shared: true,
+    turnId: (currentTurnIdx >= 0 && combatants[currentTurnIdx]) ? combatants[currentTurnIdx].id : null,
+    rows: combatants.map(c => ({ id: c.id, name: c.name, down: !!c.down }))
+  } : { shared: false, turnId: null, rows: [] };
+  const js = JSON.stringify(payload);
+  if(js === _lastSharedInit) return;   // nothing player-visible changed → skip write
+  _lastSharedInit = js;
+  try { supaStorage.set('initiative', js, true); } catch(e){}
+}
+
+// Player: hydrate the shared board at boot.
+async function loadTurnOrder(){
+  try {
+    const r = await supaStorage.get('initiative', true);
+    if(r.value != null) playerInit = JSON.parse(r.value) || playerInit;
+  } catch(e){}
+}
+
+function toggleTurnOrderPanel(){
+  turnOrderPanelOpen = !turnOrderPanelOpen;
+  const w = document.getElementById('turnorder-wrap');
+  const b = document.getElementById('turnorder-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !turnOrderPanelOpen);
+  if(b) b.classList.toggle('panel-open', turnOrderPanelOpen);
+  if(turnOrderPanelOpen) renderTurnOrder();
+}
+function toggleTurnOrderCollapse(){
+  const hdr = document.getElementById('turnorder-header');
+  if(hdr && hdr.dataset.suppressClick === '1') return;
+  turnOrderCollapsed = !turnOrderCollapsed;
+  document.getElementById('turnorder-toggle').textContent = turnOrderCollapsed ? '▲' : '▼';
+  document.getElementById('turnorder-body').classList.toggle('collapsed', turnOrderCollapsed);
+  document.getElementById('turnorder-wrap').classList.toggle('panel-collapsed', turnOrderCollapsed);
+}
+
+function renderTurnOrder(){
+  const body = document.getElementById('turnorder-body');
+  if(!body) return;
+  const rows = (playerInit && playerInit.shared && Array.isArray(playerInit.rows)) ? playerInit.rows : [];
+  const countEl = document.getElementById('turnorder-count');
+  if(countEl) countEl.textContent = rows.length;
+  if(!rows.length){
+    body.innerHTML = '<div class="to-empty">No active turn order. The referee shares it when combat begins.</div>';
+    return;
+  }
+  body.innerHTML = rows.map((r, i) => {
+    const cur = (playerInit.turnId != null && r.id === playerInit.turnId);
+    const nm = (typeof escQH === 'function') ? escQH(r.name || '') : (r.name || '');
+    return `<div class="to-row${cur ? ' current' : ''}${r.down ? ' down' : ''}">
+      <span class="to-ord">${i + 1}</span>
+      <span class="to-name">${nm}</span>
+      ${cur ? '<span class="to-turn">◄ turn</span>' : ''}
+      ${r.down ? '<span class="to-downtag">down</span>' : ''}
+    </div>`;
+  }).join('');
 }
 
 
