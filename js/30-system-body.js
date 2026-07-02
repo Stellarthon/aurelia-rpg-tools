@@ -1464,17 +1464,12 @@ function attachDiscTapHandler(svg){
 // ═══════════════════════════════════════════════════════════════════════════
 // VIEW SWITCHING
 // ═══════════════════════════════════════════════════════════════════════════
-// Plays a brief warp-style transition, then runs the actual view switch
-// at the midpoint (when the overlay is fully opaque) so the swap is hidden.
+// Thin wrapper kept so every caller (goGalaxy/enterSystem/enterStation/…) routes
+// the swap through one place. The old blue "warp" overlay was removed, so the
+// swap now happens immediately; any per-view splash (e.g. maybeSystemWelcome)
+// shows straight after.
 function playViewTransition(switchFn){
-  const el = document.getElementById('view-transition');
-  if(!el){ switchFn(); return; }
-  el.classList.remove('active');
-  // Force reflow so re-adding the class restarts the animation
-  void el.offsetWidth;
-  el.classList.add('active');
-  setTimeout(switchFn, 175); // ~35% through the 500ms animation = full opacity
-  setTimeout(() => el.classList.remove('active'), 520);
+  switchFn();
 }
 
 function enterStation(){

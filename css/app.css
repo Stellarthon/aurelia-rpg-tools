@@ -3037,21 +3037,6 @@ input#ui-scale-range{
 #conn-pill.cp-offline{color:#d45050;border-color:#5a2a2a;opacity:1}
 @keyframes cp-pulse{0%,100%{opacity:1}50%{opacity:.5}}
 
-/* ── View transition effect ── */
-#view-transition{
-  position:fixed;inset:0;z-index:150;pointer-events:none;
-  background:radial-gradient(circle at 50% 50%, #5ab0e8 0%, #1a3a6a 40%, #050810 100%);
-  opacity:0;
-}
-#view-transition.active{
-  animation:view-warp 0.5s cubic-bezier(.4,0,.2,1)
-}
-@keyframes view-warp{
-  0%   { opacity:0;   transform:scale(0.3); clip-path:circle(0% at 50% 50%); }
-  35%  { opacity:0.85; transform:scale(1);   clip-path:circle(75% at 50% 50%); }
-  65%  { opacity:0.85; transform:scale(1);   clip-path:circle(75% at 50% 50%); }
-  100% { opacity:0;   transform:scale(1.4); clip-path:circle(0% at 50% 50%); }
-}
 
 /* ── Drag/resize handle (shared by event log + initiative panels) ── */
 .panel-resize-handle{
