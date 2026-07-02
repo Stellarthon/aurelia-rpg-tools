@@ -1595,6 +1595,118 @@ function renderHandoutsPanel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DOWNTIME LOG — between-jump actions (players declare, referee resolves)
+// ═══════════════════════════════════════════════════════════════════════════
+// A jump takes ~1 week; this is where a player says "I'll train Gun Combat /
+// repair the ship / meet my contact" during the passage, and the referee
+// resolves it between sessions. NEVER auto-resolved — Traveller training is
+// time-based (track weeks, not XP). Shared key 'downtime'; a player sees/authors
+// their own entries, the referee sees & resolves all.
+//   entry = { id, by, action, kind, weeks, status:'planned'|'done'|'failed', outcome, date }
+
+const DOWNTIME_KINDS = [['training','Training'],['repair','Ship Repair'],['contact','Contact / Network'],['research','Research'],['rest','Rest / Recover'],['trade','Trade / Broker'],['other','Other']];
+let downtime = [];
+let downtimePanelOpen = false, downtimeCollapsed = false;
+
+async function loadDowntime(){
+  try { const r = await supaStorage.get('downtime', true); if(r.value != null) downtime = JSON.parse(r.value) || []; }
+  catch(e){ downtime = []; }
+}
+async function saveDowntime(){
+  try { await supaStorage.set('downtime', JSON.stringify(downtime), true); }
+  catch(e){ console.error('Downtime save failed:', e); }
+}
+function toggleDowntimePanel(){
+  downtimePanelOpen = !downtimePanelOpen;
+  const w = document.getElementById('downtime-wrap'), b = document.getElementById('downtime-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !downtimePanelOpen);
+  if(b) b.classList.toggle('panel-open', downtimePanelOpen);
+  if(downtimePanelOpen) renderDowntimePanel();
+}
+function toggleDowntimeCollapse(){
+  const h = document.getElementById('downtime-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  downtimeCollapsed = !downtimeCollapsed;
+  document.getElementById('downtime-toggle').textContent = downtimeCollapsed ? '▲' : '▼';
+  document.getElementById('downtime-body').classList.toggle('collapsed', downtimeCollapsed);
+  document.getElementById('downtime-wrap').classList.toggle('panel-collapsed', downtimeCollapsed);
+}
+function addDowntime(){
+  if(!myIdentity){ if(typeof showToast === 'function') showToast('Set your character first', 'error'); return; }
+  const gv = id => (document.getElementById(id) && document.getElementById(id).value || '').trim();
+  const action = gv('dt-f-action'); if(!action) return;
+  downtime.push({
+    id: 'dt_' + Date.now().toString(36), by: myIdentity, action,
+    kind: gv('dt-f-kind') || 'other', weeks: Math.max(0, Number(gv('dt-f-weeks')) || 0),
+    status: 'planned', outcome: '',
+    date: (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : ''
+  });
+  saveDowntime(); renderDowntimePanel();
+  if(typeof showToast === 'function') showToast('Downtime action logged');
+}
+function resolveDowntime(id, ok){
+  if(!isReferee()) return;
+  const e = downtime.find(x => x.id === id); if(!e) return;
+  let outcome = '';
+  try { const r = prompt(ok ? 'Outcome (what happened):' : 'Why it failed / what happened:', e.outcome || ''); if(r === null) return; outcome = r.trim(); } catch(err){}
+  e.status = ok ? 'done' : 'failed'; e.outcome = outcome;
+  saveDowntime(); renderDowntimePanel();
+}
+function reopenDowntime(id){
+  if(!isReferee()) return;
+  const e = downtime.find(x => x.id === id); if(!e) return;
+  e.status = 'planned'; e.outcome = '';
+  saveDowntime(); renderDowntimePanel();
+}
+function removeDowntime(id){
+  const e = downtime.find(x => x.id === id); if(!e) return;
+  if(!isReferee() && !(e.by === myIdentity && e.status === 'planned')) return; // players cancel only their own un-resolved
+  downtime = downtime.filter(x => x.id !== id);
+  saveDowntime(); renderDowntimePanel();
+}
+function renderDowntimePanel(){
+  const body = document.getElementById('downtime-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = downtime.filter(e => ref || e.by === myIdentity);
+  const countEl = document.getElementById('downtime-count');
+  if(countEl) countEl.textContent = visible.filter(e => e.status === 'planned').length;
+  const kindLbl = k => { const f = DOWNTIME_KINDS.find(x => x[0] === k); return f ? f[1] : k; };
+  let list;
+  if(!visible.length){
+    list = `<div class="dt-empty">${ref ? 'No downtime logged. Players declare between-jump actions here.' : (myIdentity ? 'No downtime yet. Log what you do during the jump below.' : 'Set your character to log downtime.')}</div>`;
+  } else {
+    const rank = s => s === 'planned' ? 0 : 1;
+    list = visible.slice().sort((a, b) => rank(a.status) - rank(b.status)).map(e => {
+      const mine = e.by === myIdentity, st = e.status;
+      const badge = st === 'done' ? '<span class="dt-badge done">Resolved</span>' : st === 'failed' ? '<span class="dt-badge fail">Failed</span>' : '<span class="dt-badge">Planned</span>';
+      const ctl = ref
+        ? (st === 'planned'
+            ? `<div class="dt-ctl"><button class="dt-mini ok" onclick="resolveDowntime('${e.id}',true)">✓ Resolve</button><button class="dt-mini bad" onclick="resolveDowntime('${e.id}',false)">✗ Failed</button><button class="dt-mini del" onclick="removeDowntime('${e.id}')">🗑</button></div>`
+            : `<div class="dt-ctl"><button class="dt-mini" onclick="reopenDowntime('${e.id}')">↺ Reopen</button><button class="dt-mini del" onclick="removeDowntime('${e.id}')">🗑</button></div>`)
+        : (mine && st === 'planned' ? `<div class="dt-ctl"><button class="dt-mini del" onclick="removeDowntime('${e.id}')">Cancel</button></div>` : '');
+      return `<div class="dt-entry dt-${st}">
+        <div class="dt-entry-hd">${ref ? `<span class="dt-by">${escQH(e.by)}</span>` : ''}<span class="dt-kind">${escQH(kindLbl(e.kind))}${e.weeks ? ' · ' + e.weeks + 'wk' : ''}</span>${badge}</div>
+        <div class="dt-action">${escQH(e.action)}</div>
+        ${e.outcome ? `<div class="dt-outcome">↳ ${escQH(e.outcome)}</div>` : ''}
+        ${ctl}
+      </div>`;
+    }).join('');
+  }
+  const form = myIdentity ? `
+    <div class="dt-add">
+      <input id="dt-f-action" placeholder="What do you do during the jump?" maxlength="120">
+      <div class="dt-add-row">
+        <select id="dt-f-kind">${DOWNTIME_KINDS.map(k => `<option value="${k[0]}">${k[1]}</option>`).join('')}</select>
+        <input id="dt-f-weeks" type="number" inputmode="numeric" min="0" placeholder="weeks" style="max-width:72px">
+      </div>
+      <button class="cal-add-btn" onclick="addDowntime()">+ Log downtime</button>
+      <div class="cargo-hint">The referee resolves this between sessions — training is time (weeks), not points.</div>
+    </div>` : '';
+  body.innerHTML = list + form;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // "SINCE YOU WERE LAST HERE" DIGEST — between-session continuity for players
 // ═══════════════════════════════════════════════════════════════════════════
 // A returning player gets a one-shot summary of what changed since they last
@@ -1696,6 +1808,8 @@ makePanelDraggable('cargo-wrap', 'cargo-header');
 makePanelResizable('cargo-wrap');
 makePanelDraggable('handouts-wrap', 'handouts-header');
 makePanelResizable('handouts-wrap');
+makePanelDraggable('downtime-wrap', 'downtime-header');
+makePanelResizable('downtime-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1780,6 +1894,7 @@ loadSessionLog(); // session journal renders on-demand when its panel is opened
 loadTurnOrder(); // shared read-only turn order (players); referee is the source
 loadTradeCargo(); // shared cargo manifest — renders on-demand when its panel opens
 loadHandouts(); // referee-pushed handouts — renders on-demand when its panel opens
+loadDowntime(); // between-jump downtime actions — renders on-demand when its panel opens
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
