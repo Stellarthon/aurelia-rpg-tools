@@ -29,6 +29,24 @@ in verified code; assumptions are flagged with ⚠️.
 
 ---
 
+## Implementation status — branch `claude/aurelia-feature-gaps-taksg8`
+
+Tier-1 progress (each commit syntax-checked + driven through a headless-Chromium boot
+smoke test with zero uncaught exceptions; live referee→player sync not exercised to avoid
+mutating the production `aurelia_state`):
+
+| Item | Status |
+|---|---|
+| `strip-secrets.mjs` de-bake guard fix (§7 Tier-1.6) | ✅ shipped — `--check` exits 0 |
+| Saved session journal (§5.4) | ✅ shipped |
+| Codex player-submitted rumours / `pending` (§5.3) | ✅ shipped |
+| Shared turn-order board, redacted + referee-gated (§5.1) | ✅ shipped |
+| Finish route-blocking (§5.2) | ⏳ not yet |
+| Ship's log + saved flight plan (§6) | ⏳ not yet |
+| Rules & gear reference, Layers 1–2 (§5.6) | ⏳ not yet |
+
+---
+
 ## 1. Clarifying questions & answers
 
 Answers confirmed with the referee on 2026-07-02. Each recommendation that depends on one
