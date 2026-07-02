@@ -582,6 +582,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Cargo manifest — players see the party's speculative-trade hold update live
+  try {
+    const resTC = await supaStorage.get('trade-cargo', true);
+    if(resTC.ok){
+      const freshTC = resTC.value != null ? (JSON.parse(resTC.value) || {lots:[]}) : {lots:[]};
+      if(JSON.stringify(freshTC) !== JSON.stringify(tradeCargo)){
+        tradeCargo = freshTC;
+        if(cargoPanelOpen) renderCargoPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Rules & gear page references — players see referee-authored citations live
   try {
     const resRR = await supaStorage.get('rules-index', true);
