@@ -70,6 +70,11 @@ function makeCombatShip(o){
     status: 'active',                   // 'active' | 'disabled' | 'destroyed'
     // fog-of-war: until revealed, the player redactor strips this ship entirely
     revealed: o.revealed || false,
+    // per-stat fog: a ship can be revealed as a *blip* (players see the contact
+    // exists + its range) while its loadout/condition stays hidden. The redactor
+    // nulls `stats` for such ships, so the referee can show a contact without
+    // leaking how tough or how armed it is.
+    statsHidden: o.statsHidden || false,
     visibleTo: o.visibleTo || 'all'     // canSee() audience once revealed
   };
 }
@@ -108,8 +113,11 @@ function redactEncounterForPlayer(enc){
     .filter(s => s.ref === 'player' || (s.revealed && canSee(s.visibleTo)))
     .map(s => {
       if(s.ref === 'player') return s;     // player reads own stats from shipState
-      // Revealed enemy: keep combat-visible state, drop nothing extra for now.
-      // (Per-stat fog — e.g. hidden weapons — is a Phase-3 refinement.)
+      // Per-stat fog: a blip-only reveal keeps the contact visible (name, side,
+      // range) but strips its stats block so hull/structure/crits/loadout never
+      // reach the player. The `statsHidden` flag survives so the card renders a
+      // "loadout unknown" placeholder instead of zeroed bars.
+      if(s.statsHidden){ s.stats = null; }
       return s;
     });
   // Drop range pairs that reference a now-hidden ship.
@@ -130,10 +138,15 @@ function redactEncounterForPlayer(enc){
   const hiddenNames = (enc.ships || [])
     .filter(s => !visibleIds.has(s.id) && s.name)
     .map(s => s.name);
+  // Blip-only (stats-fogged) ships are visible, but their combat events would
+  // leak loadout (weapon names in attack lines) and condition (damage numbers),
+  // so drop any log entry that references one until the referee fully reveals it.
+  const foggedIds = new Set(copy.ships.filter(s => s.statsHidden).map(s => s.id));
   copy.log = (copy.log || []).filter(e => {
     const m = e.meta || {};
     const refs = [m.shipId, m.targetId, m.attackerId, m.operatorId, m.defenderId, m.aId, m.bId].filter(Boolean);
     if(!refs.every(id => visibleIds.has(id))) return false;
+    if(refs.some(id => foggedIds.has(id))) return false;
     const text = e.text || '';
     return !hiddenNames.some(n => text.indexOf(n) !== -1);
   });
@@ -775,27 +788,34 @@ function renderCombatShip(s, ref){
   const hullPct = hullMax > 0 ? Math.max(0, Math.min(100, hull / hullMax * 100)) : 0;
   const strPct = strMax > 0 ? Math.max(0, Math.min(100, str / strMax * 100)) : 0;
   const crits = st && st.crits ? Object.entries(st.crits).filter(([k, v]) => Number(v) > 0) : [];
+  // A player looking at a blip-only contact: the redactor nulled its stats, so
+  // render "loadout unknown" instead of zeroed bars. (The referee keeps stats.)
+  const blipOnly = s.ref !== 'player' && s.statsHidden && !st;
   const tags = [];
   tags.push(`<span class="cbt-tag ${s.side === 'hostile' ? 'hostile' : 'allied'}">${s.side === 'hostile' ? 'Hostile' : 'Allied'}</span>`);
   if(ref && s.ref !== 'player' && !s.revealed) tags.push(`<span class="cbt-tag hidden">Hidden</span>`);
+  if(s.ref !== 'player' && s.revealed && s.statsHidden) tags.push(`<span class="cbt-tag foggy">${ref ? 'Stats hidden' : 'Unidentified'}</span>`);
   if(destroyed) tags.push(`<span class="cbt-tag destroyed">Destroyed</span>`);
   const refCtl = (ref && s.ref !== 'player') ? `
     <div class="cbt-ctl-row" style="margin-top:2px">
       <button class="cbt-btn" onclick="openShipEditor('${s.id}')">✏ Edit</button>
       <button class="cbt-btn" onclick="uiToggleReveal('${s.id}')">${s.revealed ? '🙈 Hide from players' : '👁 Reveal to players'}</button>
+      ${s.revealed ? `<button class="cbt-btn" onclick="uiToggleStatsFog('${s.id}')" title="${s.statsHidden ? 'Reveal this contact&#39;s loadout &amp; condition to players' : 'Show players only a blip — hide its loadout &amp; condition'}">${s.statsHidden ? '🔓 Show stats' : '🔒 Hide stats'}</button>` : ''}
       <button class="cbt-btn danger" onclick="uiRemoveShip('${s.id}')">Remove</button>
     </div>` : (ref && s.ref === 'player') ? `
     <div class="cbt-ctl-row" style="margin-top:2px">
       <button class="cbt-btn" onclick="openShipEditor('player')">✏ Edit combat stats</button>
     </div>` : '';
-  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}" id="cbtship-${s.id}">
+  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}${blipOnly ? ' is-blip' : ''}" id="cbtship-${s.id}">
     <div class="cbt-ship-top">
       <span class="cbt-ship-name">${escQH(redactedShipName(s))}</span>
       <span class="cbt-ship-tags">${tags.join('')}</span>
     </div>
-    <div class="cbt-bar-row"><span class="lbl">Hull</span><div class="cbt-bar"><div class="cbt-bar-fill hull${hullPct < 34 ? ' low' : ''}" style="width:${hullPct}%"></div></div><span>${hull}/${hullMax}</span></div>
+    ${blipOnly
+      ? `<div class="cbt-unknown">📡 Loadout &amp; condition unknown — contact on scope</div>`
+      : `<div class="cbt-bar-row"><span class="lbl">Hull</span><div class="cbt-bar"><div class="cbt-bar-fill hull${hullPct < 34 ? ' low' : ''}" style="width:${hullPct}%"></div></div><span>${hull}/${hullMax}</span></div>
     <div class="cbt-bar-row"><span class="lbl">Struct</span><div class="cbt-bar"><div class="cbt-bar-fill struct${strPct < 34 ? ' low' : ''}" style="width:${strPct}%"></div></div><span>${str}/${strMax}</span></div>
-    ${crits.length ? `<div class="cbt-crits">${crits.map(([k, v]) => `<span class="cbt-crit">${escQH(k)} ${v}</span>`).join('')}</div>` : ''}
+    ${crits.length ? `<div class="cbt-crits">${crits.map(([k, v]) => `<span class="cbt-crit">${escQH(k)} ${v}</span>`).join('')}</div>` : ''}`}
     ${refCtl}
   </div>`;
 }
@@ -848,7 +868,7 @@ function renderCombatRadar(ref){
     const cls = [ 'cbt-blip', s.side === 'hostile' ? 'hostile' : 'allied',
       destroyed ? 'destroyed' : '', (combatEncounter.activeShipId === s.id && !destroyed) ? 'active' : '',
       combatSelTarget === s.id ? 'sel' : '' ].filter(Boolean).join(' ');
-    const glyph = destroyed ? '✕' : (s.side === 'hostile' ? '▲' : '◆');
+    const glyph = destroyed ? '✕' : (s.statsHidden ? '?' : (s.side === 'hostile' ? '▲' : '◆'));
     const click = (ref && !destroyed) ? ` onclick="uiSelectTarget('${s.id}')"` : '';
     blips += `<div class="${cls}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"${click} title="${escQH(redactedShipName(s))} — ${escQH(COMBAT_RANGE_BANDS[idx] || '?')}">${glyph}<span class="cbt-blip-lbl">${escQH(redactedShipName(s))}</span></div>`;
   });
@@ -966,6 +986,14 @@ function uiToggleReveal(id){
   const s = combatShipById(id); if(!s) return;
   s.revealed = !s.revealed;
   combatLog('system', `${s.name} ${s.revealed ? 'revealed to' : 'hidden from'} the players.`, { shipId: id });
+  saveCombatEncounter(); renderCombat();
+}
+// Per-stat fog: flip a revealed contact between blip-only and fully detailed.
+function uiToggleStatsFog(id){
+  if(!isReferee()) return;
+  const s = combatShipById(id); if(!s || s.ref === 'player') return;
+  s.statsHidden = !s.statsHidden;
+  combatLog('system', `${s.name} loadout ${s.statsHidden ? 'hidden from' : 'revealed to'} the players.`, { shipId: id });
   saveCombatEncounter(); renderCombat();
 }
 function uiRemoveShip(id){ if(confirm('Remove this ship from combat?')){ removeCombatShip(id); renderCombat(); } }
