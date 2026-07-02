@@ -1440,6 +1440,136 @@ function renderCargoPanel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// HANDOUTS / EVIDENCE — the referee pushes an image to players' devices
+// ═══════════════════════════════════════════════════════════════════════════
+// A map, a clue, a photo, a document scan — pushed to everyone or to a single
+// player (per-handout audience via canSee(visibleTo), same spoiler gating as the
+// rest of the app). Images live in the 'handouts' Storage bucket (js/50); a
+// shared 'handouts' metadata key lists them so devices learn of new ones on the
+// poll. Referee authors; players view in a lightbox. Referee-only push.
+//   handout = { id, name, ver, visibleTo, date }
+
+let handouts = [];
+let handoutsPanelOpen = false, handoutsCollapsed = false, _handoutBusy = false;
+
+async function loadHandouts(){
+  try { const r = await supaStorage.get('handouts', true); if(r.value != null) handouts = JSON.parse(r.value) || []; }
+  catch(e){ handouts = []; }
+}
+async function saveHandouts(){
+  try { await supaStorage.set('handouts', JSON.stringify(handouts), true); }
+  catch(e){ console.error('Handouts save failed:', e); }
+}
+function hoCampaign(){ return (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default'; }
+function visibleHandouts(){
+  const ref = isReferee();
+  return handouts.filter(h => ref || (typeof canSee === 'function' ? canSee(h.visibleTo) : true));
+}
+function toggleHandoutsPanel(){
+  handoutsPanelOpen = !handoutsPanelOpen;
+  const w = document.getElementById('handouts-wrap'), b = document.getElementById('handouts-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !handoutsPanelOpen);
+  if(b) b.classList.toggle('panel-open', handoutsPanelOpen);
+  if(handoutsPanelOpen) renderHandoutsPanel();
+}
+function toggleHandoutsCollapse(){
+  const h = document.getElementById('handouts-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  handoutsCollapsed = !handoutsCollapsed;
+  document.getElementById('handouts-toggle').textContent = handoutsCollapsed ? '▲' : '▼';
+  document.getElementById('handouts-body').classList.toggle('collapsed', handoutsCollapsed);
+  document.getElementById('handouts-wrap').classList.toggle('panel-collapsed', handoutsCollapsed);
+}
+// Downscale the longest side to <=maxDim JPEG (aspect preserved) before upload.
+function resizeHandoutImage(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+function onHandoutFile(input){
+  if(!isReferee()) return;
+  const file = input && input.files && input.files[0];
+  if(input) input.value = '';
+  if(!file) return;
+  if(file.type && !/^image\/(jpeg|png|webp)$/.test(file.type)){ if(typeof showToast === 'function') showToast('Choose a JPG/PNG/WebP image', 'error'); return; }
+  if(file.size > 20 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 20 MB source)', 'error'); return; }
+  if(_handoutBusy) return;
+  _handoutBusy = true; if(typeof showToast === 'function') showToast('Preparing handout…', 'info');
+  const id = 'ho_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const vis = (document.getElementById('handout-vis') && document.getElementById('handout-vis').value) || 'all';
+  const name = file.name ? file.name.replace(/\.[a-z0-9]+$/i, '') : 'Handout';
+  resizeHandoutImage(file, 1600)
+    .then(blob => uploadHandoutBlob(hoCampaign(), id, blob))
+    .then(() => {
+      handouts.push({ id, name, ver: Date.now(), visibleTo: vis,
+        date: (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '' });
+      return saveHandouts();
+    })
+    .then(() => { if(typeof showToast === 'function') showToast('Handout pushed to players'); if(handoutsPanelOpen) renderHandoutsPanel(); })
+    .catch(err => { if(typeof showToast === 'function') showToast('Handout upload failed — is the handouts bucket set up? (migration 0004)', 'error'); console.error(err); })
+    .finally(() => { _handoutBusy = false; });
+}
+function removeHandout(id){
+  if(!isReferee()) return;
+  handouts = handouts.filter(h => h.id !== id);
+  saveHandouts(); renderHandoutsPanel();
+}
+function openHandout(id){
+  const h = handouts.find(x => x.id === id); if(!h) return;
+  if(!isReferee() && typeof canSee === 'function' && !canSee(h.visibleTo)) return;
+  const box = document.getElementById('handout-lightbox'), img = document.getElementById('handout-lightbox-img');
+  if(!box || !img || typeof handoutUrlFor !== 'function') return;
+  img.src = handoutUrlFor(hoCampaign(), h.id, h.ver);
+  box.classList.remove('hidden');
+}
+function closeHandout(){ const b = document.getElementById('handout-lightbox'); if(b) b.classList.add('hidden'); }
+function renderHandoutsPanel(){
+  const body = document.getElementById('handouts-body'); if(!body) return;
+  const ref = isReferee();
+  const list = visibleHandouts();
+  const countEl = document.getElementById('handouts-count'); if(countEl) countEl.textContent = list.length;
+  let grid;
+  if(!list.length){
+    grid = `<div class="handout-empty">${ref ? 'No handouts yet. Push a map, clue, or photo below.' : 'No handouts shared yet.'}</div>`;
+  } else {
+    grid = `<div class="handout-grid">` + list.map(h => {
+      const url = (typeof handoutUrlFor === 'function') ? handoutUrlFor(hoCampaign(), h.id, h.ver) : '';
+      const who = (h.visibleTo && h.visibleTo !== 'all') ? (Array.isArray(h.visibleTo) ? h.visibleTo.join(', ') : h.visibleTo) : 'All';
+      const del = ref ? `<button class="handout-del" onclick="event.stopPropagation();removeHandout('${h.id}')" title="Remove">✕</button>` : '';
+      return `<div class="handout-thumb" onclick="openHandout('${h.id}')" title="${escQH(h.name || 'Handout')}">
+        ${del}<img src="${url}" alt="${escQH(h.name || '')}" loading="lazy" onerror="this.style.display='none'">
+        <div class="handout-cap">${escQH(h.name || 'Handout')}${ref ? ` · ${escQH(who)}` : ''}</div>
+      </div>`;
+    }).join('') + `</div>`;
+  }
+  let form = '';
+  if(ref){
+    const opts = ['all'].concat((typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []));
+    const optHtml = opts.map(o => `<option value="${escQH(o)}">${o === 'all' ? 'Everyone' : escQH(o)}</option>`).join('');
+    form = `<div class="handout-add">
+      <label class="handout-up">⬆ Push a handout<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onHandoutFile(this)"></label>
+      <label class="handout-vis-lbl">To <select id="handout-vis">${optHtml}</select></label>
+      <div class="cargo-hint">Downscaled to ≤1600px before upload. Send to a single player for a private clue. (Needs the <code>handouts</code> bucket — migration 0004.)</div>
+    </div>`;
+  }
+  body.innerHTML = grid + form;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // "SINCE YOU WERE LAST HERE" DIGEST — between-session continuity for players
 // ═══════════════════════════════════════════════════════════════════════════
 // A returning player gets a one-shot summary of what changed since they last
@@ -1539,6 +1669,8 @@ makePanelDraggable('turnorder-wrap', 'turnorder-header');
 makePanelResizable('turnorder-wrap');
 makePanelDraggable('cargo-wrap', 'cargo-header');
 makePanelResizable('cargo-wrap');
+makePanelDraggable('handouts-wrap', 'handouts-header');
+makePanelResizable('handouts-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1622,6 +1754,7 @@ loadQuestLog(); // quests render on-demand when panel is opened, no immediate re
 loadSessionLog(); // session journal renders on-demand when its panel is opened
 loadTurnOrder(); // shared read-only turn order (players); referee is the source
 loadTradeCargo(); // shared cargo manifest — renders on-demand when its panel opens
+loadHandouts(); // referee-pushed handouts — renders on-demand when its panel opens
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter

@@ -124,6 +124,31 @@ async function uploadRulebookBlob(campaignId, file){
   return true;
 }
 
+// ── Handouts (Supabase Storage 'handouts' bucket) ────────────────────────────
+// Referee-pushed images (map / clue / photo / doc scan) players view on their
+// own devices. One object per handout, keyed per campaign:
+// handouts/<campaignSlug>/<id>.jpg. Migration 0004. Public-read like portraits;
+// per-handout audience is enforced client-side via canSee() on the shared
+// 'handouts' metadata key.
+const HANDOUT_BASE = SUPABASE_URL + '/storage/v1/object/public/handouts/';
+function handoutObjectPath(campaignId, id){
+  return rulebookSlug(campaignId) + '/' + String(id || '').replace(/[^a-z0-9_-]/gi, '') + '.jpg';
+}
+function handoutUrlFor(campaignId, id, ver){
+  const url = HANDOUT_BASE + handoutObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadHandoutBlob(campaignId, id, blob){
+  const path = handoutObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/handouts/' + path, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('Handout upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
 // ───────────────────────────────────────────────────────────────────────────
