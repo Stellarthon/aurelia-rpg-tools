@@ -2150,6 +2150,19 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .rr-add-row{display:flex;gap:5px}
 .rr-add-row input{flex:1}
 .rr-hint{font-size:9px;color:var(--tx1);opacity:.7;line-height:1.35}
+.rr-hint code{font-family:monospace;font-size:8.5px;color:var(--accentGold)}
+/* clickable cited page + BYO-rulebook bar */
+.rr-cite-wrap{display:inline-flex;align-items:baseline;gap:6px;flex-shrink:0}
+.rr-page{background:var(--accentGoldBg);border:.5px solid var(--accentGold);border-radius:4px;color:var(--accentGold);font-family:monospace;font-size:10px;padding:1px 6px;cursor:pointer;white-space:nowrap}
+.rr-page:hover{background:var(--accentGold);color:var(--bg0)}
+.rb-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.rb-open{display:inline-block;background:var(--accentGoldBg);border:1px solid var(--accentGold);border-radius:5px;color:var(--accentGold);font-size:11px;padding:6px 10px;cursor:pointer}
+.rb-open:hover{background:var(--accentGold);color:var(--bg0)}
+.rb-name{font-size:10.5px;color:var(--tx1);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-replace{font-size:10px;color:var(--tx1);cursor:pointer;border:.5px solid var(--bd0);border-radius:4px;padding:4px 7px}
+.rb-replace:hover{border-color:var(--accentGold);color:var(--accentGold)}
+.rb-forget{background:transparent;border:none;color:var(--txD,#d45050);cursor:pointer;font-size:12px;opacity:.6}
+.rb-forget:hover{opacity:1}
 
 .qref-section{margin-bottom:18px}
 .qref-section-title{

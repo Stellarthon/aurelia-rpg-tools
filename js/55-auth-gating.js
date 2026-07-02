@@ -593,6 +593,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // BYO rulebook config — players learn a rulebook is available (and its version)
+  try {
+    const resRBk = await supaStorage.get('rulebook-config', true);
+    if(resRBk.ok){
+      const freshRBk = resRBk.value != null ? JSON.parse(resRBk.value) || {} : {};
+      if(JSON.stringify(freshRBk) !== JSON.stringify(rulebookConfig)){
+        rulebookConfig = freshRBk; _rbLoaded = true;
+        if(qrefOpen) renderQref();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);
