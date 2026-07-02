@@ -129,13 +129,11 @@
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
     <button id="cal-btn" onclick="toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Calendar</button>
-    <button id="econ-btn" class="ref-only" onclick="toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
     <button id="disc-btn" onclick="toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
     <button id="npc-btn" class="ref-only" onclick="toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
     <button id="rep-btn" onclick="toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
     <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
-    <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
-    <button id="session-btn" class="ref-only" onclick="openSessionTools()" title="Session export & recap">🎬 Session</button>
+    <button id="more-btn" class="ref-only" onclick="openMoreMenu()" title="More referee tools — Economy · Oracle · Session">⋯ More</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
@@ -398,20 +396,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ── Traveller quick-nav bar (player mode only; shown across every view) ──
-       A flex child of #root so it reserves space at the bottom of whichever
-       view is active. Scales via the --tvscale root variable (Settings). -->
-  <div id="tvbar" role="navigation" aria-label="Quick navigation">
-    <button class="tv-btn" onclick="openSheetMenu()" title="Character sheet"><span class="ico">📋</span><span class="lbl">Sheet</span></button>
-    <button class="tv-btn" onclick="toggleShipPanel()" title="Ship status"><span class="ico">🚀</span><span class="lbl">Ship</span></button>
-    <button class="tv-btn" onclick="toggleQuestPanel()" title="Mission log"><span class="ico">📜</span><span class="lbl">Missions</span></button>
-    <button class="tv-btn" onclick="toggleJournalPanel()" title="Session journal — previously on…"><span class="ico">📓</span><span class="lbl">Journal</span></button>
-    <button class="tv-btn" onclick="toggleTurnOrderPanel()" title="Turn order (during combat)"><span class="ico">🎯</span><span class="lbl">Turns</span></button>
-    <button class="tv-btn" onclick="toggleFundsPanel()" title="Funds"><span class="ico">💰</span><span class="lbl">Funds</span></button>
-    <button class="tv-btn" onclick="toggleQref()" title="Quick reference rules"><span class="ico">📖</span><span class="lbl">Rules</span></button>
-  </div>
-
 
   <!-- ── Event Log (floating panel) ── -->
   <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
@@ -688,6 +672,18 @@
 
   <div id="design-menu" class="hidden" onclick="if(event.target===this) closeDesignMenu()">
     <div id="design-menu-card"></div>
+  </div>
+
+  <!-- ── "More" overflow menu — houses the occasional referee tools that used to
+       crowd the header (Economy, Oracle, Session). The buttons keep their ids so
+       their existing toggles + panel-open highlighting still work. ── -->
+  <div id="more-menu" class="hidden" onclick="if(event.target===this) closeMoreMenu()">
+    <div id="more-menu-card">
+      <div class="settings-section-lbl">More Tools</div>
+      <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
+      <button id="gen-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
+      <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
+    </div>
   </div>
 
   <!-- ── Quick Reference sidebar ── -->
