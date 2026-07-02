@@ -1286,7 +1286,10 @@ textarea{font-family:var(--font)}
 .cbt-tag.allied{background:var(--bgI);color:var(--txI)}
 .cbt-tag.hostile{background:var(--bgD);color:var(--txD)}
 .cbt-tag.hidden{background:#2A1A3B;color:#9B59B6}
+.cbt-tag.foggy{background:#2b2410;color:var(--accentGold)}
 .cbt-tag.destroyed{background:var(--bgD);color:var(--txD)}
+.cbt-ship.is-blip{border-left-style:dashed;opacity:.9}
+.cbt-unknown{font-size:10px;font-family:monospace;color:var(--tx2);font-style:italic;letter-spacing:.5px}
 .cbt-bar-row{display:flex;align-items:center;gap:6px;font-size:9px;font-family:monospace;color:var(--tx1)}
 .cbt-bar-row .lbl{width:36px;flex-shrink:0}
 .cbt-bar{flex:1;height:7px;background:var(--bg2);border-radius:4px;overflow:hidden}
