@@ -82,7 +82,16 @@ function showSplash(opts){
   el.classList.remove('show', 'preboot');
   void el.offsetWidth;                       // reflow, so the entrance replays
   el.setAttribute('aria-hidden', 'false');
-  requestAnimationFrame(() => el.classList.add('show'));
+  if(opts.instant){
+    // Cover on THIS frame, opaque, with no opacity fade-IN — so a view rendered
+    // underneath in the same task (e.g. the system view behind a per-system
+    // welcome, or the app behind the app-entry intro) is never briefly visible
+    // before the splash appears. The inner rise animations still play, and
+    // dismissSplash restores the fade-OUT. Mirrors the pre-boot cover.
+    el.classList.add('preboot', 'show');
+  } else {
+    requestAnimationFrame(() => el.classList.add('show'));
+  }
   armSplashDismissal(opts.duration);
 }
 function dismissSplash(){
@@ -132,7 +141,9 @@ function showIntroSplash(){
     try { clearTimeout(window.__introPrebootSafety); } catch(e){}
     armSplashDismissal(3800);                   // cover is already up with this content — just time it out
   } else {
-    showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint });
+    // Fresh login (no pre-boot cover ran): show the intro on this same frame,
+    // opaque, so the just-revealed app underneath never flashes before it.
+    showSplash({ kicker:c.kicker, title:c.title, sub:c.sub, italicSub:true, hint:c.hint, instant:true });
   }
 }
 
@@ -351,6 +362,10 @@ function applyHydratedData(data){
   if(rootEl) rootEl.classList.toggle('pm-active', playerMode);
   if(fp) fp.classList.toggle('pm-active', playerMode);
   if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  // Refresh the header identity chip now that role + identity are known from the
+  // token, so a referee token relabels "Playing as" → "Viewing as" (and shows
+  // the token's identity) instead of keeping the pre-hydration text.
+  if(typeof renderWhoAmI === 'function') renderWhoAmI();
   refreshSecureViews();
 }
 async function hydrateSecureContent(){
@@ -697,6 +712,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Territory paint — players see the referee paint/erase border hexes live
+  try {
+    const resHP = await supaStorage.get('hex-paint', true);
+    if(resHP.ok){
+      const freshHP = resHP.value != null ? (JSON.parse(resHP.value) || {}) : {};
+      if(typeof hexPaint !== 'undefined' && JSON.stringify(freshHP) !== JSON.stringify(hexPaint)){
+        hexPaint = freshHP;
+        if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Imperial date — players see the referee advance the campaign date
   try {
     const resDate = await supaStorage.get('imperial-date', true);
@@ -1034,15 +1061,22 @@ function confirmIdentity(){
 function renderWhoAmI(){
   applyIdentityClass();
   if(shipPanelOpen) renderShipPanel(); // gated readouts depend on identity
+  // A referee isn't *playing* a character — this control is how they PREVIEW the
+  // game as a given player (spoiler-gating, per-player views). Label it
+  // "Viewing as" for the referee, "Playing as" for a player, so a referee with
+  // a character selected is never mislabelled as playing them.
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const verb = ref ? 'Viewing as' : 'Playing as';
   const strip = document.getElementById('whoami-strip');
-  if(strip) strip.innerHTML = `Playing as <span onclick="changeIdentity()">${myIdentity}</span>`;
+  if(strip) strip.innerHTML = `${verb} <span onclick="changeIdentity()">${myIdentity}</span>`;
   const headerBtn = document.getElementById('header-whoami-btn');
   const headerName = document.getElementById('header-whoami-name');
+  const headerPrefix = document.getElementById('header-whoami-prefix');
+  if(headerPrefix) headerPrefix.textContent = verb;
   if(headerBtn){
-    // Show "Playing as X" whenever a character is selected — for the referee
-    // too, since character selection now lives entirely on this control (the
-    // Sheets button jumps straight to the active sheet and no longer offers a
-    // picker). Referees use it to switch which character they're viewing as.
+    headerBtn.title = ref ? 'Tap to preview the game as another player' : 'Tap to switch character';
+    // Show the chip whenever a character is selected — for the referee too, so
+    // they can switch which player they're previewing as.
     if(myIdentity){
       headerName.textContent = myIdentity;
       headerBtn.classList.remove('hidden');

@@ -113,7 +113,7 @@
       <div id="impdate-display" onclick="toggleCalendarPanel()" title="Imperial date — open calendar">001-1105</div>
     </div>
     <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
-    <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character">Playing as <span id="header-whoami-name"></span></button>
+    <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character"><span id="header-whoami-prefix">Playing as</span> <span id="header-whoami-name"></span></button>
     <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
     <button id="referee-menu-btn" class="ref-only" aria-label="Referee tools" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
     <button id="design-menu-btn" class="ref-only" aria-label="Design tools" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
@@ -174,6 +174,13 @@
     <button id="hx-range-toggle" onclick="hxToggleRange()">Fuel range: OFF</button>
     <button id="hx-fuel-toggle" onclick="hxToggleFuel()">Fuel: ON</button>
     <button id="hx-trade-toggle" onclick="hxToggleTrade()">Trade: OFF</button>
+    <!-- Referee territory brush: paint hexes in a transparent colour (colour
+         picker) to draw borders on top of the auto region tint. -->
+    <div id="hx-paint-tools" class="ref-only">
+      <button id="hx-paint-toggle" onclick="hxTogglePaint()">🖌 Paint: OFF</button>
+      <label id="hx-paint-swatch" title="Territory brush colour"><input type="color" id="hx-paint-color" value="#4aa3ff" onchange="hxSetPaintColor(this.value)"></label>
+      <button id="hx-paint-clear" onclick="hxClearPaint()" title="Clear all painted hexes">✕</button>
+    </div>
     <div id="hx-trade-legend" class="hidden"></div>
     <div id="hx-zoom">
       <button class="hx-zoom-btn" onclick="hxZoomBy(1.25)">+</button>
@@ -420,6 +427,9 @@
       <div id="sheet-card">
         <div id="sheet-card-header">
           <span id="sheet-card-title">CHARACTER SHEET</span>
+          <!-- Referee-only sheet picker: switch between any character's sheet
+               without leaving the modal (populated + shown by openSheet). -->
+          <select id="sheet-char-picker" class="hidden" aria-label="Choose a character sheet" onchange="openSheet(this.value)"></select>
           <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
         </div>
         <div id="sheet-card-body"></div>
