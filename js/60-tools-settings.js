@@ -81,6 +81,14 @@ async function saveSheet(characterName, data){
 // (changeIdentity → showIdentityModal), so Sheets no longer shows its own
 // character picker. With no character selected yet, hand off to that chooser.
 function openSheetMenu(){
+  // Referee: open a sheet straight away with the character picker at the top,
+  // so they can flip between any character's sheet from the dropdown. Default to
+  // whoever they're viewing as, else the first known character.
+  if(isReferee()){
+    const first = (typeof KNOWN_CHARACTERS !== 'undefined' && KNOWN_CHARACTERS.length) ? KNOWN_CHARACTERS[0] : null;
+    const target = myIdentity || first;
+    if(target){ openSheet(target); return; }
+  }
   if(myIdentity){ openSheet(myIdentity); return; }
   showIdentityModal();
 }
@@ -1205,6 +1213,25 @@ async function openSheet(characterName){
   const notice = document.getElementById('sheet-readonly-notice');
   title.textContent = characterName.toUpperCase();
   notice.textContent = isReferee() ? 'Referee view — editable' : '';
+  // Referee sheet picker: swap the static title for a dropdown of every known
+  // character so the referee can jump between sheets without closing the modal.
+  // Players only ever see their own sheet, so the picker stays hidden for them.
+  const picker = document.getElementById('sheet-char-picker');
+  if(picker){
+    if(isReferee()){
+      const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+      const ea = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+      const names = (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS.slice() : []);
+      if(characterName && !names.includes(characterName)) names.unshift(characterName);   // include a one-off (e.g. an NPC) name
+      picker.innerHTML = names.map(n => `<option value="${eatt(n)}"${n === characterName ? ' selected' : ''}>${ea(n)}</option>`).join('');
+      picker.value = characterName;
+      picker.classList.remove('hidden');
+      title.classList.add('hidden');
+    } else {
+      picker.classList.add('hidden');
+      title.classList.remove('hidden');
+    }
+  }
   document.getElementById('sheet-card-body').innerHTML = '<div class="init-empty">Loading…</div>';
   modal.classList.remove('hidden');
 
