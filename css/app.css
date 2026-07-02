@@ -787,6 +787,34 @@ textarea{font-family:var(--font)}
 }
 #quest-wrap.hidden{display:none}
 #quest-wrap.panel-collapsed{height:auto!important;min-height:0}
+
+/* ── Session Journal panel (cloned from #quest-wrap chrome) ── */
+#journal-wrap{
+  position:fixed;top:54px;left:0;width:340px;height:480px;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:260px;min-height:120px;max-width:90vw;max-height:85vh
+}
+#journal-wrap.hidden{display:none}
+#journal-wrap.panel-collapsed{height:auto!important;min-height:0}
+#journal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
+  border-bottom:.5px solid var(--bd0)
+}
+#journal-toggle{font-size:10px;color:var(--tx1)}
+#journal-body{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
+#journal-body.collapsed{display:none}
+.journal-empty{color:var(--tx1);font-size:11px;text-align:center;padding:18px 6px;line-height:1.5}
+.journal-entry{background:var(--bg0);border-radius:6px;border-left:3px solid var(--accentGold);overflow:hidden}
+.journal-entry-head{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:.5px solid var(--bd0)}
+.journal-entry-title{flex:1;font-size:11px;font-weight:700;color:var(--tx0);font-family:monospace;letter-spacing:.5px}
+.journal-entry-date{font-size:10px;color:var(--accentGold);font-family:monospace;white-space:nowrap}
+.journal-del{background:transparent;border:none;color:var(--txD,#d45050);cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
+.journal-del:hover{color:#ff6b6b}
+.journal-entry-body{padding:8px 9px;font-size:11px;color:var(--tx1);line-height:1.55;word-break:break-word}
+
 #quest-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;

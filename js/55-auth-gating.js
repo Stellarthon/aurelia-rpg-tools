@@ -551,6 +551,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Session journal — players see new saved recaps ("Previously on…") appear live
+  try {
+    const resJ = await supaStorage.get('session-log', true);
+    if(resJ.ok){
+      const freshJ = resJ.value != null ? JSON.parse(resJ.value) || [] : [];
+      if(JSON.stringify(freshJ) !== JSON.stringify(sessionLog)){
+        sessionLog = freshJ;
+        if(journalPanelOpen) renderJournalPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);

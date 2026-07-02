@@ -1161,6 +1161,106 @@ async function deleteQuest(){
   showToast('Quest deleted', 'info');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION JOURNAL — persisted, player-visible session recaps ("Previously on…")
+// ═══════════════════════════════════════════════════════════════════════════
+// The session-recap generator (generateSessionRecap, js/92) is ephemeral. The
+// journal persists a recap as a dated entry so continuity carries between
+// sessions. Shared key 'session-log' (shared:true), same pattern as quest-log:
+// the referee writes, players poll and read; entries are visibility-gated via
+// canSee(visibleTo) (default 'all'). Lives here (load pos 85) so the boot-time
+// loadSessionLog() below resolves — it must be defined before it is called.
+//   entry = { id, realDate, imperialDate:{day,year}|null, title, body, visibleTo }
+
+let sessionLog = [];
+let journalPanelOpen = false;
+let journalCollapsed = false;
+
+async function loadSessionLog(){
+  try {
+    const res = await supaStorage.get('session-log', true);
+    if(res.value != null) sessionLog = JSON.parse(res.value) || [];
+  } catch(e){ sessionLog = []; }
+}
+async function saveSessionLog(){
+  try { await supaStorage.set('session-log', JSON.stringify(sessionLog), true); }
+  catch(e){ console.error('Session journal save failed:', e); }
+}
+
+function toggleJournalPanel(){
+  journalPanelOpen = !journalPanelOpen;
+  const wrap = document.getElementById('journal-wrap');
+  const btn = document.getElementById('journal-btn');
+  if(!wrap) return;
+  wrap.classList.toggle('hidden', !journalPanelOpen);
+  if(btn) btn.classList.toggle('panel-open', journalPanelOpen);
+  if(journalPanelOpen) renderJournalPanel();
+}
+function toggleJournalCollapse(){
+  const hdr = document.getElementById('journal-header');
+  if(hdr && hdr.dataset.suppressClick === '1') return;
+  journalCollapsed = !journalCollapsed;
+  document.getElementById('journal-toggle').textContent = journalCollapsed ? '▲' : '▼';
+  document.getElementById('journal-body').classList.toggle('collapsed', journalCollapsed);
+  document.getElementById('journal-wrap').classList.toggle('panel-collapsed', journalCollapsed);
+}
+
+// Referee: persist the current generated recap as a dated journal entry.
+// Reads the recap already produced into #session-recap-output by
+// generateSessionRecap() — so it reuses that generator rather than re-inventing.
+function saveRecapToJournal(){
+  if(!isReferee()) return;
+  const out = document.getElementById('session-recap-output');
+  const body = ((out && out.textContent) || '').trim();
+  if(!body){ showToast('Generate a recap first', 'error'); return; }
+  const imp = (typeof imperialNow === 'function') ? imperialNow() : null;
+  const title = 'Session — ' + (imp ? formatImperial(imp) : new Date().toLocaleDateString());
+  sessionLog.push({
+    id: 'sess_' + Math.random().toString(36).slice(2, 9),
+    realDate: new Date().toISOString().slice(0, 10),
+    imperialDate: imp,
+    title, body, visibleTo: 'all'
+  });
+  saveSessionLog();
+  showToast('Saved to session journal');
+  if(journalPanelOpen) renderJournalPanel();
+}
+
+function deleteJournalEntry(id){
+  if(!isReferee()) return;
+  if(!confirm('Delete this journal entry? This cannot be undone.')) return;
+  sessionLog = sessionLog.filter(e => e.id !== id);
+  saveSessionLog();
+  renderJournalPanel();
+}
+
+function renderJournalPanel(){
+  const ref = isReferee();
+  const body = document.getElementById('journal-body');
+  if(!body) return;
+  // newest first; players only see entries their identity is permitted to
+  const visible = sessionLog
+    .filter(e => ref || (typeof canSee === 'function' ? canSee(e.visibleTo) : true))
+    .slice().reverse();
+  if(!visible.length){
+    body.innerHTML = `<div class="journal-empty">${ref
+      ? 'No saved recaps yet. Open Session Tools, “Generate recap”, then “Save to Journal”.'
+      : 'No session recaps yet.'}</div>`;
+    return;
+  }
+  body.innerHTML = visible.map(e => {
+    const when = e.imperialDate ? formatImperial(e.imperialDate) : (e.realDate || '');
+    const del = ref ? `<button class="journal-del" onclick="deleteJournalEntry('${e.id}')" title="Delete entry">✕</button>` : '';
+    return `<div class="journal-entry">
+      <div class="journal-entry-head">
+        <span class="journal-entry-title">${escQH(e.title)}</span>
+        <span class="journal-entry-date">${escQH(when)}</span>${del}
+      </div>
+      <div class="journal-entry-body">${escQH(e.body).replace(/\n/g,'<br>')}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── Player polling extension ──────────────────────────────────────────────
 // Wired into the existing pollRevealState() call chain — see that function
 
@@ -1172,6 +1272,8 @@ makePanelDraggable('health-wrap', 'health-header');
 makePanelResizable('health-wrap');
 makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
+makePanelDraggable('journal-wrap', 'journal-header');
+makePanelResizable('journal-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1252,6 +1354,7 @@ loadTextureCatalog().then(() => {
   if(typeof buildOrrery === 'function') buildOrrery();
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
+loadSessionLog(); // session journal renders on-demand when its panel is opened
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
