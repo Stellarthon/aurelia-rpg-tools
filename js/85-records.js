@@ -1342,6 +1342,89 @@ function renderJournalPanel(){
   }).join('');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// "SINCE YOU WERE LAST HERE" DIGEST — between-session continuity for players
+// ═══════════════════════════════════════════════════════════════════════════
+// A returning player gets a one-shot summary of what changed since they last
+// left: Imperial date advance, party-funds delta, new Codex intel, resolved
+// missions, new session recaps. Pure diff of already-loaded shared state against
+// a per-device baseline in localStorage — no new shared key, no backend. Built
+// as a self-contained inline-styled overlay (no index.html / css/app.css
+// footprint) so it can't collide with other UI work. Players only; the referee
+// is the source of the changes.
+
+function _digestSnapshot(){
+  const codex = (typeof discoveryLog !== 'undefined')
+    ? discoveryLog.filter(e => (typeof discViewerStage === 'function') ? discViewerStage(e) : true).length : 0;
+  const jrnl = (typeof sessionLog !== 'undefined')
+    ? sessionLog.filter(e => (typeof canSee === 'function') ? canSee(e.visibleTo) : true).length : 0;
+  const q = (typeof questLog !== 'undefined') ? questLog.filter(x => x.status !== 'hidden') : [];
+  return {
+    date: (typeof formatImperial === 'function' && typeof imperialDate !== 'undefined') ? formatImperial(imperialDate) : '',
+    funds: (typeof funds !== 'undefined') ? (Number(funds.party) || 0) : 0,
+    quests: q.length,
+    questsDone: q.filter(x => x.status === 'complete').length,
+    codex, journal: jrnl
+  };
+}
+function _saveDigestBaseline(){
+  try { localStorage.setItem('aurelia_lastseen', JSON.stringify(_digestSnapshot())); } catch(e){}
+}
+function _isPlayerViewer(){ return !(typeof isReferee === 'function' && isReferee()); }
+
+function showSinceLastSessionDigest(){
+  if(!_isPlayerViewer()) return;                                  // referee is the source
+  try { if(!localStorage.getItem('aurelia_access')) return; } catch(e){ return; } // still at the gate
+  let last = null;
+  try { last = JSON.parse(localStorage.getItem('aurelia_lastseen') || 'null'); } catch(e){}
+  if(!last){ _saveDigestBaseline(); return; }                     // first visit on this device → seed only
+  const now = _digestSnapshot();
+  const lines = [];
+  if(last.date && now.date && last.date !== now.date)
+    lines.push('🗓 Imperial date is now <b>' + escQH(now.date) + '</b> <span style="opacity:.6">(was ' + escQH(last.date) + ')</span>.');
+  const df = now.funds - (Number(last.funds) || 0);
+  if(df) lines.push('💰 Party funds ' + (df > 0 ? '+' : '−') + 'Cr ' + Math.abs(df).toLocaleString() + ' <span style="opacity:.6">(now Cr ' + now.funds.toLocaleString() + ')</span>.');
+  const dc = now.codex - (Number(last.codex) || 0);
+  if(dc > 0) lines.push('🗂 ' + dc + ' new Codex entr' + (dc === 1 ? 'y' : 'ies') + ' to read.');
+  const dd = now.questsDone - (Number(last.questsDone) || 0);
+  if(dd > 0) lines.push('📜 ' + dd + ' mission' + (dd === 1 ? '' : 's') + ' resolved.');
+  else if(now.quests !== last.quests) lines.push('📜 The mission log was updated.');
+  const dj = now.journal - (Number(last.journal) || 0);
+  if(dj > 0) lines.push('📓 ' + dj + ' new session recap' + (dj === 1 ? '' : 's') + ' in the journal.');
+  if(!lines.length) return;
+  _renderDigestCard(lines);
+}
+function _renderDigestCard(lines){
+  const old = document.getElementById('since-digest'); if(old) old.remove();
+  const card = document.createElement('div');
+  card.id = 'since-digest';
+  card.setAttribute('style', [
+    'position:fixed', 'left:50%', 'top:64px', 'transform:translateX(-50%)', 'z-index:200',
+    'max-width:min(440px,92vw)', 'background:var(--bg1)', 'border:1px solid var(--accentGold)',
+    'border-radius:10px', 'box-shadow:0 8px 32px rgba(0,0,0,.55)', 'padding:14px 16px',
+    'color:var(--tx0)', 'font-size:12.5px', 'line-height:1.6'
+  ].join(';'));
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">' +
+      '<span style="font-family:monospace;font-weight:700;letter-spacing:1px;color:var(--accentGold);font-size:11px">◈ SINCE YOU WERE LAST HERE</span>' +
+      '<button onclick="dismissDigest()" aria-label="Dismiss" style="background:transparent;border:none;color:var(--tx1);cursor:pointer;font-size:15px;line-height:1">✕</button>' +
+    '</div>' +
+    '<div>' + lines.map(l => '<div style="margin:3px 0">' + l + '</div>').join('') + '</div>';
+  document.body.appendChild(card);
+  try { card._t = setTimeout(() => { const c = document.getElementById('since-digest'); if(c) c.remove(); }, 16000); } catch(e){}
+}
+function dismissDigest(){ const c = document.getElementById('since-digest'); if(c){ try { clearTimeout(c._t); } catch(e){} c.remove(); } }
+
+// Refresh the baseline when the player leaves so next visit diffs against the
+// state they actually last saw (visibilitychange is the mobile-reliable signal).
+try {
+  document.addEventListener('visibilitychange', () => { if(document.hidden && _isPlayerViewer()) _saveDigestBaseline(); });
+  window.addEventListener('beforeunload', () => { if(_isPlayerViewer()) _saveDigestBaseline(); });
+} catch(e){}
+// Fire once after boot has settled (data loaded, splash/gate cleared for a
+// returning, already-unlocked player).
+setTimeout(() => { try { showSinceLastSessionDigest(); } catch(e){} }, 5000);
+
 // ── Player polling extension ──────────────────────────────────────────────
 // Wired into the existing pollRevealState() call chain — see that function
 
