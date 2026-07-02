@@ -1343,6 +1343,103 @@ function renderJournalPanel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CARGO MANIFEST — the party's speculative-trade position (referee-facilitated)
+// ═══════════════════════════════════════════════════════════════════════════
+// Trade is played at the table: the referee runs the MgT2e Speculative-Trade
+// checks from the rulebook (📖 Rules / their BYO book) and reads prices off the
+// living-economy console — this app never resolves the trade. What was missing
+// is a SHARED record of what the party is hauling and what they paid. The
+// referee keeps it; every player sees the position live. Licensing-clean: no
+// trade tables embedded — good names are free-text (the sim's own ECON.GOODS
+// are offered as a convenience datalist). Shared key 'trade-cargo'.
+//   lot = { id, good, tons, buyCr /* per dton */, world, date }
+
+let tradeCargo = { lots: [] };
+let cargoPanelOpen = false, cargoCollapsed = false;
+
+async function loadTradeCargo(){
+  try { const r = await supaStorage.get('trade-cargo', true); if(r.value != null){ const v = JSON.parse(r.value); tradeCargo = (v && Array.isArray(v.lots)) ? v : { lots: [] }; } }
+  catch(e){ tradeCargo = { lots: [] }; }
+}
+async function saveTradeCargo(){
+  try { await supaStorage.set('trade-cargo', JSON.stringify(tradeCargo), true); }
+  catch(e){ console.error('Cargo manifest save failed:', e); }
+}
+function toggleCargoPanel(){
+  cargoPanelOpen = !cargoPanelOpen;
+  const w = document.getElementById('cargo-wrap'), b = document.getElementById('cargo-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !cargoPanelOpen);
+  if(b) b.classList.toggle('panel-open', cargoPanelOpen);
+  if(cargoPanelOpen) renderCargoPanel();
+}
+function toggleCargoCollapse(){
+  const h = document.getElementById('cargo-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  cargoCollapsed = !cargoCollapsed;
+  document.getElementById('cargo-toggle').textContent = cargoCollapsed ? '▲' : '▼';
+  document.getElementById('cargo-body').classList.toggle('collapsed', cargoCollapsed);
+  document.getElementById('cargo-wrap').classList.toggle('panel-collapsed', cargoCollapsed);
+}
+function cargoAddLot(){
+  if(!isReferee()) return;
+  const gv = id => (document.getElementById(id) && document.getElementById(id).value || '').trim();
+  const good = gv('cargo-f-good'); if(!good) return;
+  const tons = Math.max(0, Number(gv('cargo-f-tons')) || 0);
+  const buyCr = Math.max(0, Number(gv('cargo-f-cr')) || 0);
+  const world = gv('cargo-f-world');
+  tradeCargo.lots = tradeCargo.lots || [];
+  tradeCargo.lots.push({
+    id: 'lot_' + Date.now().toString(36), good, tons, buyCr, world,
+    date: (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : ''
+  });
+  saveTradeCargo(); renderCargoPanel();
+  if(typeof showToast === 'function') showToast('Cargo lot added');
+}
+function cargoRemoveLot(id){
+  if(!isReferee()) return;
+  tradeCargo.lots = (tradeCargo.lots || []).filter(l => l.id !== id);
+  saveTradeCargo(); renderCargoPanel();
+}
+function renderCargoPanel(){
+  const body = document.getElementById('cargo-body'); if(!body) return;
+  const ref = isReferee();
+  const lots = (tradeCargo && Array.isArray(tradeCargo.lots)) ? tradeCargo.lots : [];
+  const fmt = (typeof fmtCr === 'function') ? fmtCr : (n => 'Cr' + (Number(n) || 0));
+  const countEl = document.getElementById('cargo-count'); if(countEl) countEl.textContent = lots.length;
+  const totalTons = lots.reduce((s, l) => s + (Number(l.tons) || 0), 0);
+  const totalCr = lots.reduce((s, l) => s + (Number(l.tons) || 0) * (Number(l.buyCr) || 0), 0);
+  let list;
+  if(!lots.length){
+    list = `<div class="cargo-empty">${ref ? 'No cargo tracked. Add a speculative lot below — the trade check itself happens at the table.' : 'The hold is empty.'}</div>`;
+  } else {
+    list = lots.map(l => {
+      const invested = (Number(l.tons) || 0) * (Number(l.buyCr) || 0);
+      const del = ref ? `<button class="cargo-del" onclick="cargoRemoveLot('${l.id}')" title="Sold / remove from hold">✕</button>` : '';
+      return `<div class="cargo-lot">${del}
+        <div class="cargo-lot-hd"><span class="cargo-good">${escQH(l.good)}</span><span class="cargo-tons">${Number(l.tons) || 0} dt</span></div>
+        <div class="cargo-lot-meta">Bought ${fmt(l.buyCr)}/dt${l.world ? (' · ' + escQH(l.world)) : ''}${l.date ? (' · ' + escQH(l.date)) : ''} · in ${fmt(invested)}</div>
+      </div>`;
+    }).join('');
+    list += `<div class="cargo-total">Hold: <b>${totalTons} dt</b> · invested <b>${fmt(totalCr)}</b></div>`;
+  }
+  const goods = (typeof ECON !== 'undefined' && ECON.GOODS) ? Object.keys(ECON.GOODS) : [];
+  const datalist = goods.length ? `<datalist id="cargo-goods">${goods.map(g => `<option value="${escQH(g)}">`).join('')}</datalist>` : '';
+  const form = ref ? `
+    <div class="cargo-add">${datalist}
+      <input id="cargo-f-good" list="cargo-goods" placeholder="Good (e.g. Luxury Goods)" maxlength="40">
+      <div class="cargo-add-row">
+        <input id="cargo-f-tons" type="number" inputmode="numeric" min="0" placeholder="dtons">
+        <input id="cargo-f-cr" type="number" inputmode="numeric" min="0" placeholder="Cr / dton">
+      </div>
+      <input id="cargo-f-world" placeholder="Bought at (world)" maxlength="40">
+      <button class="cal-add-btn" onclick="cargoAddLot()">+ Track cargo lot</button>
+      <div class="cargo-hint">Prices &amp; trade DMs come from your rulebook (📖 Rules) + the 📈 Economy console — this only records the position.</div>
+    </div>` : '';
+  body.innerHTML = list + form;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // "SINCE YOU WERE LAST HERE" DIGEST — between-session continuity for players
 // ═══════════════════════════════════════════════════════════════════════════
 // A returning player gets a one-shot summary of what changed since they last
@@ -1440,6 +1537,8 @@ makePanelDraggable('journal-wrap', 'journal-header');
 makePanelResizable('journal-wrap');
 makePanelDraggable('turnorder-wrap', 'turnorder-header');
 makePanelResizable('turnorder-wrap');
+makePanelDraggable('cargo-wrap', 'cargo-header');
+makePanelResizable('cargo-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1522,6 +1621,7 @@ loadTextureCatalog().then(() => {
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadSessionLog(); // session journal renders on-demand when its panel is opened
 loadTurnOrder(); // shared read-only turn order (players); referee is the source
+loadTradeCargo(); // shared cargo manifest — renders on-demand when its panel opens
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
