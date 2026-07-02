@@ -583,12 +583,29 @@ function repBand(s){ for(const [min, label, color] of REP_BANDS){ if(s >= min) r
 // one place, so it's the obvious hook for the future station/outpost buy-sell.)
 let funds = { party: 0, purses: {}, log: [] };
 let fundsPanelOpen = false, fundsCollapsed = false;
-async function loadFunds(){ try { const r = await supaStorage.get('funds', true); if(r.value != null) funds = Object.assign(funds, JSON.parse(r.value)); } catch(e){} }
+// Guarantee the shape the operations rely on. A stored blob from an older build
+// (or a partial write) can arrive missing `purses`/`log`, or with them set to
+// null — which used to make a deposit throw at `funds.purses[...]=` /
+// `funds.log.unshift(...)` AFTER the in-memory total had changed but BEFORE the
+// re-render, so the panel froze and the buttons looked dead. Normalising up front
+// makes every operation safe.
+function normalizeFunds(){
+  if(!funds || typeof funds !== 'object') funds = { party: 0, purses: {}, log: [] };
+  funds.party = Number(funds.party) || 0;
+  if(!funds.purses || typeof funds.purses !== 'object') funds.purses = {};
+  if(!Array.isArray(funds.log)) funds.log = [];
+}
+async function loadFunds(){ try { const r = await supaStorage.get('funds', true); if(r.value != null) funds = Object.assign(funds, JSON.parse(r.value)); } catch(e){} normalizeFunds(); }
 async function saveFunds(){ try { await supaStorage.set('funds', JSON.stringify(funds), true); } catch(e){ console.error('Funds save failed:', e); } }
 function fundActor(){ return isReferee() ? 'Referee' : (myIdentity || 'Unknown'); }
-function purseOf(name){ return Number(funds.purses[name]) || 0; }
+function purseOf(name){ return Number((funds.purses || {})[name]) || 0; }
 function fmtCr(n){ return 'Cr' + (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
-function fundsLog(target, amount, note){ funds.log.unshift(Object.assign(imperialNow(), { by: fundActor(), target, amount, note: note || '' })); funds.log = funds.log.slice(0, 50); }
+function fundsLog(target, amount, note){
+  if(!Array.isArray(funds.log)) funds.log = [];
+  let stamp = {}; try { stamp = imperialNow() || {}; } catch(e){ /* keep the money change even if the date stamp fails */ }
+  funds.log.unshift(Object.assign(stamp, { by: fundActor(), target, amount, note: note || '' }));
+  funds.log = funds.log.slice(0, 50);
+}
 function fundsAmt(){ const v = parseInt((document.getElementById('fund-amt') || {}).value, 10); return isFinite(v) ? Math.abs(v) : 0; }
 function fundsNote(){ const e = document.getElementById('fund-note'); return e ? e.value.trim() : ''; }
 
@@ -608,31 +625,39 @@ function toggleFundsCollapse(){
 }
 
 // ── Operations (all log + save) ──
-function depositToParty(){ const a = fundsAmt(); if(a <= 0) return;
+// Read the typed amount; if it's missing/invalid, tell the user instead of
+// silently doing nothing (which reads as "the buttons are dead").
+function fundsAmtOrWarn(){
+  const a = fundsAmt();
+  if(a <= 0 && typeof showToast === 'function') showToast('Enter a Cr amount first', 'error');
+  return a;
+}
+function depositToParty(){ normalizeFunds(); const a = fundsAmtOrWarn(); if(a <= 0) return;
   if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) - a;
   funds.party = (Number(funds.party) || 0) + a;
   fundsLog('party', a, (myIdentity ? 'Deposit from ' + myIdentity : 'Added to fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
   saveFunds(); renderFundsPanel(); }
-function withdrawFromParty(){ const a = fundsAmt(); if(a <= 0) return;
+function withdrawFromParty(){ normalizeFunds(); const a = fundsAmtOrWarn(); if(a <= 0) return;
   funds.party = (Number(funds.party) || 0) - a;
   if(myIdentity) funds.purses[myIdentity] = purseOf(myIdentity) + a;
   fundsLog('party', -a, (myIdentity ? 'Withdrawn by ' + myIdentity : 'Drawn from fund') + (fundsNote() ? ' — ' + fundsNote() : ''));
   saveFunds(); renderFundsPanel(); }
-function adjustMyPurse(sign){ const a = fundsAmt(); if(a <= 0 || !myIdentity) return;
+function adjustMyPurse(sign){ normalizeFunds(); if(!myIdentity) return; const a = fundsAmtOrWarn(); if(a <= 0) return;
   funds.purses[myIdentity] = purseOf(myIdentity) + sign * a;
   fundsLog(myIdentity, sign * a, fundsNote() || (sign > 0 ? 'Income' : 'Spending'));
   saveFunds(); renderFundsPanel(); }
-function refAdjustParty(sign){ const a = fundsAmt(); if(a <= 0) return;
+function refAdjustParty(sign){ normalizeFunds(); const a = fundsAmtOrWarn(); if(a <= 0) return;
   funds.party = (Number(funds.party) || 0) + sign * a;
   fundsLog('party', sign * a, fundsNote() || (sign > 0 ? 'Referee grant' : 'Referee charge'));
   saveFunds(); renderFundsPanel(); }
-function refAdjustPurse(name, sign){ const a = fundsAmt(); if(a <= 0) return;
+function refAdjustPurse(name, sign){ normalizeFunds(); const a = fundsAmtOrWarn(); if(a <= 0) return;
   funds.purses[name] = purseOf(name) + sign * a;
   fundsLog(name, sign * a, fundsNote() || (sign > 0 ? 'Paid by referee' : 'Charged by referee'));
   saveFunds(); renderFundsPanel(); }
 
 function renderFundsPanel(){
   const body = document.getElementById('funds-body'); if(!body) return;
+  normalizeFunds();   // never render (or read purses/log) against a malformed blob
   const ref = isReferee(), me = myIdentity;
   let h = `<div class="fund-row"><input id="fund-amt" class="fund-inp" type="number" min="0" step="100" placeholder="Cr amount"><input id="fund-note" class="fund-note" placeholder="note (optional)"></div>`;
   // Party fund — visible to all
@@ -2156,4 +2181,5 @@ loadSystemStores().then(() => { rebuildSystemsFromOverlay();   // fold in any re
 loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes(); }catch(e){}   // economy follows jump lanes — pick up saved lane edits
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
+loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // referee-painted territory hexes (shared)
 
