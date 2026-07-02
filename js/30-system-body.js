@@ -108,10 +108,23 @@ function buildOrrery(){
   if(typeof requestAnimationFrame !== 'function'){ buildOrreryNow(); return; }
   _orreryRaf = requestAnimationFrame(() => { _orreryRaf = 0; buildOrreryNow(); });
 }
+
+// The orrery's viewBox is fitted to the panel's live aspect ratio (see buildOrreryNow),
+// so it must be rebuilt when the window resizes or the tablet rotates. Bound once, lazily,
+// the first time the orrery is built.
+let _orreryResizeBound = false;
+function bindOrreryResize(){
+  if(_orreryResizeBound || typeof window==='undefined') return;
+  _orreryResizeBound = true;
+  const rebuild = () => { if(typeof currentView!=='undefined' && currentView==='system') buildOrrery(); };
+  window.addEventListener('resize', rebuild);
+  window.addEventListener('orientationchange', rebuild);
+}
 function buildOrreryNow(){
   const svg = document.getElementById("orrery-svg");
   if(!svg) return;
-  const W=800, H=500;
+  bindOrreryResize();
+  const W=800, H=500;                       // legacy authoring space for the star field
   const bodies = getBodies();
 
   // Max occupied orbit slot drives the layout. Default 6 so a near-empty
@@ -119,6 +132,28 @@ function buildOrreryNow(){
   const orbitPositions = bodies.filter(b => !b.isStar && !b.isMoon && b.orbitPos)
                                .map(b => b.orbitPos);
   const maxP = orbitPositions.length ? Math.max(6, Math.max.apply(null, orbitPositions)) : 6;
+
+  // ── Responsive, centred viewBox ────────────────────────────
+  // The composition is authored around a fixed star at (ORR_SX,ORR_SY) with orbits
+  // fanning outward; the outermost orbit — tilted by ORR_TILT — actually spills well
+  // past the legacy 800×500 frame. A static viewBox therefore either letterboxes the
+  // map (black bars, e.g. on the near-square iPad panel) or clips the outer orbits.
+  // Instead, size the viewBox to the true content extent AND to the panel's own aspect
+  // ratio, centred on the star, so the orrery fills the panel edge-to-edge with no bars
+  // and nothing cut off, at any panel shape.
+  const [oA, oB] = orbitAxes(maxP, maxP);            // outermost orbit semi-axes
+  const absC = Math.abs(ORR_COS), absS = Math.abs(ORR_SIN);
+  const ORR_PAD = 48;                                 // breathing room for labels / belt jitter
+  let halfX = Math.sqrt((oA*absC)**2 + (oB*absS)**2) + ORR_PAD;
+  let halfY = Math.sqrt((oA*absS)**2 + (oB*absC)**2) + ORR_PAD;
+  const panel = svg.parentElement;
+  const pw = panel ? panel.clientWidth  : 0;
+  const ph = panel ? panel.clientHeight : 0;
+  const panelAspect = (pw>0 && ph>0) ? pw/ph : halfX/halfY;
+  if(panelAspect > halfX/halfY) halfX = halfY * panelAspect;   // panel wider than content → pad sides
+  else                          halfY = halfX / panelAspect;   // panel taller than content → pad top/bottom
+  const vbX = ORR_SX - halfX, vbY = ORR_SY - halfY, vbW = halfX*2, vbH = halfY*2;
+  svg.setAttribute('viewBox', `${vbX.toFixed(1)} ${vbY.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
 
   // ── Body list table ────────────────────────────────────────
   const tbl = document.getElementById("body-list-table");
@@ -185,7 +220,7 @@ function buildOrreryNow(){
     </radialGradient>`;
   });
   html += `</defs>`;
-  html += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#bg-grad)"/>`;
+  html += `<rect x="${vbX.toFixed(1)}" y="${vbY.toFixed(1)}" width="${vbW.toFixed(1)}" height="${vbH.toFixed(1)}" fill="url(#bg-grad)"/>`;
 
   // ── Background stars ───────────────────────────────────────
   const STARS = [
@@ -202,7 +237,9 @@ function buildOrreryNow(){
     const r = i%7===0?1.5:i%3===0?1.2:0.8;
     const op = 0.15+((i*7)%5)*0.1;
     const cls = i%13===0?'twinkle-a':i%17===0?'twinkle-b':i%19===0?'twinkle-c':'';
-    html += `<circle cx="${x}" cy="${y}" r="${r}" fill="white" opacity="${op}"${cls?' class="'+cls+'"':''} pointer-events="none"/>`;
+    // Authored in the legacy 800×500 space — spread proportionally across the live viewBox.
+    const sx = vbX + (x/W)*vbW, sy = vbY + (y/H)*vbH;
+    html += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${r}" fill="white" opacity="${op}"${cls?' class="'+cls+'"':''} pointer-events="none"/>`;
   });
 
   const tiltDeg = (ORR_TILT * 180 / Math.PI).toFixed(1);
