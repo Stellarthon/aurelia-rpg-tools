@@ -85,8 +85,6 @@
   </div>
 </div>
 <div id="root">
-  <!-- ── View transition overlay ── -->
-  <div id="view-transition"></div>
   <!-- ── Player manual refresh (iOS home-screen apps don't run background timers reliably) ── -->
 
 
@@ -128,13 +126,10 @@
     <button id="journal-btn" onclick="toggleJournalPanel()" title="Session Journal — saved recaps">📓 Journal</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
-    <button id="turnorder-btn" class="hidden" onclick="toggleTurnOrderPanel()" title="Turn order — the referee shares it during combat">🎯 Turns</button>
-    <button id="handouts-btn" onclick="toggleHandoutsPanel()" title="Handouts — maps, clues & evidence the referee shares">🖼 Handouts</button>
-    <button id="npc-btn" class="ref-only" onclick="toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
     <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
     <button id="cargo-btn" onclick="toggleCargoPanel()" title="Cargo manifest — the party's speculative-trade hold">💹 Cargo</button>
     <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
-    <button id="more-btn" onclick="openMoreMenu()" title="More tools — Library Data · Wiki · Contacts · Standing · Downtime · Imperial Calendar · Economy · Session">⋯ More</button>
+    <button id="more-btn" onclick="openMoreMenu()" title="More tools — Library Data · Wiki · Contacts · Standing · Downtime · Imperial Calendar · Handouts · Turns · NPCs · Economy · Session">⋯ More</button>
     <!-- Clock edit popover -->
     <div id="clock-edit">
       <label>SET STATION TIME</label>
@@ -677,10 +672,11 @@
 
   <!-- ── "More" overflow menu — houses the occasional tools that used to crowd
        the header (Library Data, Wiki, Contacts, Standing, Downtime, Imperial
-       Calendar, plus the referee-only Economy & Session). The buttons keep their
-       ids so their existing toggles, panel-open highlighting, terminology
-       relabelling and module-flag gating all still work. Player-facing items are
-       visible to everyone; ref-only items auto-hide for players. ── -->
+       Calendar, Handouts, Turns, plus the referee-only NPCs, Economy & Session).
+       The buttons keep their ids so their existing toggles, panel-open
+       highlighting, terminology relabelling and module-flag gating all still
+       work. Player-facing items are visible to everyone; ref-only items auto-hide
+       for players; Turns stays hidden until the referee shares a combat board. ── -->
   <div id="more-menu" class="hidden" onclick="if(event.target===this) closeMoreMenu()">
     <div id="more-menu-card">
       <div class="settings-section-lbl">More Tools</div>
@@ -690,6 +686,9 @@
       <button id="rep-btn" class="more-item" onclick="closeMoreMenu();toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
       <button id="downtime-btn" class="more-item" onclick="closeMoreMenu();toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
       <button id="cal-btn" class="more-item" onclick="closeMoreMenu();toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Imperial Calendar</button>
+      <button id="handouts-btn" class="more-item" onclick="closeMoreMenu();toggleHandoutsPanel()" title="Handouts — maps, clues & evidence the referee shares">🖼 Handouts</button>
+      <button id="turnorder-btn" class="more-item hidden" onclick="closeMoreMenu();toggleTurnOrderPanel()" title="Turn order — the referee shares it during combat">🎯 Turns</button>
+      <button id="npc-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
       <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
       <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
     </div>
