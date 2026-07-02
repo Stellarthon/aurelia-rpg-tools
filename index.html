@@ -126,6 +126,7 @@
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
     <button id="journal-btn" onclick="toggleJournalPanel()" title="Session Journal — saved recaps">📓 Journal</button>
+    <button id="downtime-btn" onclick="toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
     <button id="turnorder-btn" class="hidden" onclick="toggleTurnOrderPanel()" title="Turn order — the referee shares it during combat">🎯 Turns</button>
@@ -756,6 +757,18 @@
   <div id="handout-lightbox" class="hidden" onclick="if(event.target===this)closeHandout()">
     <button id="handout-lightbox-close" onclick="closeHandout()" aria-label="Close">✕</button>
     <img id="handout-lightbox-img" src="" alt="Handout">
+  </div>
+
+  <div id="downtime-wrap" class="hidden">
+    <div id="downtime-header" onclick="toggleDowntimeCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">⏳ DOWNTIME</span>
+        <span id="downtime-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="downtime-toggle">▼</span>
+    </div>
+    <div id="downtime-body"></div>
+    <div class="panel-resize-handle" id="downtime-resize"></div>
   </div>
 
   <div id="turnorder-wrap" class="hidden">
