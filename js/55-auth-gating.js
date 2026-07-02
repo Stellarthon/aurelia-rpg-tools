@@ -551,6 +551,24 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Shared turn order — players get the referee's redacted initiative board live,
+  // and the panel auto-opens the moment the referee shares one.
+  try {
+    const resTO = await supaStorage.get('initiative', true);
+    if(resTO.ok){
+      const freshTO = resTO.value != null ? (JSON.parse(resTO.value) || {shared:false,turnId:null,rows:[]}) : {shared:false,turnId:null,rows:[]};
+      if(JSON.stringify(freshTO) !== JSON.stringify(playerInit)){
+        const wasShared = playerInit.shared;
+        playerInit = freshTO;
+        if(playerInit.shared && !wasShared && !turnOrderPanelOpen){
+          toggleTurnOrderPanel();      // reveal the board when combat begins
+        } else if(turnOrderPanelOpen){
+          renderTurnOrder();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Session journal — players see new saved recaps ("Previously on…") appear live
   try {
     const resJ = await supaStorage.get('session-log', true);

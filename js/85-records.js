@@ -1355,6 +1355,8 @@ makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
 makePanelDraggable('journal-wrap', 'journal-header');
 makePanelResizable('journal-wrap');
+makePanelDraggable('turnorder-wrap', 'turnorder-header');
+makePanelResizable('turnorder-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1436,6 +1438,7 @@ loadTextureCatalog().then(() => {
 });
 loadQuestLog(); // quests render on-demand when panel is opened, no immediate re-render needed
 loadSessionLog(); // session journal renders on-demand when its panel is opened
+loadTurnOrder(); // shared read-only turn order (players); referee is the source
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter

@@ -822,6 +822,34 @@ textarea{font-family:var(--font)}
 .disc-mini.approve{color:#4caf82;border-color:#4caf82}
 .disc-sub-hint{font-size:9.5px;color:var(--tx1);opacity:.75;padding:4px 2px 0;line-height:1.4}
 
+/* ── Shared Turn Order panel (player read-only, cloned from #quest-wrap chrome) ── */
+#turnorder-wrap{
+  position:fixed;top:54px;left:0;width:300px;height:380px;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:220px;min-height:120px;max-width:90vw;max-height:85vh
+}
+#turnorder-wrap.hidden{display:none}
+#turnorder-wrap.panel-collapsed{height:auto!important;min-height:0}
+#turnorder-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
+  border-bottom:.5px solid var(--bd0)
+}
+#turnorder-toggle{font-size:10px;color:var(--tx1)}
+#turnorder-body{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+#turnorder-body.collapsed{display:none}
+.to-empty{color:var(--tx1);font-size:11px;text-align:center;padding:18px 6px;line-height:1.5}
+.to-row{display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--bg0);border-radius:6px;border-left:3px solid var(--bd0)}
+.to-row.current{border-left-color:var(--accentGold);background:var(--accentGoldBg)}
+.to-row.down{opacity:.55}
+.to-ord{font-size:10px;font-family:monospace;color:var(--tx1);min-width:16px;text-align:center}
+.to-name{flex:1;font-size:12px;color:var(--tx0);font-weight:600}
+.to-row.down .to-name{text-decoration:line-through}
+.to-turn{font-size:10px;font-family:monospace;color:var(--accentGold);font-weight:700}
+.to-downtag{font-size:9px;font-family:monospace;color:var(--txD,#d45050);text-transform:uppercase}
+
 #quest-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
