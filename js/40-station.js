@@ -454,7 +454,9 @@ setTimeout(renderRsrMarkers, 100);
 // EVENT LOG
 // ═══════════════════════════════════════════════════════════════════════════
 let eventLog = [];
-let eventLogCollapsed = false;
+// Referee trackers start collapsed (compact bars) by default so they don't bury
+// the map; the referee's choice is remembered per device.
+let eventLogCollapsed = (()=>{ try { const v = localStorage.getItem('aurelia_evlog_collapsed'); return v==null ? true : v==='1'; } catch(e){ return true; } })();
 try { eventLog = JSON.parse(localStorage.getItem('aurelia_evlog')||'[]'); } catch(e){}
 
 function logEvent(text, areaLabel){
@@ -489,6 +491,7 @@ function renderEventLog(){
 function toggleEventLog(){
   if(document.getElementById('event-log-header').dataset.suppressClick === '1') return;
   eventLogCollapsed = !eventLogCollapsed;
+  try { localStorage.setItem('aurelia_evlog_collapsed', eventLogCollapsed ? '1' : '0'); } catch(e){}
   document.getElementById('event-log-toggle').textContent = eventLogCollapsed ? '▲' : '▼';
   renderEventLog();
 }

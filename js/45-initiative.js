@@ -3,7 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 let combatants = []; // {id, name, score, dex, int, ambush:null|'atk'|'def', down:false, notes:''}
 let currentTurnIdx = -1; // -1 = no active turn pointer
-let initCollapsed = false;
+// Collapsed by default (remembered per device) so the tracker sits as a compact
+// bar until the referee needs it — see tidyTrackers() in 98-trackers-boot.js.
+let initCollapsed = (()=>{ try { const v = localStorage.getItem('aurelia_init_collapsed'); return v==null ? true : v==='1'; } catch(e){ return true; } })();
 let combatantIdSeed = 1;
 let initShared = false; // referee: is a redacted turn-order pushed to players' devices?
 
@@ -223,9 +225,11 @@ function clearInitiative(){
   saveCombatants();
 }
 
+function persistCollapse(key, val){ try { localStorage.setItem(key, val ? '1' : '0'); } catch(e){} }
 function toggleInitPanel(){
   if(document.getElementById('init-header').dataset.suppressClick === '1') return;
   initCollapsed = !initCollapsed;
+  persistCollapse('aurelia_init_collapsed', initCollapsed);
   document.getElementById('init-toggle').textContent = initCollapsed ? '▲' : '▼';
   document.getElementById('init-body').classList.toggle('collapsed', initCollapsed);
   document.getElementById('init-foot').classList.toggle('collapsed', initCollapsed);
@@ -310,11 +314,12 @@ function renderInit(){
 // purely on health, so referees don't have to scroll through full
 // initiative rows (ambush flags, notes, move buttons) just to check HP.
 // Both panels stay in sync automatically since they share the same data.
-let healthPanelCollapsed = false;
+let healthPanelCollapsed = (()=>{ try { const v = localStorage.getItem('aurelia_health_collapsed'); return v==null ? true : v==='1'; } catch(e){ return true; } })();
 
 function toggleHealthPanel(){
   if(document.getElementById('health-header').dataset.suppressClick === '1') return;
   healthPanelCollapsed = !healthPanelCollapsed;
+  persistCollapse('aurelia_health_collapsed', healthPanelCollapsed);
   document.getElementById('health-toggle').textContent = healthPanelCollapsed ? '▲' : '▼';
   document.getElementById('health-body').classList.toggle('collapsed', healthPanelCollapsed);
   document.getElementById('health-wrap').classList.toggle('panel-collapsed', healthPanelCollapsed);

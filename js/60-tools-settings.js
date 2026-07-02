@@ -745,6 +745,16 @@ function openRefereeMenu(){
 function closeRefereeMenu(){
   document.getElementById('referee-menu').classList.add('hidden');
 }
+// ── "More" overflow menu (Economy · Oracle · Session) ──────────────────────
+function openMoreMenu(){
+  if(!isReferee()) return;
+  const m = document.getElementById('more-menu');
+  if(m) m.classList.remove('hidden');
+}
+function closeMoreMenu(){
+  const m = document.getElementById('more-menu');
+  if(m) m.classList.add('hidden');
+}
 // Inline Design-Mode passcode state. We can't use prompt()/alert() — they're
 // silently suppressed inside sandboxed preview iframes — so the passcode is
 // entered through a field rendered inline in the Referee menu instead.
