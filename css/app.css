@@ -3440,6 +3440,7 @@ body.light-mode-body #starfield{display:none}
    only `top` is set, so per-panel left/right/width/height are untouched. A
    dragged panel writes an inline top and still overrides this. */
 #quest-wrap,#journal-wrap,#turnorder-wrap,#ship-wrap,#combat-wrap,#cal-wrap,
-#disc-wrap,#npc-wrap,#rep-wrap,#funds-wrap,#gen-wrap,#econ-wrap{
+#disc-wrap,#npc-wrap,#rep-wrap,#funds-wrap,#gen-wrap,#econ-wrap,
+#cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap{
   top:calc(var(--hdr-h,82px) + 6px)
 }
