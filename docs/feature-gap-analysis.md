@@ -53,8 +53,8 @@ Tier-2 progress:
 
 | Item | Status |
 |---|---|
-| BYO-rulebook PDF upload — Layer 3 (§5.6) | ✅ shipped — referee uploads own PDF to a private `rulebooks` bucket; page references deep-link the native viewer via `#page=N`. ⚠️ **deploy step:** apply `supabase/migrations/0003_rulebooks_bucket.sql`; then verify upload + open on a device |
-| "Since last session" digest (§6) | ⏳ not yet |
+| BYO-rulebook PDF upload — Layer 3 (§5.6) | ✅ shipped — referee uploads own PDF to a private `rulebooks` bucket; page references deep-link the native viewer via `#page=N`. Migration `0003_rulebooks_bucket.sql` **applied to production** (bucket + policies verified) |
+| "Since last session" digest (§6) | ✅ shipped — returning players see a one-shot summary of what changed (date/funds/codex/missions/journal); JS-only overlay, no index.html/css footprint |
 | Referee-facilitated trade helper (§5.5) | ⏳ not yet |
 | Printable char/ship sheet (§5.7) | ⏳ not yet |
 | Handout / evidence push (§5.8) | ⏳ not yet |
