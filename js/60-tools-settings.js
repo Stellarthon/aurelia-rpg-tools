@@ -76,26 +76,13 @@ async function saveSheet(characterName, data){
 }
 
 // ── Sheet menu (small popover from the header button) ──────────────────
+// The Sheets button jumps straight to the active character's sheet. Choosing
+// *which* character you are is the job of the "Playing as" control
+// (changeIdentity → showIdentityModal), so Sheets no longer shows its own
+// character picker. With no character selected yet, hand off to that chooser.
 function openSheetMenu(){
-  const menu = document.getElementById('sheet-menu');
-  const card = document.getElementById('sheet-menu-card');
-  let html = '';
-  if(isReferee()){
-    html += '<div class="sheet-menu-label">View / edit a sheet</div>';
-    html += KNOWN_CHARACTERS.map(n =>
-      `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${n.replace(/'/g,"\\\\'")}')">${n}</button>`
-    ).join('');
-  } else {
-    if(!myIdentity){
-      html += '<div class="sheet-menu-label">Pick a character first</div>';
-      html += '<button class="sheet-menu-item" onclick="closeSheetMenu();showIdentityModal()">Choose my character</button>';
-    } else {
-      html += `<button class="sheet-menu-item" onclick="closeSheetMenu();openSheet('${myIdentity.replace(/'/g,"\\\\'")}')">My Sheet (${myIdentity})</button>`;
-      html += `<button class="sheet-menu-item" style="color:var(--tx1);font-size:10px" onclick="closeSheetMenu();changeIdentity()">Not ${myIdentity}? Switch character</button>`;
-    }
-  }
-  card.innerHTML = html;
-  menu.classList.remove('hidden');
+  if(myIdentity){ openSheet(myIdentity); return; }
+  showIdentityModal();
 }
 
 function closeSheetMenu(){
@@ -745,9 +732,11 @@ function openRefereeMenu(){
 function closeRefereeMenu(){
   document.getElementById('referee-menu').classList.add('hidden');
 }
-// ── "More" overflow menu (Economy · Oracle · Session) ──────────────────────
+// ── "More" overflow menu (Library Data · Wiki · Contacts · Standing ·
+//    Downtime · Imperial Calendar, plus ref-only Economy & Session) ──────────
+// Now holds player-facing tools too, so it's open to everyone. The ref-only
+// items inside auto-hide for players via the .ref-only / #root.pm-active rules.
 function openMoreMenu(){
-  if(!isReferee()) return;
   const m = document.getElementById('more-menu');
   if(m) m.classList.remove('hidden');
 }
