@@ -41,9 +41,10 @@ mutating the production `aurelia_state`):
 | Saved session journal (§5.4) | ✅ shipped |
 | Codex player-submitted rumours / `pending` (§5.3) | ✅ shipped |
 | Shared turn-order board, redacted + referee-gated (§5.1) | ✅ shipped |
-| Finish route-blocking (§5.2) | ⏳ not yet |
-| Ship's log + saved flight plan (§6) | ⏳ not yet |
-| Rules & gear reference, Layers 1–2 (§5.6) | ⏳ not yet |
+| Rules & gear page references — Layer 2 (§5.6) | ✅ shipped (`rules-index` key, in the Rules panel) |
+| Ship's log (§6) | ✅ **already present** — the "Captain's Log" section renders `shipState.jumpLog` in the galaxy panel (`js/10:2100`); not a gap |
+| Rules & gear catalogue seed — Layer 1 (§5.6) | ⏳ content task (referee-entered gear; nothing generic to ship) |
+| Finish route-blocking (§5.2) | ⏳ remaining — needs SVG lane rendering + click-to-block in `js/10`; best done with a visual check |
 
 ---
 
