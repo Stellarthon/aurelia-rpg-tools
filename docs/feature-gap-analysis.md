@@ -56,8 +56,21 @@ Tier-2 progress:
 | BYO-rulebook PDF upload — Layer 3 (§5.6) | ✅ shipped — referee uploads own PDF to a private `rulebooks` bucket; page references deep-link the native viewer via `#page=N`. Migration `0003_rulebooks_bucket.sql` **applied to production** (bucket + policies verified) |
 | "Since last session" digest (§6) | ✅ shipped — returning players see a one-shot summary of what changed (date/funds/codex/missions/journal); JS-only overlay, no index.html/css footprint |
 | Printable character sheet (§5.7) | ✅ shipped — native print / save-as-PDF from a clean self-contained doc; js/60-only, no index.html/css footprint. Ship-sheet print still to do |
-| Referee-facilitated trade helper (§5.5) | ⏳ not yet — will touch index.html/css + js/90 |
-| Handout / evidence push (§5.8) | ⏳ not yet — will touch index.html/css + a storage bucket |
+| Referee-facilitated trade helper (§5.5) | ✅ shipped — shared, referee-edited cargo manifest (`trade-cargo` key) player-visible next to Funds; suggests, never resolves |
+| Handout / evidence push (§5.8) | ✅ shipped — referee pushes an image to all / a single player; private `handouts` bucket + lightbox. Migration `0004_handouts_bucket.sql` **applied to production** |
+| Cargo living-economy signal (Tier-2 bonus) | ✅ shipped — each manifest lot shows a dear/cheap/steady chip from `ECON.pressure`, so the referee reads a buy/sell hint off the sim |
+
+**Tier-2 is complete.** All five items (plus the econ signal) are shipped.
+
+Tier-3 progress:
+
+| Item | Status |
+|---|---|
+| Downtime / between-jump actions log (§5.10) | ✅ shipped (PR #42) — players declare a downtime action per jump, referee resolves; `downtime` key, honour-gated to own entries |
+| Referee-curated wiki / lore pages (§5.9) | ✅ shipped (PR #43) — ref-only markdown-lite articles with `visibleTo` gating; `wiki` key |
+| Contact / faction dossier with secret layers (§6) | ✅ shipped (PR #44) — per-PC known-layers + referee-only note; each player sees only their own layer (`contacts` key) |
+| Scene ambience presets (§7 Tier-3.15) | ⏳ not started — needs an audio-approach decision (no bundled copyrighted audio; likely referee-supplied URLs played on the referee's device, players stay quiet). Low priority per Q6 |
+| Complete per-player secrecy (§7 Tier-3.16) | ⏳ not started — deploy/verify the flag-gated `get-content` edge path so redaction is enforced, not honour-system. Security-critical, multi-day; **plan-first before touching production**, and best landed before/with open-sourcing |
 
 ---
 
