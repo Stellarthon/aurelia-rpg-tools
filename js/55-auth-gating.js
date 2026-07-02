@@ -560,6 +560,7 @@ async function pollRevealState(){
       if(JSON.stringify(freshTO) !== JSON.stringify(playerInit)){
         const wasShared = playerInit.shared;
         playerInit = freshTO;
+        if(typeof updateTurnOrderBtn === 'function') updateTurnOrderBtn();
         if(playerInit.shared && !wasShared && !turnOrderPanelOpen){
           toggleTurnOrderPanel();      // reveal the board when combat begins
         } else if(turnOrderPanelOpen){

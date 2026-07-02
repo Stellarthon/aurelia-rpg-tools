@@ -441,6 +441,16 @@ async function loadTurnOrder(){
     const r = await supaStorage.get('initiative', true);
     if(r.value != null) playerInit = JSON.parse(r.value) || playerInit;
   } catch(e){}
+  updateTurnOrderBtn();
+}
+// The "🎯 Turns" header launcher is hidden until the referee shares a board, so
+// it never clutters the (decluttered) header — it only appears for players
+// during combat, giving them a way to reopen the panel if they close it.
+function updateTurnOrderBtn(){
+  const b = document.getElementById('turnorder-btn');
+  if(!b) return;
+  const show = !!(playerInit && playerInit.shared) && !(typeof isReferee === 'function' && isReferee());
+  b.classList.toggle('hidden', !show);
 }
 
 function toggleTurnOrderPanel(){
