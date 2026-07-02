@@ -381,7 +381,7 @@ textarea{font-family:var(--font)}
 
 /* ── Header ── */
 #hdr{
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;justify-content:center;
   padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
   flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
 ;z-index:61}
@@ -1536,6 +1536,12 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 #econ-btn{font-size:10px;font-family:monospace;color:var(--tx1);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:6px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap}
 #econ-btn:hover{background:var(--bd0);color:var(--tx0)}
 #econ-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+/* Journal & NPCs were the only header nav buttons without their own #id rule,
+   so the base `button{background:none;border:none}` left them boxless. Give them
+   the same dark chrome (bg + border + hover + open states) as every sibling. */
+#journal-btn,#npc-btn{font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#journal-btn:hover,#npc-btn:hover{background:var(--bd0);color:var(--tx0)}
+#journal-btn.panel-open,#npc-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#econ-wrap{right:0;top:54px;width:330px}}
 
 /* ── Quest editor modal ── */
@@ -3101,6 +3107,10 @@ textarea.hx-edit-in{resize:vertical;line-height:1.4}
 .hx-route-leg{font-size:10px;font-family:var(--mono,monospace);color:var(--tx1);padding:3px 0;display:flex;gap:6px}
 .hx-route-leg b{color:var(--tx0)}
 .hx-note{font-size:10px;color:var(--tx1);line-height:1.55;background:var(--bg1,#181c27);border:.5px solid var(--bd2);border-radius:6px;padding:9px 11px;margin-top:8px}
+/* Match the gap above the first collapsible section (Galaxy) to the 14px gap
+   between sections — the note→Galaxy seam was flush because the first .hx-sec
+   is reset to margin-top:0. */
+#hx-sel-block{margin-top:14px}
 .hx-warn{color:#ddaa44}
 #hx-pbody details{margin-top:6px}
 #hx-pbody summary{font-size:10px;font-family:var(--mono,monospace);color:var(--tx1);cursor:pointer;letter-spacing:.5px}
@@ -3180,24 +3190,6 @@ textarea.hx-edit-in{resize:vertical;line-height:1.4}
   .sheet-aside-body{overflow:visible}
 }
 
-/* ── Traveller quick-nav bar (player mode, every view; tablet-friendly) ── */
-#tvbar{display:none}
-#root.pm-active #tvbar{
-  display:flex;align-items:stretch;justify-content:center;gap:8px;
-  flex-shrink:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
-  background:var(--bg1);border-top:.5px solid var(--bd0);z-index:60
-}
-#tvbar .tv-btn{
-  flex:1 1 0;max-width:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  padding:calc(9px * var(--tvscale,1)) 6px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:11px;
-  color:var(--tx0);cursor:pointer;transition:background .12s,border-color .12s,transform .06s;
-  min-height:calc(54px * var(--tvscale,1))
-}
-#tvbar .tv-btn .ico{font-size:calc(21px * var(--tvscale,1));line-height:1}
-#tvbar .tv-btn .lbl{font-size:calc(11px * var(--tvscale,1));font-weight:600;letter-spacing:.4px}
-#tvbar .tv-btn:hover,#tvbar .tv-btn.active{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold)}
-#tvbar .tv-btn:active{transform:scale(.96)}
-
 /* ── Faction visibility toggle (galaxy Regions list, referee only) ── */
 .hx-fac-eye{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:6px;border:.5px solid var(--bd0);border-radius:5px;background:transparent;cursor:pointer;font-size:12px;vertical-align:-5px;flex:none;padding:0}
 .hx-fac-eye.hidden-fac{border-color:#d45050;color:#d45050}
@@ -3216,3 +3208,16 @@ textarea.hx-edit-in{resize:vertical;line-height:1.4}
    own backgrounds. Light mode pins its own bg and hides the field. */
 #root:not(.light-mode){background:transparent}
 body.light-mode-body #starfield{display:none}
+
+/* ── Header-anchored floating panels clear the (wrapping) header ──────────────
+   Every panel opened from a header nav button hardcoded top:54px, which no
+   longer clears the enlarged/wrapping header — on tablets the Session Journal
+   opened entirely behind it ("cut off"). Anchor them to the live header height
+   (--hdr-h, published by trackHeaderHeight()) plus a small gap. Placed last so
+   it wins over each panel's own top:54px (base + media-query) by source order;
+   only `top` is set, so per-panel left/right/width/height are untouched. A
+   dragged panel writes an inline top and still overrides this. */
+#quest-wrap,#journal-wrap,#turnorder-wrap,#ship-wrap,#combat-wrap,#cal-wrap,
+#disc-wrap,#npc-wrap,#rep-wrap,#funds-wrap,#gen-wrap,#econ-wrap{
+  top:calc(var(--hdr-h,82px) + 6px)
+}
