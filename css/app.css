@@ -964,6 +964,42 @@ textarea{font-family:var(--font)}
 .wiki-add > input,.wiki-add > textarea{width:100%}
 .wiki-add-row{display:flex;gap:5px;align-items:center}
 .wiki-add-row select,.wiki-add-row input{flex:1}
+
+/* ── Contacts dossier panel (cloned from #journal-wrap chrome) ── */
+#contacts-wrap{
+  position:fixed;top:54px;left:0;width:350px;height:auto;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:270px;min-height:120px;max-width:92vw;max-height:85vh
+}
+#contacts-wrap.hidden{display:none}
+#contacts-wrap.panel-collapsed{height:auto!important;min-height:0}
+#contacts-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
+  border-bottom:.5px solid var(--bd0)
+}
+#contacts-toggle{font-size:10px;color:var(--tx1)}
+#contacts-body{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+#contacts-body.collapsed{display:none}
+.con-card{background:var(--bg0);border-radius:6px;border-left:3px solid var(--accentGold);overflow:hidden}
+.con-card.editing{border-left-color:var(--tx1)}
+.con-hd{display:flex;align-items:center;gap:7px;padding:7px 9px;cursor:pointer}
+.con-name{font-size:12px;font-weight:700;color:var(--tx0);flex-shrink:0}
+.con-meta{flex:1;font-size:10px;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.con-blurb{padding:2px 10px 8px;font-size:11px;color:var(--tx1);line-height:1.5}
+.con-layers{padding:0 10px 6px;display:flex;flex-direction:column;gap:4px}
+.con-layer{font-size:10.5px;color:var(--tx1);line-height:1.45;background:var(--bg1);border-radius:5px;padding:5px 7px}
+.con-layer.mine{border-left:2px solid var(--accentGold)}
+.con-layer-who{font-family:monospace;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--accentGold);margin-right:4px}
+.con-refnote{padding:4px 10px 8px;font-size:10px;color:var(--txD,#d45050);opacity:.85;line-height:1.4}
+.con-edit{display:flex;flex-direction:column;gap:5px;padding:9px}
+.con-edit input,.con-edit textarea,.con-edit select{background:var(--bg1);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:6px 8px;font-size:11px;box-sizing:border-box;width:100%;min-width:0;font-family:inherit}
+.con-edit-row{display:flex;gap:5px}
+.con-edit-row input{flex:1}
+.con-known-grid{display:flex;flex-direction:column;gap:5px;border-top:.5px dashed var(--bd0);border-bottom:.5px dashed var(--bd0);padding:6px 0}
+.con-known-lbl{display:flex;flex-direction:column;gap:3px;font-size:9.5px;color:var(--accentGold);font-family:monospace}
 .journal-empty{color:var(--tx1);font-size:11px;text-align:center;padding:18px 6px;line-height:1.5}
 .journal-entry{background:var(--bg0);border-radius:6px;border-left:3px solid var(--accentGold);overflow:hidden}
 .journal-entry-head{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:.5px solid var(--bd0)}
