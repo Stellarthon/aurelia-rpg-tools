@@ -846,6 +846,14 @@ textarea{font-family:var(--font)}
 .cargo-add-row{display:flex;gap:5px}
 .cargo-add-row input{flex:1;width:auto}
 .cargo-hint{font-size:9px;color:var(--tx1);opacity:.7;line-height:1.35}
+/* living-economy buy/sell signal in the cargo panel */
+.cargo-ref{font-size:10px;color:var(--tx1);margin-bottom:6px}
+.cargo-ref label{display:flex;align-items:center;gap:6px;width:100%}
+.cargo-ref select{flex:1;min-width:0;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:4px 6px;font-size:10.5px}
+.cargo-sig{display:inline-block;font-size:9px;font-family:monospace;padding:1px 6px;border-radius:8px;white-space:nowrap;border:.5px solid}
+.cargo-sig-sell{color:#4caf82;border-color:#4caf82;background:rgba(76,175,130,.12)}
+.cargo-sig-buy{color:#4a90d9;border-color:#4a90d9;background:rgba(74,144,217,.12)}
+.cargo-sig-flat{color:var(--tx1);border-color:var(--bd0)}
 
 /* ── Handouts panel + lightbox (cloned from #journal-wrap chrome) ── */
 #handouts-wrap{

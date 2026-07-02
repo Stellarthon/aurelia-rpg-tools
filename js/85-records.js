@@ -1356,6 +1356,7 @@ function renderJournalPanel(){
 
 let tradeCargo = { lots: [] };
 let cargoPanelOpen = false, cargoCollapsed = false;
+let cargoRefWorld = ''; // device-local "which market am I checking" for the living-economy signal
 
 async function loadTradeCargo(){
   try { const r = await supaStorage.get('trade-cargo', true); if(r.value != null){ const v = JSON.parse(r.value); tradeCargo = (v && Array.isArray(v.lots)) ? v : { lots: [] }; } }
@@ -1401,6 +1402,30 @@ function cargoRemoveLot(id){
   tradeCargo.lots = (tradeCargo.lots || []).filter(l => l.id !== id);
   saveTradeCargo(); renderCargoPanel();
 }
+function cargoSetRefWorld(id){ cargoRefWorld = id || ''; renderCargoPanel(); }
+// A buy/sell hint from the LIVING ECONOMY's own pressure (-4..+4) at the chosen
+// reference world — never a resolved price, and licensing-clean (the sim's own
+// goods, not any copyrighted trade table). The referee still rolls the trade.
+function cargoSignalChip(good){
+  if(typeof ECON === 'undefined' || !cargoRefWorld || !ECON.GOODS || ECON.GOODS[good] == null) return '';
+  let p; try { p = ECON.pressure(cargoRefWorld, good); } catch(e){ return ''; }
+  if(p == null) return '';
+  const cls = p >= 2 ? 'sell' : p <= -2 ? 'buy' : 'flat';
+  const txt = p >= 2 ? 'dear here ▲' : p <= -2 ? 'cheap here ▼' : 'steady';
+  const lbl = (typeof ECON.worlds === 'function' && (ECON.worlds()[cargoRefWorld] || {}).label) || cargoRefWorld;
+  return ` <span class="cargo-sig cargo-sig-${cls}" title="Living-economy signal at ${escQH(lbl)} — the trade check is still yours to roll">${txt}</span>`;
+}
+function cargoRefSelectHTML(){
+  if(typeof ECON === 'undefined' || typeof ECON.worlds !== 'function') return '';
+  let ws;
+  try { ws = Object.keys(ECON.worlds()).map(id => ({ id, label: (ECON.worlds()[id] || {}).label || id })).sort((a, b) => a.label.localeCompare(b.label)); }
+  catch(e){ return ''; }
+  if(!ws.length) return '';
+  return `<div class="cargo-ref"><label>Market signal at <select onchange="cargoSetRefWorld(this.value)">
+    <option value="">— pick a world —</option>
+    ${ws.map(w => `<option value="${escQH(w.id)}"${w.id === cargoRefWorld ? ' selected' : ''}>${escQH(w.label)}</option>`).join('')}
+  </select></label></div>`;
+}
 function renderCargoPanel(){
   const body = document.getElementById('cargo-body'); if(!body) return;
   const ref = isReferee();
@@ -1418,7 +1443,7 @@ function renderCargoPanel(){
       const del = ref ? `<button class="cargo-del" onclick="cargoRemoveLot('${l.id}')" title="Sold / remove from hold">✕</button>` : '';
       return `<div class="cargo-lot">${del}
         <div class="cargo-lot-hd"><span class="cargo-good">${escQH(l.good)}</span><span class="cargo-tons">${Number(l.tons) || 0} dt</span></div>
-        <div class="cargo-lot-meta">Bought ${fmt(l.buyCr)}/dt${l.world ? (' · ' + escQH(l.world)) : ''}${l.date ? (' · ' + escQH(l.date)) : ''} · in ${fmt(invested)}</div>
+        <div class="cargo-lot-meta">Bought ${fmt(l.buyCr)}/dt${l.world ? (' · ' + escQH(l.world)) : ''}${l.date ? (' · ' + escQH(l.date)) : ''} · in ${fmt(invested)}${cargoSignalChip(l.good)}</div>
       </div>`;
     }).join('');
     list += `<div class="cargo-total">Hold: <b>${totalTons} dt</b> · invested <b>${fmt(totalCr)}</b></div>`;
@@ -1436,7 +1461,7 @@ function renderCargoPanel(){
       <button class="cal-add-btn" onclick="cargoAddLot()">+ Track cargo lot</button>
       <div class="cargo-hint">Prices &amp; trade DMs come from your rulebook (📖 Rules) + the 📈 Economy console — this only records the position.</div>
     </div>` : '';
-  body.innerHTML = list + form;
+  body.innerHTML = cargoRefSelectHTML() + list + form;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
