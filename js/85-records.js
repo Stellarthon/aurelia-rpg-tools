@@ -1595,6 +1595,131 @@ function renderHandoutsPanel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONTACT DOSSIER — the party's contacts, with a shared blurb + per-PC layers
+// ═══════════════════════════════════════════════════════════════════════════
+// A player-facing "who do we know": patrons, informants, rivals. Separate from
+// the referee-only NPC roster (which never syncs to players) — the referee
+// PUBLISHES each contact (visibleTo audience) with a shared blurb everyone sees,
+// PER-CHARACTER private knowledge ("what Rhett knows"), and a referee-only note.
+// Player clients redact to the viewer's own layer (honour-system, like the
+// combat/codex redaction — true secrecy needs the get-content path). Shared key
+// 'contacts'.
+//   contact = { id, name, role, faction, location, blurb, known:{identity:text}, refNote, visibleTo }
+
+let contacts = [];
+let contactsPanelOpen = false, contactsCollapsed = false, contactsEditingId = null, contactsExpanded = {};
+
+async function loadContacts(){
+  try { const r = await supaStorage.get('contacts', true); if(r.value != null) contacts = JSON.parse(r.value) || []; }
+  catch(e){ contacts = []; }
+}
+async function saveContacts(){
+  try { await supaStorage.set('contacts', JSON.stringify(contacts), true); }
+  catch(e){ console.error('Contacts save failed:', e); }
+}
+function toggleContactsPanel(){
+  contactsPanelOpen = !contactsPanelOpen;
+  const w = document.getElementById('contacts-wrap'), b = document.getElementById('contacts-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !contactsPanelOpen);
+  if(b) b.classList.toggle('panel-open', contactsPanelOpen);
+  if(contactsPanelOpen) renderContactsPanel();
+}
+function toggleContactsCollapse(){
+  const h = document.getElementById('contacts-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  contactsCollapsed = !contactsCollapsed;
+  document.getElementById('contacts-toggle').textContent = contactsCollapsed ? '▲' : '▼';
+  document.getElementById('contacts-body').classList.toggle('collapsed', contactsCollapsed);
+  document.getElementById('contacts-wrap').classList.toggle('panel-collapsed', contactsCollapsed);
+}
+function contactsToggleExpand(id){ contactsExpanded[id] = !contactsExpanded[id]; renderContactsPanel(); }
+function contactAdd(){
+  if(!isReferee()) return;
+  const c = { id: 'con_' + Date.now().toString(36), name: '', role: '', faction: '', location: '', blurb: '', known: {}, refNote: '', visibleTo: 'all' };
+  contacts.push(c); contactsEditingId = c.id; contactsExpanded[c.id] = true;
+  renderContactsPanel(); const f = document.getElementById('contact-f-name'); if(f) f.focus();
+}
+function contactEdit(id){ if(!isReferee()) return; contactsEditingId = (contactsEditingId === id ? null : id); renderContactsPanel(); }
+function contactCancel(){ contactsEditingId = null; renderContactsPanel(); }
+function contactSave(){
+  if(!isReferee() || !contactsEditingId) return;
+  const c = contacts.find(x => x.id === contactsEditingId); if(!c) return;
+  const gv = id => (document.getElementById(id) && document.getElementById(id).value) || '';
+  c.name = gv('contact-f-name').trim() || 'Contact';
+  c.role = gv('contact-f-role'); c.faction = gv('contact-f-faction'); c.location = gv('contact-f-location');
+  c.blurb = gv('contact-f-blurb'); c.refNote = gv('contact-f-refnote');
+  c.visibleTo = (typeof parseCalVis === 'function') ? parseCalVis(gv('contact-f-vis')) : 'all';
+  c.known = c.known || {};
+  (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).forEach((nm, i) => {
+    const v = gv('contact-f-known-' + i).trim(); if(v) c.known[nm] = v; else delete c.known[nm];
+  });
+  contactsEditingId = null;
+  saveContacts(); renderContactsPanel();
+  if(typeof showToast === 'function') showToast('Contact saved');
+}
+function contactRemove(id){
+  if(!isReferee()) return;
+  if(!confirm('Remove this contact?')) return;
+  contacts = contacts.filter(c => c.id !== id);
+  if(contactsEditingId === id) contactsEditingId = null;
+  saveContacts(); renderContactsPanel();
+}
+function contactEditorHTML(c){
+  const escA = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x).replace(/"/g, '&quot;'));
+  const chars = (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [];
+  const visRaw = (typeof calVisRaw === 'function') ? calVisRaw(c.visibleTo) : '';
+  const knownFields = chars.map((nm, i) => `<label class="con-known-lbl">${escQH(nm)} knows<textarea id="contact-f-known-${i}" rows="2" placeholder="What ${escQH(nm)} knows…">${escQH((c.known && c.known[nm]) || '')}</textarea></label>`).join('');
+  return `<div class="con-edit">
+    <input id="contact-f-name" placeholder="Name" maxlength="60" value="${escA(c.name)}">
+    <div class="con-edit-row"><input id="contact-f-role" placeholder="Role" maxlength="50" value="${escA(c.role)}"><input id="contact-f-faction" placeholder="Faction" maxlength="50" value="${escA(c.faction)}"></div>
+    <div class="con-edit-row"><input id="contact-f-location" placeholder="Where" maxlength="50" value="${escA(c.location)}"><input id="contact-f-vis" placeholder="all / referee / Rhett Calder" value="${escA(visRaw)}"></div>
+    <textarea id="contact-f-blurb" rows="2" placeholder="Shared blurb — what everyone knows">${escQH(c.blurb || '')}</textarea>
+    <div class="con-known-grid">${knownFields}</div>
+    <textarea id="contact-f-refnote" rows="2" placeholder="Referee-only note (honour-system)">${escQH(c.refNote || '')}</textarea>
+    <div class="con-edit-row"><button class="cal-add-btn" style="flex:1" onclick="contactSave()">Save contact</button><button class="dt-mini" onclick="contactCancel()">Cancel</button></div>
+  </div>`;
+}
+function renderContactsPanel(){
+  const body = document.getElementById('contacts-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = contacts.filter(c => ref || (typeof canSee === 'function' ? canSee(c.visibleTo) : true));
+  const cnt = document.getElementById('contacts-count'); if(cnt) cnt.textContent = visible.length;
+  let list;
+  if(!visible.length){
+    list = `<div class="wiki-empty">${ref ? "No contacts yet. Add the party's patrons, informants, and rivals below." : 'No contacts recorded yet.'}</div>`;
+  } else {
+    list = visible.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => {
+      if(ref && contactsEditingId === c.id) return `<div class="con-card editing">${contactEditorHTML(c)}</div>`;
+      const exp = !!contactsExpanded[c.id];
+      const mineKnown = (!ref && c.known && myIdentity) ? c.known[myIdentity] : '';
+      const meta = [c.role, c.faction, c.location].filter(Boolean).map(x => escQH(x)).join(' · ');
+      const ctl = ref ? `<span class="wiki-ctl"><button class="dt-mini" onclick="event.stopPropagation();contactEdit('${c.id}')">✏</button><button class="dt-mini del" onclick="event.stopPropagation();contactRemove('${c.id}')">✕</button></span>` : '';
+      let detail = '';
+      if(exp){
+        if(c.blurb) detail += `<div class="con-blurb">${escQH(c.blurb).replace(/\n/g, '<br>')}</div>`;
+        if(ref){
+          const layers = Object.keys(c.known || {}).map(nm => `<div class="con-layer"><span class="con-layer-who">${escQH(nm)}</span> ${escQH(c.known[nm]).replace(/\n/g, '<br>')}</div>`).join('');
+          if(layers) detail += `<div class="con-layers">${layers}</div>`;
+          if(c.refNote) detail += `<div class="con-refnote">↳ ${escQH(c.refNote).replace(/\n/g, '<br>')}</div>`;
+        } else if(mineKnown){
+          detail += `<div class="con-layer mine"><span class="con-layer-who">You know</span> ${escQH(mineKnown).replace(/\n/g, '<br>')}</div>`;
+        }
+      }
+      return `<div class="con-card">
+        <div class="con-hd" onclick="contactsToggleExpand('${c.id}')">
+          <span class="con-name">${escQH(c.name || 'Contact')}</span>
+          ${meta ? `<span class="con-meta">${meta}</span>` : ''}
+          ${ctl}<span class="wiki-exp">${exp ? '▲' : '▼'}</span>
+        </div>
+        ${detail}
+      </div>`;
+    }).join('');
+  }
+  body.innerHTML = list + (ref ? `<button class="cal-add-btn" style="width:100%" onclick="contactAdd()">+ New contact</button>` : '');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // WIKI / ENCYCLOPEDIA — referee-curated lore articles (players read)
 // ═══════════════════════════════════════════════════════════════════════════
 // Long-form campaign canon the Codex (short fog-gated entries) doesn't fit:
@@ -1922,6 +2047,8 @@ makePanelDraggable('downtime-wrap', 'downtime-header');
 makePanelResizable('downtime-wrap');
 makePanelDraggable('wiki-wrap', 'wiki-header');
 makePanelResizable('wiki-wrap');
+makePanelDraggable('contacts-wrap', 'contacts-header');
+makePanelResizable('contacts-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -2008,6 +2135,7 @@ loadTradeCargo(); // shared cargo manifest — renders on-demand when its panel 
 loadHandouts(); // referee-pushed handouts — renders on-demand when its panel opens
 loadDowntime(); // between-jump downtime actions — renders on-demand when its panel opens
 loadWiki(); // referee-curated lore articles — renders on-demand when its panel opens
+loadContacts(); // contact dossier — renders on-demand when its panel opens
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
