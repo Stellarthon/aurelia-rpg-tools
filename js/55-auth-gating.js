@@ -634,6 +634,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Contacts — players see referee-published contacts (and their own layer) live
+  try {
+    const resCON = await supaStorage.get('contacts', true);
+    if(resCON.ok){
+      const freshCON = resCON.value != null ? JSON.parse(resCON.value) || [] : [];
+      if(JSON.stringify(freshCON) !== JSON.stringify(contacts)){
+        contacts = freshCON;
+        if(contactsPanelOpen) renderContactsPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Rules & gear page references — players see referee-authored citations live
   try {
     const resRR = await supaStorage.get('rules-index', true);
