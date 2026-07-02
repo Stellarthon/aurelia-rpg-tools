@@ -622,6 +622,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Wiki — players see referee-published lore articles update live
+  try {
+    const resWK = await supaStorage.get('wiki', true);
+    if(resWK.ok){
+      const freshWK = resWK.value != null ? JSON.parse(resWK.value) || [] : [];
+      if(JSON.stringify(freshWK) !== JSON.stringify(wikiArticles)){
+        wikiArticles = freshWK;
+        if(wikiPanelOpen) renderWikiPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Rules & gear page references — players see referee-authored citations live
   try {
     const resRR = await supaStorage.get('rules-index', true);
