@@ -1508,7 +1508,11 @@ function goSystem(){
 function setBreadcrumb(crumbs,current){
   const el=document.getElementById("breadcrumb");
   el.innerHTML=crumbs.map(c=>`<span class="bc-link" onclick="${c.fn}()">${c.label}</span><span class="bc-sep"> › </span>`).join("")
-    +(current?`<span style="color:#8b91a8">${current}</span>`:"");
+    +(current?`<span class="bc-cur">${current}</span>`:"");
+  // The locus box is a fixed width so the location name never reflows the header
+  // (see #hdr-locus). Ancestor crumbs ellipsize before the current leaf does, and
+  // the full trail is available on hover.
+  el.title = crumbs.map(c=>c.label).concat(current?[current]:[]).join(" › ");
   updateBackBtn();
 }
 

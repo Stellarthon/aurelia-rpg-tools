@@ -392,12 +392,26 @@ textarea{font-family:var(--font)}
    right margin, so centred content never slides under the toggle at any width. */
 #hdr .pm-row{position:absolute;bottom:9px;right:16px;margin:0;z-index:2}
 #conn-pill{margin-right:180px}
-#hdr-title{font-size:13px;font-weight:700;color:var(--accentGold);letter-spacing:1px;font-family:monospace;white-space:nowrap}
-#build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap}
-#breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
-#breadcrumb .bc-link{color:var(--accentGold);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+/* The location "locus" holds the title + version + breadcrumb. Normally it hugs
+   its content (so the breadcrumb-less galaxy landing has no dead gap), but as
+   soon as a breadcrumb is present it locks to a steady width — that way a long
+   location name can never widen it and shove the nav buttons onto a new wrapped
+   row, so the bar height stays constant no matter where you are. Deeper trails
+   just clip their oldest ancestor (see #breadcrumb below), never the current
+   leaf. On narrow screens the width cap in the media query lets it shrink. */
+#hdr-locus{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0;overflow:hidden}
+#hdr-locus:has(#breadcrumb:not(:empty)){flex-basis:460px}
+#hdr-title{font-size:13px;font-weight:700;color:var(--accentGold);letter-spacing:1px;font-family:monospace;white-space:nowrap;flex-shrink:0}
+#build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap;flex-shrink:0}
+/* Right-aligned so that when the trail outgrows the fixed locus it clips on the
+   left (oldest ancestor first) and the current-location leaf on the right stays
+   fully visible. Short trails still sit naturally after the title. The full path
+   is on hover (title attr set in setBreadcrumb). */
+#breadcrumb{display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:5px;font-size:11px;color:var(--tx1);flex:0 1 auto;min-width:0;overflow:hidden}
+#breadcrumb .bc-link{color:var(--accentGold);cursor:pointer;text-decoration:underline;text-underline-offset:2px;flex:0 0 auto;white-space:nowrap}
 #breadcrumb .bc-link:hover{color:#E8A020}
-#breadcrumb .bc-sep{color:var(--bd0)}
+#breadcrumb .bc-sep{color:var(--bd0);flex:0 0 auto}
+#breadcrumb .bc-cur{color:#8b91a8;flex:0 0 auto;white-space:nowrap}
 
 /* ── Station clock ── */
 #clock-wrap{
@@ -3362,6 +3376,8 @@ textarea.hx-edit-in{resize:vertical;line-height:1.4}
   #hdr > button{font-size:13px;padding:9px 12px}
   #hdr-title{font-size:16px}
   #clock-display{font-size:18px}
+  /* Don't let the locked locus width dominate a phone row — cap it, let it shrink. */
+  #hdr-locus{max-width:62vw}
 }
 
 /* ── Character sheet: side panels (funds left, status effects right) ── */
