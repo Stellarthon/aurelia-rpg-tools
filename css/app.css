@@ -815,6 +815,13 @@ textarea{font-family:var(--font)}
 .journal-del:hover{color:#ff6b6b}
 .journal-entry-body{padding:8px 9px;font-size:11px;color:var(--tx1);line-height:1.55;word-break:break-word}
 
+/* ── Codex: player-submitted rumour (pending fog state) ── */
+.disc-card.state-pending{border-left:3px solid var(--accentGold,#c9a54a)}
+.disc-pending-by{font-size:10px;color:var(--accentGold);font-family:monospace;padding:2px 9px 0}
+.disc-pending-note{font-size:10px;color:var(--accentGold);font-family:monospace;padding:4px 9px}
+.disc-mini.approve{color:#4caf82;border-color:#4caf82}
+.disc-sub-hint{font-size:9.5px;color:var(--tx1);opacity:.75;padding:4px 2px 0;line-height:1.4}
+
 #quest-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
