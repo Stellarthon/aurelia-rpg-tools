@@ -1263,7 +1263,16 @@ textarea{font-family:var(--font)}
 .cbt-statusbar b{color:var(--tx0)}
 .cbt-chip{background:var(--bg2);border:.5px solid var(--bd0);border-radius:10px;padding:2px 8px}
 .cbt-chip.live{background:#3B1A1A;color:#d45050;border-color:#5a2222}
+.cbt-chip.cbt-hu-yourturn{background:#173a24;color:#5fcf8a;border-color:#245a37}
 .cbt-sec-tab{font-size:8px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase;margin:2px 0}
+/* Player heads-up guardrail — minimal glanceable combat readout */
+.cbt-headsup-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 4px}
+.cbt-hu-title{font-size:8px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase}
+.cbt-hu-ranges{display:flex;flex-wrap:wrap;gap:6px}
+.cbt-hu-range{display:inline-flex;align-items:center;gap:6px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--tx1)}
+.cbt-hu-range b{color:var(--tx0)}
+.cbt-hu-band{font-family:monospace;font-size:9px;color:var(--accentGold)}
+.cbt-hu-note{font-size:10px;color:var(--tx2);font-style:italic;padding:2px 0}
 /* Ship card */
 .cbt-ship{background:var(--bg0);border-radius:6px;border-left:3px solid var(--bd0);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .cbt-ship.side-allied{border-left-color:var(--txI)}
