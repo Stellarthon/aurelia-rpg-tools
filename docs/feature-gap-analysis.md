@@ -72,6 +72,16 @@ Tier-3 progress:
 | Scene ambience presets (§7 Tier-3.15) | ⏳ not started — needs an audio-approach decision (no bundled copyrighted audio; likely referee-supplied URLs played on the referee's device, players stay quiet). Low priority per Q6 |
 | Complete per-player secrecy (§7 Tier-3.16) | ⏳ not started — deploy/verify the flag-gated `get-content` edge path so redaction is enforced, not honour-system. Security-critical, multi-day; **plan-first before touching production**, and best landed before/with open-sourcing |
 
+Space-combat §7.1 reconsiderations (the deferred containment pass):
+
+| Item | Status |
+|---|---|
+| Per-stat fog — blip-only reveal (§7.1.1) | ✅ shipped (PR #46) — closes `phase-3-combat-audit.md §6` |
+| Heads-up guardrail on player devices (§7.1.2) | ✅ shipped (PR #46) — players default to a minimal readout; radar/FX are the referee's |
+| Quick-resolve for minor skirmishes (§7.1.5) | ✅ shipped (PR #46) — flat damage / destroy / call-it via the shared `applyNetDamage` |
+| Hold-the-line + referee-only mutation (§7.1.3, .6) | ✅ held — policy stance unchanged; players stay read-only |
+| Tunables confirmation pass (§7.1.4) | ⏳ optional — one-time referee settings pass on interpretation-dependent DMs |
+
 ---
 
 ## 1. Clarifying questions & answers
@@ -502,26 +512,35 @@ continuity item with a lookup item each cycle).**
 ### 7.1 Space-combat reconsiderations (deferred — after the roadmap phases)
 
 The engine is ~90% done and stays. These are containment/refinement, ranked; none is a
-rebuild:
+rebuild. Items 1, 2 and 5 shipped in **PR #46**; each *contains* the engine (no new
+automation, no per-player tactical control, no player dice):
 
-1. **Per-stat fog** (the audit's own open item, `docs/phase-3-combat-audit.md §6`). Reveal
-   is whole-ship today; add "reveal that a contact exists but hide its loadout/stats," so
-   the referee can show a blip without leaking capabilities. Small, high narrative value.
-2. **Heads-up guardrail on player devices (Q2 — no shared TV).** Radar + FX shine on the
-   *referee's* screen, but on each player's phone they pull eyes down mid-scene. Default
-   players to a **minimal glanceable state** (whose turn · range band · my hull/alert)
-   with radar/FX **off or opt-in**; keep the full spectacle on the referee's screen so
-   drama stays in narration.
+1. **Per-stat fog** (the audit's own open item, `docs/phase-3-combat-audit.md §6`). ✅
+   **shipped** — a contact can be revealed as a *blip* (players see it exists + its range)
+   while a `statsHidden` flag makes the redactor null its stats block and drop any
+   battle-log line referencing it, so hull/structure/crits and weapon names never leak.
+   Players see a dashed "Unidentified" card + a `?` radar blip; the referee gets a
+   per-contact Hide-stats / Show-stats toggle.
+2. **Heads-up guardrail on player devices (Q2 — no shared TV).** ✅ **shipped** — players
+   default to a minimal glanceable readout (whose turn · your hull/structure/crits · range
+   to each contact as chips) with the radar + beam/impact FX (and the FX-borne beeps)
+   **off**; a one-tap toggle opts into the full tactical view. The referee is always full.
 3. **Hold the line at ship combat.** Keep personal/ground combat theatre-of-the-mind — no
    tokens/grid/personal-initiative automation beyond the existing referee tracker. Make
-   the boundary explicit in code/docs so scope doesn't creep.
+   the boundary explicit in code/docs so scope doesn't creep. *(Policy — still the stance;
+   no code change needed.)*
 4. **Tunables confirmation pass (part of the last 10%).** The engine flags
    interpretation-dependent DMs in `MGT2E.tunables` + `COMBAT_HAZARDS` for referee
    confirmation (`js/80:207-238`); do a one-time "make these numbers yours" settings pass.
-5. **Optional quick-resolve path.** For minor skirmishes, let the referee set an outcome +
-   damage without stepping every phase, so a small fight isn't a 20-minute screen session.
-6. **Preserve referee-only mutation / no player dice.** If an absent player's gunner ever
-   needs covering, make it an explicit fallback, never the default.
+   *(Still open — a small optional settings feature; interpretation depends on your
+   printing.)*
+5. **Optional quick-resolve path.** ✅ **shipped** — a referee-only Quick Resolve section
+   applies flat damage (through the same `applyNetDamage` Hull→Structure→crit pipeline),
+   drops a ship, or calls the encounter with a recorded outcome, so a minor skirmish isn't
+   a phase-by-phase screen session. The full loop stays the default for set-piece battles.
+6. **Preserve referee-only mutation / no player dice.** ✅ **held** — every mutating combat
+   path is still `isReferee()`-gated and players remain read-only (verified). If an absent
+   player's gunner ever needs covering, that stays an explicit fallback, never the default.
 
 ---
 
