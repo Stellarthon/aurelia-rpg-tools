@@ -1595,6 +1595,116 @@ function renderHandoutsPanel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// WIKI / ENCYCLOPEDIA — referee-curated lore articles (players read)
+// ═══════════════════════════════════════════════════════════════════════════
+// Long-form campaign canon the Codex (short fog-gated entries) doesn't fit:
+// faction write-ups, places, history, tech. Referee authors; players read what
+// their audience permits (canSee(visibleTo)). Referee-only editing (a V2 wiki);
+// player contribution would reuse the Codex pending pattern later. Shared 'wiki'.
+//   article = { id, title, category, body, visibleTo, updatedAt }
+
+const WIKI_CATEGORIES = [['lore','Lore'],['faction','Faction'],['location','Location'],['history','History'],['tech','Tech'],['person','Person'],['other','Other']];
+let wikiArticles = [];
+let wikiPanelOpen = false, wikiCollapsed = false, wikiEditingId = null, wikiExpanded = {};
+
+async function loadWiki(){
+  try { const r = await supaStorage.get('wiki', true); if(r.value != null) wikiArticles = JSON.parse(r.value) || []; }
+  catch(e){ wikiArticles = []; }
+}
+async function saveWiki(){
+  try { await supaStorage.set('wiki', JSON.stringify(wikiArticles), true); }
+  catch(e){ console.error('Wiki save failed:', e); }
+}
+function toggleWikiPanel(){
+  wikiPanelOpen = !wikiPanelOpen;
+  const w = document.getElementById('wiki-wrap'), b = document.getElementById('wiki-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !wikiPanelOpen);
+  if(b) b.classList.toggle('panel-open', wikiPanelOpen);
+  if(wikiPanelOpen) renderWikiPanel();
+}
+function toggleWikiCollapse(){
+  const h = document.getElementById('wiki-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  wikiCollapsed = !wikiCollapsed;
+  document.getElementById('wiki-toggle').textContent = wikiCollapsed ? '▲' : '▼';
+  document.getElementById('wiki-body').classList.toggle('collapsed', wikiCollapsed);
+  document.getElementById('wiki-wrap').classList.toggle('panel-collapsed', wikiCollapsed);
+}
+function wikiToggleExpand(id){ wikiExpanded[id] = !wikiExpanded[id]; renderWikiPanel(); }
+function wikiCatLabel(c){ const f = WIKI_CATEGORIES.find(x => x[0] === c); return f ? f[1] : (c || ''); }
+function saveWikiArticle(){
+  if(!isReferee()) return;
+  const gv = id => (document.getElementById(id) && document.getElementById(id).value) || '';
+  const title = gv('wiki-f-title').trim(); if(!title) return;
+  const category = gv('wiki-f-cat');
+  const bodyTxt = gv('wiki-f-body');
+  const visibleTo = (typeof parseCalVis === 'function') ? parseCalVis(gv('wiki-f-vis')) : 'all';
+  const date = (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '';
+  if(wikiEditingId){
+    const a = wikiArticles.find(x => x.id === wikiEditingId);
+    if(a){ a.title = title; a.category = category; a.body = bodyTxt; a.visibleTo = visibleTo; a.updatedAt = date; }
+    wikiEditingId = null;
+  } else {
+    wikiArticles.push({ id: 'wiki_' + Date.now().toString(36), title, category, body: bodyTxt, visibleTo, updatedAt: date });
+  }
+  saveWiki(); renderWikiPanel();
+  if(typeof showToast === 'function') showToast('Article saved');
+}
+function editWikiArticle(id){ if(!isReferee()) return; wikiEditingId = id; renderWikiPanel(); const f = document.getElementById('wiki-f-title'); if(f) f.scrollIntoView({ block:'nearest' }); }
+function cancelWikiEdit(){ wikiEditingId = null; renderWikiPanel(); }
+function deleteWikiArticle(id){
+  if(!isReferee()) return;
+  if(!confirm('Delete this article? This cannot be undone.')) return;
+  wikiArticles = wikiArticles.filter(a => a.id !== id);
+  if(wikiEditingId === id) wikiEditingId = null;
+  saveWiki(); renderWikiPanel();
+}
+function renderWikiForm(){
+  const editing = wikiEditingId ? wikiArticles.find(a => a.id === wikiEditingId) : null;
+  const escA = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x).replace(/"/g, '&quot;'));
+  const catOpts = WIKI_CATEGORIES.map(c => `<option value="${c[0]}"${editing && editing.category === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+  const visRaw = (typeof calVisRaw === 'function' && editing) ? calVisRaw(editing.visibleTo) : '';
+  return `<div class="wiki-add">
+    <div class="wiki-add-ttl">${editing ? 'Edit article' : 'New article'}</div>
+    <input id="wiki-f-title" placeholder="Title…" maxlength="80" value="${editing ? escA(editing.title) : ''}">
+    <div class="wiki-add-row">
+      <select id="wiki-f-cat">${catOpts}</select>
+      <input id="wiki-f-vis" placeholder="all / referee / Rhett Calder" value="${editing ? escA(visRaw) : ''}">
+    </div>
+    <textarea id="wiki-f-body" rows="5" placeholder="Article text…">${editing ? escQH(editing.body || '') : ''}</textarea>
+    <div class="wiki-add-row">
+      <button class="cal-add-btn" style="flex:1" onclick="saveWikiArticle()">${editing ? 'Save changes' : '+ Add article'}</button>
+      ${editing ? `<button class="dt-mini" onclick="cancelWikiEdit()">Cancel</button>` : ''}
+    </div>
+  </div>`;
+}
+function renderWikiPanel(){
+  const body = document.getElementById('wiki-body'); if(!body) return;
+  const ref = isReferee();
+  const visible = wikiArticles.filter(a => ref || (typeof canSee === 'function' ? canSee(a.visibleTo) : true));
+  const countEl = document.getElementById('wiki-count'); if(countEl) countEl.textContent = visible.length;
+  let list;
+  if(!visible.length){
+    list = `<div class="wiki-empty">${ref ? 'No articles yet. Write campaign lore, factions, or places below.' : 'No lore published yet.'}</div>`;
+  } else {
+    list = visible.slice().sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(a => {
+      const exp = !!wikiExpanded[a.id];
+      const ctl = ref ? `<span class="wiki-ctl"><button class="dt-mini" onclick="event.stopPropagation();editWikiArticle('${a.id}')">✏</button><button class="dt-mini del" onclick="event.stopPropagation();deleteWikiArticle('${a.id}')">✕</button></span>` : '';
+      return `<div class="wiki-art">
+        <div class="wiki-art-hd" onclick="wikiToggleExpand('${a.id}')">
+          <span class="wiki-cat">${escQH(wikiCatLabel(a.category))}</span>
+          <span class="wiki-title">${escQH(a.title)}</span>
+          ${ctl}<span class="wiki-exp">${exp ? '▲' : '▼'}</span>
+        </div>
+        ${exp ? `<div class="wiki-body-txt">${escQH(a.body || '').replace(/\n/g, '<br>')}</div>${a.updatedAt ? `<div class="wiki-meta">Updated ${escQH(a.updatedAt)}</div>` : ''}` : ''}
+      </div>`;
+    }).join('');
+  }
+  body.innerHTML = list + (ref ? renderWikiForm() : '');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DOWNTIME LOG — between-jump actions (players declare, referee resolves)
 // ═══════════════════════════════════════════════════════════════════════════
 // A jump takes ~1 week; this is where a player says "I'll train Gun Combat /
@@ -1810,6 +1920,8 @@ makePanelDraggable('handouts-wrap', 'handouts-header');
 makePanelResizable('handouts-wrap');
 makePanelDraggable('downtime-wrap', 'downtime-header');
 makePanelResizable('downtime-wrap');
+makePanelDraggable('wiki-wrap', 'wiki-header');
+makePanelResizable('wiki-wrap');
 makePanelDraggable('ship-wrap', 'ship-header');
 makePanelResizable('ship-wrap');
 makePanelDraggable('combat-wrap', 'combat-header');
@@ -1895,6 +2007,7 @@ loadTurnOrder(); // shared read-only turn order (players); referee is the source
 loadTradeCargo(); // shared cargo manifest — renders on-demand when its panel opens
 loadHandouts(); // referee-pushed handouts — renders on-demand when its panel opens
 loadDowntime(); // between-jump downtime actions — renders on-demand when its panel opens
+loadWiki(); // referee-curated lore articles — renders on-demand when its panel opens
 loadShipState().then(() => { if(shipPanelOpen) renderShipPanel(); renderAlertCtl(); if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadAlertState().then(() => applyAlertState());
 loadCombatEncounter().then(() => { updateCombatBtn(); if(combatPanelOpen) renderCombat(); }); // hydrate any in-progress encounter
