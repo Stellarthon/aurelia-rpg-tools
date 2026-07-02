@@ -383,8 +383,15 @@ textarea{font-family:var(--font)}
 #hdr{
   display:flex;align-items:center;justify-content:center;
   padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
-  flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px
+  flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px;position:relative
 ;z-index:61}
+/* Traveller View toggle stays pinned to the header's bottom-right corner so it's
+   always in the same place, even though the nav buttons are centred and wrap.
+   Absolute → out of the flex flow, so it never lands on its own wrapped row. The
+   connection pill (last in-flow item) reserves the toggle's slot with a matching
+   right margin, so centred content never slides under the toggle at any width. */
+#hdr .pm-row{position:absolute;bottom:9px;right:16px;margin:0;z-index:2}
+#conn-pill{margin-right:180px}
 #hdr-title{font-size:13px;font-weight:700;color:var(--accentGold);letter-spacing:1px;font-family:monospace;white-space:nowrap}
 #build-version{font-size:9px;color:var(--tx1);opacity:0.4;font-family:monospace;white-space:nowrap}
 #breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1)}
@@ -779,7 +786,7 @@ textarea{font-family:var(--font)}
 
 /* ── Quest Log panel ── */
 #quest-wrap{
-  position:fixed;top:54px;left:0;width:340px;height:480px;z-index:53;
+  position:fixed;top:54px;left:0;width:340px;height:auto;z-index:53;
   background:var(--bg1);border:.5px solid var(--bd0);
   border-radius:8px;display:flex;flex-direction:column;
   box-shadow:0 4px 20px rgba(0,0,0,.45);
@@ -790,7 +797,7 @@ textarea{font-family:var(--font)}
 
 /* ── Session Journal panel (cloned from #quest-wrap chrome) ── */
 #journal-wrap{
-  position:fixed;top:54px;left:0;width:340px;height:480px;z-index:53;
+  position:fixed;top:54px;left:0;width:340px;height:auto;z-index:53;
   background:var(--bg1);border:.5px solid var(--bd0);
   border-radius:8px;display:flex;flex-direction:column;
   box-shadow:0 4px 20px rgba(0,0,0,.45);
@@ -824,7 +831,7 @@ textarea{font-family:var(--font)}
 
 /* ── Shared Turn Order panel (player read-only, cloned from #quest-wrap chrome) ── */
 #turnorder-wrap{
-  position:fixed;top:54px;left:0;width:300px;height:380px;z-index:53;
+  position:fixed;top:54px;left:0;width:300px;height:auto;z-index:53;
   background:var(--bg1);border:.5px solid var(--bd0);
   border-radius:8px;display:flex;flex-direction:column;
   box-shadow:0 4px 20px rgba(0,0,0,.45);
@@ -918,7 +925,7 @@ textarea{font-family:var(--font)}
 #quest-btn:hover{background:var(--bd0);color:var(--tx0)}
 #quest-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){
-  #quest-wrap{width:280px;height:320px;top:54px;left:0}
+  #quest-wrap{width:280px;height:auto;top:54px;left:0}
 }
 
 /* ── Ship Status panel — styled as the Mongoose Traveller 2E ship sheet ──
@@ -1539,8 +1546,8 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 /* Journal & NPCs were the only header nav buttons without their own #id rule,
    so the base `button{background:none;border:none}` left them boxless. Give them
    the same dark chrome (bg + border + hover + open states) as every sibling. */
-#journal-btn,#npc-btn{font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;flex-shrink:0;white-space:nowrap}
-#journal-btn:hover,#npc-btn:hover{background:var(--bd0);color:var(--tx0)}
+#journal-btn,#npc-btn,#more-btn{font-family:monospace;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+#journal-btn:hover,#npc-btn:hover,#more-btn:hover{background:var(--bd0);color:var(--tx0)}
 #journal-btn.panel-open,#npc-btn.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
 @media(max-width:640px){#econ-wrap{right:0;top:54px;width:330px}}
 
@@ -1922,6 +1929,16 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
   flex-shrink:0;line-height:1
 }
 #referee-menu-btn:hover,#design-menu-btn:hover{background:var(--bd0);color:var(--tx0)}
+
+/* ── "More" overflow menu (cloned from #settings-menu) ── */
+#more-menu{position:fixed;inset:0;background:rgba(7,10,16,0.5);z-index:190;display:flex;align-items:flex-start;justify-content:flex-end}
+#more-menu.hidden{display:none}
+#more-menu-card{background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;margin:50px 14px 0 0;padding:12px;width:300px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px;min-width:260px;flex-shrink:0}
+/* Higher specificity (id + class) so these override each button's own #id rule. */
+#more-menu-card .more-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font-family:monospace;font-size:13px;color:var(--tx0);background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:11px 12px;cursor:pointer}
+#more-menu-card .more-item:hover{background:var(--bd0);border-color:var(--accentGold);color:var(--accentGold)}
+#more-menu-card .more-item.panel-open{background:var(--accentGoldBg);color:var(--accentGold);border-color:var(--accentGold)}
+#more-menu-card .settings-section-lbl{margin-top:0}
 #design-menu-btn{display:none}
 #root.design-active #design-menu-btn{display:inline-flex;align-items:center}
 #design-menu-btn{color:#9B59B6;border-color:#9B59B6}
