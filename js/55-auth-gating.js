@@ -594,6 +594,22 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Handouts — players learn of (and get nudged about) newly-pushed handouts
+  try {
+    const resHO = await supaStorage.get('handouts', true);
+    if(resHO.ok){
+      const freshHO = resHO.value != null ? JSON.parse(resHO.value) || [] : [];
+      if(JSON.stringify(freshHO) !== JSON.stringify(handouts)){
+        const oldIds = new Set(handouts.map(h => h.id));
+        handouts = freshHO;
+        const fresh = freshHO.filter(h => !oldIds.has(h.id) && (typeof canSee === 'function' ? canSee(h.visibleTo) : true));
+        if(fresh.length && typeof showToast === 'function' && !isReferee())
+          showToast('🖼 The referee shared ' + (fresh.length === 1 ? 'a handout' : fresh.length + ' handouts'));
+        if(handoutsPanelOpen) renderHandoutsPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Rules & gear page references — players see referee-authored citations live
   try {
     const resRR = await supaStorage.get('rules-index', true);
