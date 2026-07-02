@@ -189,36 +189,6 @@ function onUIScaleCommit(idx){
 // Apply saved scale on load
 applyUIScale(getUIScale());
 
-// ── Traveller quick-nav bar scale (tablet-friendly sizing) ──────────────────
-// Drives the --tvscale CSS variable that sizes the #tvbar buttons. Stored per
-// device, like the text-size scale above.
-const TVBAR_SCALE_STEPS = [90, 100, 115, 130, 150];
-const TVBAR_SCALE_DEFAULT = 100;
-let _tvbarScaleCache = null;
-function getTvbarScale(){
-  if(_tvbarScaleCache !== null) return _tvbarScaleCache;
-  try { const v = parseInt(localStorage.getItem('aurelia_tvbar_scale'), 10);
-    if(TVBAR_SCALE_STEPS.includes(v)){ _tvbarScaleCache = v; return v; } } catch(e){}
-  _tvbarScaleCache = TVBAR_SCALE_DEFAULT; return TVBAR_SCALE_DEFAULT;
-}
-function applyTvbarScale(pct){ document.documentElement.style.setProperty('--tvscale', pct / 100); }
-function onTvbarScaleInput(idx){
-  const pct = TVBAR_SCALE_STEPS[parseInt(idx, 10)] || TVBAR_SCALE_DEFAULT;
-  _tvbarScaleCache = pct; applyTvbarScale(pct);
-  const fill = document.getElementById('tvbar-scale-fill');
-  if(fill) fill.style.width = (parseInt(idx,10) / (TVBAR_SCALE_STEPS.length-1) * 100) + '%';
-  const valEl = document.querySelector('.tvbar-scale-value');
-  if(valEl) valEl.textContent = pct + '%';
-}
-function onTvbarScaleCommit(idx){
-  const pct = TVBAR_SCALE_STEPS[parseInt(idx, 10)] || TVBAR_SCALE_DEFAULT;
-  _tvbarScaleCache = pct; applyTvbarScale(pct);
-  try { localStorage.setItem('aurelia_tvbar_scale', pct); } catch(e){}
-  renderSettingsMenu(isReferee());
-}
-// Apply saved quick-nav scale on load
-applyTvbarScale(getTvbarScale());
-
 // ═══════════════════════════════════════════════════════════════════════════
 // SEARCH
 // ═══════════════════════════════════════════════════════════════════════════
@@ -532,11 +502,6 @@ function renderSettingsMenu(showArchon){
   const curScale = getUIScale();
   const scaleIdx = scaleSteps.indexOf(curScale);
   const fillPct = scaleIdx < 0 ? 40 : (scaleIdx / (scaleSteps.length - 1)) * 100;
-  // Traveller quick-nav bar size (for tablets)
-  const tvSteps = TVBAR_SCALE_STEPS;
-  const tvCur = getTvbarScale();
-  const tvIdx = tvSteps.indexOf(tvCur);
-  const tvFill = tvIdx < 0 ? 40 : (tvIdx / (tvSteps.length - 1)) * 100;
   let html = `
     <div class="settings-section-lbl">Display</div>
     <div class="settings-row">
@@ -557,22 +522,6 @@ function renderSettingsMenu(showArchon){
       </div>
       <div class="ui-scale-steps">
         ${scaleSteps.map(s => `<span class="ui-scale-step"${s===curScale?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
-      </div>
-    </div>
-    <div class="ui-scale-row">
-      <div class="ui-scale-labels">
-        <span class="ui-scale-label">📱 Quick-Nav Bar (Traveller mode)</span>
-        <span class="ui-scale-value tvbar-scale-value">${tvCur}%</span>
-      </div>
-      <div class="ui-scale-track">
-        <div class="ui-scale-fill" id="tvbar-scale-fill" style="width:${tvFill}%"></div>
-        <input id="tvbar-scale-range" type="range" min="0" max="${tvSteps.length - 1}"
-          value="${tvIdx < 0 ? 1 : tvIdx}"
-          oninput="onTvbarScaleInput(this.value)"
-          onchange="onTvbarScaleCommit(this.value)">
-      </div>
-      <div class="ui-scale-steps">
-        ${tvSteps.map(s => `<span class="ui-scale-step"${s===tvCur?' style="color:var(--accentGold);font-weight:700"':''}>${s}%</span>`).join('')}
       </div>
     </div>`;
 
@@ -795,6 +744,16 @@ function openRefereeMenu(){
 }
 function closeRefereeMenu(){
   document.getElementById('referee-menu').classList.add('hidden');
+}
+// ── "More" overflow menu (Economy · Oracle · Session) ──────────────────────
+function openMoreMenu(){
+  if(!isReferee()) return;
+  const m = document.getElementById('more-menu');
+  if(m) m.classList.remove('hidden');
+}
+function closeMoreMenu(){
+  const m = document.getElementById('more-menu');
+  if(m) m.classList.add('hidden');
 }
 // Inline Design-Mode passcode state. We can't use prompt()/alert() — they're
 // silently suppressed inside sandboxed preview iframes — so the passcode is
