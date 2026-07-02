@@ -70,6 +70,11 @@ function makeCombatShip(o){
     status: 'active',                   // 'active' | 'disabled' | 'destroyed'
     // fog-of-war: until revealed, the player redactor strips this ship entirely
     revealed: o.revealed || false,
+    // per-stat fog: a ship can be revealed as a *blip* (players see the contact
+    // exists + its range) while its loadout/condition stays hidden. The redactor
+    // nulls `stats` for such ships, so the referee can show a contact without
+    // leaking how tough or how armed it is.
+    statsHidden: o.statsHidden || false,
     visibleTo: o.visibleTo || 'all'     // canSee() audience once revealed
   };
 }
@@ -108,8 +113,11 @@ function redactEncounterForPlayer(enc){
     .filter(s => s.ref === 'player' || (s.revealed && canSee(s.visibleTo)))
     .map(s => {
       if(s.ref === 'player') return s;     // player reads own stats from shipState
-      // Revealed enemy: keep combat-visible state, drop nothing extra for now.
-      // (Per-stat fog — e.g. hidden weapons — is a Phase-3 refinement.)
+      // Per-stat fog: a blip-only reveal keeps the contact visible (name, side,
+      // range) but strips its stats block so hull/structure/crits/loadout never
+      // reach the player. The `statsHidden` flag survives so the card renders a
+      // "loadout unknown" placeholder instead of zeroed bars.
+      if(s.statsHidden){ s.stats = null; }
       return s;
     });
   // Drop range pairs that reference a now-hidden ship.
@@ -130,10 +138,15 @@ function redactEncounterForPlayer(enc){
   const hiddenNames = (enc.ships || [])
     .filter(s => !visibleIds.has(s.id) && s.name)
     .map(s => s.name);
+  // Blip-only (stats-fogged) ships are visible, but their combat events would
+  // leak loadout (weapon names in attack lines) and condition (damage numbers),
+  // so drop any log entry that references one until the referee fully reveals it.
+  const foggedIds = new Set(copy.ships.filter(s => s.statsHidden).map(s => s.id));
   copy.log = (copy.log || []).filter(e => {
     const m = e.meta || {};
     const refs = [m.shipId, m.targetId, m.attackerId, m.operatorId, m.defenderId, m.aId, m.bId].filter(Boolean);
     if(!refs.every(id => visibleIds.has(id))) return false;
+    if(refs.some(id => foggedIds.has(id))) return false;
     const text = e.text || '';
     return !hiddenNames.some(n => text.indexOf(n) !== -1);
   });
@@ -491,10 +504,24 @@ function applyCombatDamage(targetId, weapon, effect){
   const armour = Number(st.armourRating) || 0;
   const raw = rollDamage(weapon, effect);
   const dmg = Math.max(0, raw - armour);            // armour subtracts from rolled damage (verified)
+  const res = applyNetDamage(targetId, dmg, effect);
+  if(!res) return null;
+  const crits = res.crits;
+  const critTxt = crits.filter(Boolean).length ? ` + ${crits.filter(Boolean).length} critical(s): ${crits.filter(Boolean).map(c=>`${c.location} sev ${c.severity}`).join(', ')}` : '';
+  return { raw, armour, dmg, hull: res.hull, structure: res.structure, crits,
+           summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${res.hull}/${res.maxHull}${critTxt}` };
+}
+
+// Apply a resolved (post-armour) damage amount through Hull → Structure overflow,
+// the Sustained-Damage crit thresholds, the Effect≥6 crit, the destruction check
+// and the player Red Alert wiring. The single damage pipeline shared by the
+// full attack loop (applyCombatDamage) and the quick-resolve path.
+function applyNetDamage(targetId, dmg, effect){
+  const tgt = combatShipById(targetId); if(!tgt) return null;
+  const st = combatStatsOf(tgt); if(!st) return null;
   // Apply to Hull first, overflow to Structure (verified: Hull breached → Structure).
   const beforeHull = Number(st.hullPoints) || 0;
-  let remaining = dmg;
-  let hull = beforeHull - remaining;
+  let hull = beforeHull - Math.max(0, Number(dmg) || 0);
   let struct = Number(st.structurePoints) || 0;
   if(hull < 0){ struct += hull; hull = 0; }          // overflow eats Structure
   st.hullPoints = hull;
@@ -527,9 +554,7 @@ function applyCombatDamage(targetId, weapon, effect){
     if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert();
     if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
   }
-  const critTxt = crits.filter(Boolean).length ? ` + ${crits.filter(Boolean).length} critical(s): ${crits.filter(Boolean).map(c=>`${c.location} sev ${c.severity}`).join(', ')}` : '';
-  return { raw, armour, dmg, hull: st.hullPoints, structure: st.structurePoints, crits,
-           summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${st.hullPoints}/${maxHull}${critTxt}` };
+  return { crits, hull: st.hullPoints, structure: st.structurePoints, maxHull };
 }
 function rollCritLocation(){ return MGT2E.critLocation[combatRoll2D().sum]; }
 function applyCrit(targetId, location, severity){
@@ -655,7 +680,20 @@ function renderCombat(){
   if(badge) badge.textContent = enc.status === 'active'
     ? `R${enc.round} · ${enc.phase.toUpperCase()}` : enc.status.toUpperCase();
 
+  // Player heads-up guardrail (Q2 — no shared TV): players default to a minimal,
+  // glanceable readout (whose turn · your hull/alert · range to contacts). The
+  // radar + battle FX are the referee's spectacle; they stay off player devices
+  // unless a player deliberately opts into the full tactical view, so eyes stay
+  // up at the table mid-scene.
+  if(!ref && combatHeadsUp){
+    body.innerHTML = renderCombatHeadsUp(enc);
+    combatFXScan(); // keep the FX cursor current so a later switch to full view has no backlog
+    return;
+  }
+
   const out = [];
+  // Players in the full tactical view get a one-tap way back to the calm readout.
+  if(!ref) out.push(`<div class="cbt-headsup-bar"><span class="cbt-hu-title">Full tactical</span><button class="cbt-btn" onclick="toggleCombatHeadsUp()" title="Return to the minimal heads-up view — keeps eyes up at the table">📥 Heads-up view</button></div>`);
 
   // Status bar
   if(enc.status === 'active'){
@@ -692,7 +730,7 @@ function renderCombat(){
   }
 
   // Referee controls + hazard tooling + roster/fleet deployment
-  if(ref){ out.push(renderCombatControls(enc)); out.push(renderHazardControls()); out.push(renderShipRoster(true)); }
+  if(ref){ out.push(renderCombatControls(enc)); out.push(renderQuickResolve(enc)); out.push(renderHazardControls()); out.push(renderShipRoster(true)); }
 
   // Battle log
   out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
@@ -700,6 +738,55 @@ function renderCombat(){
 
   body.innerHTML = out.join('');
   combatFXScan(); // replay any new battle-log events as abstract FX (Phase 5)
+}
+
+// ── Player heads-up view (minimal, glanceable — the §7.1 guardrail) ─────────
+// Whose turn · your ship's condition · range to each contact, as static text.
+// No radar sweep, no beam/impact FX — those live on the referee's screen so the
+// drama stays in narration and player phones don't pull eyes down mid-scene.
+function renderCombatHeadsUp(enc){
+  const player = enc.ships.find(s => s.ref === 'player');
+  const others = enc.ships.filter(s => s.ref !== 'player');
+  const act = combatActiveShip();
+  const out = [];
+  out.push(`<div class="cbt-headsup-bar"><span class="cbt-hu-title">Heads-up</span>
+    <button class="cbt-btn" onclick="toggleCombatHeadsUp()" title="Show the full tactical scope + battle effects">🔭 Full tactical view</button></div>`);
+
+  if(enc.status === 'active'){
+    const yourTurn = act && act.ref === 'player';
+    out.push(`<div class="cbt-statusbar">
+      <span class="cbt-chip live">Round <b>${enc.round}</b></span>
+      <span class="cbt-chip">Phase <b>${escQH(enc.phase)}</b></span>
+      <span class="cbt-chip${yourTurn ? ' cbt-hu-yourturn' : ''}">Active <b>${act ? escQH(redactedShipName(act)) : '—'}</b>${yourTurn ? ' — <b>you</b>' : ''}</span>
+    </div>`);
+  }
+
+  // Your ship — hull / structure / crits (reuse the ship card, controls off).
+  if(player){
+    out.push(`<div class="cbt-sec-tab">Your ship</div>`);
+    out.push(renderCombatShip(player, false));
+  }
+
+  // Range to each visible contact — plain chips, no scope.
+  const myPairs = player ? combatRangePairs().filter(p => p.aId === player.id || p.bId === player.id) : [];
+  if(myPairs.length){
+    out.push(`<div class="cbt-sec-tab">Range to contacts</div>`);
+    out.push(`<div class="cbt-hu-ranges">${myPairs.map(p => {
+      const other = p.aId === player.id ? p.b : p.a;
+      return `<span class="cbt-hu-range"><b>${escQH(other)}</b><span class="cbt-hu-band">${escQH(p.band)}</span></span>`;
+    }).join('')}</div>`);
+  } else if(others.length){
+    out.push(`<div class="cbt-hu-note">${others.length} contact${others.length > 1 ? 's' : ''} on scope.</div>`);
+  }
+
+  // Active hazards — glanceable, read-only.
+  const hz = combatHazardChips();
+  if(hz) out.push(hz);
+
+  // Recent battle log — text only, no motion.
+  out.push(`<div class="cbt-sec-tab">Battle Log</div>`);
+  out.push(renderCombatLog(enc));
+  return out.join('');
 }
 
 // Players never hold an unrevealed enemy, but guard the name anyway.
@@ -713,27 +800,34 @@ function renderCombatShip(s, ref){
   const hullPct = hullMax > 0 ? Math.max(0, Math.min(100, hull / hullMax * 100)) : 0;
   const strPct = strMax > 0 ? Math.max(0, Math.min(100, str / strMax * 100)) : 0;
   const crits = st && st.crits ? Object.entries(st.crits).filter(([k, v]) => Number(v) > 0) : [];
+  // A player looking at a blip-only contact: the redactor nulled its stats, so
+  // render "loadout unknown" instead of zeroed bars. (The referee keeps stats.)
+  const blipOnly = s.ref !== 'player' && s.statsHidden && !st;
   const tags = [];
   tags.push(`<span class="cbt-tag ${s.side === 'hostile' ? 'hostile' : 'allied'}">${s.side === 'hostile' ? 'Hostile' : 'Allied'}</span>`);
   if(ref && s.ref !== 'player' && !s.revealed) tags.push(`<span class="cbt-tag hidden">Hidden</span>`);
+  if(s.ref !== 'player' && s.revealed && s.statsHidden) tags.push(`<span class="cbt-tag foggy">${ref ? 'Stats hidden' : 'Unidentified'}</span>`);
   if(destroyed) tags.push(`<span class="cbt-tag destroyed">Destroyed</span>`);
   const refCtl = (ref && s.ref !== 'player') ? `
     <div class="cbt-ctl-row" style="margin-top:2px">
       <button class="cbt-btn" onclick="openShipEditor('${s.id}')">✏ Edit</button>
       <button class="cbt-btn" onclick="uiToggleReveal('${s.id}')">${s.revealed ? '🙈 Hide from players' : '👁 Reveal to players'}</button>
+      ${s.revealed ? `<button class="cbt-btn" onclick="uiToggleStatsFog('${s.id}')" title="${s.statsHidden ? 'Reveal this contact&#39;s loadout &amp; condition to players' : 'Show players only a blip — hide its loadout &amp; condition'}">${s.statsHidden ? '🔓 Show stats' : '🔒 Hide stats'}</button>` : ''}
       <button class="cbt-btn danger" onclick="uiRemoveShip('${s.id}')">Remove</button>
     </div>` : (ref && s.ref === 'player') ? `
     <div class="cbt-ctl-row" style="margin-top:2px">
       <button class="cbt-btn" onclick="openShipEditor('player')">✏ Edit combat stats</button>
     </div>` : '';
-  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}" id="cbtship-${s.id}">
+  return `<div class="cbt-ship side-${s.side === 'hostile' ? 'hostile' : 'allied'}${s.id === (combatEncounter && combatEncounter.activeShipId) ? ' is-active' : ''}${destroyed ? ' is-destroyed' : ''}${blipOnly ? ' is-blip' : ''}" id="cbtship-${s.id}">
     <div class="cbt-ship-top">
       <span class="cbt-ship-name">${escQH(redactedShipName(s))}</span>
       <span class="cbt-ship-tags">${tags.join('')}</span>
     </div>
-    <div class="cbt-bar-row"><span class="lbl">Hull</span><div class="cbt-bar"><div class="cbt-bar-fill hull${hullPct < 34 ? ' low' : ''}" style="width:${hullPct}%"></div></div><span>${hull}/${hullMax}</span></div>
+    ${blipOnly
+      ? `<div class="cbt-unknown">📡 Loadout &amp; condition unknown — contact on scope</div>`
+      : `<div class="cbt-bar-row"><span class="lbl">Hull</span><div class="cbt-bar"><div class="cbt-bar-fill hull${hullPct < 34 ? ' low' : ''}" style="width:${hullPct}%"></div></div><span>${hull}/${hullMax}</span></div>
     <div class="cbt-bar-row"><span class="lbl">Struct</span><div class="cbt-bar"><div class="cbt-bar-fill struct${strPct < 34 ? ' low' : ''}" style="width:${strPct}%"></div></div><span>${str}/${strMax}</span></div>
-    ${crits.length ? `<div class="cbt-crits">${crits.map(([k, v]) => `<span class="cbt-crit">${escQH(k)} ${v}</span>`).join('')}</div>` : ''}
+    ${crits.length ? `<div class="cbt-crits">${crits.map(([k, v]) => `<span class="cbt-crit">${escQH(k)} ${v}</span>`).join('')}</div>` : ''}`}
     ${refCtl}
   </div>`;
 }
@@ -786,7 +880,7 @@ function renderCombatRadar(ref){
     const cls = [ 'cbt-blip', s.side === 'hostile' ? 'hostile' : 'allied',
       destroyed ? 'destroyed' : '', (combatEncounter.activeShipId === s.id && !destroyed) ? 'active' : '',
       combatSelTarget === s.id ? 'sel' : '' ].filter(Boolean).join(' ');
-    const glyph = destroyed ? '✕' : (s.side === 'hostile' ? '▲' : '◆');
+    const glyph = destroyed ? '✕' : (s.statsHidden ? '?' : (s.side === 'hostile' ? '▲' : '◆'));
     const click = (ref && !destroyed) ? ` onclick="uiSelectTarget('${s.id}')"` : '';
     blips += `<div class="${cls}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"${click} title="${escQH(redactedShipName(s))} — ${escQH(COMBAT_RANGE_BANDS[idx] || '?')}">${glyph}<span class="cbt-blip-lbl">${escQH(redactedShipName(s))}</span></div>`;
   });
@@ -814,7 +908,10 @@ function renderCombatControls(enc){
       </div>`;
   }
   if(enc.status !== 'active') {
-    return `<div class="cbt-controls"><div class="cbt-ctl-row"><button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ New Encounter</button></div></div>`;
+    return `<div class="cbt-controls"><div class="cbt-ctl-row">
+      <button class="cbt-btn primary" onclick="uiStartEncounter()">⚔ New Encounter</button>
+      <button class="cbt-btn danger" onclick="uiEndEncounter()">Clear board</button>
+    </div></div>`;
   }
 
   const act = combatActiveShip();
@@ -879,6 +976,82 @@ function renderCombatControls(enc){
     </div>`;
 }
 
+// ── Quick-resolve (§7.1) ────────────────────────────────────────────────────
+// For a minor skirmish that doesn't warrant stepping every phase: apply a flat
+// damage amount (through the same Hull→Structure→crit pipeline), drop a ship, or
+// call the encounter with a recorded outcome. Referee-only; the full loop stays
+// the default for set-piece battles.
+function quickResolveDamage(targetId, amount, ignoreArmour){
+  if(!isReferee() || !combatEncounter) return null;
+  const tgt = combatShipById(targetId); if(!tgt) return null;
+  const st = combatStatsOf(tgt); if(!st) return null;
+  const armour = ignoreArmour ? 0 : (Number(st.armourRating) || 0);
+  const amt = Math.max(0, Number(amount) || 0);
+  const dmg = Math.max(0, amt - armour);
+  const res = applyNetDamage(targetId, dmg, 0); if(!res) return null;
+  const critTxt = res.crits.filter(Boolean).length ? ` + ${res.crits.filter(Boolean).length} crit(s)` : '';
+  combatLog('attack', `Quick-resolve: ${tgt.name} takes ${dmg} damage${armour ? ` (${amt} − ${armour} armour)` : ''} → Hull ${res.hull}/${res.maxHull}${critTxt}.`, { targetId });
+  saveCombatEncounter();
+  return res;
+}
+function quickDestroy(targetId){
+  if(!isReferee() || !combatEncounter) return;
+  const tgt = combatShipById(targetId); if(!tgt) return;
+  tgt.status = 'destroyed';
+  const st = combatStatsOf(tgt); if(st){ st.hullPoints = 0; st.structurePoints = 0; }
+  if(tgt.ref === 'player'){ saveShipState(); if(typeof checkHullAutoAlert === 'function') checkHullAutoAlert(); if(shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel(); }
+  combatLog('system', `Quick-resolve: ${tgt.name} is destroyed.`, { targetId });
+  saveCombatEncounter();
+}
+// Call the fight without clearing it: mark it ended + record the outcome so the
+// result shows on the players' board. The referee clears with "Clear board".
+function quickResolveEnd(outcome, note){
+  if(!isReferee() || !combatEncounter) return;
+  combatLog('system', `Quick-resolve — ${outcome || 'Resolved'}${note ? `: ${note}` : ''}.`);
+  combatEncounter.status = 'ended';
+  saveCombatEncounter();
+}
+
+const COMBAT_QR_OUTCOMES = ['Party victory', 'Enemy disabled', 'Enemy fled', 'Party withdrew', 'Mutual disengage'];
+function renderQuickResolve(enc){
+  if(!enc || enc.status !== 'active') return '';
+  const live = enc.ships.filter(s => s.status !== 'destroyed');
+  if(live.length < 2) return '';
+  const opts = live.map(s => `<option value="${s.id}">${escQH(redactedShipName(s))}</option>`).join('');
+  return `<details class="cbt-quick"><summary>⚡ Quick resolve</summary>
+    <div class="cbt-quick-body">
+      <div class="cbt-quick-note">Minor skirmish? Apply damage or call the result without stepping every phase.</div>
+      <div class="cbt-ctl-row">
+        <select class="cbt-sel" id="cbt-qr-target" style="flex:1;min-width:90px">${opts}</select>
+        <input class="cbt-num" id="cbt-qr-dmg" type="number" min="0" placeholder="dmg" style="width:64px">
+        <button class="cbt-btn fire" onclick="uiQuickDamage()">Apply</button>
+        <button class="cbt-btn danger" onclick="uiQuickDestroy()">Destroy</button>
+      </div>
+      <div class="cbt-ctl-row" style="margin-top:4px">
+        <select class="cbt-sel" id="cbt-qr-outcome" style="flex:1;min-width:90px">${COMBAT_QR_OUTCOMES.map(o => `<option>${escQH(o)}</option>`).join('')}</select>
+        <input class="cbt-sel" id="cbt-qr-note" type="text" placeholder="note (optional)" style="flex:1;min-width:70px">
+        <button class="cbt-btn primary" onclick="uiQuickEnd()">Call it</button>
+      </div>
+    </div>
+  </details>`;
+}
+function uiQuickDamage(){
+  const t = document.getElementById('cbt-qr-target'), d = document.getElementById('cbt-qr-dmg');
+  if(!t || !d) return;
+  const amt = Number(d.value) || 0; if(amt <= 0) return;
+  quickResolveDamage(t.value, amt); d.value = ''; renderCombat();
+}
+function uiQuickDestroy(){
+  const t = document.getElementById('cbt-qr-target'); if(!t) return;
+  const s = combatShipById(t.value); if(!s) return;
+  if(confirm(`Destroy ${s.name}?`)){ quickDestroy(t.value); renderCombat(); }
+}
+function uiQuickEnd(){
+  const o = document.getElementById('cbt-qr-outcome'), n = document.getElementById('cbt-qr-note');
+  if(!o) return;
+  if(confirm(`Call the encounter — ${o.value}?`)){ quickResolveEnd(o.value, n ? n.value.trim() : ''); renderCombat(); }
+}
+
 function renderCombatLog(enc){
   const entries = (enc.log || []).slice(-60).reverse();
   if(!entries.length) return `<div class="cbt-log"><div style="font-size:10px;color:var(--tx1);font-style:italic">No actions yet.</div></div>`;
@@ -904,6 +1077,14 @@ function uiToggleReveal(id){
   const s = combatShipById(id); if(!s) return;
   s.revealed = !s.revealed;
   combatLog('system', `${s.name} ${s.revealed ? 'revealed to' : 'hidden from'} the players.`, { shipId: id });
+  saveCombatEncounter(); renderCombat();
+}
+// Per-stat fog: flip a revealed contact between blip-only and fully detailed.
+function uiToggleStatsFog(id){
+  if(!isReferee()) return;
+  const s = combatShipById(id); if(!s || s.ref === 'player') return;
+  s.statsHidden = !s.statsHidden;
+  combatLog('system', `${s.name} loadout ${s.statsHidden ? 'hidden from' : 'revealed to'} the players.`, { shipId: id });
   saveCombatEncounter(); renderCombat();
 }
 function uiRemoveShip(id){ if(confirm('Remove this ship from combat?')){ removeCombatShip(id); renderCombat(); } }
@@ -1443,6 +1624,16 @@ let combatSfxEnabled = true;
 try { combatSfxEnabled = localStorage.getItem('aurelia_combat_sfx') !== '0'; } catch(e){}
 const combatReducedMotion = (typeof matchMedia === 'function') && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Heads-up guardrail (§7.1): players default to the minimal glanceable view; the
+// referee is always full. Per-device preference, so a player can opt in/out.
+let combatHeadsUp = true;
+try { combatHeadsUp = localStorage.getItem('aurelia_combat_headsup') !== '0'; } catch(e){}
+function toggleCombatHeadsUp(){
+  combatHeadsUp = !combatHeadsUp;
+  try { localStorage.setItem('aurelia_combat_headsup', combatHeadsUp ? '1' : '0'); } catch(e){}
+  renderCombat();
+}
+
 function toggleCombatSfx(){
   combatSfxEnabled = !combatSfxEnabled;
   try { localStorage.setItem('aurelia_combat_sfx', combatSfxEnabled ? '1' : '0'); } catch(e){}
@@ -1458,7 +1649,11 @@ function combatFXScan(){
   if(idx < 0){ combatFXLastId = log.length ? log[log.length - 1].id : null; return; } // log reset/trimmed — re-prime quietly
   const fresh = log.slice(idx + 1);
   if(!fresh.length) return;
-  combatFXLastId = fresh[fresh.length - 1].id;
+  combatFXLastId = fresh[fresh.length - 1].id;  // advance the cursor regardless, so heads-up ↔ full toggles never replay a backlog
+  // Heads-up guardrail: players in the minimal view get the state, not the motion
+  // (and, since sound rides on playCombatFX, no beeps either) — the referee's
+  // screen keeps the spectacle.
+  if(!isReferee() && combatHeadsUp) return;
   // Only animate while the panel is actually visible.
   const wrap = document.getElementById('combat-wrap');
   if(!wrap || wrap.classList.contains('hidden') || combatCollapsed) return;

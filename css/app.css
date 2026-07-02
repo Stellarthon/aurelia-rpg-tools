@@ -1263,7 +1263,16 @@ textarea{font-family:var(--font)}
 .cbt-statusbar b{color:var(--tx0)}
 .cbt-chip{background:var(--bg2);border:.5px solid var(--bd0);border-radius:10px;padding:2px 8px}
 .cbt-chip.live{background:#3B1A1A;color:#d45050;border-color:#5a2222}
+.cbt-chip.cbt-hu-yourturn{background:#173a24;color:#5fcf8a;border-color:#245a37}
 .cbt-sec-tab{font-size:8px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase;margin:2px 0}
+/* Player heads-up guardrail — minimal glanceable combat readout */
+.cbt-headsup-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 4px}
+.cbt-hu-title{font-size:8px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase}
+.cbt-hu-ranges{display:flex;flex-wrap:wrap;gap:6px}
+.cbt-hu-range{display:inline-flex;align-items:center;gap:6px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--tx1)}
+.cbt-hu-range b{color:var(--tx0)}
+.cbt-hu-band{font-family:monospace;font-size:9px;color:var(--accentGold)}
+.cbt-hu-note{font-size:10px;color:var(--tx2);font-style:italic;padding:2px 0}
 /* Ship card */
 .cbt-ship{background:var(--bg0);border-radius:6px;border-left:3px solid var(--bd0);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .cbt-ship.side-allied{border-left-color:var(--txI)}
@@ -1277,7 +1286,10 @@ textarea{font-family:var(--font)}
 .cbt-tag.allied{background:var(--bgI);color:var(--txI)}
 .cbt-tag.hostile{background:var(--bgD);color:var(--txD)}
 .cbt-tag.hidden{background:#2A1A3B;color:#9B59B6}
+.cbt-tag.foggy{background:#2b2410;color:var(--accentGold)}
 .cbt-tag.destroyed{background:var(--bgD);color:var(--txD)}
+.cbt-ship.is-blip{border-left-style:dashed;opacity:.9}
+.cbt-unknown{font-size:10px;font-family:monospace;color:var(--tx2);font-style:italic;letter-spacing:.5px}
 .cbt-bar-row{display:flex;align-items:center;gap:6px;font-size:9px;font-family:monospace;color:var(--tx1)}
 .cbt-bar-row .lbl{width:36px;flex-shrink:0}
 .cbt-bar{flex:1;height:7px;background:var(--bg2);border-radius:4px;overflow:hidden}
@@ -1336,6 +1348,12 @@ textarea{font-family:var(--font)}
 .cbt-btn.fire{background:#3B1A1A;color:#ff6b6b;border-color:#5a2222}
 .cbt-sel,.cbt-num{font-size:10px;font-family:monospace;background:var(--bg2);color:var(--tx0);border:.5px solid var(--bd0);border-radius:4px;padding:4px 6px}
 .cbt-num{width:52px}
+/* Quick resolve */
+.cbt-quick{background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:2px 8px}
+.cbt-quick>summary{font-size:9px;font-family:monospace;letter-spacing:1px;color:var(--accentGold);text-transform:uppercase;cursor:pointer;padding:5px 0;list-style:none}
+.cbt-quick>summary::-webkit-details-marker{display:none}
+.cbt-quick-body{display:flex;flex-direction:column;gap:5px;padding:2px 0 7px}
+.cbt-quick-note{font-size:9px;color:var(--tx1);font-style:italic}
 /* Battle log */
 .cbt-log{display:flex;flex-direction:column;gap:4px;background:var(--bg0);border-radius:6px;padding:7px 8px}
 .cbt-log-entry{font-size:10px;line-height:1.5;color:var(--tx0);font-family:monospace;border-left:2px solid var(--bd0);padding:2px 7px}
