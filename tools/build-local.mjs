@@ -31,4 +31,11 @@ html = html.replace(/<script\b[^>]*\bsrc="(js\/[^"]+)"[^>]*>\s*<\/script>/gi, (m
 
 fs.writeFileSync(path.join(ROOT, 'index.local.html'), html);
 console.log(`index.local.html built — inlined ${css} stylesheet(s) + ${js} script(s), ${(html.length/1024).toFixed(0)}kB`);
-if(css !== 2 || js !== 18) console.warn(`⚠ expected 2 css + 18 js (got ${css} + ${js}) — check index.html references`);
+
+// Sanity check: every module file on disk should be referenced (and thus inlined).
+// Derive the expected counts from css/ and js/ so this never goes stale as
+// modules are added or removed — a mismatch means index.html is missing a
+// reference (or points at something that no longer exists).
+const countDir = (dir, ext) => fs.readdirSync(path.join(ROOT, dir)).filter(f => f.endsWith(ext)).length;
+const expCss = countDir('css', '.css'), expJs = countDir('js', '.js');
+if(css !== expCss || js !== expJs) console.warn(`⚠ expected ${expCss} css + ${expJs} js (got ${css} + ${js}) — check index.html references`);
