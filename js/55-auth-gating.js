@@ -581,6 +581,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Rules & gear page references — players see referee-authored citations live
+  try {
+    const resRR = await supaStorage.get('rules-index', true);
+    if(resRR.ok){
+      const freshRR = resRR.value != null ? JSON.parse(resRR.value) || [] : [];
+      if(JSON.stringify(freshRR) !== JSON.stringify(rulesIndex)){
+        rulesIndex = freshRR; _rulesLoaded = true;
+        if(qrefOpen) renderQref();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Ship status — players see live fuel/route/destination changes the referee makes
   try {
     const resShip = await supaStorage.get('ship-state', true);
