@@ -476,6 +476,40 @@ loadArchonLog(); // archon tracker is localStorage-only, no Supabase, renders on
 renderEventLog();
 renderRsrMarkers();
 
+// ── Referee trackers: collapsed-by-default + tidy bottom-left stack ──────────
+// The Event Log, NPC Status, and Initiative panels are persistently visible in
+// referee mode. Left expanded, three tall panels buried the map and the docked
+// right-hand detail panel and overlapped each other on tablets. Apply the saved
+// (default: collapsed) state to each, then stack their compact bars up the
+// bottom-left corner, clear of the right-hand detail. A panel the referee has
+// dragged (saved panelpos_) keeps its own placement. Runs once at boot; the
+// collapse booleans are seeded from the same localStorage keys in files 40/45.
+(function tidyTrackers(){
+  const collapsed = (k) => { try { const v = localStorage.getItem(k); return v==null ? true : v==='1'; } catch(e){ return true; } };
+  const defs = [
+    { id:'event-log-wrap', body:'event-log-body', foot:null,        tgl:'event-log-toggle', key:'aurelia_evlog_collapsed'  },
+    { id:'health-wrap',    body:'health-body',    foot:null,        tgl:'health-toggle',    key:'aurelia_health_collapsed' },
+    { id:'init-wrap',      body:'init-body',      foot:'init-foot', tgl:'init-toggle',      key:'aurelia_init_collapsed'   },
+  ];
+  defs.forEach(d => {
+    const el = document.getElementById(d.id);
+    if(el && collapsed(d.key)){
+      el.classList.add('panel-collapsed');
+      const b = document.getElementById(d.body); if(b) b.classList.add('collapsed');
+      if(d.foot){ const f = document.getElementById(d.foot); if(f) f.classList.add('collapsed'); }
+      const t = document.getElementById(d.tgl); if(t) t.textContent = '▲';
+    }
+  });
+  let bottom = 8;
+  defs.forEach(d => {
+    const el = document.getElementById(d.id);
+    if(!el) return;
+    if(localStorage.getItem('panelpos_' + d.id)) return;   // respect a dragged placement
+    el.style.left = '8px'; el.style.right = 'auto'; el.style.top = 'auto'; el.style.bottom = bottom + 'px';
+    bottom += el.offsetHeight + 8;                          // stack by actual (usually collapsed) height
+  });
+})();
+
 // ── Accessibility: label icon controls + make click-only rows keyboard-operable ──
 // The UI renders interactive controls as innerHTML strings; hundreds of icon-only
 // buttons and onclick <tr>/<div> rows ship without ARIA. Rather than hand-annotate

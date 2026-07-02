@@ -7,6 +7,21 @@
 // here. Position/size are persisted per-panel to localStorage so layout
 // survives a page reload.
 
+// ── Live header height → --hdr-h ─────────────────────────────────────────────
+// The header wraps to several rows on tablets/phones (and even on desktop in
+// referee mode, where every nav button shows), so its height is dynamic. The
+// header-anchored floating panels open at top:calc(var(--hdr-h) + gap); without
+// this they slid up behind the wrapped header — the Session Journal was reported
+// "cut off" exactly this way. Republish the measured height on every reflow.
+(function trackHeaderHeight(){
+  const hdr = document.getElementById('hdr');
+  if(!hdr) return;
+  const publish = () => document.documentElement.style.setProperty('--hdr-h', hdr.offsetHeight + 'px');
+  publish();
+  try { new ResizeObserver(publish).observe(hdr); }
+  catch(e){ window.addEventListener('resize', publish); }
+})();
+
 function makePanelDraggable(panelId, headerId){
   const panel = document.getElementById(panelId);
   const header = document.getElementById(headerId);
