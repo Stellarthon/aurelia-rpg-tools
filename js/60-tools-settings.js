@@ -1349,7 +1349,86 @@ function renderSheetForm(data){
       <div class="sheet-section-lbl">Notes</div>
       <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
     </div>
+    <div class="sheet-section" style="text-align:right">
+      <button class="cal-add-btn" style="width:auto;display:inline-block;padding:7px 14px" onclick="printCharacterSheet()">🖨 Print / save as PDF</button>
+    </div>
   `;
+}
+
+// ── Printable character sheet ────────────────────────────────────────────────
+// Builds a clean, self-contained print document (own inline styles) and opens it
+// in a new window for the browser's native Print / "Save as PDF". A paper backup
+// + player takeaway + wifi-out fallback. Pure builder so it's testable without a
+// window; no index.html / css/app.css footprint.
+function buildCharacterSheetHTML(name, data){
+  data = data || {};
+  const _escRaw = (typeof escHtml === 'function') ? escHtml : null;   // escHtml expects a string
+  const esc = x => { const str = String(x == null ? '' : x); return _escRaw ? _escRaw(str) : str.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); };
+  const fmt = (typeof fmtCr === 'function') ? fmtCr : (n => 'Cr' + (n || 0));
+  const chars = sheetAttrKeys().map(a => {
+    const v = (data[a.key] != null ? data[a.key] : '');
+    const dm = charDM(v);
+    return `<tr><td>${esc(a.label)}</td><td class="c">${esc(v)}</td><td class="c">${dm >= 0 ? '+' : ''}${dm}</td></tr>`;
+  }).join('');
+  const statusFx = (typeof pkStatusFx === 'function') ? pkStatusFx() : TRAVELLER_STATUS_FX;
+  const activeIds = Array.isArray(data.status) ? data.status : [];
+  const statusNames = activeIds.map(id => { const fx = statusFx.find(f => f.id === id); return fx ? (fx.ico + ' ' + fx.name) : id; });
+  const items = (typeof invItemsFor === 'function') ? invItemsFor(name) : [];
+  const invRows = items.map(it => {
+    const s = it.snapshot || {};
+    const nm = (it.state && it.state.customName) || s.name || 'Item';
+    const q = Number(it.qty) || 1, mass = Number(s.mass) || 0;
+    const tags = [it.equipped ? 'worn/equipped' : '', it.stowed ? 'stowed' : ''].filter(Boolean).join(', ');
+    return `<tr><td>${esc(nm)}${q > 1 ? ' ×' + q : ''}</td><td>${esc(s.category || 'gear')}</td><td class="c">${mass}kg</td><td>${esc(tags)}</td></tr>`;
+  }).join('');
+  let enc = null; try { if(typeof encStatus === 'function') enc = encStatus(name); } catch(e){}
+  const purse = (typeof purseOf === 'function') ? purseOf(name) : 0;
+  const party = (typeof funds !== 'undefined' && funds) ? (Number(funds.party) || 0) : 0;
+  const portrait = (typeof portraitUrlFor === 'function' && data.portraitVer) ? portraitUrlFor(name, data.portraitVer) : '';
+  const encTxt = enc ? ` — ${enc.carried}${enc.cap ? ('/' + enc.cap) : ''} kg · ${enc.level}` + (enc.dm ? ` (DM ${enc.dm >= 0 ? '+' : ''}${enc.dm})` : '') : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} — Character Sheet</title>
+<style>
+  *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:24px;font-size:12px}
+  h1{font-size:20px;margin:0 0 2px} .sub{color:#666;margin:0 0 14px;font-size:12px}
+  .row{display:flex;gap:20px;align-items:flex-start} .col{flex:1}
+  h2{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#333;border-bottom:1.5px solid #333;padding-bottom:3px;margin:16px 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:12px} td,th{padding:3px 6px;border-bottom:1px solid #ddd;text-align:left} td.c,th.c{text-align:center}
+  .chars td:first-child{font-weight:600} .pill{display:inline-block;border:1px solid #999;border-radius:10px;padding:1px 8px;margin:2px 3px 2px 0;font-size:11px}
+  .muted{color:#666} .wrap{white-space:pre-wrap} .port{width:88px;height:88px;object-fit:cover;border:1px solid #999;border-radius:6px}
+  @media print{ body{margin:0} }
+</style></head><body onload="try{window.focus();setTimeout(function(){window.print();},300);}catch(e){}">
+  <div class="row">
+    ${portrait ? `<img class="port" src="${esc(portrait)}" alt="">` : ''}
+    <div class="col"><h1>${esc(name)}</h1><p class="sub">${data.age ? ('Age ' + esc(data.age) + ' · ') : ''}Traveller · Archon Gambit</p></div>
+  </div>
+  <div class="row">
+    <div class="col">
+      <h2>Characteristics</h2>
+      <table class="chars"><thead><tr><th>Stat</th><th class="c">Score</th><th class="c">DM</th></tr></thead><tbody>${chars}</tbody></table>
+      <h2>Funds</h2>
+      <table><tbody><tr><td>${esc(name)} · purse</td><td class="c">${fmt(purse)}</td></tr><tr><td>Party fund</td><td class="c">${fmt(party)}</td></tr></tbody></table>
+    </div>
+    <div class="col">
+      <h2>Skills</h2>
+      <div class="wrap">${esc(data.skills || '—')}</div>
+      <h2>Conditions</h2>
+      <div>${statusNames.length ? statusNames.map(n => `<span class="pill">${esc(n)}</span>`).join('') : '<span class="muted">None</span>'}</div>
+    </div>
+  </div>
+  <h2>Inventory<span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">${encTxt}</span></h2>
+  ${invRows ? `<table><thead><tr><th>Item</th><th>Category</th><th class="c">Mass</th><th>Worn/Stowed</th></tr></thead><tbody>${invRows}</tbody></table>` : '<div class="muted">No items.</div>'}
+  <h2>Notes</h2>
+  <div class="wrap">${esc(data.notes || '—')}</div>
+</body></html>`;
+}
+function printCharacterSheet(){
+  const name = (typeof sheetCurrentCharacter !== 'undefined') ? sheetCurrentCharacter : null;
+  if(!name){ if(typeof showToast === 'function') showToast('Open a character sheet first', 'error'); return; }
+  const data = (typeof collectSheetData === 'function') ? collectSheetData() : (sheetCurrentData || {});
+  const html = buildCharacterSheetHTML(name, data);
+  const w = window.open('', '_blank');
+  if(!w){ if(typeof showToast === 'function') showToast('Allow pop-ups to print the sheet', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 function updateSheetDM(key){
