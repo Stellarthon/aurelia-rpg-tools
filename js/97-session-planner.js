@@ -40,6 +40,7 @@ const SCENE_TYPES = [
   ['downtime','⏳ Downtime'],
 ];
 const PLAN_STATUS = [['planned','Planned'], ['active','Running'], ['done','Done']];
+const CHECK_OUTCOMES = [['pending','Pending'], ['success','Success'], ['partial','Partial'], ['failure','Failure']];
 
 function _pid(pfx){ return pfx + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 function sesc(s){ return (typeof escQH === 'function') ? escQH(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -49,8 +50,9 @@ function sattr(s){ return (typeof escAttr === 'function') ? escAttr(s == null ? 
 
 function emptyScene(){
   return { id: _pid('sc_'), title: '', type: 'scene', readAloud: '', refNotes: '',
-           done: false, npcIds: [], missionIds: [], oracle: [] };
+           done: false, npcIds: [], missionIds: [], oracle: [], checks: [] };
 }
+function emptyCheck(){ return { id: _pid('ck_'), label: '', target: '', who: '', roll: '', outcome: 'pending', notes: '' }; }
 function emptyPlan(){
   return { id: _pid('sp_'), title: 'New Session', inGameDate: '', status: 'planned',
            premise: '', prep: '', scenes: [], createdAt: Date.now() };
@@ -68,6 +70,7 @@ function normalizePlans(){
       if(!Array.isArray(s.npcIds)) s.npcIds = [];
       if(!Array.isArray(s.missionIds)) s.missionIds = [];
       if(!Array.isArray(s.oracle)) s.oracle = [];
+      if(!Array.isArray(s.checks)) s.checks = [];
     });
   });
 }
@@ -353,6 +356,42 @@ function sceneOracleToLibrary(planId, sceneId, oid){
   if(typeof showToast === 'function') showToast('Sent to Library Data');
 }
 
+// ── Dice checks ─────────────────────────────────────────────────────────────
+// The referee preps a check (what it's for + target number) and, at the table,
+// records who rolled, the result, an outcome, and the consequence. Resolved
+// checks flow into the session recap (js/92 buildSessionLogText / generateSessionRecap).
+
+function checkAdd(planId, sceneId){
+  if(!isReferee()) return;
+  const s = sceneById(planById(planId), sceneId); if(!s) return;
+  if(!Array.isArray(s.checks)) s.checks = [];
+  s.checks.push(emptyCheck());
+  saveSessionPlans();
+  renderPlannerDetail();
+}
+function checkEditField(planId, sceneId, checkId, field, value){
+  if(!isReferee()) return;
+  const s = sceneById(planById(planId), sceneId); if(!s) return;
+  const c = (s.checks || []).find(x => x.id === checkId); if(!c) return;
+  c[field] = value;
+  saveSessionPlans();   // text inputs use onchange (blur) — no re-render, so focus survives
+}
+function checkSetOutcome(planId, sceneId, checkId, outcome){
+  if(!isReferee()) return;
+  const s = sceneById(planById(planId), sceneId); if(!s) return;
+  const c = (s.checks || []).find(x => x.id === checkId); if(!c) return;
+  c.outcome = outcome;
+  saveSessionPlans();
+  renderPlannerDetail();   // recolour the card + selected segment
+}
+function checkDelete(planId, sceneId, checkId){
+  if(!isReferee()) return;
+  const s = sceneById(planById(planId), sceneId); if(!s) return;
+  s.checks = (s.checks || []).filter(x => x.id !== checkId);
+  saveSessionPlans();
+  renderPlannerDetail();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════════════════
@@ -469,6 +508,25 @@ function renderSceneCard(p, s, idx, total){
     </div>`;
   }).join('');
 
+  // Dice checks — prep the check, record the roll + outcome at the table
+  const checks = (s.checks || []).map(c => {
+    const outSeg = CHECK_OUTCOMES.map(([v, l]) =>
+      `<button class="planner-ck-out o-${v}${(c.outcome || 'pending') === v ? ' on' : ''}" onclick="checkSetOutcome('${p.id}','${s.id}','${c.id}','${v}')">${l}</button>`).join('');
+    return `<div class="planner-check outcome-${c.outcome || 'pending'}">
+      <div class="planner-check-top">
+        <input class="planner-ck-label" value="${sattr(c.label)}" placeholder="Check — e.g. Recon to spot the ambush" onchange="checkEditField('${p.id}','${s.id}','${c.id}','label',this.value)">
+        <input class="planner-ck-target" value="${sattr(c.target)}" placeholder="8+" onchange="checkEditField('${p.id}','${s.id}','${c.id}','target',this.value)">
+        <button class="disc-mini del" onclick="checkDelete('${p.id}','${s.id}','${c.id}')" title="Delete check">✕</button>
+      </div>
+      <div class="planner-check-mid">
+        <input class="planner-ck-who" value="${sattr(c.who)}" placeholder="Who rolled" onchange="checkEditField('${p.id}','${s.id}','${c.id}','who',this.value)">
+        <input class="planner-ck-roll" value="${sattr(c.roll)}" placeholder="Result — e.g. 10 (Effect +2)" onchange="checkEditField('${p.id}','${s.id}','${c.id}','roll',this.value)">
+      </div>
+      <div class="planner-ck-outrow">${outSeg}</div>
+      <input class="planner-ck-notes" value="${sattr(c.notes)}" placeholder="Outcome — what happened as a result" onchange="checkEditField('${p.id}','${s.id}','${c.id}','notes',this.value)">
+    </div>`;
+  }).join('');
+
   return `<div class="planner-scene${s.done ? ' done' : ''}">
     <div class="planner-scene-hd">
       <button class="planner-scene-check${s.done ? ' on' : ''}" onclick="sceneToggleDone('${p.id}','${s.id}')" title="Mark scene played">${s.done ? '✓' : ''}</button>
@@ -494,6 +552,11 @@ function renderSceneCard(p, s, idx, total){
     <div class="planner-link-block">
       <div class="planner-link-lbl">🎯 Missions</div>
       <div class="planner-chips">${mChips}<button class="planner-link-add" onclick="openLinkPicker('${p.id}','${s.id}','mission')">+ Link mission</button></div>
+    </div>
+    <div class="planner-link-block">
+      <div class="planner-link-lbl">⚄ Checks &amp; outcomes</div>
+      <div class="planner-check-list">${checks}</div>
+      <button class="cal-add-btn planner-add-check" onclick="checkAdd('${p.id}','${s.id}')">+ Add dice check</button>
     </div>
     <div class="planner-link-block">
       <div class="planner-link-lbl">🎲 Oracle</div>
@@ -548,6 +611,70 @@ function renderLinkPicker(){
     <input id="planner-pick-search" class="planner-pick-search" placeholder="🔍 Search or type a new name…" value="${sattr(q || '')}" oninput="plannerPickerSearch(this.value)">
     <div class="planner-pick-list">${rows}</div>
     ${createBtn}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECAP INTEGRATION — resolved dice checks feed the Session Tools recap (js/92)
+// ═══════════════════════════════════════════════════════════════════════════
+// buildSessionLogText()/generateSessionRecap() call these via typeof guards, so
+// the recap tool stays the owner of the output and this module just contributes.
+
+function _checkResolved(c){ return !!(c && (((c.roll || '').trim()) || (c.outcome && c.outcome !== 'pending') || ((c.notes || '').trim()))); }
+function _outcomeLabel(o){ return (CHECK_OUTCOMES.find(x => x[0] === o) || [null, ''])[1] || ''; }
+
+// One human-readable line for a resolved check, e.g.
+// "Recon to spot the ambush (8+) — Rhett rolled 10 → Success. Spotted the trail."
+function _checkOneLine(c, scene){
+  let head = (c.label || '').trim() || (scene && scene.title || '').trim() || 'Check';
+  if((c.target || '').trim()) head += ' (' + c.target.trim() + ')';
+  const roll = [];
+  if((c.who || '').trim()) roll.push(c.who.trim());
+  if((c.roll || '').trim()) roll.push('rolled ' + c.roll.trim());
+  const oc = _outcomeLabel(c.outcome);
+  let result = roll.join(' ');
+  if(oc) result = result ? (result + ' → ' + oc) : oc;
+  let line = head;
+  if(result) line += ' — ' + result;
+  if((c.notes || '').trim()) line += '. ' + c.notes.trim();
+  return line;
+}
+
+// Resolved checks grouped by session. Scoped to Running sessions if any are
+// Running, else all sessions; only sessions with ≥1 resolved check appear,
+// newest session first. So marking a session "Running" focuses the recap on it.
+function plannerResolvedCheckGroups(){
+  if(!Array.isArray(sessionPlans)) return [];
+  const running = sessionPlans.filter(p => p.status === 'active');
+  const pool = running.length ? running : sessionPlans;
+  const groups = [];
+  pool.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).forEach(p => {
+    const items = [];
+    (p.scenes || []).forEach(s => (s.checks || []).forEach(c => { if(_checkResolved(c)) items.push({ scene: s, check: c }); }));
+    if(items.length) groups.push({ title: p.title || 'Untitled session', items });
+  });
+  return groups;
+}
+function plannerResolvedCheckCount(){ return plannerResolvedCheckGroups().reduce((n, g) => n + g.items.length, 0); }
+
+// Plain-text section for the exported/copied session log (js/92 buildSessionLogText).
+function plannerChecksRecapLines(){
+  const groups = plannerResolvedCheckGroups();
+  if(!groups.length) return [];
+  const lines = ['KEY ROLLS & CHECKS', '-'.repeat(48)];
+  groups.forEach(g => {
+    if(groups.length > 1) lines.push('· ' + g.title);
+    g.items.forEach(({ scene, check }) => lines.push((groups.length > 1 ? '  ' : '') + _checkOneLine(check, scene)));
+  });
+  lines.push('');
+  return lines;
+}
+// Prose lines for the generated narrative recap (js/92 generateSessionRecap).
+function plannerChecksRecapProse(){
+  const groups = plannerResolvedCheckGroups();
+  if(!groups.length) return [];
+  const parts = ['', 'Key rolls:'];
+  groups.forEach(g => g.items.forEach(({ scene, check }) => parts.push('• ' + _checkOneLine(check, scene))));
+  return parts;
 }
 
 // ── Referee preload (mirrors js/85 loadNpcRoster boot preload) ──────────────
