@@ -3463,3 +3463,103 @@ body.light-mode-body #starfield{display:none}
 #cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap{
   top:calc(var(--hdr-h,82px) + 6px)
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHONE-ONLY LAYOUT
+   Activated by the `is-phone` class set on <html> at boot (UA + coarse-pointer
+   detection in index.html). Everything here is scoped under `html.is-phone`, so
+   tablets and desktops are never affected — not even a narrow desktop window.
+   Two goals: (1) collapse the ~20-button header into a compact ☰ drawer so it
+   stops swallowing the screen; (2) give the galaxy "Jump Plotter" detail panel
+   the full remaining height so it scrolls properly instead of a tiny strip.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Compact top bar ── */
+html.is-phone #hdr{
+  flex-wrap:wrap;
+  justify-content:flex-start;
+  align-items:center;
+  gap:7px 8px;
+  padding:7px 10px;
+  min-height:auto;
+}
+/* Open drawer can grow tall — scroll it instead of eating the whole viewport. */
+html.is-phone #hdr.nav-open{
+  max-height:72vh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* ── ☰ menu toggle (injected in index.html; hidden on non-phones) ── */
+#mnav-toggle{display:none}
+html.is-phone #mnav-toggle{
+  display:inline-flex;align-items:center;justify-content:center;
+  order:-1;flex:0 0 auto;
+  font-size:20px;line-height:1;
+  padding:7px 13px;
+  color:var(--tx0);
+  background:var(--bg0);
+  border:.5px solid var(--bd0);
+  border-radius:8px;
+  cursor:pointer;
+}
+html.is-phone #hdr.nav-open #mnav-toggle{color:var(--accentGold);border-color:var(--accentGold)}
+
+/* ── Always-visible top-row items ── */
+html.is-phone #back-btn{order:-2;flex:0 0 auto}
+html.is-phone #hdr-locus{flex:1 1 auto;max-width:none;order:0}
+html.is-phone #hdr-title{font-size:15px;letter-spacing:1px}
+html.is-phone #clock-wrap{order:0;padding:5px 9px}
+html.is-phone #clock-display{font-size:16px;min-width:46px}
+html.is-phone #conn-pill{order:0}
+html.is-phone .pm-row{order:0}
+html.is-phone .pm-row .pm-label{font-size:12px}
+
+/* ── Collapsible nav — hidden until the drawer is open ──
+   Uses :not(.nav-open) so that when the drawer IS open each control simply
+   reverts to its natural visibility; the ref-only (#root.pm-active !important)
+   and .hidden rules keep working because we never force-show anything. */
+html.is-phone #hdr:not(.nav-open) > #impdate-wrap,
+html.is-phone #hdr:not(.nav-open) > #sheet-trigger-btn,
+html.is-phone #hdr:not(.nav-open) > #header-whoami-btn,
+html.is-phone #hdr:not(.nav-open) > #qref-btn,
+html.is-phone #hdr:not(.nav-open) > #referee-menu-btn,
+html.is-phone #hdr:not(.nav-open) > #design-menu-btn,
+html.is-phone #hdr:not(.nav-open) > #settings-btn,
+html.is-phone #hdr:not(.nav-open) > #search-wrap,
+html.is-phone #hdr:not(.nav-open) > #quest-btn,
+html.is-phone #hdr:not(.nav-open) > #journal-btn,
+html.is-phone #hdr:not(.nav-open) > #ship-btn,
+html.is-phone #hdr:not(.nav-open) > #combat-btn,
+html.is-phone #hdr:not(.nav-open) > #funds-btn,
+html.is-phone #hdr:not(.nav-open) > #cargo-btn,
+html.is-phone #hdr:not(.nav-open) > #gen-btn,
+html.is-phone #hdr:not(.nav-open) > #more-btn{
+  display:none !important;
+}
+
+/* ── Open drawer: two-column grid of large tap targets below the top row ── */
+html.is-phone #hdr.nav-open > button{
+  order:5;
+  flex:1 1 42%;
+  justify-content:center;
+  font-size:14px;
+  padding:13px 10px;
+}
+/* Keep the anchors compact — they belong on the top row, not the grid. */
+html.is-phone #hdr.nav-open > #back-btn,
+html.is-phone #hdr.nav-open > #mnav-toggle{flex:0 0 auto}
+/* Search + Imperial date span the full width above the button grid. */
+html.is-phone #hdr.nav-open > #search-wrap{order:4;flex:1 1 100%}
+html.is-phone #hdr.nav-open #search-input,
+html.is-phone #hdr.nav-open #search-input:focus{width:100%;box-sizing:border-box;font-size:15px}
+html.is-phone #hdr.nav-open > #impdate-wrap{order:4;flex:1 1 100%;justify-content:center}
+
+/* ── Galaxy "Jump Plotter": give the detail panel real height + full scroll ──
+   With the header now compact, the map + detail split has room to breathe. */
+html.is-phone #galaxy-canvas{height:40vh}
+html.is-phone #galaxy-detail{flex:1 1 auto;min-height:0}
+html.is-phone #hx-pbody{
+  overscroll-behavior:contain;
+  padding-bottom:calc(18px + env(safe-area-inset-bottom));
+}
