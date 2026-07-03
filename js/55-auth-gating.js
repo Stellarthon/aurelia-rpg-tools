@@ -931,6 +931,7 @@ function resetCampaign(){
   npcRoster = [];
   selectedBodyLoc = null;
   questLog = [];
+  sessionPlans = [];
 
   // Shared state (Supabase) — fire and forget, same pattern as toggleReveal
   saveRevealState();
@@ -958,6 +959,7 @@ function resetCampaign(){
   saveShipRoster();
   saveNpcRoster();
   saveQuestLog();
+  saveSessionPlans();
 
   // Galaxy is back to the authored regions + systems — fold the now-empty overlays in.
   if(typeof rebuildFactionsFromOverlay === 'function') rebuildFactionsFromOverlay();
