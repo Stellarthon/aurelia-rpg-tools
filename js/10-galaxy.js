@@ -1638,7 +1638,7 @@ const HX = (function(){
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
   let origin=null, selected=null;
-  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false, tapConsumed=false;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, showRoutes=true, showBestRun=false, dragMoved=false, tapConsumed=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
@@ -1667,7 +1667,16 @@ const HX = (function(){
   function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
   function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
-  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg) svg.classList.toggle('hx-lblzoom',labelsVisible()); }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); } }
+  // Trader convoy labels live inside the zooming scene, so at high zoom they'd balloon and
+  // clutter. Counter-scale them: keep their natural size when zoomed out, and once zoomed past
+  // fit hold a constant on-screen size that gently shrinks the deeper you go. Driven by a CSS
+  // var so one write restyles every label (they carry font-size:var(--hx-trader-font)). ──
+  function scaleTraderLabels(){ if(!svg) return;
+    const r=view.scale/(fitScale||1);                                   // zoom ratio past fit
+    const onScreen=clamp(11 - 2.2*Math.log2(Math.max(1,r)), 5.5, 9);    // target px on screen (shrinks as you zoom in)
+    const scene=Math.min(8.5, onScreen/(view.scale||1));               // ≤ natural, so zoomed-out labels aren't enlarged
+    svg.style.setProperty('--hx-trader-font', scene.toFixed(3)+'px'); }
 
   // ── Infinite grid: which hexes to tile this frame ──
   // Invert axialPx for the four screen corners to get the q,r box currently in
@@ -1737,6 +1746,11 @@ const HX = (function(){
     const op=axialPx(origin.q,origin.r);
     [5,10,15].forEach(h=>{ g.appendChild(NS('circle',{cx:op.x,cy:op.y,r:h*Math.sqrt(3)*RPX,class:'hx-ring'}));
       const t=NS('text',{x:op.x,y:op.y-h*Math.sqrt(3)*RPX+11,class:'hx-ring-lbl','text-anchor':'middle'}); t.textContent=h+' hex'; g.appendChild(t); });
+    // Trade mode + exactly one good picked in the legend → price heatmap: wash each market
+    // world green where it's a good place to BUY that good (local glut) and red where it's a
+    // good place to SELL (local shortage / demand). Drawn here, under the lanes and stars, so
+    // it reads as a background layer. See drawPriceHeat().
+    if(showTrade && tradeGoods.size===1){ try{ drawPriceHeat(g); }catch(e){} }
     if(showLanes){ const editing=(typeof designModeOn!=='undefined'&&designModeOn&&ref());
       const laneLayer=NS('g',{}); g.appendChild(laneLayer);
       laneEdges().forEach(L=>{ const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
@@ -1760,6 +1774,10 @@ const HX = (function(){
           hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true;
             if(typeof gxBlockMode!=='undefined'&&gxBlockMode){ if(typeof gxToggleBlock==='function') gxToggleBlock(L.key); }
             else if(editing){ if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); } }); laneLayer.appendChild(hit); } }); }
+    // Supply→demand connector arcs for the picked good(s): producer → importer, drawn under
+    // the live convoys. Structural (needs no sim), so it's the Simple-mode counterpart to the
+    // goods-flow lines. See drawSupplyRoutes().
+    if(showTrade && showRoutes && tradeGoods.size){ try{ drawSupplyRoutes(g); }catch(e){} }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
     // Corp territory — when a house is selected in the econ console, ring its HQ + expanded worlds in
     // its house colour (HQ = solid ring + label; expansions = dashed, growing with the invest count).
@@ -1782,6 +1800,18 @@ const HX = (function(){
         if(plan.strandedAt!=null){ const sp=route[plan.strandedAt], p=axialPx(sp.q,sp.r);
           g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:8,class:'hx-strand-dot'}));
           const t=NS('text',{x:p.x,y:p.y+22,'text-anchor':'middle',class:'hx-fuel-warn'}); t.textContent='⚠ STRANDED'; g.appendChild(t); } } }
+    // Referee-only "best run from here" overlay: the most profit-per-week cargo run reachable
+    // from the current location, drawn as a gold route to the destination. Never shown to
+    // players — the trade call is theirs to make (see bestRunFromHere).
+    if(showBestRun && ref()){ try{ const br=bestRunFromHere();
+      if(br){ const rt=br.route, bl=NS('g',{class:'hx-bestrun-layer','pointer-events':'none'}); g.appendChild(bl);
+        for(let i=0;i<rt.length-1;i++){ const pa=axialPx(rt[i].q,rt[i].r),pb=axialPx(rt[i+1].q,rt[i+1].r);
+          bl.appendChild(NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-bestrun'})); }
+        const dp=axialPx(br.dst.q,br.dst.r);
+        bl.appendChild(NS('circle',{cx:dp.x,cy:dp.y,r:10,fill:'none',stroke:'#ffd24a','stroke-width':1.6,opacity:0.95}));
+        const lbl=NS('text',{x:dp.x,y:dp.y-13,'text-anchor':'middle',class:'hx-bestrun-lbl'});
+        lbl.textContent=`★ ${gShort(br.good)} +${kCr(br.perTon)}/t`; bl.appendChild(lbl); }
+    }catch(e){} }
     SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
@@ -1812,6 +1842,10 @@ const HX = (function(){
       if(!(isOrigin||isSel)){ hit.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); hit.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
       g.appendChild(hit);
     });
+    // Trade mode: emoji badges above each market world — what it produces (▲) and needs
+    // (▼), with amounts. Drawn AFTER the stars so it layers on top; works in Simple mode
+    // too (no live sim needed), unlike the goods-flow/convoy overlay above.
+    if(showTrade){ try{ drawEconBadges(g); }catch(e){} }
     // Design Mode click-to-place: highlight every empty hex in view as a tap
     // target. Tiles the whole viewport, so panning lets the referee drop a system
     // anywhere on the unbounded grid. Topmost layer so it wins the click.
@@ -1918,6 +1952,130 @@ const HX = (function(){
     });
   }
 
+  // ── Trade-mode econ badges — what each market world PRODUCES (▲) and DEMANDS (▼),
+  //    as emoji above the star with kt/week amounts. Reads ECON.effectiveProfile — the
+  //    SAME produces/demands the price model and the star panel (econChipsHTML) use — so
+  //    it works in Simple AND Full economy mode. Amounts ride a zoom-gated class
+  //    (.hx-econ-amt), so the map stays a clean at-a-glance icon view until you zoom in.
+  //    The whole layer is pointer-events:none, so a badge never steals a tap from the
+  //    star beneath it (the badges sit inside the star's 14px hit circle). ────────────
+  const GOOD_ICON = {
+    'Common Ore':'🪨','Common Consumables':'🌾','Common Electronics':'🔌',
+    'Common Manufactured':'⚙️','Advanced Electronics':'💻','Precious Metals':'💎',
+    'Radioactives':'☢️','Biochemicals':'🧪','Luxury Goods':'💍','Pharmaceuticals':'💊',
+    'Unrefined Hydrogen':'💨','Refined Fuel':'⛽','Scrap':'♻️'
+  };
+  function econAmt(v){ v=Math.round(+v||0); return v>=1000 ? (Math.round(v/100)/10)+'k' : ''+v; }
+  // Top produced / net-imported goods for a market world. Demand = final consumption +
+  // the recipe inputs the world auto-draws (autoInputsOf), NET of what it makes itself —
+  // so a world that grows its own food doesn't read as "needs food". Internal/untraded
+  // goods (Scrap) are dropped. The legend's goods filter (tradeGoods) narrows the badges
+  // to just the selected goods when any are picked; empty = no filter = show every good,
+  // so it matches the flow lines you've focused on. Returns null when nothing survives.
+  function econBadgeData(id){
+    if(typeof window.ECON==='undefined' || !ECON.effectiveProfile || !ECON.isMarketId || !ECON.isMarketId(id)) return null;
+    let ep; try{ ep=ECON.effectiveProfile(id); }catch(e){ return null; }
+    if(!ep) return null;
+    const G=ECON.GOODS||{}, prod=ep.prod||{}, cons=ep.cons||{};
+    const picked=tradeGoods.size ? g=>tradeGoods.has(g) : ()=>true;   // legend filter (empty = all)
+    const shown=g=> G[g] && !G[g].internal && picked(g);
+    let auto={}; try{ auto=ECON.autoInputsOf(prod)||{}; }catch(e){}
+    const prodE=Object.keys(prod).filter(g=>prod[g]>0 && shown(g))
+      .map(g=>({good:g,rate:prod[g]})).sort((a,b)=>b.rate-a.rate);
+    const dem={};
+    Object.keys(cons).forEach(g=>{ dem[g]=(dem[g]||0)+cons[g]; });
+    Object.keys(auto).forEach(g=>{ dem[g]=(dem[g]||0)+auto[g]; });
+    const demE=Object.keys(dem).filter(shown)
+      .map(g=>({good:g,rate:dem[g]-(prod[g]||0)}))   // net import: subtract own output
+      .filter(e=>e.rate>0.5).sort((a,b)=>b.rate-a.rate);
+    if(!prodE.length && !demE.length) return null;
+    return { prod:prodE, dem:demE };
+  }
+  function drawEconBadges(layer){
+    if(typeof window.ECON==='undefined' || !ECON.effectiveProfile) return;
+    const bg=NS('g',{'pointer-events':'none'}); layer.appendChild(bg);
+    const STEP=11, MAX=3;
+    const mkText=(x,y,cls,txt,col,op)=>{ const a={x,y,'text-anchor':'middle',class:cls}; if(col)a.fill=col; if(op!=null)a.opacity=op;
+      const t=NS('text',a); t.textContent=txt; bg.appendChild(t); return t; };
+    SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;
+      const p=axialPx(s.q,s.r), rows=[];
+      if(data.prod.length) rows.push({entries:data.prod.slice(0,MAX), extra:data.prod.length-MAX, kind:'prod'});
+      if(data.dem.length)  rows.push({entries:data.dem.slice(0,MAX),  extra:data.dem.length-MAX,  kind:'dem'});
+      rows.forEach((row,ri)=>{ const y=p.y-12-ri*12, isProd=row.kind==='prod', col=isProd?'#66c07a':'#e3a24a';
+        // Produce icons show at every zoom (the at-a-glance "what this world makes" map);
+        // the demand row rides the same .hx-lblzoom gate as amounts, so the fit view stays
+        // clean and the full produce+demand+amount detail unfolds as you zoom in.
+        const dim=isProd?'':' hx-econ-dem';
+        const n=row.entries.length, startX=p.x-(n-1)*STEP/2;
+        mkText(startX-8, y, 'hx-econ-dir'+dim, isProd?'▲':'▼', col);                   // direction cue
+        row.entries.forEach((e,i)=>{ const x=startX+i*STEP;
+          mkText(x, y, 'hx-econ-ic'+dim, GOOD_ICON[e.good]||'▪');                      // the good's emoji
+          mkText(x+4.7, y+4.7, 'hx-econ-amt', econAmt(e.rate), col); });               // kt/week (zoom-gated)
+        if(row.extra>0) mkText(startX+n*STEP-2, y, 'hx-econ-dir'+dim, '+'+row.extra, col, 0.85); });   // overflow beyond top-3
+    });
+  }
+
+  // ── Price heatmap — for the single good picked in the legend, wash each market world by
+  //    how good a place it is to trade it. Green = local glut (produced here / cheap → BUY);
+  //    red = local shortage (demanded here / dear → SELL). Colour + sign come from mktPressure
+  //    (the same signal that drives the price everywhere, live in Full sim), but a world is
+  //    only tinted when it has a REAL stake in the good (produces or net-imports it, via the
+  //    same econBadgeData the badges use) — so seeded price-texture never washes the map. A
+  //    world at price-equilibrium but with a stake still gets a mid tint from its profile. ──
+  const HEAT_BUY='#3fae5a', HEAT_SELL='#d8503f';
+  function drawPriceHeat(layer){
+    if(typeof window.ECON==='undefined') return;
+    const good=[...tradeGoods][0]; if(!good) return;
+    const hg=NS('g',{'pointer-events':'none'}); layer.appendChild(hg);
+    SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;   // no stake in this good → no tint
+      let pr=0; try{ pr=mktPressure(s,good); }catch(e){}
+      let t=clamp(pr/4,-1,1);
+      if(Math.abs(t)<0.25) t = data.prod.length ? 0.45 : -0.45;         // ~equilibrium: fall back to the profile stake
+      const col=t>0?HEAT_BUY:HEAT_SELL, op=0.15+Math.abs(t)*0.32, p=axialPx(s.q,s.r);
+      hg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:col,'fill-opacity':op.toFixed(2),
+        stroke:col,'stroke-opacity':Math.min(0.9,op+0.28).toFixed(2),'stroke-width':1})); });
+  }
+
+  // ── Supply→demand connector arcs — for each good picked in the legend, arc from every net
+  //    importer to its NEAREST net producer (producer → importer, arrowhead at the importer).
+  //    This is the STATIC "who should trade with whom" for a good; unlike the animated convoys
+  //    it needs no running sim, so it's the Simple-mode counterpart to the flow lines. Reads the
+  //    same net produce/demand the badges use; capped per good so the map stays legible. ──
+  function goodNet(id, good){   // >0 net exporter (produces more than it uses), <0 net importer
+    if(typeof window.ECON==='undefined' || !ECON.isMarketId || !ECON.isMarketId(id)) return 0;
+    let ep; try{ ep=ECON.effectiveProfile(id); }catch(e){ return 0; }
+    if(!ep) return 0;
+    const prod=(ep.prod&&ep.prod[good])||0, cons=(ep.cons&&ep.cons[good])||0;
+    let auto=0; try{ auto=(ECON.autoInputsOf(ep.prod||{})[good])||0; }catch(e){}
+    return prod-(cons+auto);
+  }
+  function drawSupplyRoutes(layer){
+    if(typeof window.ECON==='undefined') return;
+    const rg=NS('g',{'pointer-events':'none'}); layer.appendChild(rg);
+    const IMP_CAP=8;   // arcs per good = neediest importers only, so a busy good stays readable
+    [...tradeGoods].forEach(good=>{
+      const producers=[], importers=[];
+      SYS.forEach(s=>{ const n=goodNet(s.id,good); if(n>0.5) producers.push(s); else if(n<-0.5) importers.push({s,need:-n}); });
+      if(!producers.length || !importers.length) return;
+      importers.sort((a,b)=>b.need-a.need);
+      const col=GOOD_COL[good]||'#9fb0c8';
+      importers.slice(0,IMP_CAP).forEach(imp=>{
+        let best=null, bd=Infinity;
+        producers.forEach(pr=>{ const d=hexDist(imp.s,pr); if(d<bd){ bd=d; best=pr; } });   // nearest supply
+        if(!best) return;
+        const a=axialPx(best.q,best.r), b=axialPx(imp.s.q,imp.s.r);
+        const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len, nx=-uy, ny=ux;
+        const ax=a.x+ux*7, ay=a.y+uy*7, bx=b.x-ux*8, by=b.y-uy*8;                             // clear the star markers
+        const bow=Math.min(38, len*0.16), cx=(ax+bx)/2+nx*bow, cy=(ay+by)/2+ny*bow;           // gentle bow
+        const w=Math.max(0.7, Math.min(2.6, Math.sqrt(imp.need)/2));                          // heavier arc = hungrier importer
+        rg.appendChild(NS('path',{d:`M${ax.toFixed(1)},${ay.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
+          fill:'none',stroke:col,'stroke-width':w,'stroke-opacity':0.5,'stroke-linecap':'round'}));
+        const tx=bx-cx, ty=by-cy, tl=Math.hypot(tx,ty)||1, hx=tx/tl, hy=ty/tl, px=-hy, py=hx, sz=4;   // arrowhead along the tangent
+        rg.appendChild(NS('polygon',{points:`${bx.toFixed(1)},${by.toFixed(1)} ${(bx-hx*sz+px*sz*0.6).toFixed(1)},${(by-hy*sz+py*sz*0.6).toFixed(1)} ${(bx-hx*sz-px*sz*0.6).toFixed(1)},${(by-hy*sz-py*sz*0.6).toFixed(1)}`,fill:col,'fill-opacity':0.7}));
+      });
+    });
+  }
+
   // ── Fuel / routing ──
   // (B) A jump lane counts as a SINGLE max-rating jump regardless of map distance,
   //     so lore connections are always flyable. Its fuel/reach distance is capped
@@ -1944,6 +2102,23 @@ const HX = (function(){
     SYS.forEach(s=>{ if(s===origin||cost[s.q+','+s.r]===Infinity) return; const path=routeFrom(prev,origin,s); if(!path) return;
       if(fuelPlan(path).strandedAt===null){ reach.add(s.q+','+s.r); const d=hexDist(s,origin); if(d>fd){ fd=d; farthest=s; fjumps=path.length-1; fcost=cost[s.q+','+s.r]; } } });
     return { reach, count:reach.size, farthest, farthestCost:fcost, farthestJumps:fjumps }; }
+
+  // ── Best cargo run from the current location (REFEREE-ONLY analysis). Over every feasible,
+  //    fuel-reachable market, take that leg's most profitable good (tradeOpportunities, the
+  //    same pricing the cargo panel uses) and rank by profit-per-week — favouring a quick
+  //    turnaround over a marginally richer long haul. Deliberately a referee aid: it names the
+  //    optimal move, which is the players' call to make, so it never renders in player view. ──
+  function bestRunFromHere(){
+    if(!hasMarket(origin)) return null;
+    const {cost,prev}=dijkstra(origin); let best=null;
+    SYS.forEach(s=>{ if(s===origin || !hasMarket(s) || cost[s.q+','+s.r]===Infinity) return;
+      const route=routeFrom(prev,origin,s); if(!route || route.length<2) return;
+      const plan=fuelPlan(route); if(plan.strandedAt!=null) return;                    // must actually be flyable
+      const ops=tradeOpportunities(origin,s).filter(o=>o.profit>0); if(!ops.length) return;
+      const top=ops[0], weeks=Math.max(1,route.length-1), total=top.profit*cargoHold, perWeek=total/weeks;
+      if(!best || perWeek>best.perWeek) best={ dst:s, good:top.good, perTon:top.profit, total, weeks, route, plan, perWeek, fuel:plan.total }; });
+    return best;
+  }
 
   // ── Campaign-action helpers (referee-gated) ──
   let toastTimer=null;
@@ -2258,16 +2433,44 @@ const HX = (function(){
   window.hxToggleRange=()=>{ showRange=!showRange; const b=document.getElementById('hx-range-toggle'); if(b){ b.textContent='Fuel range: '+(showRange?'ON':'OFF'); b.classList.toggle('on',showRange); } render(); };
   window.hxToggleFuel =()=>{ showFuel=!showFuel; const b=document.getElementById('hx-fuel-toggle'); if(b){ b.textContent='Fuel: '+(showFuel?'ON':'OFF'); b.classList.toggle('off',!showFuel); } render(); };
   function buildTradeLegend(lg){
-    let h='<div class="hx-tl-h">Goods flows <span class="hx-tl-an" onclick="hxTradeAllGoods(true)">all</span> · <span class="hx-tl-an" onclick="hxTradeAllGoods(false)">none</span></div><div class="hx-tl-grid">';
+    // Each world shows emoji badges for what it makes (▲) and needs (▼); the chips below
+    // double as the emoji key AND toggle each good's animated flow lines (Full sim only).
+    let h='<div class="hx-tl-h"><span style="color:#66c07a;font-weight:700">▲</span> produces · <span style="color:#e3a24a;font-weight:700">▼</span> needs</div>'+
+      '<div class="hx-tl-sub">Emoji above each world · zoom in for demand &amp; amounts</div>'+
+      '<div class="hx-tl-h" style="margin-top:7px">Goods flows <span class="hx-tl-an" onclick="hxTradeAllGoods(true)">all</span> · <span class="hx-tl-an" onclick="hxTradeAllGoods(false)">none</span></div><div class="hx-tl-grid">';
     Object.keys(GOOD_COL).forEach(g=>{ const on=tradeGoods.has(g);
-      h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
-    h+='</div><div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
+      h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-em">${GOOD_ICON[g]||''}</span><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
+    h+='</div>';
+    // Supply→demand arcs: producer → importer for each picked good (works without the sim).
+    h+=`<div class="hx-tl-row" style="margin-top:5px"><span class="hx-tl-an${showRoutes?' on':''}" onclick="hxToggleRoutes()">⟿ routes: ${showRoutes?'ON':'OFF'}</span><span style="color:var(--tx1);opacity:.85">supply → demand</span></div>`;
+    // Price heatmap key — only meaningful for a single good, so it appears once exactly one
+    // chip is picked; otherwise a hint tells you how to summon it.
+    if(tradeGoods.size===1){ const g=[...tradeGoods][0];
+      h+=`<div class="hx-tl-heat"><div class="hx-tl-h" style="margin-bottom:4px">Price map · ${GOOD_ICON[g]||''} ${gShort(g)}</div>`+
+        `<div class="hx-tl-heatbar"></div>`+
+        `<div class="hx-tl-heatlbl"><span style="color:${HEAT_BUY}">BUY · glut</span><span style="color:${HEAT_SELL}">SELL · scarce</span></div></div>`;
+    } else {
+      h+='<div class="hx-tl-sub" style="margin-top:6px">Pick one good above for a buy/sell price map</div>';
+    }
+    // Referee-only "best run from here" — names the optimal cargo run, so it's the ref's
+    // planning aid, never the players' (they make the call). Gated on ref() AND .ref-only so
+    // it can't leak into player view.
+    if(ref()){ h+=`<div class="hx-tl-best ref-only"><div class="hx-tl-row"><span class="hx-tl-an${showBestRun?' on':''}" onclick="hxToggleBestRun()">★ best run: ${showBestRun?'ON':'OFF'}</span><span style="color:var(--tx1);opacity:.85">referee</span></div>`;
+      if(showBestRun){ let br=null; try{ br=bestRunFromHere(); }catch(e){}
+        if(br) h+=`<div class="hx-tl-bestread">Buy <b>${GOOD_ICON[br.good]||''} ${gShort(br.good)}</b> here → sell at <b>${eh(disp(br.dst))}</b><br><span style="color:#3f9d5a">+${kCr(br.perTon)}/t · +${kCr(br.total)} / hold</span> · ${br.weeks} wk · ${Math.round(br.fuel)}t fuel</div>`;
+        else h+=`<div class="hx-tl-sub" style="margin-top:3px">No profitable run reachable from ${eh(disp(origin))}.</div>`; }
+      h+='</div>'; }
+    h+='<div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
     lg.innerHTML=h;
   }
   window.hxToggleTrade=()=>{ showTrade=!showTrade; const b=document.getElementById('hx-trade-toggle'); if(b){ b.textContent='Trade: '+(showTrade?'ON':'OFF'); b.classList.toggle('on',showTrade); }
     const lg=document.getElementById('hx-trade-legend');
     if(lg){ lg.classList.toggle('hidden',!showTrade); if(showTrade) buildTradeLegend(lg); }
     render(); };
+  window.hxToggleRoutes=()=>{ showRoutes=!showRoutes;
+    const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
+  window.hxToggleBestRun=()=>{ if(!ref()) return; showBestRun=!showBestRun;
+    const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeGood=g=>{ if(tradeGoods.has(g)) tradeGoods.delete(g); else tradeGoods.add(g);
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeAllGoods=on=>{ tradeGoods.clear(); if(on) Object.keys(GOOD_COL).forEach(g=>tradeGoods.add(g));
