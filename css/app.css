@@ -3277,6 +3277,7 @@ input#ui-scale-range{
 #hx-trade-legend .hx-tl-h{font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--tx1);margin-bottom:6px;display:flex;gap:5px;align-items:center}
 #hx-trade-legend .hx-tl-an{cursor:pointer;color:var(--accentGold);border:.5px solid var(--bd0,#2e3347);border-radius:4px;padding:1px 5px}
 #hx-trade-legend .hx-tl-an:hover{border-color:var(--accentGold)}
+#hx-trade-legend .hx-tl-an.on{border-color:var(--accentGold);background:rgba(212,168,67,.14)}
 #hx-trade-legend .hx-tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
 #hx-trade-legend .hx-tl-chip{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--tx0);padding:3px 5px;border:.5px solid transparent;border-radius:5px;cursor:pointer;opacity:.4;transition:opacity .12s}
 #hx-trade-legend .hx-tl-chip:hover{background:rgba(255,255,255,.05)}
