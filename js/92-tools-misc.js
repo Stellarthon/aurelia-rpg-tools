@@ -359,7 +359,9 @@ function renderSessionStats(){
     '<div class="session-stat-row"><span>Events logged</span><span>' + eventLog.length + '</span></div>' +
     '<div class="session-stat-row"><span>Areas revealed</span><span>' + revealedCount + '</span></div>' +
     '<div class="session-stat-row"><span>Missions active / done</span><span>' + questActive + ' / ' + questDone + '</span></div>' +
-    '<div class="session-stat-row"><span>NPCs placed on station</span><span>' + npcsPlaced + '</span></div>';
+    '<div class="session-stat-row"><span>NPCs placed on station</span><span>' + npcsPlaced + '</span></div>' +
+    ((typeof plannerResolvedCheckCount === 'function' && plannerResolvedCheckCount())
+      ? '<div class="session-stat-row"><span>Dice checks recorded</span><span>' + plannerResolvedCheckCount() + '</span></div>' : '');
 }
 
 // Build a plain-text session log from current state.
@@ -393,6 +395,12 @@ function buildSessionLogText(){
     activeQ.forEach(q => lines.push('[ACTIVE] ' + q.title));
     doneQ.forEach(q => lines.push('[DONE]   ' + q.title));
     lines.push('');
+  }
+
+  // Dice checks & outcomes recorded in the Session Planner (js/97)
+  if(typeof plannerChecksRecapLines === 'function'){
+    const ckLines = plannerChecksRecapLines();
+    ckLines.forEach(l => lines.push(l));
   }
 
   // NPC positions
@@ -449,30 +457,37 @@ function generateSessionRecap(){
   if(!out) return;
   out.style.display = 'block';
 
-  if(!eventLog.length){
-    out.innerHTML = '<span class="session-recap-empty">No events logged yet. The recap builds from the event timeline as the session plays out — advance the clock and trigger events first.</span>';
+  // Dice checks recorded in the Session Planner (js/97) — prose lines, may be empty
+  const checkProse = (typeof plannerChecksRecapProse === 'function') ? plannerChecksRecapProse() : [];
+
+  if(!eventLog.length && !checkProse.length){
+    out.innerHTML = '<span class="session-recap-empty">Nothing to recap yet. The recap builds from the event timeline as the session plays out — advance the clock and trigger events, or record dice checks in the Session Planner.</span>';
     return;
   }
 
-  const events = [...eventLog].reverse(); // oldest first
   const parts = [];
   parts.push('SESSION RECAP — ' + new Date().toLocaleDateString());
   parts.push('');
 
-  // Opening
-  parts.push('The session ran from ' + events[0].time + ' to ' + events[events.length-1].time + ' station time, across ' + events.length + ' logged ' + (events.length === 1 ? 'beat' : 'beats') + '.');
-  parts.push('');
+  if(eventLog.length){
+    const events = [...eventLog].reverse(); // oldest first
+    // Opening
+    parts.push('The session ran from ' + events[0].time + ' to ' + events[events.length-1].time + ' station time, across ' + events.length + ' logged ' + (events.length === 1 ? 'beat' : 'beats') + '.');
+    parts.push('');
+    // Group consecutive events by area
+    let lastArea = null;
+    events.forEach(e => {
+      if(e.area && e.area !== lastArea){
+        parts.push('• At ' + (e.area) + ':');
+        lastArea = e.area;
+      }
+      const prefix = e.area ? '   ' : '• ';
+      parts.push(prefix + e.time + ' — ' + e.text);
+    });
+  }
 
-  // Group consecutive events by area
-  let lastArea = null;
-  events.forEach(e => {
-    if(e.area && e.area !== lastArea){
-      parts.push('• At ' + (e.area) + ':');
-      lastArea = e.area;
-    }
-    const prefix = e.area ? '   ' : '• ';
-    parts.push(prefix + e.time + ' — ' + e.text);
-  });
+  // Key rolls (Session Planner dice checks)
+  checkProse.forEach(l => parts.push(l));
 
   // Quest status
   const activeQ = questLog.filter(q => q.status === 'active');
