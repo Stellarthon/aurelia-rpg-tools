@@ -5,7 +5,7 @@
 // → always fetch fresh and refresh the cache; offline → fall back to the last
 // cached copy (and to the cached shell for navigations). Same-origin GETs only —
 // Supabase / get-content / Anthropic calls are never intercepted.
-const CACHE = 'orion-shell-v3';
+const CACHE = 'orion-shell-v4';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-180.png',
@@ -17,7 +17,7 @@ const SHELL = [
   './js/50-supabase.js', './js/55-auth-gating.js', './js/60-tools-settings.js',
   './js/62-campaign-studio.js', './js/65-design-mode.js', './js/70-panels-quest.js', './js/75-ship.js',
   './js/80-combat.js', './js/85-records.js', './js/90-economy.js',
-  './js/92-tools-misc.js', './js/96-creators.js', './js/98-trackers-boot.js',
+  './js/92-tools-misc.js', './js/96-creators.js', './js/97-session-planner.js', './js/98-trackers-boot.js',
 ];
 
 self.addEventListener('install', (e) => {
