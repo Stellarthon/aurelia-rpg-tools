@@ -1699,6 +1699,12 @@ const HX = (function(){
   // gesture settles so the grid + place targets re-tile the newly-exposed area.
   let _vpRAF=null;
   function scheduleViewportRender(){ if(_vpRAF) return; _vpRAF=requestAnimationFrame(()=>{ _vpRAF=null; if(svg&&origin) render(); }); }
+  // Wheel zoom fires many events per second; applyTransform keeps the gesture
+  // buttery, but a full scene rebuild every frame is what makes zooming feel
+  // laggy. So debounce the re-tile: only rebuild once the wheel settles, matching
+  // how pinch already waits for touchend before re-rendering.
+  let _settleTimer=null;
+  function scheduleSettleRender(){ if(_settleTimer) clearTimeout(_settleTimer); _settleTimer=setTimeout(()=>{ _settleTimer=null; if(svg&&origin) render(); },140); }
 
   // ── Render ──
   function render(){ if(!svg||!origin) return;
@@ -2412,7 +2418,7 @@ const HX = (function(){
       if(placeMode) return;                                       // placing a system — the hex cells handle the tap
       if(typeof gxLinkMode!=='undefined'&&gxLinkMode) return;     // drawing a lane — tap picks the destination
       deselect(); });
-    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); scheduleViewportRender(); },{passive:false});
+    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.12:0.89); scheduleSettleRender(); },{passive:false});
     svg.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist) zoomBy(d/lastDist); lastDist=d; } },{passive:false});
     svg.addEventListener('touchend',()=>{ lastDist=null; scheduleViewportRender(); }); }
 
