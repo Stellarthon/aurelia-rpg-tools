@@ -1638,7 +1638,7 @@ const HX = (function(){
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
   let origin=null, selected=null;
-  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, showRoutes=true, dragMoved=false, tapConsumed=false;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, showRoutes=true, showBestRun=false, dragMoved=false, tapConsumed=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
@@ -1667,7 +1667,16 @@ const HX = (function(){
   function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
   function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
-  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg) svg.classList.toggle('hx-lblzoom',labelsVisible()); }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); } }
+  // Trader convoy labels live inside the zooming scene, so at high zoom they'd balloon and
+  // clutter. Counter-scale them: keep their natural size when zoomed out, and once zoomed past
+  // fit hold a constant on-screen size that gently shrinks the deeper you go. Driven by a CSS
+  // var so one write restyles every label (they carry font-size:var(--hx-trader-font)). ──
+  function scaleTraderLabels(){ if(!svg) return;
+    const r=view.scale/(fitScale||1);                                   // zoom ratio past fit
+    const onScreen=clamp(11 - 2.2*Math.log2(Math.max(1,r)), 5.5, 9);    // target px on screen (shrinks as you zoom in)
+    const scene=Math.min(8.5, onScreen/(view.scale||1));               // ≤ natural, so zoomed-out labels aren't enlarged
+    svg.style.setProperty('--hx-trader-font', scene.toFixed(3)+'px'); }
 
   // ── Infinite grid: which hexes to tile this frame ──
   // Invert axialPx for the four screen corners to get the q,r box currently in
@@ -1791,6 +1800,18 @@ const HX = (function(){
         if(plan.strandedAt!=null){ const sp=route[plan.strandedAt], p=axialPx(sp.q,sp.r);
           g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:8,class:'hx-strand-dot'}));
           const t=NS('text',{x:p.x,y:p.y+22,'text-anchor':'middle',class:'hx-fuel-warn'}); t.textContent='⚠ STRANDED'; g.appendChild(t); } } }
+    // Referee-only "best run from here" overlay: the most profit-per-week cargo run reachable
+    // from the current location, drawn as a gold route to the destination. Never shown to
+    // players — the trade call is theirs to make (see bestRunFromHere).
+    if(showBestRun && ref()){ try{ const br=bestRunFromHere();
+      if(br){ const rt=br.route, bl=NS('g',{class:'hx-bestrun-layer','pointer-events':'none'}); g.appendChild(bl);
+        for(let i=0;i<rt.length-1;i++){ const pa=axialPx(rt[i].q,rt[i].r),pb=axialPx(rt[i+1].q,rt[i+1].r);
+          bl.appendChild(NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-bestrun'})); }
+        const dp=axialPx(br.dst.q,br.dst.r);
+        bl.appendChild(NS('circle',{cx:dp.x,cy:dp.y,r:10,fill:'none',stroke:'#ffd24a','stroke-width':1.6,opacity:0.95}));
+        const lbl=NS('text',{x:dp.x,y:dp.y-13,'text-anchor':'middle',class:'hx-bestrun-lbl'});
+        lbl.textContent=`★ ${gShort(br.good)} +${kCr(br.perTon)}/t`; bl.appendChild(lbl); }
+    }catch(e){} }
     SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
@@ -2081,6 +2102,23 @@ const HX = (function(){
     SYS.forEach(s=>{ if(s===origin||cost[s.q+','+s.r]===Infinity) return; const path=routeFrom(prev,origin,s); if(!path) return;
       if(fuelPlan(path).strandedAt===null){ reach.add(s.q+','+s.r); const d=hexDist(s,origin); if(d>fd){ fd=d; farthest=s; fjumps=path.length-1; fcost=cost[s.q+','+s.r]; } } });
     return { reach, count:reach.size, farthest, farthestCost:fcost, farthestJumps:fjumps }; }
+
+  // ── Best cargo run from the current location (REFEREE-ONLY analysis). Over every feasible,
+  //    fuel-reachable market, take that leg's most profitable good (tradeOpportunities, the
+  //    same pricing the cargo panel uses) and rank by profit-per-week — favouring a quick
+  //    turnaround over a marginally richer long haul. Deliberately a referee aid: it names the
+  //    optimal move, which is the players' call to make, so it never renders in player view. ──
+  function bestRunFromHere(){
+    if(!hasMarket(origin)) return null;
+    const {cost,prev}=dijkstra(origin); let best=null;
+    SYS.forEach(s=>{ if(s===origin || !hasMarket(s) || cost[s.q+','+s.r]===Infinity) return;
+      const route=routeFrom(prev,origin,s); if(!route || route.length<2) return;
+      const plan=fuelPlan(route); if(plan.strandedAt!=null) return;                    // must actually be flyable
+      const ops=tradeOpportunities(origin,s).filter(o=>o.profit>0); if(!ops.length) return;
+      const top=ops[0], weeks=Math.max(1,route.length-1), total=top.profit*cargoHold, perWeek=total/weeks;
+      if(!best || perWeek>best.perWeek) best={ dst:s, good:top.good, perTon:top.profit, total, weeks, route, plan, perWeek, fuel:plan.total }; });
+    return best;
+  }
 
   // ── Campaign-action helpers (referee-gated) ──
   let toastTimer=null;
@@ -2414,6 +2452,14 @@ const HX = (function(){
     } else {
       h+='<div class="hx-tl-sub" style="margin-top:6px">Pick one good above for a buy/sell price map</div>';
     }
+    // Referee-only "best run from here" — names the optimal cargo run, so it's the ref's
+    // planning aid, never the players' (they make the call). Gated on ref() AND .ref-only so
+    // it can't leak into player view.
+    if(ref()){ h+=`<div class="hx-tl-best ref-only"><div class="hx-tl-row"><span class="hx-tl-an${showBestRun?' on':''}" onclick="hxToggleBestRun()">★ best run: ${showBestRun?'ON':'OFF'}</span><span style="color:var(--tx1);opacity:.85">referee</span></div>`;
+      if(showBestRun){ let br=null; try{ br=bestRunFromHere(); }catch(e){}
+        if(br) h+=`<div class="hx-tl-bestread">Buy <b>${GOOD_ICON[br.good]||''} ${gShort(br.good)}</b> here → sell at <b>${eh(disp(br.dst))}</b><br><span style="color:#3f9d5a">+${kCr(br.perTon)}/t · +${kCr(br.total)} / hold</span> · ${br.weeks} wk · ${Math.round(br.fuel)}t fuel</div>`;
+        else h+=`<div class="hx-tl-sub" style="margin-top:3px">No profitable run reachable from ${eh(disp(origin))}.</div>`; }
+      h+='</div>'; }
     h+='<div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
     lg.innerHTML=h;
   }
@@ -2422,6 +2468,8 @@ const HX = (function(){
     if(lg){ lg.classList.toggle('hidden',!showTrade); if(showTrade) buildTradeLegend(lg); }
     render(); };
   window.hxToggleRoutes=()=>{ showRoutes=!showRoutes;
+    const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
+  window.hxToggleBestRun=()=>{ if(!ref()) return; showBestRun=!showBestRun;
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeGood=g=>{ if(tradeGoods.has(g)) tradeGoods.delete(g); else tradeGoods.add(g);
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
