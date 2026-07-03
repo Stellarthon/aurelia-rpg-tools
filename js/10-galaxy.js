@@ -1737,6 +1737,11 @@ const HX = (function(){
     const op=axialPx(origin.q,origin.r);
     [5,10,15].forEach(h=>{ g.appendChild(NS('circle',{cx:op.x,cy:op.y,r:h*Math.sqrt(3)*RPX,class:'hx-ring'}));
       const t=NS('text',{x:op.x,y:op.y-h*Math.sqrt(3)*RPX+11,class:'hx-ring-lbl','text-anchor':'middle'}); t.textContent=h+' hex'; g.appendChild(t); });
+    // Trade mode + exactly one good picked in the legend → price heatmap: wash each market
+    // world green where it's a good place to BUY that good (local glut) and red where it's a
+    // good place to SELL (local shortage / demand). Drawn here, under the lanes and stars, so
+    // it reads as a background layer. See drawPriceHeat().
+    if(showTrade && tradeGoods.size===1){ try{ drawPriceHeat(g); }catch(e){} }
     if(showLanes){ const editing=(typeof designModeOn!=='undefined'&&designModeOn&&ref());
       const laneLayer=NS('g',{}); g.appendChild(laneLayer);
       laneEdges().forEach(L=>{ const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
@@ -1983,6 +1988,27 @@ const HX = (function(){
           mkText(x+4.7, y+4.7, 'hx-econ-amt', econAmt(e.rate), col); });               // kt/week (zoom-gated)
         if(row.extra>0) mkText(startX+n*STEP-2, y, 'hx-econ-dir'+dim, '+'+row.extra, col, 0.85); });   // overflow beyond top-3
     });
+  }
+
+  // ── Price heatmap — for the single good picked in the legend, wash each market world by
+  //    how good a place it is to trade it. Green = local glut (produced here / cheap → BUY);
+  //    red = local shortage (demanded here / dear → SELL). Colour + sign come from mktPressure
+  //    (the same signal that drives the price everywhere, live in Full sim), but a world is
+  //    only tinted when it has a REAL stake in the good (produces or net-imports it, via the
+  //    same econBadgeData the badges use) — so seeded price-texture never washes the map. A
+  //    world at price-equilibrium but with a stake still gets a mid tint from its profile. ──
+  const HEAT_BUY='#3fae5a', HEAT_SELL='#d8503f';
+  function drawPriceHeat(layer){
+    if(typeof window.ECON==='undefined') return;
+    const good=[...tradeGoods][0]; if(!good) return;
+    const hg=NS('g',{'pointer-events':'none'}); layer.appendChild(hg);
+    SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;   // no stake in this good → no tint
+      let pr=0; try{ pr=mktPressure(s,good); }catch(e){}
+      let t=clamp(pr/4,-1,1);
+      if(Math.abs(t)<0.25) t = data.prod.length ? 0.45 : -0.45;         // ~equilibrium: fall back to the profile stake
+      const col=t>0?HEAT_BUY:HEAT_SELL, op=0.15+Math.abs(t)*0.32, p=axialPx(s.q,s.r);
+      hg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:col,'fill-opacity':op.toFixed(2),
+        stroke:col,'stroke-opacity':Math.min(0.9,op+0.28).toFixed(2),'stroke-width':1})); });
   }
 
   // ── Fuel / routing ──
@@ -2332,7 +2358,17 @@ const HX = (function(){
       '<div class="hx-tl-h" style="margin-top:7px">Goods flows <span class="hx-tl-an" onclick="hxTradeAllGoods(true)">all</span> · <span class="hx-tl-an" onclick="hxTradeAllGoods(false)">none</span></div><div class="hx-tl-grid">';
     Object.keys(GOOD_COL).forEach(g=>{ const on=tradeGoods.has(g);
       h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-em">${GOOD_ICON[g]||''}</span><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
-    h+='</div><div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
+    h+='</div>';
+    // Price heatmap key — only meaningful for a single good, so it appears once exactly one
+    // chip is picked; otherwise a hint tells you how to summon it.
+    if(tradeGoods.size===1){ const g=[...tradeGoods][0];
+      h+=`<div class="hx-tl-heat"><div class="hx-tl-h" style="margin-bottom:4px">Price map · ${GOOD_ICON[g]||''} ${gShort(g)}</div>`+
+        `<div class="hx-tl-heatbar"></div>`+
+        `<div class="hx-tl-heatlbl"><span style="color:${HEAT_BUY}">BUY · glut</span><span style="color:${HEAT_SELL}">SELL · scarce</span></div></div>`;
+    } else {
+      h+='<div class="hx-tl-sub" style="margin-top:6px">Pick one good above for a buy/sell price map</div>';
+    }
+    h+='<div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
     lg.innerHTML=h;
   }
   window.hxToggleTrade=()=>{ showTrade=!showTrade; const b=document.getElementById('hx-trade-toggle'); if(b){ b.textContent='Trade: '+(showTrade?'ON':'OFF'); b.classList.toggle('on',showTrade); }

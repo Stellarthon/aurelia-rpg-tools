@@ -3285,6 +3285,9 @@ input#ui-scale-range{
 #hx-trade-legend .hx-tl-sw{width:10px;height:10px;border-radius:2px;flex:none}
 #hx-trade-legend .hx-tl-em{font-size:11px;line-height:1;flex:none}
 #hx-trade-legend .hx-tl-sub{font-size:8px;color:var(--tx1);margin:-3px 0 2px;opacity:.85}
+#hx-trade-legend .hx-tl-heat{margin-top:7px;padding-top:6px;border-top:.5px solid var(--bd0,#2e3347)}
+#hx-trade-legend .hx-tl-heatbar{height:7px;border-radius:3px;background:linear-gradient(90deg,#3fae5a,#2e3347 50%,#d8503f)}
+#hx-trade-legend .hx-tl-heatlbl{display:flex;justify-content:space-between;font-size:8px;font-weight:700;margin-top:2px}
 .hx-trade-lbl{font-size:8.5px;fill:#f4d35e;font-family:var(--mono,monospace);font-weight:700;paint-order:stroke;stroke:#04060e;stroke-width:2.4px;stroke-linejoin:round}
 /* Trade-mode economy badges above each world: what it produces (▲) / needs (▼).
    Emoji + direction cue always show; kt/week amounts appear only when zoomed in
