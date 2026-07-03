@@ -1939,20 +1939,23 @@ const HX = (function(){
   // Top produced / net-imported goods for a market world. Demand = final consumption +
   // the recipe inputs the world auto-draws (autoInputsOf), NET of what it makes itself —
   // so a world that grows its own food doesn't read as "needs food". Internal/untraded
-  // goods (Scrap) are dropped. Returns null for non-market worlds or an empty profile.
+  // goods (Scrap) are dropped. The legend's goods filter (tradeGoods) narrows the badges
+  // to just the selected goods when any are picked; empty = no filter = show every good,
+  // so it matches the flow lines you've focused on. Returns null when nothing survives.
   function econBadgeData(id){
     if(typeof window.ECON==='undefined' || !ECON.effectiveProfile || !ECON.isMarketId || !ECON.isMarketId(id)) return null;
     let ep; try{ ep=ECON.effectiveProfile(id); }catch(e){ return null; }
     if(!ep) return null;
     const G=ECON.GOODS||{}, prod=ep.prod||{}, cons=ep.cons||{};
-    const tradeable=g=> G[g] && !G[g].internal;
+    const picked=tradeGoods.size ? g=>tradeGoods.has(g) : ()=>true;   // legend filter (empty = all)
+    const shown=g=> G[g] && !G[g].internal && picked(g);
     let auto={}; try{ auto=ECON.autoInputsOf(prod)||{}; }catch(e){}
-    const prodE=Object.keys(prod).filter(g=>prod[g]>0 && tradeable(g))
+    const prodE=Object.keys(prod).filter(g=>prod[g]>0 && shown(g))
       .map(g=>({good:g,rate:prod[g]})).sort((a,b)=>b.rate-a.rate);
     const dem={};
     Object.keys(cons).forEach(g=>{ dem[g]=(dem[g]||0)+cons[g]; });
     Object.keys(auto).forEach(g=>{ dem[g]=(dem[g]||0)+auto[g]; });
-    const demE=Object.keys(dem).filter(tradeable)
+    const demE=Object.keys(dem).filter(shown)
       .map(g=>({good:g,rate:dem[g]-(prod[g]||0)}))   // net import: subtract own output
       .filter(e=>e.rate>0.5).sort((a,b)=>b.rate-a.rate);
     if(!prodE.length && !demE.length) return null;
