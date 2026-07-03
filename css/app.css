@@ -385,13 +385,11 @@ textarea{font-family:var(--font)}
   padding:7px 14px;background:var(--bg1);border-bottom:.5px solid var(--bd0);
   flex-shrink:0;gap:8px;flex-wrap:wrap;min-height:44px;position:relative
 ;z-index:61}
-/* Traveller View toggle stays pinned to the header's bottom-right corner so it's
-   always in the same place, even though the nav buttons are centred and wrap.
-   Absolute → out of the flex flow, so it never lands on its own wrapped row. The
-   connection pill (last in-flow item) reserves the toggle's slot with a matching
-   right margin, so centred content never slides under the toggle at any width. */
-#hdr .pm-row{position:absolute;bottom:9px;right:16px;margin:0;z-index:2}
-#conn-pill{margin-right:180px}
+/* The Traveller View toggle and connection pill flow inline with the rest of the
+   header so everything wraps and stays centred as one balanced group — no absolute
+   pinning, which otherwise left the toggle stranded on the right edge and (via the
+   pill's reserved margin) shoved the centred rows off-centre. */
+#hdr .pm-row{margin:0}
 /* The location "locus" holds the title + version + breadcrumb. Normally it hugs
    its content (so the breadcrumb-less galaxy landing has no dead gap), but as
    soon as a breadcrumb is present it locks to a steady width — that way a long
@@ -3386,7 +3384,7 @@ textarea.hx-edit-in{resize:vertical;line-height:1.4}
 #hdr > button#back-btn{font-size:23px;padding:6px 15px}
 #hdr > button#settings-btn,#hdr > button#referee-menu-btn,#hdr > button#design-menu-btn{font-size:19px}
 .pm-row .pm-label{font-size:14px;font-weight:600}
-.pm-toggle{transform:scale(1.3);transform-origin:right center;margin-left:4px}
+.pm-toggle{transform:scale(1.3);transform-origin:center;margin-left:4px}
 /* On phones the doubled bar would swallow the screen — dampen it there; the
    Traveller quick-nav bar below is the real navigation on small devices. */
 @media(max-width:640px){
