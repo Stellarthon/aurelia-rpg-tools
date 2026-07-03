@@ -11,6 +11,27 @@
 <title>Aurelian System — Referee Map</title>
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
+<script>
+// ── Phone-only layout flag ──────────────────────────────────────────────────
+// Adds `is-phone` to <html> when (and only when) the viewer is on a handset,
+// so the phone layout in app.css (collapsing ☰ nav + full-height detail scroll)
+// never touches tablets or desktops — even a narrow desktop window. Runs during
+// head parse so the class is set before first paint (no menu "flash"). Tablets
+// (incl. iPadOS reporting as desktop Safari) are explicitly excluded.
+(function(){
+  try{
+    var ua = navigator.userAgent || '';
+    var isTablet = /iPad|Tablet|PlayBook|Silk|Kindle|(?:Android(?!.*Mobile))/i.test(ua)
+                   || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); // iPadOS 13+
+    var isPhoneUA = /iPhone|iPod|Android.*Mobile|Windows Phone|IEMobile|BlackBerry|BB10|Opera Mini/i.test(ua);
+    var coarse = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+    var minDim = Math.min(screen.width || 9999, screen.height || 9999);
+    if(!isTablet && (isPhoneUA || (coarse && minDim <= 480))){
+      document.documentElement.classList.add('is-phone');
+    }
+  }catch(e){ /* non-fatal — falls back to the standard responsive layout */ }
+})();
+</script>
 </head>
 <body>
 <!-- Decorative starfield behind every view (populated by buildStarfield at boot) -->
@@ -1017,6 +1038,54 @@
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
+</script>
+<script>
+// ── Phone nav drawer ────────────────────────────────────────────────────────
+// On phones the header carries ~20 controls; showing them all wraps the bar
+// into a wall of buttons that swallows the screen. Here we inject a single ☰
+// toggle that collapses the nav into a drawer (styling lives in app.css under
+// `html.is-phone`). No-op on tablets/desktops, which never get the is-phone flag.
+(function(){
+  if(!document.documentElement.classList.contains('is-phone')) return;
+  var hdr = document.getElementById('hdr');
+  if(!hdr) return;
+
+  var btn = document.createElement('button');
+  btn.id = 'mnav-toggle';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Menu');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.textContent = '☰';
+  hdr.insertBefore(btn, hdr.firstChild);
+
+  function setOpen(open){
+    hdr.classList.toggle('nav-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.textContent = open ? '✕' : '☰';
+    if(!open) hdr.scrollTop = 0;
+    // Republish the header height synchronously so header-anchored panels
+    // opened by the very same tap (see below) don't anchor to the tall,
+    // still-open drawer — the ResizeObserver in 70-panels-quest.js is async.
+    try { document.documentElement.style.setProperty('--hdr-h', hdr.offsetHeight + 'px'); }catch(e){}
+  }
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    setOpen(!hdr.classList.contains('nav-open'));
+  });
+
+  // Tapping a nav action (which opens a panel/menu elsewhere) closes the drawer,
+  // but interacting with the search box or the clock controls keeps it open.
+  // Capture phase so the drawer collapses *before* the button's own onclick
+  // runs — the panel then measures against the compact header height.
+  hdr.addEventListener('click', function(e){
+    if(!hdr.classList.contains('nav-open')) return;
+    if(e.target.closest('#search-wrap')) return;
+    var b = e.target.closest('button');
+    if(!b || b.id === 'mnav-toggle') return;
+    if(b.classList.contains('clk-btn') || b.id === 'clock-reset') return;
+    setOpen(false);
+  }, true);
+})();
 </script>
 </body>
 </html>
