@@ -1812,6 +1812,10 @@ const HX = (function(){
       if(!(isOrigin||isSel)){ hit.addEventListener('pointerenter',()=>{ lbl.style.display='block'; }); hit.addEventListener('pointerleave',()=>{ lbl.style.display=''; }); }
       g.appendChild(hit);
     });
+    // Trade mode: emoji badges above each market world — what it produces (▲) and needs
+    // (▼), with amounts. Drawn AFTER the stars so it layers on top; works in Simple mode
+    // too (no live sim needed), unlike the goods-flow/convoy overlay above.
+    if(showTrade){ try{ drawEconBadges(g); }catch(e){} }
     // Design Mode click-to-place: highlight every empty hex in view as a tap
     // target. Tiles the whole viewport, so panning lets the referee drop a system
     // anywhere on the unbounded grid. Topmost layer so it wins the click.
@@ -1915,6 +1919,66 @@ const HX = (function(){
       if(!dim && (sel || !manyConvoys)){ const lbl=NS('text',{x:x+7,y:y-4,class:'hx-trade-lbl'}); lbl.textContent=`${a.name} · ${gShort(a.route.good)} → ${disp(t)}`;
         if(sel) lbl.setAttribute('font-weight','700'); gg.appendChild(lbl); }
       layer.appendChild(gg);
+    });
+  }
+
+  // ── Trade-mode econ badges — what each market world PRODUCES (▲) and DEMANDS (▼),
+  //    as emoji above the star with kt/week amounts. Reads ECON.effectiveProfile — the
+  //    SAME produces/demands the price model and the star panel (econChipsHTML) use — so
+  //    it works in Simple AND Full economy mode. Amounts ride a zoom-gated class
+  //    (.hx-econ-amt), so the map stays a clean at-a-glance icon view until you zoom in.
+  //    The whole layer is pointer-events:none, so a badge never steals a tap from the
+  //    star beneath it (the badges sit inside the star's 14px hit circle). ────────────
+  const GOOD_ICON = {
+    'Common Ore':'🪨','Common Consumables':'🌾','Common Electronics':'🔌',
+    'Common Manufactured':'⚙️','Advanced Electronics':'💻','Precious Metals':'💎',
+    'Radioactives':'☢️','Biochemicals':'🧪','Luxury Goods':'💍','Pharmaceuticals':'💊',
+    'Unrefined Hydrogen':'💨','Refined Fuel':'⛽','Scrap':'♻️'
+  };
+  function econAmt(v){ v=Math.round(+v||0); return v>=1000 ? (Math.round(v/100)/10)+'k' : ''+v; }
+  // Top produced / net-imported goods for a market world. Demand = final consumption +
+  // the recipe inputs the world auto-draws (autoInputsOf), NET of what it makes itself —
+  // so a world that grows its own food doesn't read as "needs food". Internal/untraded
+  // goods (Scrap) are dropped. Returns null for non-market worlds or an empty profile.
+  function econBadgeData(id){
+    if(typeof window.ECON==='undefined' || !ECON.effectiveProfile || !ECON.isMarketId || !ECON.isMarketId(id)) return null;
+    let ep; try{ ep=ECON.effectiveProfile(id); }catch(e){ return null; }
+    if(!ep) return null;
+    const G=ECON.GOODS||{}, prod=ep.prod||{}, cons=ep.cons||{};
+    const tradeable=g=> G[g] && !G[g].internal;
+    let auto={}; try{ auto=ECON.autoInputsOf(prod)||{}; }catch(e){}
+    const prodE=Object.keys(prod).filter(g=>prod[g]>0 && tradeable(g))
+      .map(g=>({good:g,rate:prod[g]})).sort((a,b)=>b.rate-a.rate);
+    const dem={};
+    Object.keys(cons).forEach(g=>{ dem[g]=(dem[g]||0)+cons[g]; });
+    Object.keys(auto).forEach(g=>{ dem[g]=(dem[g]||0)+auto[g]; });
+    const demE=Object.keys(dem).filter(tradeable)
+      .map(g=>({good:g,rate:dem[g]-(prod[g]||0)}))   // net import: subtract own output
+      .filter(e=>e.rate>0.5).sort((a,b)=>b.rate-a.rate);
+    if(!prodE.length && !demE.length) return null;
+    return { prod:prodE, dem:demE };
+  }
+  function drawEconBadges(layer){
+    if(typeof window.ECON==='undefined' || !ECON.effectiveProfile) return;
+    const bg=NS('g',{'pointer-events':'none'}); layer.appendChild(bg);
+    const STEP=11, MAX=3;
+    const mkText=(x,y,cls,txt,col,op)=>{ const a={x,y,'text-anchor':'middle',class:cls}; if(col)a.fill=col; if(op!=null)a.opacity=op;
+      const t=NS('text',a); t.textContent=txt; bg.appendChild(t); return t; };
+    SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;
+      const p=axialPx(s.q,s.r), rows=[];
+      if(data.prod.length) rows.push({entries:data.prod.slice(0,MAX), extra:data.prod.length-MAX, kind:'prod'});
+      if(data.dem.length)  rows.push({entries:data.dem.slice(0,MAX),  extra:data.dem.length-MAX,  kind:'dem'});
+      rows.forEach((row,ri)=>{ const y=p.y-12-ri*12, isProd=row.kind==='prod', col=isProd?'#66c07a':'#e3a24a';
+        // Produce icons show at every zoom (the at-a-glance "what this world makes" map);
+        // the demand row rides the same .hx-lblzoom gate as amounts, so the fit view stays
+        // clean and the full produce+demand+amount detail unfolds as you zoom in.
+        const dim=isProd?'':' hx-econ-dem';
+        const n=row.entries.length, startX=p.x-(n-1)*STEP/2;
+        mkText(startX-8, y, 'hx-econ-dir'+dim, isProd?'▲':'▼', col);                   // direction cue
+        row.entries.forEach((e,i)=>{ const x=startX+i*STEP;
+          mkText(x, y, 'hx-econ-ic'+dim, GOOD_ICON[e.good]||'▪');                      // the good's emoji
+          mkText(x+4.7, y+4.7, 'hx-econ-amt', econAmt(e.rate), col); });               // kt/week (zoom-gated)
+        if(row.extra>0) mkText(startX+n*STEP-2, y, 'hx-econ-dir'+dim, '+'+row.extra, col, 0.85); });   // overflow beyond top-3
     });
   }
 
@@ -2258,9 +2322,13 @@ const HX = (function(){
   window.hxToggleRange=()=>{ showRange=!showRange; const b=document.getElementById('hx-range-toggle'); if(b){ b.textContent='Fuel range: '+(showRange?'ON':'OFF'); b.classList.toggle('on',showRange); } render(); };
   window.hxToggleFuel =()=>{ showFuel=!showFuel; const b=document.getElementById('hx-fuel-toggle'); if(b){ b.textContent='Fuel: '+(showFuel?'ON':'OFF'); b.classList.toggle('off',!showFuel); } render(); };
   function buildTradeLegend(lg){
-    let h='<div class="hx-tl-h">Goods flows <span class="hx-tl-an" onclick="hxTradeAllGoods(true)">all</span> · <span class="hx-tl-an" onclick="hxTradeAllGoods(false)">none</span></div><div class="hx-tl-grid">';
+    // Each world shows emoji badges for what it makes (▲) and needs (▼); the chips below
+    // double as the emoji key AND toggle each good's animated flow lines (Full sim only).
+    let h='<div class="hx-tl-h"><span style="color:#66c07a;font-weight:700">▲</span> produces · <span style="color:#e3a24a;font-weight:700">▼</span> needs</div>'+
+      '<div class="hx-tl-sub">Emoji above each world · zoom in for demand &amp; amounts</div>'+
+      '<div class="hx-tl-h" style="margin-top:7px">Goods flows <span class="hx-tl-an" onclick="hxTradeAllGoods(true)">all</span> · <span class="hx-tl-an" onclick="hxTradeAllGoods(false)">none</span></div><div class="hx-tl-grid">';
     Object.keys(GOOD_COL).forEach(g=>{ const on=tradeGoods.has(g);
-      h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
+      h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-em">${GOOD_ICON[g]||''}</span><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
     h+='</div><div class="hx-tl-row" style="margin-top:6px"><span class="hx-tl-sw" style="background:#f4d35e;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>Independent trader (always shown)</div>';
     lg.innerHTML=h;
   }
