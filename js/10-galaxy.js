@@ -1638,7 +1638,7 @@ const HX = (function(){
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
   let origin=null, selected=null;
-  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, dragMoved=false, tapConsumed=false;
+  let showLanes=true, showTerr=true, showRange=false, showFuel=true, showTrade=false, showRoutes=true, dragMoved=false, tapConsumed=false;
   let view={x:0,y:0,scale:1}, fitScale=1, fitted=false, built=false, resizeBound=false, svg=null, scene=null;
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
@@ -1765,6 +1765,10 @@ const HX = (function(){
           hit.addEventListener('pointerup',ev=>{ if(ev.button>0||dragMoved) return; tapConsumed=true;
             if(typeof gxBlockMode!=='undefined'&&gxBlockMode){ if(typeof gxToggleBlock==='function') gxToggleBlock(L.key); }
             else if(editing){ if(typeof gxRemoveLane==='function') gxRemoveLane(L.key); } }); laneLayer.appendChild(hit); } }); }
+    // Supply→demand connector arcs for the picked good(s): producer → importer, drawn under
+    // the live convoys. Structural (needs no sim), so it's the Simple-mode counterpart to the
+    // goods-flow lines. See drawSupplyRoutes().
+    if(showTrade && showRoutes && tradeGoods.size){ try{ drawSupplyRoutes(g); }catch(e){} }
     if(showTrade){ try{ drawTrade(g); }catch(e){} }   // living-economy overlay: goods flows + trader convoys
     // Corp territory — when a house is selected in the econ console, ring its HQ + expanded worlds in
     // its house colour (HQ = solid ring + label; expansions = dashed, growing with the invest count).
@@ -2009,6 +2013,46 @@ const HX = (function(){
       const col=t>0?HEAT_BUY:HEAT_SELL, op=0.15+Math.abs(t)*0.32, p=axialPx(s.q,s.r);
       hg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:col,'fill-opacity':op.toFixed(2),
         stroke:col,'stroke-opacity':Math.min(0.9,op+0.28).toFixed(2),'stroke-width':1})); });
+  }
+
+  // ── Supply→demand connector arcs — for each good picked in the legend, arc from every net
+  //    importer to its NEAREST net producer (producer → importer, arrowhead at the importer).
+  //    This is the STATIC "who should trade with whom" for a good; unlike the animated convoys
+  //    it needs no running sim, so it's the Simple-mode counterpart to the flow lines. Reads the
+  //    same net produce/demand the badges use; capped per good so the map stays legible. ──
+  function goodNet(id, good){   // >0 net exporter (produces more than it uses), <0 net importer
+    if(typeof window.ECON==='undefined' || !ECON.isMarketId || !ECON.isMarketId(id)) return 0;
+    let ep; try{ ep=ECON.effectiveProfile(id); }catch(e){ return 0; }
+    if(!ep) return 0;
+    const prod=(ep.prod&&ep.prod[good])||0, cons=(ep.cons&&ep.cons[good])||0;
+    let auto=0; try{ auto=(ECON.autoInputsOf(ep.prod||{})[good])||0; }catch(e){}
+    return prod-(cons+auto);
+  }
+  function drawSupplyRoutes(layer){
+    if(typeof window.ECON==='undefined') return;
+    const rg=NS('g',{'pointer-events':'none'}); layer.appendChild(rg);
+    const IMP_CAP=8;   // arcs per good = neediest importers only, so a busy good stays readable
+    [...tradeGoods].forEach(good=>{
+      const producers=[], importers=[];
+      SYS.forEach(s=>{ const n=goodNet(s.id,good); if(n>0.5) producers.push(s); else if(n<-0.5) importers.push({s,need:-n}); });
+      if(!producers.length || !importers.length) return;
+      importers.sort((a,b)=>b.need-a.need);
+      const col=GOOD_COL[good]||'#9fb0c8';
+      importers.slice(0,IMP_CAP).forEach(imp=>{
+        let best=null, bd=Infinity;
+        producers.forEach(pr=>{ const d=hexDist(imp.s,pr); if(d<bd){ bd=d; best=pr; } });   // nearest supply
+        if(!best) return;
+        const a=axialPx(best.q,best.r), b=axialPx(imp.s.q,imp.s.r);
+        const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len, nx=-uy, ny=ux;
+        const ax=a.x+ux*7, ay=a.y+uy*7, bx=b.x-ux*8, by=b.y-uy*8;                             // clear the star markers
+        const bow=Math.min(38, len*0.16), cx=(ax+bx)/2+nx*bow, cy=(ay+by)/2+ny*bow;           // gentle bow
+        const w=Math.max(0.7, Math.min(2.6, Math.sqrt(imp.need)/2));                          // heavier arc = hungrier importer
+        rg.appendChild(NS('path',{d:`M${ax.toFixed(1)},${ay.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
+          fill:'none',stroke:col,'stroke-width':w,'stroke-opacity':0.5,'stroke-linecap':'round'}));
+        const tx=bx-cx, ty=by-cy, tl=Math.hypot(tx,ty)||1, hx=tx/tl, hy=ty/tl, px=-hy, py=hx, sz=4;   // arrowhead along the tangent
+        rg.appendChild(NS('polygon',{points:`${bx.toFixed(1)},${by.toFixed(1)} ${(bx-hx*sz+px*sz*0.6).toFixed(1)},${(by-hy*sz+py*sz*0.6).toFixed(1)} ${(bx-hx*sz-px*sz*0.6).toFixed(1)},${(by-hy*sz-py*sz*0.6).toFixed(1)}`,fill:col,'fill-opacity':0.7}));
+      });
+    });
   }
 
   // ── Fuel / routing ──
@@ -2359,6 +2403,8 @@ const HX = (function(){
     Object.keys(GOOD_COL).forEach(g=>{ const on=tradeGoods.has(g);
       h+=`<div class="hx-tl-chip${on?' on':''}" onclick="hxTradeGood('${g}')"><span class="hx-tl-em">${GOOD_ICON[g]||''}</span><span class="hx-tl-sw" style="background:${GOOD_COL[g]}"></span>${gShort(g)}</div>`; });
     h+='</div>';
+    // Supply→demand arcs: producer → importer for each picked good (works without the sim).
+    h+=`<div class="hx-tl-row" style="margin-top:5px"><span class="hx-tl-an${showRoutes?' on':''}" onclick="hxToggleRoutes()">⟿ routes: ${showRoutes?'ON':'OFF'}</span><span style="color:var(--tx1);opacity:.85">supply → demand</span></div>`;
     // Price heatmap key — only meaningful for a single good, so it appears once exactly one
     // chip is picked; otherwise a hint tells you how to summon it.
     if(tradeGoods.size===1){ const g=[...tradeGoods][0];
@@ -2375,6 +2421,8 @@ const HX = (function(){
     const lg=document.getElementById('hx-trade-legend');
     if(lg){ lg.classList.toggle('hidden',!showTrade); if(showTrade) buildTradeLegend(lg); }
     render(); };
+  window.hxToggleRoutes=()=>{ showRoutes=!showRoutes;
+    const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeGood=g=>{ if(tradeGoods.has(g)) tradeGoods.delete(g); else tradeGoods.add(g);
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeAllGoods=on=>{ tradeGoods.clear(); if(on) Object.keys(GOOD_COL).forEach(g=>tradeGoods.add(g));
