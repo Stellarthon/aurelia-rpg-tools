@@ -97,6 +97,124 @@ function seedFromString(str){
 }
 function lcgNext(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PINCH / ZOOM  —  reusable pointer-events pan + zoom for an SVG canvas
+// ───────────────────────────────────────────────────────────────────────────
+// Applied to the orrery (#orrery-svg) and the body close-up (#body-disc-svg).
+// Implemented as a CSS transform ON THE SVG ELEMENT (translate + uniform scale,
+// transform-origin 0 0) rather than a viewBox rewrite, because:
+//   · buildOrreryNow() re-fits the viewBox on every rebuild/resize — a viewBox
+//     zoom would be wiped, whereas an element style.transform survives innerHTML
+//     rebuilds untouched;
+//   · a CSS transform composes into getScreenCTM(), so existing coordinate maths
+//     (e.g. handleDiscTap's tap-to-place) keep landing exactly where tapped;
+//   · hit-testing follows the visual transform, so tap-to-select still hits the
+//     right body at any zoom.
+// Gestures: two pointers = pinch-zoom about the gesture midpoint · one-pointer
+// drag = pan · wheel = zoom (desktop) · double-tap / double-click = reset. A tap
+// is told from a drag by an ~8px movement threshold; when the gesture WAS a drag
+// or pinch the trailing click/touchend is swallowed (capture phase) so it can't
+// select a body — a genuine tap is never blocked, so selection works as before.
+const PZ_MIN = 0.5, PZ_MAX = 8, PZ_TAP_PX = 8;   // zoom clamp + tap/drag threshold
+let pzSuppressTap = false;                        // shared: a drag/pinch just ended → swallow its trailing tap
+
+function attachPinchZoom(svg){
+  if(!svg || svg.dataset.pzBound === '1') return;
+  svg.dataset.pzBound = '1';
+  svg.style.touchAction = 'none';                 // ONLY on this canvas — no page/viewport-meta change
+  svg.style.transformOrigin = '0 0';
+  const st = { s:1, tx:0, ty:0 };                 // current transform, in screen px
+  const pointers = new Map();                     // active pointerId -> {x,y}
+  let dragging = false, moved = false, startX = 0, startY = 0;
+  let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
+  let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+  svg.__pz = st;
+
+  function apply(){
+    st.s = Math.max(PZ_MIN, Math.min(PZ_MAX, st.s));
+    const rect = svg.getBoundingClientRect(), M = 40, w = rect.width, h = rect.height;   // rect is the *transformed* box (= s × untransformed)
+    st.tx = Math.max(M - w, Math.min(w / st.s - M, st.tx));    // lenient clamp so the canvas can't be flung fully out of view
+    st.ty = Math.max(M - h, Math.min(h / st.s - M, st.ty));
+    svg.style.transform = `translate(${st.tx}px,${st.ty}px) scale(${st.s})`;
+  }
+  // Content point (untransformed element px) under a client position.
+  function localAt(cx, cy){ const r = svg.getBoundingClientRect(); return { x:(cx - r.left) / st.s, y:(cy - r.top) / st.s }; }
+  // Zoom to factor k about a client focal point, keeping that point stationary.
+  function zoomAbout(cx, cy, k){
+    const L = localAt(cx, cy);
+    const s0 = st.s, s1 = Math.max(PZ_MIN, Math.min(PZ_MAX, s0 * k));
+    st.tx += L.x * (s0 - s1); st.ty += L.y * (s0 - s1); st.s = s1;
+    apply();
+  }
+  function reset(){ st.s = 1; st.tx = 0; st.ty = 0; apply(); }
+  svg.__pzReset = reset;
+
+  svg.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    moved = false;
+    try { svg.setPointerCapture(e.pointerId); } catch(err){}
+    if(pointers.size === 1){ dragging = true; startX = e.clientX; startY = e.clientY; }
+    else if(pointers.size === 2){
+      dragging = false;
+      const p = [...pointers.values()];
+      pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;
+      pinchMidX = (p[0].x + p[1].x) / 2; pinchMidY = (p[0].y + p[1].y) / 2;
+    }
+  });
+
+  svg.addEventListener('pointermove', (e) => {
+    if(!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    if(pointers.size >= 2){
+      const p = [...pointers.values()];
+      const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;
+      const midX = (p[0].x + p[1].x) / 2, midY = (p[0].y + p[1].y) / 2;
+      zoomAbout(midX, midY, dist / (pinchDist || dist));       // pinch scale about the midpoint …
+      st.tx += midX - pinchMidX; st.ty += midY - pinchMidY;    // … plus pan by midpoint drift
+      apply();
+      pinchDist = dist; pinchMidX = midX; pinchMidY = midY; moved = true;
+    } else if(dragging){
+      const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+      if(!moved && Math.hypot(e.clientX - startX, e.clientY - startY) > PZ_TAP_PX) moved = true;
+      if(moved){ st.tx += dx; st.ty += dy; apply(); }
+    }
+  });
+
+  function endPointer(e){
+    const wasMoved = moved;
+    pointers.delete(e.pointerId);
+    try { svg.releasePointerCapture(e.pointerId); } catch(err){}
+    if(pointers.size < 2) pinchDist = 0;
+    if(pointers.size !== 0) return;
+    dragging = false;
+    if(wasMoved){                                  // a drag/pinch — swallow the trailing click/touchend so it can't select
+      pzSuppressTap = true; setTimeout(() => { pzSuppressTap = false; }, 350);
+      return;
+    }
+    const now = Date.now();                        // a tap — double-tap within 300ms & 30px resets
+    if(now - lastTapTime < 300 && Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 30){
+      reset();
+      pzSuppressTap = true; setTimeout(() => { pzSuppressTap = false; }, 350);   // swallow the 2nd tap's select
+      lastTapTime = 0;
+    } else { lastTapTime = now; lastTapX = e.clientX; lastTapY = e.clientY; }
+  }
+  svg.addEventListener('pointerup', endPointer);
+  svg.addEventListener('pointercancel', endPointer);
+
+  // Capture-phase tap swallow — registered FIRST (before selection / handleDiscTap
+  // listeners) so stopImmediatePropagation can veto a select when, and only when,
+  // the gesture was a drag/pinch. A genuine tap leaves pzSuppressTap false and
+  // passes straight through, so tap-to-select is unchanged.
+  const swallow = (e) => { if(pzSuppressTap){ e.stopImmediatePropagation(); if(e.cancelable) e.preventDefault(); } };
+  svg.addEventListener('click', swallow, true);
+  svg.addEventListener('touchend', swallow, true);
+
+  // Desktop wheel zoom about the cursor.
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); zoomAbout(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive:false });
+}
+function pzReset(svg){ if(svg && typeof svg.__pzReset === 'function') svg.__pzReset(); }
+
 // Coalesce rebuilds: the player poll, design-mode edits, and several view paths
 // can all call buildOrrery() in a burst. Re-stringifying the whole SVG each time is
 // the hot path, so collapse a burst into ONE rebuild on the next animation frame.
@@ -123,6 +241,7 @@ function bindOrreryResize(){
 function buildOrreryNow(){
   const svg = document.getElementById("orrery-svg");
   if(!svg) return;
+  attachPinchZoom(svg);                       // pinch / wheel / drag zoom (bound once; survives rebuilds)
   bindOrreryResize();
   const W=800, H=500;                       // legacy authoring space for the star field
   const bodies = getBodies();
@@ -866,6 +985,8 @@ function buildBodyView(id){
 
   const svg = document.getElementById('body-disc-svg');
   if(svg){
+    attachPinchZoom(svg);                      // bind pan/zoom BEFORE the disc-tap handler so its swallow wins registration order
+    if(svg.dataset.pzBody !== body.id){ pzReset(svg); svg.dataset.pzBody = body.id; }   // fresh body → start un-zoomed
     const PR = bodyDiscPR(body);
     svg.innerHTML = renderBodyDisc(body) + renderElevators(body, 400, 300, PR)
       + renderMoonNodes(body, 400, 300, PR) + renderLocationNodes(body, 400, 300, PR);

@@ -195,6 +195,9 @@ let revealedAreas = {}; // {areaId: true/false} — shared
 let myIdentity = null;  // local to this device — "Rhett Calder", "Cassia Velen", etc.
 let notesViewMode = 'private'; // 'private' | 'party'
 let secureRole = null;  // set from the get-content token response; overrides pmCheck when present
+let secureNetworkLock = null;   // TASK 6: referee's view of the network-lock state (from get-content; referee only)
+let securePlayers = null;       // TASK 7: player roster + tokens (referee only, from get-content)
+let networkLockMessage = '';    // TASK 6: 403 lock-out message to surface to a blocked device
 
 // With a secure token, the SERVER's role is authoritative for the whole UI
 // (chrome + content). Without one, fall back to the local player-mode checkbox.
@@ -284,6 +287,60 @@ function copyInviteLink(){
   const done = () => { if(typeof showToast === 'function') showToast('Invite link copied — send it to the player.'); };
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, () => prompt('Copy this invite link:', link));
   else prompt('Copy this invite link:', link);
+}
+
+// ── TASK 6: venue-network lock (referee) ─────────────────────────────────────
+// Enable/disable the "same network only" lock through the SAME edge-function path
+// that gates ref notes — the lock lives server-side (network_lock table) and is
+// pinned to the referee's public IP AS THE EDGE FUNCTION SEES IT. Never a client
+// flag. Both enabling and disabling confirm first (the referee asked for the
+// warning). Requires a referee token (secureRole==='referee').
+async function setNetworkLock(enable){
+  const token = getContentToken();
+  if(!token || secureRole !== 'referee'){ if(typeof showToast === 'function') showToast('Apply your referee token first.', 'error'); return; }
+  const warn = enable
+    ? 'Lock this campaign to your current network?\n\nAnyone NOT on the same public IP as you — players on mobile data or a VPN — will be blocked until you turn this off. It auto-unlocks 12 hours after it is pinned (break-glass).'
+    : 'Unlock the campaign?\n\nAnyone with a valid token will be able to connect from any network again.';
+  if(typeof confirm === 'function' && !confirm(warn)) return;
+  try {
+    const res = await fetch(CONTENT_API, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ networkLock: { set: !!enable } }),
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    secureNetworkLock = data.networkLock || null;
+    if(data.players) securePlayers = data.players;
+    if(typeof showToast === 'function') showToast(enable
+      ? ('Network lock ON — pinned to ' + ((secureNetworkLock && secureNetworkLock.pinned_ip) || 'your IP') + '. Auto-unlocks in 12h.')
+      : 'Network lock OFF — players may connect from any network.');
+    const menu = document.getElementById('settings-menu');
+    if(menu && !menu.classList.contains('hidden') && typeof renderSettingsMenu === 'function') renderSettingsMenu();
+  } catch(e){
+    if(typeof showToast === 'function') showToast('Could not change the network lock — check your connection.', 'error');
+  }
+}
+
+// ── TASK 7: referee token vault helpers ──────────────────────────────────────
+// Tokens arrive ONLY in the referee's get-content response (securePlayers) — never
+// in a player bundle/row. The settings list masks them; these reveal / copy /
+// share a single token on demand at the table.
+function revealPlayerToken(i){
+  const p = (securePlayers || [])[i]; const cell = document.getElementById('pv-tok-' + i);
+  if(p && cell){ cell.textContent = p.token; cell.dataset.revealed = '1'; }
+}
+function copyPlayerToken(i){
+  const p = (securePlayers || [])[i]; if(!p) return;
+  const done = () => { if(typeof showToast === 'function') showToast('Token copied — hand it to ' + (p.identity || 'the player') + '.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(p.token).then(done, () => prompt('Copy this token:', p.token));
+  else prompt('Copy this token:', p.token);
+}
+function sharePlayerToken(i){
+  const p = (securePlayers || [])[i]; if(!p) return;
+  const link = location.origin + location.pathname + '#token=' + encodeURIComponent(p.token);
+  if(navigator.share){ navigator.share({ title: 'Aurelia access', text: 'Your access token for ' + (p.identity || 'the campaign'), url: link }).catch(() => {}); }
+  else copyPlayerToken(i);
 }
 // Mirror of the server/extractor classification: fields stripped locally before
 // server fragments are applied. MUST stay in sync with tools/extract-content.mjs.
@@ -378,9 +435,24 @@ async function hydrateSecureContent(){
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: '{}',
     });
+    if(res.status === 403){
+      // TASK 6: the venue-network lock blocked this device. Surface the referee's
+      // message and fail CLOSED (player-safe shell) — do NOT use cached content.
+      let msg = 'The referee has locked this campaign to the venue network.';
+      try { const b = await res.json(); if(b && b.message) msg = b.message; } catch(e2){}
+      networkLockMessage = msg;
+      if(typeof showToast === 'function') showToast(msg, 'error');
+      return false;
+    }
     if(!res.ok) throw new Error('get-content ' + res.status);
     data = await res.json();
     cacheSecureContent(token, data);       // refresh the offline fallback on every success
+    if(data.role === 'referee'){           // TASK 6/7: capture referee-only extras (never present for players)
+      secureNetworkLock = data.networkLock || null;
+      securePlayers = data.players || null;
+      if(secureNetworkLock && secureNetworkLock.repinned && typeof showToast === 'function')
+        showToast('Network lock re-pinned to your current IP (' + (secureNetworkLock.pinned_ip || '?') + ').');
+    }
   } catch(e){
     // Offline / unreachable: fall back to this token's last cached content so a
     // referee doesn't lose their NPCs/checks mid-session. No cache → fail CLOSED
