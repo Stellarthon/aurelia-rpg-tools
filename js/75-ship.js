@@ -121,8 +121,11 @@ async function saveShipState(){
 }
 
 // ── Traveller 2E math ──
-// Jump fuel for one jump = 10% of hull tonnage × parsecs jumped. A trip needs
-// ceil(parsecs / jumpRating) jumps; each jump takes ≈ 1 week (7 days).
+// Jump fuel for one jump = 10% of hull tonnage × parsecs jumped (FUEL_RULES,
+// js/00-core-data.js). A trip needs ceil(parsecs / jumpRating) jumps; each jump
+// takes ≈ 1 week (7 days). Crossing `p` parsecs total burns 10% × hull × p in
+// jump fuel regardless of how the jumps are split, so shipFuelForTrip uses the
+// whole-trip parsec count directly (exact tons — no house rounding).
 function shipJumpsNeeded(){
   const p = Number(shipState.jumpParsecs) || 0;
   const r = Number(shipState.jumpRating) || 1;
@@ -130,8 +133,10 @@ function shipJumpsNeeded(){
 }
 function shipFuelForTrip(){
   const p = Number(shipState.jumpParsecs) || 0;
-  const t = Number(shipState.tonnage) || 0;
-  return p > 0 ? +(0.1 * t * p).toFixed(1) : 0;
+  if(p <= 0) return 0;
+  const t = shipState.tonnage;
+  const weeks = shipJumpsNeeded() * (FUEL_RULES.operatingFuel.weeksPerJump || 1);
+  return jumpFuel(t, p) + operatingFuel(t, weeks);   // operating term is 0 unless FUEL_RULES.operatingFuel.enabled
 }
 function shipTravelDays(){ return shipJumpsNeeded() * 7; }
 

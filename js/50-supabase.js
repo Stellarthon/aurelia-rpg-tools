@@ -335,3 +335,61 @@ function updateConnPill(){
   pill.title = `Shared sync — ${text}${q ? ` · ${q} change${q>1?'s':''} queued` : ''} · last synced ${syncAgoLabel()}`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ERROR TELEMETRY UPLOADER  —  drains the aurelia_err_upload queue → error_log
+// ───────────────────────────────────────────────────────────────────────────
+// js/00-core-data.js parks client errors on a localStorage queue (it can't reach
+// this data layer at load time). We drain that queue to the error_log table
+// (migration 0005) here, where SUPABASE_URL/KEY already live. Rules:
+//   · batched     — at most one flush per 10s, all queued rows in one POST;
+//   · session cap — never more than 50 uploads per page load, so a runaway error
+//                   loop can't flood the table;
+//   · fire-and-forget — every path is wrapped in try/catch. If the upload fails
+//                   (offline, blocked, RLS) the queue is simply left for the next
+//                   tick and the app is entirely unaffected — exactly as today.
+// There is NO select policy on error_log, so this key can only ever write.
+const ERR_LOG_REST = SUPABASE_URL + '/rest/v1/error_log';
+let _errUploadedThisSession = 0;   // hard session cap counter
+let _errLastFlush = 0;             // throttle: at most one flush per 10s
+let _errFlushBusy = false;
+async function flushErrorQueue(){
+  try {
+    if(_errFlushBusy) return;
+    if(_errUploadedThisSession >= 50) return;                 // session hard cap reached
+    const now = Date.now();
+    if(now - _errLastFlush < 10000) return;                   // ≤ one flush per 10s
+    let q;
+    try { q = JSON.parse(localStorage.getItem('aurelia_err_upload') || '[]'); } catch(e){ q = []; }
+    if(!Array.isArray(q) || !q.length) return;
+    _errFlushBusy = true;
+    _errLastFlush = now;                                       // a mere attempt still counts against the 10s window
+    const batch = q.slice(0, 50 - _errUploadedThisSession);   // fill remaining session budget
+    const rows = batch.map(e => ({
+      created_at:  e && e.created_at || new Date().toISOString(),
+      player:      e && e.player != null ? e.player : null,
+      app_version: e && e.app_version != null ? e.app_version : null,
+      ua:          e && e.ua != null ? e.ua : null,
+      message:     e && e.message != null ? e.message : null,
+      stack:       e && e.stack != null ? String(e.stack).slice(0, 2048) : null,   // belt-and-braces 2KB cap
+      context:     e && e.context != null ? e.context : {}
+    }));
+    const res = await fetch(ERR_LOG_REST, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(rows)
+    });
+    if(res.ok){
+      _errUploadedThisSession += batch.length;
+      const rest = q.slice(batch.length);
+      try { localStorage.setItem('aurelia_err_upload', JSON.stringify(rest)); } catch(e){}
+    }
+  } catch(e){ /* offline / blocked — leave the queue; the next tick retries (capped) */ }
+  finally { _errFlushBusy = false; }
+}
+// Drain shortly after boot settles, then poll every 10s. Both are deferred
+// callbacks (load-order safe) and no-op when the queue is empty.
+try {
+  if(typeof setTimeout === 'function')  setTimeout(function(){ try { flushErrorQueue(); } catch(e){} }, 4000);
+  if(typeof setInterval === 'function') setInterval(function(){ try { flushErrorQueue(); } catch(e){} }, 10000);
+} catch(e){}
+
