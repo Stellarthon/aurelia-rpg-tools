@@ -434,13 +434,21 @@ window.ECON = (function(){
   // subsidised hulls. (The sim moves kilotonnes while a hull carries tens of tons — the ship
   // is a flavour/scale layer over the abstract bulk run.)
   const SHIP_CLASSES = {
-    free:  { id:'free',  name:'Free Trader',         tons:200,  jump:1, cargoT:82,  haul:9 },
-    far:   { id:'far',   name:'Far Trader',          tons:200,  jump:2, cargoT:64,  haul:8 },
-    subm:  { id:'subm',  name:'Subsidised Merchant', tons:400,  jump:1, cargoT:200, haul:14 },
-    fat:   { id:'fat',   name:'Fat Trader',          tons:400,  jump:1, cargoT:268, haul:16 },
-    heavy: { id:'heavy', name:'Heavy Freighter',     tons:1000, jump:2, cargoT:730, haul:24 },
+    free:  { id:'free',  name:'Free Trader',         tons:200,  jump:1, cargoT:82,  haul:9,  fuelMax:80  },
+    far:   { id:'far',   name:'Far Trader',          tons:200,  jump:2, cargoT:64,  haul:8,  fuelMax:80  },
+    subm:  { id:'subm',  name:'Subsidised Merchant', tons:400,  jump:1, cargoT:200, haul:14, fuelMax:160 },
+    fat:   { id:'fat',   name:'Fat Trader',          tons:400,  jump:1, cargoT:268, haul:16, fuelMax:160 },
+    heavy: { id:'heavy', name:'Heavy Freighter',     tons:1000, jump:2, cargoT:730, haul:24, fuelMax:400 },
   };
   function shipOf(a){ return SHIP_CLASSES[(a&&a.shipId)||'free'] || SHIP_CLASSES.free; }
+  // ── TASK 5: trader fuel (per ship class). Fuel lives in state.agents → synced
+  //    via econ-state and mutated ONLY in the referee-run agentsStep, exactly like
+  //    a.pos / a.cap, so every client reads identical fuel (no per-client divergence).
+  //    fuelMax defaults to 40% of hull (matches the player ship's 200t→80t) if a
+  //    class omits it. jumpFuel()/FUEL_RULES (00-core-data) give the burn — same
+  //    Mongoose Traveller 2e rules the player ship uses.
+  function shipFuelMax(a){ const sc=shipOf(a); return sc.fuelMax || Math.round(0.4*sc.tons); }
+  function ensureAgentFuel(a){ if(a.fuelMax==null) a.fuelMax=shipFuelMax(a); if(a.fuel==null) a.fuel=a.fuelMax; }
   function pickShip(backing){ const pub=backing&&backing!=='private';
     return pick(pub ? ['subm','subm','fat','heavy','far'] : ['free','free','far','far','subm','fat']); }
   function upkeepOf(a){ return Math.round(400 + shipOf(a).haul*60); }    // bigger hull → more vessel/crew/mooring upkeep (Free ~940 … Heavy ~1840)
@@ -552,6 +560,7 @@ window.ECON = (function(){
 
   function agentsStep(week){
     if(!state.agents || state.tradersOn===false) return;
+    state.agents.forEach(ensureAgentFuel);   // TASK 5: give legacy/loaded agents fuel fields (idempotent)
     const blk = blocked(), goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
     // Pool the imbalanced worlds per good once (cheap — empty at baseline).
     const pool = {};
@@ -601,6 +610,15 @@ window.ECON = (function(){
       const src=best.b.id, dst=best.s.id, startPos=a.pos||src;
       let dead=0; if(startPos!==src){ const D=dist(startPos,agentBlockSet(a,blk)); if(D[src]!=null) dead=D[src]; }   // deadhead also routes around hostile space for backed fleets
       const tripWk=dead+Math.max(1,best.dist), eta=week+tripWk;
+      // ── TASK 5: fuel. The trader tops off during its berth IF this world can
+      //    supply fuel; a fuel-STARVED berth (an economy fuel shortage — fueled()
+      //    reads the Refined-Fuel/Hydrogen stock) forces a dry trader to HOLD here
+      //    until it restocks, which shows in the referee's docked-traders panel.
+      ensureAgentFuel(a);
+      const need = jumpFuel(shipOf(a).tons, dead + Math.max(1,best.dist));   // MgT2e 10%×hull×pc — same FUEL_RULES as the player ship
+      if(fueled(startPos)){ a.fuel = a.fuelMax; a.fuelWait = false; }         // refuel service at the berth
+      else if((a.fuel||0) < need){ a.fuelWait = true; return; }              // dry & no fuel here → wait at port (dispatch aborts)
+      a.fuel = Math.max(0, a.fuel - need); a.fuelWait = false;
       // Berthing: the ship sits at port 1–7 days before setting off (crew rest, loading,
       // repairs). The weekly cargo clock is unchanged — this is the port pause you see when
       // day-stepping: the marker idles at its berth until `began`, then flies the same route.
@@ -1351,7 +1369,7 @@ window.ECON = (function(){
     coverWeeks(id,g){ ensure(); const w=worlds[id]; if(!w) return null; const rate=(w.cons[g]||0)+recipeDraw(w,g); return rate>0? stk(id,g)/rate : null; },
     foodFactor(id){ ensure(); return foodFactor(id); },   // 0..1 labour-output multiplier (1 = fed; <1 = larder running dry, all non-food output sagging)
     stock: stk, safety:(id,g)=>{ ensure(); return worlds[id]?safety(worlds[id],g):0; },
-    agents(){ ensure(); return state.agents||[]; },
+    agents(){ ensure(); (state.agents||[]).forEach(ensureAgentFuel); return state.agents||[]; },   // TASK 5: every trader always carries fuel state (idempotent — only fills missing fields)
     shipOf:(a)=>shipOf(a), SHIP_CLASSES,
     corps(){ ensure(); return state.corps||{}; },   // {corpId:{name,specialty,home,color,treasury,invests,megacorp,monopoly,playerShares,...}}
     isCorp,
@@ -1664,6 +1682,58 @@ function econSystemSectionHTML(nodeId){
   if(ep.overridden) h += `<div style="font-size:11px;color:#C98BE8;margin:-2px 0 8px">✎ Custom economy — overrides the built-in profile.</div>`;
   h += `<button class="design-add-btn" style="width:100%" onclick="openEconEditor('${nodeId}')">⚒ Edit production &amp; consumption</button>`;
   h += econPriceControlHTML(nodeId);
+  h += `</div>`;
+  return h;
+}
+
+// ── Ref-only: trade ships docked in the viewed system (TASK 4) ───────────────
+// Lists, for the referee only, the NPC traders physically at this world's port —
+// idle after a run, or berthed/loading before departure (route not yet begun) —
+// with name, ship class, backing, route-if-known, and fuel state (populated once
+// TASK 5 lands; degrades to nothing until then). Reads the SAME shared econ-state
+// (ECON.agents) every client already syncs, so it surfaces nothing to players
+// beyond what the public economy already carries. Returns '' for players and for
+// a system with no economy node, so no trader markup ever enters a player's DOM.
+function dockedTradersSectionHTML(nodeId){
+  if(typeof ECON==='undefined' || !nodeId || typeof isReferee!=='function' || !isReferee()) return '';
+  let agents;
+  try { agents = ECON.agents() || []; } catch(e){ return ''; }
+  const esc = (s)=>String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const week = (function(){ try { return ECON.state.week||0; } catch(e){ return 0; } })();
+  const worlds = (function(){ try { return ECON.worlds()||{}; } catch(e){ return {}; } })();
+  const nameOf = (id)=> (worlds[id] && (worlds[id].label||worlds[id].name)) || id;
+  // Docked = at this node AND not yet flying (no route, or still berthed/loading).
+  const isDocked = (a)=> a && a.pos===nodeId && (!a.route || (a.route.began!=null && a.route.began>week));
+  const docked  = agents.filter(isDocked);
+  const inbound = agents.filter(a => a && a.route && a.route.to===nodeId && !isDocked(a)).length;
+  const backLabel = (a)=>{
+    const b = a && a.backing;
+    if(!b || b==='private') return 'Independent';
+    if(typeof ECON.isCorp==='function' && ECON.isCorp(b)){ const c=(ECON.corps()||{})[b]; return (c&&c.name)||'Corporate'; }
+    return b.charAt(0).toUpperCase()+b.slice(1);
+  };
+  let h = `<div class="s-sec ref-only"><div class="s-sec-lbl" style="color:#5f87c9">🚢 Docked Traders <span style="color:var(--tx1);font-weight:400">· referee</span></div>`;
+  if(!docked.length){
+    h += `<div style="font-size:11px;color:var(--tx1)">No traders docked here${inbound?` · <b style="color:var(--tx0)">${inbound}</b> inbound`:''}.</div>`;
+  } else {
+    h += docked.map(a=>{
+      const sc = (ECON.shipOf&&ECON.shipOf(a))||{}, cls = sc.name||'Trader';
+      const route = (a.route && a.route.to) ? `⏳ loading → <b style="color:var(--tx0)">${esc(nameOf(a.route.to))}</b>`
+                  : (a.hist && a.hist[0] && a.hist[0].from) ? `arrived from ${esc(nameOf(a.hist[0].from))}` : 'idle';
+      // Fuel readout (TASK 5). Falls back to the ship class's tank so it shows even
+      // for agents not yet stepped; ⚠ when a fuel-starved berth is holding it dry.
+      const fMax = (a.fuelMax!=null) ? a.fuelMax : (sc.fuelMax!=null ? sc.fuelMax : null);
+      const fCur = (a.fuel!=null) ? a.fuel : fMax;
+      const fuelStr = (fMax!=null)
+        ? `<span style="color:${(a.fuelWait || (fCur < fMax*0.15)) ? '#e8a0a0':'#7ec98f'}">⛽ ${Math.round(fCur)}/${Math.round(fMax)}t${a.fuelWait?' · <b style="color:#e8a0a0">⚠ awaiting fuel</b>':''}</span>`
+        : '';
+      return `<div style="padding:5px 0;border-top:1px solid var(--bd0)">
+        <div style="font-size:12px"><b>${esc(a.name||'Trader')}</b> <span style="color:var(--tx1)">· ${esc(cls)}</span></div>
+        <div style="font-size:11px;color:var(--tx1)">${esc(backLabel(a))} · ${route}${fuelStr?` · ${fuelStr}`:''}</div>
+      </div>`;
+    }).join('');
+    if(inbound) h += `<div style="font-size:11px;color:var(--tx1);margin-top:5px">+ <b style="color:var(--tx0)">${inbound}</b> inbound</div>`;
+  }
   h += `</div>`;
   return h;
 }

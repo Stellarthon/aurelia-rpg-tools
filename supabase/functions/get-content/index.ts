@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// get-content  ·  Stage 1 of the per-player redaction plan
+// get-content  ·  Stage 1 of the per-player redaction plan (+ TASK 6 / TASK 7)
 // See docs/per-player-redaction-plan.md
 //
 // Authenticated, per-identity content endpoint. The browser sends a bearer token
@@ -8,10 +8,23 @@
 // caller's audience permits, plus the (non-secret) reveal flags. A player NEVER
 // receives a `referee` fragment or another identity's fragment.
 //
+// It also now:
+//   · TASK 6 — enforces the referee's optional "same network only" lock. When the
+//     lock is enabled, a NON-referee caller whose public IP ≠ the pinned referee
+//     IP gets a 403. Enforcement lives ONLY here. The referee can enable/disable
+//     the lock (pinning their current public IP) and is re-pinned automatically if
+//     their IP later changes. The lock auto-expires 12h after it was pinned
+//     (break-glass) so a mistake can never permanently lock the campaign out.
+//   · TASK 7 — returns the player roster + access tokens, but ONLY to a caller the
+//     token proves is a referee. Tokens never appear in a player's response.
+//
 //   POST /functions/v1/get-content
 //   Authorization: Bearer <token>
-//   → 200 { identity, role, content: [{path, value}], reveals }
+//   Body (optional): { "networkLock": { "set": true|false } }  // referee only
+//   → 200 { identity, role, content:[{path,value}], reveals,
+//           networkLock?, players? }            // networkLock/players: referee only
 //     401 { error } on a bad/missing token
+//     403 { error:"network-locked", message } when the venue-network lock blocks you
 //
 // Deploy:  supabase functions deploy get-content --no-verify-jwt
 //          (or toggle OFF "Verify JWT" / "Enforce JWT" for this function in the
@@ -19,6 +32,9 @@
 //           JWT verification ON the gateway 401s before this code runs.
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically
 //          by the platform; no manual key handling.
+// NB: TASK 6 needs migration 0006_network_lock.sql applied. If the table is
+//     absent the lock simply stays inactive (fails OPEN for the lock feature) so
+//     content delivery is never broken by a missing migration.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -34,7 +50,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
-// Server-side mirror of the client's canSee() (index.html:7183). The two MUST
+// Server-side mirror of the client's canSee() (js/55-auth-gating.js). The two MUST
 // agree; the server is authoritative (it has already withheld anything hidden).
 function canSee(audience: unknown, role: string, audiences: string[]): boolean {
   if (audience == null || audience === "all") return true;
@@ -42,6 +58,17 @@ function canSee(audience: unknown, role: string, audiences: string[]): boolean {
   if (audience === "referee") return false;
   if (Array.isArray(audience)) return audience.some((a) => audiences.includes(a));
   return audiences.includes(audience as string);
+}
+
+// TASK 6 — break-glass: the lock auto-expires 12h after it was pinned.
+const LOCK_TTL_MS = 12 * 60 * 60 * 1000;
+
+// The caller's public IP as the edge function sees it (Supabase forwards it in
+// x-forwarded-for; x-real-ip is a fallback). First hop is the real client.
+function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for") || "";
+  const first = xff.split(",")[0].trim();
+  return first || (req.headers.get("x-real-ip") || "").trim();
 }
 
 Deno.serve(async (req) => {
@@ -58,6 +85,10 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
+  // Optional referee command body (normal boot sends "{}").
+  let body: any = {};
+  try { body = await req.json(); } catch { body = {}; }
+
   // 1. Resolve the token to an identity / role / audience set.
   const { data: player, error: pErr } = await supabase
     .from("players")
@@ -69,8 +100,62 @@ Deno.serve(async (req) => {
 
   const role: string = player.role;
   const audiences: string[] = Array.isArray(player.audiences) ? player.audiences : [];
+  const ip = clientIp(req);
 
-  // 2. Read all fragments, then redact in memory. (Content is small — a few
+  // 2. Network lock (TASK 6). Load the single row; fail OPEN if the table/migration
+  //    isn't present so content delivery is never broken by a missing migration.
+  let lock: { enabled: boolean; pinned_ip: string | null; pinned_at: string | null } | null = null;
+  try {
+    const { data } = await supabase
+      .from("network_lock")
+      .select("enabled, pinned_ip, pinned_at")
+      .eq("id", 1)
+      .maybeSingle();
+    lock = (data as any) || null;
+  } catch { lock = null; }
+
+  let repinned = false;
+  const nowIso = () => new Date().toISOString();
+  if (role === "referee") {
+    const cmd = body && body.networkLock;
+    if (cmd && typeof cmd.set === "boolean") {
+      // Referee toggled the lock. Enabling pins THIS request's public IP.
+      const row = cmd.set
+        ? { id: 1, enabled: true, pinned_ip: ip, pinned_at: nowIso(), updated_at: nowIso() }
+        : { id: 1, enabled: false, updated_at: nowIso() };
+      try {
+        await supabase.from("network_lock").upsert(row);
+        lock = cmd.set
+          ? { enabled: true, pinned_ip: ip, pinned_at: row.pinned_at as string }
+          : { enabled: false, pinned_ip: lock?.pinned_ip ?? null, pinned_at: lock?.pinned_at ?? null };
+      } catch { /* leave lock as-is */ }
+    } else if (lock && lock.enabled && lock.pinned_ip && ip && lock.pinned_ip !== ip) {
+      // The referee's IP changed → re-pin on this authorised request (TASK 6d),
+      // reporting it back so the app can show a visible confirmation.
+      try {
+        const at = nowIso();
+        await supabase.from("network_lock").upsert({ id: 1, enabled: true, pinned_ip: ip, pinned_at: at, updated_at: at });
+        lock = { enabled: true, pinned_ip: ip, pinned_at: at };
+        repinned = true;
+      } catch { /* leave lock as-is */ }
+    }
+  }
+
+  // Is the lock currently biting? (enabled, pinned, and inside the 12h window.)
+  const lockActive = !!(
+    lock && lock.enabled && lock.pinned_at &&
+    (Date.now() - new Date(lock.pinned_at).getTime() <= LOCK_TTL_MS)
+  );
+
+  // 3. Enforcement — the referee is NEVER blocked; a non-referee off-network is.
+  if (role !== "referee" && lockActive && lock!.pinned_ip && ip && lock!.pinned_ip !== ip) {
+    return json({
+      error: "network-locked",
+      message: "The referee has locked this campaign to the venue network. Join the same Wi-Fi as the referee — mobile data and VPNs are blocked.",
+    }, 403);
+  }
+
+  // 4. Read all fragments, then redact in memory. (Content is small — a few
   //    hundred rows — so a full read + filter is simplest and avoids trusting
   //    jsonb query predicates with the secret data.)
   const { data: rows, error: cErr } = await supabase
@@ -82,7 +167,7 @@ Deno.serve(async (req) => {
     .filter((r) => canSee(r.audience, role, audiences))
     .map((r) => ({ path: r.path, value: r.value }));
 
-  // 3. Reveal flags are not secret; pass them through so the poll loop keeps
+  // 5. Reveal flags are not secret; pass them through so the poll loop keeps
   //    working off this one endpoint.
   let reveals: unknown = {};
   const { data: rev } = await supabase
@@ -94,5 +179,33 @@ Deno.serve(async (req) => {
     try { reveals = JSON.parse(rev.value); } catch { /* leave {} */ }
   }
 
-  return json({ identity: player.identity, role, content, reveals });
+  const out: any = { identity: player.identity, role, content, reveals };
+
+  // 6. Referee-only extras. These are NEVER added to a player's response, so
+  //    tokens and lock internals never leave the service-role boundary for a
+  //    non-referee.
+  if (role === "referee") {
+    // TASK 6 — lock status for the referee's settings toggle.
+    out.networkLock = lock
+      ? {
+          enabled: !!lock.enabled,
+          pinned_ip: lock.pinned_ip ?? null,
+          pinned_at: lock.pinned_at ?? null,
+          active: lockActive,
+          expired: !!(lock.enabled && lock.pinned_at && !lockActive), // enabled but past the 12h break-glass
+          repinned,
+          current_ip: ip,
+        }
+      : { enabled: false, active: false, current_ip: ip };
+    // TASK 7 — player roster + access tokens, served ONLY to a referee.
+    try {
+      const { data: roster } = await supabase
+        .from("players")
+        .select("identity, token, role")
+        .order("role", { ascending: true });
+      out.players = roster ?? [];
+    } catch { out.players = []; }
+  }
+
+  return json(out);
 });

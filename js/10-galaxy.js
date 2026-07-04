@@ -1498,7 +1498,7 @@ const HX = (function(){
   const BY_ID={};  SYS.forEach(s=>BY_ID[s.id]=s);
 
   // ── Lanes ← the host's editable GX_LANES overlay (with surveyed-route discount) ──
-  const LANE_FUEL_FACTOR=0.85;
+  const LANE_FUEL_FACTOR=FUEL_RULES.laneFuelFactor;   // surveyed jump-lane discount (house rule; tune/disable via FUEL_RULES in 00-core-data.js)
   function laneEdges(){ const out=[]; if(typeof GX_LANES==='undefined') return out;
     GX_LANES.forEach(k=>{ const parts=k.split('|'), sa=BY_ID[parts[0]], sb=BY_ID[parts[1]];
       if(sa&&sb&&sa!==sb) out.push({a:sa,b:sb,len:hexDist(sa,sb),key:k}); }); return out; }
@@ -2087,7 +2087,7 @@ const HX = (function(){
   //     so lore connections are always flyable. Its fuel/reach distance is capped
   //     to the jump rating; off-lane hops keep their true hex distance.
   function jumpDist(a,b){ const h=hexDist(a,b); return onLane(a,b)?Math.min(h,jumpRating):h; }
-  function legFuel(a,b){ const base=0.1*tonnage*jumpDist(a,b); return onLane(a,b)?base*LANE_FUEL_FACTOR:base; }
+  function legFuel(a,b){ return jumpFuel(tonnage, jumpDist(a,b), onLane(a,b)) + operatingFuel(tonnage, FUEL_RULES.operatingFuel.weeksPerJump||1); }   // 10%×hull×pc (×lane) + power-plant (0 unless enabled)
   function fuelPlan(route){ let tank=Math.min(fuelAboard,fuelMax), strandedAt=null, reason='', refuels=0, total=0; const legs=[];
     for(let i=0;i<route.length-1;i++){ const here=route[i], f=legFuel(here,route[i+1]); total+=f;
       const canRefuel=strandedAt===null && i>0 && fuelAt(here)!=='none'; if(canRefuel){ tank=fuelMax; refuels++; }
@@ -2269,8 +2269,11 @@ const HX = (function(){
       const route=bestRoute(origin,s);
       if(!route){ html+=`<div class="hx-note hx-warn">Unreachable with a Jump-${jumpRating} drive — no chain of ≤${jumpRating}-pc hops connects these. Needs a longer-legged ship or an intermediate stop.</div>`; }
       else { const plan=fuelPlan(route), jumps=route.length-1; let base=0, legsHtml='';
-        for(let i=0;i<jumps;i++){ const a=route[i],b=route[i+1], lane=onLane(a,b), ld=jumpDist(a,b), lf=plan.legs[i].fuel, ok=plan.legs[i].ok, rf=plan.legs[i].refuel; base+=0.1*tonnage*ld;
-          legsHtml+=`<div class="hx-route-leg" style="${ok?'':'color:#ff5a4d'}">▸ <b>${eh(disp(a))}</b>${rf?' <span style="color:#3f9d5a">⛽</span>':''} → <b>${eh(disp(b))}</b> · ${ld} pc · ${lf.toFixed(0)} t${lane?' <span style="color:#00cc88">⟢ lane −15%</span>':''}${ok?'':' ✖ dry'}</div>`; }
+        const pct=+(FUEL_RULES.jumpFuelPerParsecFraction*100).toFixed(1), opWk=FUEL_RULES.operatingFuel.weeksPerJump||1;
+        for(let i=0;i<jumps;i++){ const a=route[i],b=route[i+1], lane=onLane(a,b), ld=jumpDist(a,b), lf=plan.legs[i].fuel, ok=plan.legs[i].ok, rf=plan.legs[i].refuel;
+          const op=operatingFuel(tonnage,opWk); base+=jumpFuel(tonnage,ld)+op;   // no-lane cost (+power) so "Saved via lanes" = base − plan.total
+          const formula=`${pct}%×${tonnage}t×${ld}pc${lane?' ×'+LANE_FUEL_FACTOR+' lane':''}${op>0?' +'+op.toFixed(1)+'t pwr':''}`;   // verifiable breakdown at the table
+          legsHtml+=`<div class="hx-route-leg" style="${ok?'':'color:#ff5a4d'}">▸ <b>${eh(disp(a))}</b>${rf?' <span style="color:#3f9d5a">⛽</span>':''} → <b>${eh(disp(b))}</b> · <span class="hx-small" style="opacity:.75">${formula} =</span> ${lf.toFixed(0)} t${ok?'':' ✖ dry'}</div>`; }
         const saved=base-plan.total, head=jumps===1?(onLane(origin,s)?'Direct, 1 jump · on lane':'Direct, 1 jump'):`${jumps} jumps`;
         html+=`<div class="hx-kv"><span class="k">${jumps===1?'Reachable':'Cheapest route'}</span><span class="v" style="color:${jumps===1?'#00e5ff':'#ddaa44'}">${head}</span></div>`;
         html+=`<div class="hx-kv"><span class="k">Total burn / time</span><span class="v">${plan.total.toFixed(0)} t · ${jumps} week${jumps>1?'s':''}</span></div>`;
@@ -2677,8 +2680,13 @@ function renderSystemOverview(){
   if(star) star.innerHTML = gxStarInfoHTML(sysId);
 
   // System economy (Design Mode, referee) — same prod/cons data + editor as the galaxy view.
+  // Below it, the ref-only "Docked Traders" panel (TASK 4) for the same world node.
   const econSec = document.getElementById('sys-econ-section');
-  if(econSec) econSec.innerHTML = econSystemSectionHTML((SYSTEMS[sysId]||{}).galaxyId);
+  if(econSec){
+    const nodeId = (SYSTEMS[sysId]||{}).galaxyId;
+    econSec.innerHTML = econSystemSectionHTML(nodeId)
+      + (typeof dockedTradersSectionHTML==='function' ? dockedTradersSectionHTML(nodeId) : '');   // 90-economy (later module) — guarded per house pattern
+  }
 
   const bodies = effectiveBodies(sysId);
   const bodiesSec = document.getElementById('sys-bodies-section');

@@ -546,6 +546,53 @@ function renderSettingsMenu(showArchon){
       <button onclick="copyInviteLink()" style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:12px;cursor:pointer" title="Build a shareable link that applies the token in the box above">🔗 Copy invite link</button>
     </div>`;
 
+  // ── Network Lock + Player Access (TASK 6 / TASK 7) — referee token required ──
+  // These are served through the referee-only get-content path (secureNetworkLock
+  // / securePlayers), so they render ONLY for a token-authenticated referee. A
+  // local-mode referee is prompted to apply their token.
+  if(secureRole === 'referee'){
+    const nl = (typeof secureNetworkLock !== 'undefined') ? secureNetworkLock : null;
+    const on = !!(nl && nl.enabled && nl.active);
+    const btnBase = 'width:100%;padding:8px;border-radius:var(--rad);font-size:12px;cursor:pointer;font-weight:700';
+    html += `<div class="settings-section-lbl">Network Lock</div>
+      <div class="settings-row">
+        <button onclick="setNetworkLock(${on ? 'false' : 'true'})" style="${btnBase};background:${on ? 'var(--accentGoldBg)' : 'var(--bg2)'};border:1px solid ${on ? 'var(--accentGold)' : 'var(--bd0)'};color:${on ? 'var(--accentGold)' : 'var(--tx0)'}">${on ? '🔒 Locked to this network — tap to unlock' : '🔓 Off — tap to lock to this network'}</button>
+      </div>`;
+    if(nl && nl.enabled && nl.active){
+      html += `<div class="settings-row" style="font-size:11px;color:var(--tx1)">Locked to <b style="color:var(--tx0)">${escHtml(nl.pinned_ip || '?')}</b> · auto-unlocks 12h after pinning. Players off this network are blocked.</div>`;
+    } else if(nl && nl.enabled && !nl.active){
+      html += `<div class="settings-row" style="font-size:11px;color:#e8a0a0">Lock expired (12h break-glass) — no one is blocked now. Tap to re-pin to your current network.</div>`;
+    } else {
+      html += `<div class="settings-row" style="font-size:11px;color:var(--tx1)">Off — anyone with a token connects from any network. Enabling pins your current public IP${nl && nl.current_ip ? ' (<b style="color:var(--tx0)">' + escHtml(nl.current_ip) + '</b>)' : ''}; mobile-data / VPN players get blocked.</div>`;
+    }
+
+    html += `<div class="settings-section-lbl">Player access</div>`;
+    const players = (typeof securePlayers !== 'undefined') ? securePlayers : null;
+    if(!players){
+      html += `<div class="settings-row" style="font-size:11px;color:var(--tx1)">Player tokens load with your referee content — reconnect your referee token to list them.</div>`;
+    } else if(!players.length){
+      html += `<div class="settings-row" style="font-size:11px;color:var(--tx1)">No players registered yet.</div>`;
+    } else {
+      const chip = 'flex:1;padding:6px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:11px;cursor:pointer';
+      players.forEach((p, i) => {
+        const roleTag = p.role === 'referee' ? ' <span style="color:var(--accentGold);font-size:10px">(referee)</span>' : '';
+        const shareBtn = (typeof navigator !== 'undefined' && navigator.share) ? `<button onclick="sharePlayerToken(${i})" style="${chip}">Share</button>` : '';
+        html += `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:5px;border-top:1px solid var(--bd0);padding-top:7px">
+          <div style="font-weight:700;color:var(--tx0);font-size:12px">${escHtml(p.identity || '—')}${roleTag}</div>
+          <div id="pv-tok-${i}" style="font-family:monospace;font-size:11px;color:var(--tx1);word-break:break-all">••••••••••••</div>
+          <div style="display:flex;gap:6px">
+            <button onclick="revealPlayerToken(${i})" style="${chip}">Reveal</button>
+            <button onclick="copyPlayerToken(${i})" style="${chip}">Copy</button>
+            ${shareBtn}
+          </div>
+        </div>`;
+      });
+    }
+  } else if(typeof isReferee === 'function' && isReferee()){
+    html += `<div class="settings-section-lbl">Network Lock &amp; Player Access</div>
+      <div class="settings-row" style="font-size:11px;color:var(--tx1)">Apply your <b>referee token</b> above to lock the campaign to your network and hand out player tokens.</div>`;
+  }
+
   html += kbdSettingsHTML();
   card.innerHTML = html;
 }
