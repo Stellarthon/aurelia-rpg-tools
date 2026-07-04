@@ -208,3 +208,105 @@ const SYSTEMS = {
 };
 let currentSystemId = 'auros';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FUEL RULES  —  Mongoose Traveller 2e fuel model (single tunable config)
+// ───────────────────────────────────────────────────────────────────────────
+// One config object so the referee can tune the fuel maths without touching any
+// logic. Consumed by the ship panel (js/75-ship.js · shipFuelForTrip) and the
+// hex-jump plotter (js/10-galaxy.js · legFuel), which now both call jumpFuel()
+// below instead of inlining the numbers. Defined in this earliest module so
+// every later module can reference it directly (load-order safe).
+//
+//   Jump fuel (MgT2e core): 10% of hull tonnage per parsec jumped, EXACT tons —
+//     J-2 in a 200 t hull = 0.10 × 200 × 2 = 40 t. No house rounding.
+//   Lane factor: a HOUSE rule of the hex galaxy (surveyed jump lanes cost −15%),
+//     NOT MgT2e. Kept as a constant so the referee can set it to 1 for pure RAW.
+//   operatingFuel: power-plant / ongoing consumption (MgT2e ≈ 1 t of fuel per ton
+//     of power plant per 4 weeks). This app doesn't track power-plant tonnage, so
+//     it's approximated as a fraction of hull per in-jump week. DEFAULT OFF so the
+//     referee's already-tested jump-feasibility numbers are unchanged; flip
+//     enabled:true (and verify the fraction vs High Guard) to model it.
+const FUEL_RULES = {
+  jumpFuelPerParsecFraction: 0.10,   // 10% of hull tonnage, per parsec
+  laneFuelFactor: 0.85,              // HOUSE (non-RAW): surveyed jump lane discount; 1 = pure MgT2e
+  operatingFuel: {
+    enabled: false,                  // OFF by default — turning on adds per-week power-plant burn to every jump
+    powerPlantFractionOfHull: 0.10,  // assumed power-plant size ≈ 10% of hull (verify vs your High Guard build)
+    tonsPerPPTonPer4Weeks: 1,        // MgT2e standard: 1 t fuel per ton of power plant per 4 weeks
+    weeksPerJump: 1                  // one week in jumpspace per jump
+  }
+};
+// Fuel for one jump — EXACT tons. fraction × hull × parsecs, optionally ×lane.
+function jumpFuel(tonnage, parsecs, onLane){
+  const t = Number(tonnage) || 0, p = Number(parsecs) || 0;
+  let f = FUEL_RULES.jumpFuelPerParsecFraction * t * p;
+  if(onLane) f *= FUEL_RULES.laneFuelFactor;
+  return f;
+}
+// Ongoing power-plant fuel over `weeks` of operation (0 unless enabled).
+function operatingFuel(tonnage, weeks){
+  const o = FUEL_RULES.operatingFuel;
+  if(!o || !o.enabled) return 0;
+  const t = Number(tonnage) || 0, w = Number(weeks) || 0;
+  return (o.powerPlantFractionOfHull * t) * o.tonsPerPPTonPer4Weeks * (w / 4);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIENT ERROR TELEMETRY  —  on-device ring buffer + ref-viewable upload queue
+// ───────────────────────────────────────────────────────────────────────────
+// pushErr() records an error to a small localStorage ring buffer (aurelia_errlog)
+// so recent client failures survive on a device, AND parks a copy on a local
+// upload queue (aurelia_err_upload) which js/50-supabase.js drains to the
+// error_log table (migration 0005). 00-core-data can't call the data layer at
+// load time (50 loads later), so the two are decoupled through localStorage —
+// the same shape as the offline write-through queue. Everything here is wrapped
+// so telemetry can NEVER break the app: a throw inside pushErr is swallowed, and
+// if the whole feature fails the app behaves exactly as it does today.
+const ERRLOG_KEY     = 'aurelia_errlog';       // on-device ring buffer
+const ERR_UPLOAD_KEY = 'aurelia_err_upload';   // pending uploads (50-supabase drains)
+const ERRLOG_MAX     = 50;                      // ring buffer + queue hard cap (an error loop can't grow either unbounded)
+
+function pushErr(message, stack, context){
+  try {
+    const ts = Date.now();
+    const msg = String(message == null ? '' : message).slice(0, 1000);
+    const stk = String(stack == null ? '' : stack).slice(0, 2048);   // 2KB cap before it ever leaves the device
+    const ctx = (context && typeof context === 'object') ? context : (context != null ? { note: String(context) } : {});
+    // 1. On-device ring buffer (newest last), capped at ERRLOG_MAX.
+    let ring = [];
+    try { ring = JSON.parse(localStorage.getItem(ERRLOG_KEY) || '[]'); if(!Array.isArray(ring)) ring = []; } catch(e){ ring = []; }
+    ring.push({ ts, message: msg, stack: stk, context: ctx });
+    if(ring.length > ERRLOG_MAX) ring = ring.slice(ring.length - ERRLOG_MAX);
+    try { localStorage.setItem(ERRLOG_KEY, JSON.stringify(ring)); } catch(e){}
+    // 2. Upload queue — annotated with who/where/version so the flush is a dumb POST.
+    let q = [];
+    try { q = JSON.parse(localStorage.getItem(ERR_UPLOAD_KEY) || '[]'); if(!Array.isArray(q)) q = []; } catch(e){ q = []; }
+    q.push({
+      created_at:  new Date(ts).toISOString(),
+      player:      (typeof myIdentity !== 'undefined' && myIdentity) ? String(myIdentity).slice(0, 120) : null,
+      app_version: (function(){ try { const el = document.getElementById('build-version'); return el ? el.textContent.trim().slice(0, 40) : null; } catch(e){ return null; } })(),
+      ua:          (typeof navigator !== 'undefined' && navigator.userAgent) ? String(navigator.userAgent).slice(0, 400) : null,
+      message:     msg,
+      stack:       stk,
+      context:     ctx
+    });
+    if(q.length > ERRLOG_MAX) q = q.slice(q.length - ERRLOG_MAX);
+    try { localStorage.setItem(ERR_UPLOAD_KEY, JSON.stringify(q)); } catch(e){}
+  } catch(e){ /* telemetry must never throw into the app */ }
+}
+
+// Global safety net: capture uncaught errors + unhandled promise rejections.
+// Passive — never calls preventDefault(), so nothing about existing behaviour
+// changes; it only feeds pushErr. Wrapped so a missing window/listener API just
+// leaves telemetry local-only. (Deferred callbacks — load-order safe.)
+try {
+  if(typeof window !== 'undefined' && window.addEventListener){
+    window.addEventListener('error', function(ev){
+      try { pushErr(ev && ev.message, ev && ev.error && ev.error.stack, { src: ev && ev.filename, line: ev && ev.lineno, col: ev && ev.colno }); } catch(e){}
+    });
+    window.addEventListener('unhandledrejection', function(ev){
+      try { const r = ev && ev.reason; pushErr(r && r.message ? r.message : ('unhandledrejection: ' + r), r && r.stack, { kind: 'unhandledrejection' }); } catch(e){}
+    });
+  }
+} catch(e){ /* no window / listener support — telemetry stays on-device only */ }
+
