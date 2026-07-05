@@ -114,7 +114,7 @@
     <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div id="hdr-locus">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v34</span>
+      <span id="build-version" title="Build version">v35</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -612,6 +612,7 @@
     <div id="planner-card">
       <div id="planner-hdr">
         <span id="planner-hdr-title">🗓 Session Planner</span>
+        <button id="planner-view-toggle" onclick="plannerToggleView()" title="Switch between the scene list and the scene board">🗺 Board</button>
         <button id="planner-new" onclick="plannerNewSession()" title="Start a new session">+ New session</button>
         <button id="planner-close" aria-label="Close" onclick="closeSessionPlanner()">✕</button>
       </div>
@@ -743,7 +744,17 @@
       <button id="npc-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
       <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
       <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
+      <button id="present-view-btn" class="more-item ref-only" onclick="closeMoreMenu();plannerSendCurrentView()" title="Show players the view you're on now — their devices offer to follow you there (referee)">📡 Send players to this view</button>
+      <button id="release-view-btn" class="more-item ref-only" onclick="closeMoreMenu();forcedViewRelease()" title="Stop presenting — players navigate freely again (referee)">🔓 Release players</button>
     </div>
+  </div>
+
+  <!-- ── Forced-view banner (player) — the referee is presenting a location; soft-follow ── -->
+  <div id="forced-view-banner" class="hidden">
+    <span id="forced-view-banner-ic">📡</span>
+    <span id="forced-view-banner-txt">The referee is showing a location</span>
+    <button id="forced-view-follow" onclick="forcedViewFollow()">Follow</button>
+    <button id="forced-view-dismiss" aria-label="Dismiss" onclick="forcedViewDismiss()">✕</button>
   </div>
 
   <!-- ── Quick Reference sidebar ── -->

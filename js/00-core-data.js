@@ -325,3 +325,72 @@ try {
   }
 } catch(e){ /* no window / listener support — telemetry stays on-device only */ }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RICH-TEXT WHITELIST SANITISER  —  session-planner prose (the ONE place that
+// stores + renders HTML instead of escaping it)
+// ───────────────────────────────────────────────────────────────────────────
+// The session planner (js/97) lets the referee write lightly-formatted prose
+// (bold / italic / lists / headings) and inline hyperlinks. That content is
+// referee-only and NEVER reaches a player device, but we still whitelist it on
+// every commit AND every render, so a hostile paste can't persist a script node
+// or an event handler. Deliberately tiny tag/attribute allow-list; anything
+// outside it is unwrapped to its text (or dropped entirely, for script/style).
+// Internal links carry a `data-link` ref (scene:/quest:/location:/pdf:/url:);
+// external links keep only a safe http(s)/mailto href. Browser-only (DOMParser);
+// callers get plain stripped text if the DOM API is somehow unavailable.
+const RICH_TAGS = { B:1, STRONG:1, I:1, EM:1, U:1, P:1, BR:1, UL:1, OL:1, LI:1, H3:1, H4:1, BLOCKQUOTE:1, SPAN:1, DIV:1, A:1 };
+const RICH_DROP = { SCRIPT:1, STYLE:1, NOSCRIPT:1, IFRAME:1, OBJECT:1, EMBED:1, TEMPLATE:1, LINK:1, META:1, TITLE:1, SVG:1 };
+const RICH_HREF_OK = /^(https?:|mailto:)/i;
+const RICH_LINK_OK = /^(scene|quest|location|pdf|url):/i;
+
+function sanitizeRich(html){
+  const src = String(html == null ? '' : html);
+  if(!src) return '';
+  if(typeof DOMParser === 'undefined') return src.replace(/<[^>]*>/g, ''); // no DOM → strip to text
+  let doc;
+  try { doc = new DOMParser().parseFromString('<body>' + src + '</body>', 'text/html'); }
+  catch(e){ return src.replace(/<[^>]*>/g, ''); }
+  const clean = (node) => {
+    // Snapshot first: we mutate childNodes as we walk.
+    Array.prototype.slice.call(node.childNodes).forEach(child => {
+      if(child.nodeType === 3) return;                                  // text — keep
+      if(child.nodeType !== 1){ node.removeChild(child); return; }      // comment/other — drop
+      const tag = child.tagName;
+      if(RICH_DROP[tag]){ node.removeChild(child); return; }            // script/style — drop content and all
+      if(!RICH_TAGS[tag]){                                              // other disallowed — unwrap, keep text
+        clean(child);
+        while(child.firstChild) node.insertBefore(child.firstChild, child);
+        node.removeChild(child);
+        return;
+      }
+      // Allowed element: strip every attribute except a safe href / data-link on <a>.
+      Array.prototype.slice.call(child.attributes).forEach(a => {
+        const name = a.name.toLowerCase();
+        if(tag === 'A' && name === 'data-link' && RICH_LINK_OK.test((a.value || '').trim())) return;
+        if(tag === 'A' && name === 'href' && RICH_HREF_OK.test((a.value || '').trim())) return;
+        child.removeAttribute(a.name);
+      });
+      if(tag === 'A' && child.getAttribute('href')){                    // external link opens safely
+        child.setAttribute('target', '_blank');
+        child.setAttribute('rel', 'noopener noreferrer');
+      }
+      clean(child);                                                     // recurse
+    });
+  };
+  clean(doc.body);
+  return doc.body.innerHTML;
+}
+
+// Plain-text projection of rich HTML — recap/export lines, graph popovers, previews.
+function richToPlain(html){
+  const src = String(html == null ? '' : html);
+  if(!src) return '';
+  if(typeof DOMParser !== 'undefined'){
+    try {
+      const doc = new DOMParser().parseFromString('<body>' + src + '</body>', 'text/html');
+      return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+    } catch(e){ /* fall through */ }
+  }
+  return src.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+

@@ -29,7 +29,11 @@ let sessionPlans = [];
 let _plansLoaded = false;
 let plannerOpen = false;
 let plannerSelId = null;          // id of the session shown in the detail pane
-let plannerPicker = null;         // {planId, sceneId, type:'npc'|'mission', q} when the link picker is open
+let plannerPicker = null;         // {planId, sceneId, type:'npc'|'mission', q} for chip picker; {mode:'link', linkType, q} for rich-text link picker
+let plannerView = 'list';         // 'list' | 'board' — detail pane mode
+let plannerLinkCtx = null;        // {planId, sceneId, field, range, selText} captured while inserting a rich-text link
+let _richTimer = null;            // debounce timer for rich-field autosave
+let _pendingLoc = null;           // {ref, label} while a location-link action popover is open
 
 const SCENE_TYPES = [
   ['scene',   '🎬 Scene'],
@@ -55,7 +59,7 @@ function emptyScene(){
 function emptyCheck(){ return { id: _pid('ck_'), label: '', target: '', who: '', roll: '', outcome: 'pending', notes: '' }; }
 function emptyPlan(){
   return { id: _pid('sp_'), title: 'New Session', inGameDate: '', status: 'planned',
-           premise: '', prep: '', scenes: [], createdAt: Date.now() };
+           premise: '', prep: '', scenes: [], docs: [], createdAt: Date.now() };
 }
 function planById(id){ return sessionPlans.find(p => p.id === id) || null; }
 function sceneById(plan, sid){ return plan ? (plan.scenes || []).find(s => s.id === sid) || null : null; }
@@ -65,6 +69,7 @@ function selPlan(){ return planById(plannerSelId); }
 function normalizePlans(){
   if(!Array.isArray(sessionPlans)) sessionPlans = [];
   sessionPlans.forEach(p => {
+    if(!Array.isArray(p.docs)) p.docs = [];
     if(!Array.isArray(p.scenes)) p.scenes = [];
     p.scenes.forEach(s => {
       if(!Array.isArray(s.npcIds)) s.npcIds = [];
@@ -106,8 +111,11 @@ function openSessionPlanner(){
   if(!_plansLoaded){ loadSessionPlans().then(paint); } else { paint(); }
 }
 function closeSessionPlanner(){
+  commitAllRich();          // flush any in-progress rich-text edit before we tear the pane down
+  closePlannerPopover();
   plannerOpen = false;
   plannerPicker = null;
+  plannerLinkCtx = null;
   const m = document.getElementById('planner-modal');
   if(m) m.classList.remove('open');
 }
@@ -396,7 +404,9 @@ function checkDelete(planId, sceneId, checkId){
 // RENDER
 // ═══════════════════════════════════════════════════════════════════════════
 
-function renderPlanner(){ renderPlannerList(); renderPlannerDetail(); }
+function renderPlanner(){ renderPlannerList(); if(plannerView === 'board') renderPlannerBoard(); else renderPlannerDetail(); syncPlannerViewToggle(); }
+function plannerToggleView(){ plannerView = (plannerView === 'board') ? 'list' : 'board'; closePlannerPopover(); renderPlanner(); }
+function syncPlannerViewToggle(){ const b = document.getElementById('planner-view-toggle'); if(b) b.textContent = (plannerView === 'board') ? '📋 List' : '🗺 Board'; }
 
 function planStatusPill(status){
   const label = (PLAN_STATUS.find(x => x[0] === status) || [null, 'Planned'])[1];
@@ -451,20 +461,24 @@ function renderPlannerDetail(){
              onchange="plannerEditField('${p.id}','inGameDate',this.value)">
       <div class="planner-status-seg">${statusOpts}</div>
     </div>
-    <textarea class="planner-premise" rows="2" placeholder="Premise — the one-line hook for this session"
-              onchange="plannerEditField('${p.id}','premise',this.value)">${sesc(p.premise || '')}</textarea>
+    <div class="planner-sec-hd"><span>Premise</span></div>
+    ${renderRichField('premise', p.premise, 'Premise — the one-line hook for this session', p.id, '')}
 
     <div class="planner-sec-hd"><span>Scenes &amp; Beats</span><span class="planner-count">${(p.scenes || []).length}</span></div>
     <div class="planner-scenes">${scenes || '<div class="planner-hint">No scenes yet.</div>'}</div>
     <button class="cal-add-btn planner-add-scene" onclick="sceneAdd('${p.id}')">+ Add scene</button>
 
     <div class="planner-sec-hd" style="margin-top:16px"><span>Prep Notes</span></div>
-    <textarea class="planner-prep" rows="4" placeholder="Loose prep notes, reminders, a checklist…"
-              onchange="plannerEditField('${p.id}','prep',this.value)">${sesc(p.prep || '')}</textarea>
+    ${renderRichField('prep', p.prep, 'Loose prep notes, reminders, a checklist…', p.id, '')}
+
+    <div class="planner-sec-hd" style="margin-top:16px"><span>Reference Documents</span><span class="planner-count">${(p.docs || []).length}</span></div>
+    <div class="planner-docs">${renderPlannerDocs(p) || '<div class="planner-hint">No PDFs attached. Upload adventure modules, maps or notes to keep them on hand.</div>'}</div>
+    <label class="cal-add-btn planner-add-doc">+ Upload PDF<input type="file" accept="application/pdf" style="display:none" onchange="onPlannerDocFile(this,'${p.id}')"></label>
 
     <div class="planner-foot">
       <button class="planner-foot-btn" onclick="plannerOpenRecap()" title="Open the recap & export tool">🎬 Recap &amp; export</button>
     </div>`;
+  wirePlannerRich();
 }
 
 function renderSceneCard(p, s, idx, total){
@@ -527,7 +541,7 @@ function renderSceneCard(p, s, idx, total){
     </div>`;
   }).join('');
 
-  return `<div class="planner-scene${s.done ? ' done' : ''}">
+  return `<div class="planner-scene${s.done ? ' done' : ''}" id="scene-card-${s.id}">
     <div class="planner-scene-hd">
       <button class="planner-scene-check${s.done ? ' on' : ''}" onclick="sceneToggleDone('${p.id}','${s.id}')" title="Mark scene played">${s.done ? '✓' : ''}</button>
       <input class="planner-scene-title" value="${sattr(s.title)}" placeholder="Scene ${idx + 1} title"
@@ -540,10 +554,10 @@ function renderSceneCard(p, s, idx, total){
       </span>
     </div>
 
-    <textarea class="planner-readaloud" rows="2" placeholder="📖 Read-aloud / boxed text"
-              onchange="sceneEditField('${p.id}','${s.id}','readAloud',this.value)">${sesc(s.readAloud || '')}</textarea>
-    <textarea class="planner-refnotes" rows="2" placeholder="Referee notes — what's really going on, checks, outcomes"
-              onchange="sceneEditField('${p.id}','${s.id}','refNotes',this.value)">${sesc(s.refNotes || '')}</textarea>
+    <div class="planner-rich-lbl">📖 Read-aloud / boxed text</div>
+    ${renderRichField('readAloud', s.readAloud, '📖 Read-aloud / boxed text', p.id, s.id)}
+    <div class="planner-rich-lbl">🗒 Referee notes</div>
+    ${renderRichField('refNotes', s.refNotes, "Referee notes — what's really going on, checks, outcomes", p.id, s.id)}
 
     <div class="planner-link-block">
       <div class="planner-link-lbl">👥 NPCs</div>
@@ -571,6 +585,7 @@ function renderSceneCard(p, s, idx, total){
 }
 
 function renderLinkPicker(){
+  if(plannerPicker && plannerPicker.mode === 'link'){ renderRichLinkPicker(); return; }
   const wrap = document.getElementById('planner-picker');
   const card = document.getElementById('planner-picker-card');
   if(!wrap || !card || !plannerPicker){ if(wrap) wrap.classList.add('hidden'); return; }
@@ -611,6 +626,537 @@ function renderLinkPicker(){
     <input id="planner-pick-search" class="planner-pick-search" placeholder="🔍 Search or type a new name…" value="${sattr(q || '')}" oninput="plannerPickerSearch(this.value)">
     <div class="planner-pick-list">${rows}</div>
     ${createBtn}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RICH TEXT  —  contenteditable prose fields (read-aloud / notes / premise / prep)
+// ═══════════════════════════════════════════════════════════════════════════
+// The four prose fields are lightweight WYSIWYG editors: a small toolbar drives
+// document.execCommand (semantic tags only — styleWithCSS is forced OFF so we get
+// <b>/<i>/<u>, which sanitizeRich() keeps). Content commits on blur (and a debounced
+// input) through the existing sceneEditField()/plannerEditField(), always via
+// sanitizeRich() so nothing but the whitelist is ever stored. The 🔗 button opens
+// the link picker (scene / quest / location / PDF / URL).
+
+function plTrunc(s, n){ s = String(s == null ? '' : s); return s.length > n ? (s.slice(0, n - 1).replace(/\s+$/, '') + '…') : s; }
+
+function renderRichField(field, html, ph, planId, sceneId){
+  const btns = [
+    ['bold', '<b>B</b>', 'Bold'], ['italic', '<i>I</i>', 'Italic'], ['underline', '<u>U</u>', 'Underline'],
+    ['sep'],
+    ['insertUnorderedList', '•', 'Bulleted list'], ['insertOrderedList', '1.', 'Numbered list'], ['heading', 'H', 'Heading'],
+    ['sep'],
+    ['link', '🔗', 'Insert a link to a scene, quest, location, PDF or URL'], ['unlink', '⛓', 'Remove link']
+  ].map(t => t[0] === 'sep'
+    ? '<span class="pr-tb-sep"></span>'
+    : `<button type="button" class="pr-tb" title="${sattr(t[2])}" onmousedown="return plannerRichCmd(event,this,'${t[0]}')">${t[1]}</button>`).join('');
+  return `<div class="planner-rich-wrap">
+    <div class="planner-rich-tb">${btns}</div>
+    <div class="planner-rich" contenteditable="true" data-field="${sattr(field)}" data-plan="${sattr(planId)}" data-scene="${sattr(sceneId || '')}" data-ph="${sattr(ph || '')}">${sanitizeRich(html || '')}</div>
+  </div>`;
+}
+
+// Toolbar handler — mousedown (not click) so the editable keeps its selection.
+function plannerRichCmd(ev, btn, cmd){
+  if(ev) ev.preventDefault();
+  const wrap = btn.closest('.planner-rich-wrap');
+  const ed = wrap ? wrap.querySelector('.planner-rich') : null;
+  if(!ed) return false;
+  ed.focus();
+  if(cmd === 'link'){ openRichLink(ed); return false; }
+  try {
+    try { document.execCommand('styleWithCSS', false, false); } catch(e){}   // semantic tags, not inline styles
+    if(cmd === 'heading'){
+      let cur = ''; try { cur = String(document.queryCommandValue('formatBlock') || '').toLowerCase(); } catch(e){}
+      document.execCommand('formatBlock', false, (cur === 'h4' || cur === '<h4>') ? 'p' : 'h4');
+    } else {
+      document.execCommand(cmd, false, null);
+    }
+  } catch(e){}
+  scheduleRichCommit(ed);
+  return false;
+}
+
+function scheduleRichCommit(ed){
+  if(_richTimer) clearTimeout(_richTimer);
+  _richTimer = setTimeout(() => { _richTimer = null; commitRich(ed); }, 800);
+}
+// Sanitise + persist a rich field, but only if it actually changed (no redundant writes).
+function commitRich(ed){
+  if(!ed) return;
+  if(_richTimer){ clearTimeout(_richTimer); _richTimer = null; }
+  const field = ed.getAttribute('data-field');
+  const planId = ed.getAttribute('data-plan');
+  const sceneId = ed.getAttribute('data-scene') || '';
+  if(!field || !planId) return;
+  const clean = sanitizeRich(ed.innerHTML);
+  const cur = sceneId ? ((sceneById(planById(planId), sceneId) || {})[field]) : ((planById(planId) || {})[field]);
+  if((cur || '') === clean) return;
+  if(sceneId) sceneEditField(planId, sceneId, field, clean);
+  else plannerEditField(planId, field, clean);
+}
+function commitAllRich(){
+  try { document.querySelectorAll('#planner-detail .planner-rich').forEach(ed => commitRich(ed)); } catch(e){}
+}
+// Attach commit + link-follow listeners to the freshly-rendered editors.
+function wirePlannerRich(){
+  try {
+    document.querySelectorAll('#planner-detail .planner-rich').forEach(ed => {
+      if(ed._wired) return;
+      ed._wired = true;
+      ed.addEventListener('blur', () => commitRich(ed));
+      ed.addEventListener('input', () => scheduleRichCommit(ed));
+      ed.addEventListener('click', plannerRichLinkClick);
+    });
+  } catch(e){}
+}
+// Click a link inside an editable → follow it instead of just placing the caret.
+function plannerRichLinkClick(ev){
+  const a = ev.target && ev.target.closest ? ev.target.closest('a[data-link], a[href]') : null;
+  if(!a) return;
+  ev.preventDefault();
+  const dl = a.getAttribute('data-link');
+  if(dl){ dispatchPlannerLink(dl, a); return; }
+  const href = a.getAttribute('href');
+  if(href && /^(https?:|mailto:)/i.test(href)) window.open(href, '_blank', 'noopener');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LINK PICKER  —  insert an inline hyperlink into the focused editor
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openRichLink(ed){
+  const sel = window.getSelection();
+  let range = null;
+  try { if(sel && sel.rangeCount) range = sel.getRangeAt(0).cloneRange(); } catch(e){}
+  plannerLinkCtx = {
+    planId: ed.getAttribute('data-plan'),
+    sceneId: ed.getAttribute('data-scene') || '',
+    field: ed.getAttribute('data-field'),
+    range: range,
+    selText: sel ? String(sel).trim() : ''
+  };
+  plannerPicker = { mode: 'link', linkType: 'scene', q: '' };
+  renderLinkPicker();
+  setTimeout(() => { const s = document.getElementById('planner-pick-search'); if(s) s.focus(); }, 60);
+}
+function plannerLinkType(t){
+  if(!plannerPicker) return;
+  plannerPicker.linkType = t; plannerPicker.q = '';
+  renderLinkPicker();
+  setTimeout(() => { const s = document.getElementById('planner-pick-search'); if(s) s.focus(); }, 40);
+}
+
+function renderRichLinkPicker(){
+  const wrap = document.getElementById('planner-picker');
+  const card = document.getElementById('planner-picker-card');
+  if(!wrap || !card || !plannerLinkCtx){ if(wrap) wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const lt = plannerPicker.linkType || 'scene';
+  const q = (plannerPicker.q || '').trim().toLowerCase();
+  const tabs = [['scene', '🎬 Scene'], ['quest', '🎯 Quest'], ['location', '📍 Location'], ['pdf', '📄 PDF'], ['url', '🔗 URL']]
+    .map(([v, l]) => `<button class="planner-linktab${lt === v ? ' on' : ''}" onclick="plannerLinkType('${v}')">${l}</button>`).join('');
+
+  let body = '';
+  if(lt === 'url'){
+    body = `<div class="planner-link-url">
+      <input id="planner-link-url-in" class="planner-pick-search" placeholder="https://…  or  mailto:…">
+      <input id="planner-link-url-lbl" class="planner-pick-search" placeholder="Link text (optional)" value="${sattr(plannerLinkCtx.selText || '')}">
+      <button class="cal-add-btn" onclick="insertRichUrl()">Insert link</button>
+    </div>`;
+  } else {
+    let rows = [];
+    if(lt === 'scene'){
+      const p = selPlan(); const scenes = (p && p.scenes) || [];
+      rows = scenes.filter(s => s.id !== plannerLinkCtx.sceneId).map(s => ({ ref: 'scene:' + s.id, label: (s.title || 'Untitled scene'), meta: (SCENE_TYPES.find(t => t[0] === s.type) || SCENE_TYPES[0])[1] }));
+    } else if(lt === 'quest'){
+      const log = (typeof questLog !== 'undefined') ? questLog : [];
+      rows = log.map(m => ({ ref: 'quest:' + m.id, label: (m.title || 'Mission'), meta: m.status || '' }));
+    } else if(lt === 'location'){
+      rows = buildLocationTargets().map(t => ({ ref: t.ref, label: t.icon + ' ' + t.label, meta: t.meta }));
+    } else if(lt === 'pdf'){
+      const p = selPlan(); const docs = (p && p.docs) || [];
+      rows = docs.map(d => ({ ref: 'pdf:' + d.id, label: (d.name || 'Document.pdf'), meta: 'PDF' }));
+    }
+    const filtered = rows.filter(r => !q || (r.label + ' ' + (r.meta || '')).toLowerCase().includes(q));
+    body = `<input id="planner-pick-search" class="planner-pick-search" placeholder="🔍 Search…" value="${sattr(plannerPicker.q || '')}" oninput="plannerPickerSearch(this.value)">
+      <div class="planner-pick-list">${filtered.length
+        ? filtered.map(r => `<button class="planner-pick-row" onclick="insertRichLink('${sattr(r.ref)}')">
+            <span class="planner-pick-name">${sesc(r.label)}</span>${r.meta ? `<span class="planner-pick-meta">${sesc(r.meta)}</span>` : ''}</button>`).join('')
+        : `<div class="planner-hint" style="padding:8px 4px">Nothing to link here yet.</div>`}</div>`;
+  }
+  card.innerHTML = `<div class="planner-pick-hd"><span>Insert link</span><button class="planner-pick-close" onclick="closeLinkPicker()">✕</button></div>
+    <div class="planner-linktabs">${tabs}</div>
+    ${body}`;
+}
+
+// Enumerate linkable in-world places: galaxy systems/nodes, worlds, and their locations.
+function buildLocationTargets(){
+  const out = [];
+  try {
+    if(typeof GALAXY_NODES !== 'undefined' && Array.isArray(GALAXY_NODES)){
+      GALAXY_NODES.forEach(n => {
+        if(!n || !n.id) return;
+        if(n.systemId && typeof SYSTEMS !== 'undefined' && SYSTEMS[n.systemId])
+          out.push({ ref: 'location:system:' + n.systemId, label: n.name || n.id, icon: '🌌', meta: 'system' });
+        else
+          out.push({ ref: 'location:node:' + n.id, label: n.name || n.id, icon: '✦', meta: 'star' });
+      });
+    }
+  } catch(e){}
+  try {
+    if(typeof SYSTEMS !== 'undefined'){
+      Object.keys(SYSTEMS).forEach(sysId => {
+        let bodies = [];
+        try { bodies = (typeof getBodies === 'function') ? (getBodies(sysId) || []) : ((SYSTEMS[sysId] && SYSTEMS[sysId].base) || []); } catch(e){ bodies = (SYSTEMS[sysId] && SYSTEMS[sysId].base) || []; }
+        bodies.forEach(b => {
+          if(!b || !b.id) return;
+          out.push({ ref: 'location:body:' + sysId + ':' + b.id, label: b.name || b.id, icon: '🪐', meta: 'world' });
+          let locs = [];
+          try {
+            if(typeof effectiveLocations === 'function') locs = effectiveLocations(sysId, b.id) || [];
+            else if(typeof BASE_LOCATIONS !== 'undefined' && BASE_LOCATIONS[sysId]) locs = BASE_LOCATIONS[sysId][b.id] || [];
+          } catch(e){ locs = []; }
+          locs.forEach(l => { if(l && l.id) out.push({ ref: 'location:loc:' + sysId + ':' + b.id + ':' + l.id, label: l.name || l.id, icon: '📍', meta: (b.name || b.id) }); });
+        });
+      });
+    }
+  } catch(e){}
+  return out;
+}
+function refDefaultLabel(ref){
+  const ci = ref.indexOf(':'); const kind = ci < 0 ? ref : ref.slice(0, ci); const rest = ci < 0 ? '' : ref.slice(ci + 1);
+  if(kind === 'scene'){ const p = selPlan(); const s = p && sceneById(p, rest); return s ? (s.title || 'Scene') : 'Scene'; }
+  if(kind === 'quest'){ const m = (typeof questLog !== 'undefined') ? questLog.find(x => x.id === rest) : null; return m ? (m.title || 'Mission') : 'Mission'; }
+  if(kind === 'pdf'){ const p = selPlan(); const d = p && (p.docs || []).find(x => x.id === rest); return d ? (d.name || 'Document') : 'Document'; }
+  if(kind === 'location'){ const t = buildLocationTargets().find(x => x.ref === ref); return t ? t.label : 'Location'; }
+  return 'link';
+}
+function _findRichEditor(ctx){
+  const eds = document.querySelectorAll('#planner-detail .planner-rich');
+  for(let i = 0; i < eds.length; i++){
+    const ed = eds[i];
+    if(ed.getAttribute('data-field') === ctx.field && (ed.getAttribute('data-scene') || '') === ctx.sceneId && ed.getAttribute('data-plan') === ctx.planId) return ed;
+  }
+  return null;
+}
+function _insertLinkFrag(ctx, frag){
+  const ed = _findRichEditor(ctx);
+  closeLinkPicker();
+  if(!ed) return;
+  ed.focus();
+  try { if(ctx.range){ const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(ctx.range); } } catch(e){}
+  try { document.execCommand('insertHTML', false, frag); } catch(e){ ed.insertAdjacentHTML('beforeend', frag); }
+  commitRich(ed);
+}
+function insertRichLink(ref){
+  const ctx = plannerLinkCtx; if(!ctx){ closeLinkPicker(); return; }
+  const label = ctx.selText || refDefaultLabel(ref);
+  _insertLinkFrag(ctx, `<a data-link="${sattr(ref)}">${sesc(label)}</a>&nbsp;`);
+}
+function insertRichUrl(){
+  const ctx = plannerLinkCtx; if(!ctx){ closeLinkPicker(); return; }
+  const raw = (document.getElementById('planner-link-url-in') || {}).value || '';
+  const u = raw.trim();
+  if(!/^(https?:|mailto:)/i.test(u)){ if(typeof showToast === 'function') showToast('Enter a http(s):// or mailto: link', 'error'); return; }
+  let label = (document.getElementById('planner-link-url-lbl') || {}).value || '';
+  label = label.trim() || ctx.selText || u;
+  _insertLinkFrag(ctx, `<a href="${sattr(u)}" target="_blank" rel="noopener noreferrer">${sesc(label)}</a>&nbsp;`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LINK DISPATCH  —  what happens when the referee clicks an inline link
+// ═══════════════════════════════════════════════════════════════════════════
+
+function dispatchPlannerLink(ref, anchorEl){
+  if(!ref) return;
+  const ci = ref.indexOf(':'); const kind = ci < 0 ? ref : ref.slice(0, ci); const rest = ci < 0 ? '' : ref.slice(ci + 1);
+  if(kind === 'scene') plannerJumpToScene(rest);
+  else if(kind === 'quest') plannerOpenQuest(rest);
+  else if(kind === 'location') plannerLocationAction(ref, anchorEl);
+  else if(kind === 'pdf') plannerDocOpen(rest);
+}
+function plannerJumpToScene(sceneId){
+  const p = selPlan(); if(!p) return;
+  if(!sceneById(p, sceneId)){ if(typeof showToast === 'function') showToast('That scene is in another session', 'info'); return; }
+  if(plannerView !== 'list'){ plannerView = 'list'; renderPlanner(); }
+  const card = document.getElementById('scene-card-' + sceneId);
+  if(card){ card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1200); }
+}
+function plannerOpenQuest(qId){
+  const q = (typeof questLog !== 'undefined') ? questLog.find(x => x.id === qId) : null;
+  if(typeof toggleQuestPanel === 'function'){
+    if(typeof questPanelOpen !== 'undefined' && !questPanelOpen) toggleQuestPanel();
+    else if(typeof renderQuestPanel === 'function') renderQuestPanel();
+  }
+  if(typeof showToast === 'function') showToast(q ? ('Quest: ' + (q.title || 'Mission')) : 'Quest not found', q ? 'info' : 'error');
+}
+function parseLocationRef(rest){
+  const parts = String(rest || '').split(':'); const sub = parts[0];
+  if(sub === 'node') return { sub, nodeId: parts[1] };
+  if(sub === 'system') return { sub, systemId: parts[1] };
+  if(sub === 'body') return { sub, systemId: parts[1], bodyId: parts[2] };
+  if(sub === 'loc') return { sub, systemId: parts[1], bodyId: parts[2], locId: parts[3] };
+  return { sub: 'unknown' };
+}
+function locSpecFromRef(loc){
+  if(!loc) return null;
+  if(loc.sub === 'node') return { view: 'galaxy' };
+  if(loc.sub === 'system') return { view: 'system', systemId: loc.systemId };
+  if(loc.sub === 'body') return { view: 'body', systemId: loc.systemId, bodyId: loc.bodyId };
+  if(loc.sub === 'loc') return { view: 'body', systemId: loc.systemId, bodyId: loc.bodyId, locId: loc.locId };
+  return null;
+}
+// A location link offers two actions: go there yourself, or present it to the table.
+function plannerLocationAction(fullRef, anchorEl){
+  _pendingLoc = { ref: fullRef, label: (anchorEl && anchorEl.textContent) ? anchorEl.textContent.trim() : 'location' };
+  const rect = anchorEl ? anchorEl.getBoundingClientRect() : { left: 200, bottom: 200 };
+  const html = `<div class="pp-title">${sesc(_pendingLoc.label)}</div>
+    <button class="pp-act" onclick="plannerGoLocation()">🧭 Go there</button>
+    <button class="pp-act" onclick="plannerSendPlayersToLocation()">📡 Send players here</button>`;
+  plannerPopover(html, rect.left, rect.bottom + 4);
+}
+function plannerGoLocation(){
+  const pl = _pendingLoc; closePlannerPopover(); if(!pl) return;
+  const spec = locSpecFromRef(parseLocationRef(pl.ref.replace(/^location:/, '')));
+  if(spec && typeof applyViewSpec === 'function'){ applyViewSpec(spec); closeSessionPlanner(); }
+}
+function plannerSendPlayersToLocation(){
+  const pl = _pendingLoc; closePlannerPopover(); if(!pl) return;
+  const spec = locSpecFromRef(parseLocationRef(pl.ref.replace(/^location:/, '')));
+  if(spec) forcedViewSet(spec, pl.label);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORCE VIEW (referee side)  —  push a "come look at this" to player devices
+// ═══════════════════════════════════════════════════════════════════════════
+// Writes the shared 'forced-view' key; the player poll (js/55) surfaces a
+// dismissible soft-follow banner. Release clears it. All referee-gated.
+
+async function forcedViewSet(spec, label){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const payload = Object.assign({}, spec, { label: label || '', ts: Date.now() });
+  try {
+    await supaStorage.set('forced-view', JSON.stringify(payload), true);
+    if(typeof showToast === 'function') showToast('📡 Players invited to ' + (label || 'this view'), 'success');
+  } catch(e){
+    if(typeof pushErr === 'function') pushErr('forcedViewSet failed', e && e.stack);
+    if(typeof showToast === 'function') showToast('Could not send view', 'error');
+  }
+}
+async function forcedViewRelease(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  try {
+    await supaStorage.set('forced-view', JSON.stringify({ cleared: true, ts: Date.now() }), true);
+    if(typeof showToast === 'function') showToast('🔓 Players are free to navigate', 'info');
+  } catch(e){
+    if(typeof showToast === 'function') showToast('Could not release players', 'error');
+  }
+}
+// Snapshot the referee's CURRENT view and present it (More-menu entry point).
+function plannerSendCurrentView(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const spec = {
+    view: (typeof currentView !== 'undefined') ? currentView : 'galaxy',
+    systemId: (typeof currentSystemId !== 'undefined') ? currentSystemId : null,
+    bodyId: (typeof selectedBody !== 'undefined') ? selectedBody : null,
+    locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null
+  };
+  forcedViewSet(spec, currentViewLabel(spec));
+}
+function currentViewLabel(spec){
+  spec = spec || {};
+  if(spec.view === 'galaxy') return 'the galaxy map';
+  if(spec.view === 'station') return 'the station';
+  const nameOf = (id) => {
+    try {
+      const sys = SYSTEMS[spec.systemId] || SYSTEMS[currentSystemId];
+      const bodies = (typeof getBodies === 'function') ? getBodies(spec.systemId || currentSystemId) : (sys && sys.base);
+      const b = (bodies || []).find(x => x.id === id);
+      return b ? b.name : id;
+    } catch(e){ return id; }
+  };
+  if(spec.locId) return nameOf(spec.bodyId) + ' · ' + spec.locId;
+  if(spec.bodyId) return nameOf(spec.bodyId);
+  return spec.view || 'this view';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POPOVER  —  small floating panel (location actions + board scene preview)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function plannerPopover(html, x, y){
+  closePlannerPopover();
+  const div = document.createElement('div');
+  div.id = 'planner-popover';
+  div.innerHTML = html;
+  document.body.appendChild(div);
+  const w = div.offsetWidth || 240, h = div.offsetHeight || 120;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let left = Math.min(Math.max(8, x), vw - w - 8);
+  let top = Math.min(Math.max(8, y), vh - h - 8);
+  div.style.left = left + 'px';
+  div.style.top = top + 'px';
+  setTimeout(() => document.addEventListener('mousedown', _popoverOutside), 0);
+}
+function closePlannerPopover(){
+  const el = document.getElementById('planner-popover');
+  if(el) el.remove();
+  document.removeEventListener('mousedown', _popoverOutside);
+}
+function _popoverOutside(e){
+  const el = document.getElementById('planner-popover');
+  if(el && !el.contains(e.target)) closePlannerPopover();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFERENCE DOCUMENTS  —  attach PDFs to a session plan (Supabase 'session-docs')
+// ═══════════════════════════════════════════════════════════════════════════
+
+function plannerDocCampaign(){
+  if(typeof hoCampaign === 'function') return hoCampaign();
+  if(typeof activeCampaignId === 'function') return activeCampaignId();
+  return 'default';
+}
+function renderPlannerDocs(p){
+  return ((p && p.docs) || []).map(d => `<div class="planner-doc">
+    <button class="planner-doc-open" onclick="plannerDocOpen('${d.id}')" title="Open in the browser's PDF viewer">📄 ${sesc(d.name || 'Document.pdf')}</button>
+    <button class="disc-mini del" onclick="plannerDocRemove('${d.id}')" title="Remove from this session">✕</button>
+  </div>`).join('');
+}
+async function onPlannerDocFile(input, planId){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const file = input && input.files && input.files[0];
+  if(input) input.value = '';
+  if(!file) return;
+  if(file.type !== 'application/pdf'){ if(typeof showToast === 'function') showToast('PDF files only', 'error'); return; }
+  if(file.size > 83886080){ if(typeof showToast === 'function') showToast('PDF too large (80 MB max)', 'error'); return; }
+  const p = planById(planId); if(!p) return;
+  if(!Array.isArray(p.docs)) p.docs = [];
+  const id = _pid('doc_'); const ver = Date.now();
+  if(typeof showToast === 'function') showToast('Uploading PDF…', 'info');
+  try {
+    await uploadPlannerDocBlob(plannerDocCampaign(), id, file);
+    p.docs.push({ id, name: (file.name || 'Document.pdf').slice(0, 120), ver, uploadedAt: ver });
+    saveSessionPlans();
+    renderPlannerDetail();
+    if(typeof showToast === 'function') showToast('PDF attached', 'success');
+  } catch(e){
+    if(typeof pushErr === 'function') pushErr('Planner PDF upload failed', e && e.stack);
+    if(typeof showToast === 'function') showToast('Upload failed — is the session-docs bucket set up?', 'error');
+  }
+}
+function plannerDocOpen(id){
+  const p = selPlan(); const d = p && (p.docs || []).find(x => x.id === id);
+  if(!d){ if(typeof showToast === 'function') showToast('Document not found', 'error'); return; }
+  const url = plannerDocUrlFor(plannerDocCampaign(), d.id, d.ver);
+  window.open(url, '_blank', 'noopener');
+}
+function plannerDocRemove(id){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const p = selPlan(); if(!p) return;
+  if(!confirm('Remove this PDF from the session? (The file itself stays in storage.)')) return;
+  p.docs = (p.docs || []).filter(x => x.id !== id);
+  saveSessionPlans();
+  renderPlannerDetail();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCENE BOARD  —  visualise the session outline; click a box for scene info
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SCENE_TYPE_COLOR = { scene: 'var(--txI)', social: 'var(--txS)', combat: 'var(--txD)', travel: 'var(--accentGold)', explore: 'var(--txW)', downtime: 'var(--tx1)' };
+function sceneTypeColor(t){ return SCENE_TYPE_COLOR[t] || 'var(--bd0)'; }
+// Scene→scene edges are derived from inline links the referee placed in the prose.
+function sceneLinkTargets(s){
+  const out = []; const html = ((s.readAloud || '') + ' ' + (s.refNotes || ''));
+  const re = /data-link\s*=\s*"scene:([^"]+)"/gi; let m;
+  while((m = re.exec(html))) out.push(m[1]);
+  return out;
+}
+function renderPlannerBoard(){
+  const el = document.getElementById('planner-detail'); if(!el) return;
+  const p = selPlan();
+  if(!p){
+    el.innerHTML = `<div class="planner-detail-empty"><div class="planner-detail-empty-ic">🗺</div><div>Pick a session to see its scene board.</div></div>`;
+    return;
+  }
+  const scenes = (p.scenes || []);
+  el.innerHTML = `<div class="planner-back-row">
+      <button class="planner-back" onclick="plannerBackToList()">‹ Sessions</button>
+      <span class="planner-board-title">${sesc(p.title || 'Untitled')} · scene board</span>
+    </div>
+    <div id="planner-board-scroll" class="planner-board-scroll"></div>`;
+  const host = document.getElementById('planner-board-scroll');
+  if(!scenes.length){ host.innerHTML = `<div class="planner-hint" style="padding:16px">No scenes yet — add some in the list view.</div>`; return; }
+
+  const BW = 300, BH = 66, GAP = 30, PADX = 24, PADY = 16, GUTTER = 96;
+  const W = PADX * 2 + BW + GUTTER;
+  const H = PADY * 2 + scenes.length * BH + (scenes.length - 1) * GAP;
+  const yOf = i => PADY + i * (BH + GAP);
+  const idxOf = id => scenes.findIndex(s => s.id === id);
+  const edges = [];
+  scenes.forEach((s, i) => sceneLinkTargets(s).forEach(tid => { const j = idxOf(tid); if(j >= 0 && j !== i) edges.push([i, j]); }));
+
+  let svg = `<svg class="planner-board-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<defs>
+    <marker id="pbArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--txI)"/></marker>
+    <marker id="pbSeq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--bd0)"/></marker>
+  </defs>`;
+  for(let i = 0; i < scenes.length - 1; i++){
+    const x = PADX + BW / 2, y1 = yOf(i) + BH, y2 = yOf(i + 1);
+    svg += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2 - 2}" stroke="var(--bd0)" stroke-width="2" marker-end="url(#pbSeq)"/>`;
+  }
+  edges.forEach(([i, j]) => {
+    const x = PADX + BW, y1 = yOf(i) + BH / 2, y2 = yOf(j) + BH / 2, cx = x + GUTTER * 0.7;
+    svg += `<path d="M ${x} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x} ${y2}" fill="none" stroke="var(--txI)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#pbArrow)"/>`;
+  });
+  scenes.forEach((s, i) => {
+    const y = yOf(i), col = sceneTypeColor(s.type);
+    const typeLbl = (SCENE_TYPES.find(t => t[0] === s.type) || SCENE_TYPES[0])[1];
+    const icon = typeLbl.split(' ')[0];
+    const title = richToPlain(s.title) || ('Scene ' + (i + 1));
+    const badges = [];
+    if((s.npcIds || []).length) badges.push('👥' + s.npcIds.length);
+    if((s.missionIds || []).length) badges.push('🎯' + s.missionIds.length);
+    if((s.checks || []).length) badges.push('⚄' + s.checks.length);
+    if((s.oracle || []).length) badges.push('🎲' + s.oracle.length);
+    const sub = typeLbl.split(' ').slice(1).join(' ') + (badges.length ? ('   ' + badges.join('  ')) : '');
+    svg += `<g class="pb-node" onclick="openSceneBoardPopover('${s.id}',event)" style="cursor:pointer">
+      <rect x="${PADX}" y="${y}" rx="8" width="${BW}" height="${BH}" fill="var(--bg2)" stroke="${s.done ? 'var(--txS)' : col}" stroke-width="${s.done ? 2 : 1.5}"/>
+      <rect x="${PADX}" y="${y}" rx="4" width="5" height="${BH}" fill="${col}"/>
+      <text x="${PADX + 16}" y="${y + 25}" fill="var(--tx0)" font-size="13" font-weight="600">${sesc(icon)} ${sesc(plTrunc(title, 32))}</text>
+      <text x="${PADX + 16}" y="${y + 46}" fill="var(--tx1)" font-size="11">${sesc(sub)}</text>
+      ${s.done ? `<text x="${PADX + BW - 20}" y="${y + 24}" fill="var(--txS)" font-size="15">✓</text>` : ''}
+    </g>`;
+  });
+  svg += `</svg>`;
+  host.innerHTML = svg;
+}
+function openSceneBoardPopover(sceneId, ev){
+  const p = selPlan(); const s = p && sceneById(p, sceneId); if(!s) return;
+  const typeLbl = (SCENE_TYPES.find(t => t[0] === s.type) || SCENE_TYPES[0])[1];
+  const ra = richToPlain(s.readAloud), rn = richToPlain(s.refNotes);
+  const meta = [
+    (s.npcIds || []).length ? ('👥 ' + s.npcIds.length) : '',
+    (s.missionIds || []).length ? ('🎯 ' + s.missionIds.length) : '',
+    (s.checks || []).length ? ('⚄ ' + s.checks.length) : '',
+    (s.oracle || []).length ? ('🎲 ' + s.oracle.length) : ''
+  ].filter(Boolean).join('   ');
+  const html = `<div class="pp-title">${sesc(s.title || 'Untitled scene')}</div>
+    <div class="pp-sub">${sesc(typeLbl)}${s.done ? ' · ✓ played' : ''}</div>
+    ${ra ? `<div class="pp-para"><b>Read-aloud:</b> ${sesc(plTrunc(ra, 180))}</div>` : ''}
+    ${rn ? `<div class="pp-para"><b>Notes:</b> ${sesc(plTrunc(rn, 180))}</div>` : ''}
+    <div class="pp-meta">${meta || 'No links yet'}</div>
+    <button class="pp-act" onclick="openSceneFromBoard('${s.id}')">Open card ›</button>`;
+  const x = ev ? ev.clientX : 200, y = ev ? ev.clientY : 200;
+  plannerPopover(html, x, y);
+}
+function openSceneFromBoard(sceneId){
+  closePlannerPopover();
+  plannerView = 'list';
+  renderPlanner();
+  setTimeout(() => plannerJumpToScene(sceneId), 40);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
