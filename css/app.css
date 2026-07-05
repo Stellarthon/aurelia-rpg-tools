@@ -3304,6 +3304,9 @@ input#ui-scale-range{
 .hx-econ-dir{font-size:6.5px;font-family:var(--mono,monospace);font-weight:700;paint-order:stroke;stroke:#05070e;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
 .hx-econ-amt{font-size:5.2px;font-family:var(--mono,monospace);font-weight:700;paint-order:stroke;stroke:#05070e;stroke-width:1.4px;stroke-linejoin:round;pointer-events:none;display:none}
 .hx-econ-dem{display:none}
+/* Sealed-market cue: a market world the party has not yet called at shows a faint "?"
+   in place of its produce/demand badges (fog-of-price); revealed on visit. */
+.hx-econ-unknown{font-size:8px;font-family:var(--mono,monospace);font-weight:700;fill:#6b7a92;opacity:.7;paint-order:stroke;stroke:#05070e;stroke-width:1.6px;stroke-linejoin:round;pointer-events:none}
 #hx-map.hx-lblzoom .hx-econ-amt,#hx-map.hx-lblzoom .hx-econ-dem{display:block}
 #hx-toast{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);background:rgba(14,18,30,.96);border:.5px solid var(--accentGold);border-radius:8px;padding:9px 14px;color:var(--tx0);font-size:12px;font-family:var(--mono,monospace);z-index:30;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
 #hx-toast.show{opacity:1}

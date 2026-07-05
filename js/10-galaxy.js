@@ -1662,6 +1662,20 @@ const HX = (function(){
     return set; }
   function isVisited(s){ return !!s && visitedSet().has(s.id); }
 
+  // ── Market-intel staleness — a visited world's trade readout on the map fades with the
+  //    weeks since the party last called there (word ages at roughly one jump per week).
+  //    shipState.visitLog stamps the Imperial ordinal of each call; the current location
+  //    always reads fresh (0), an unvisited world has no age (Infinity). Referees see live
+  //    truth, so callers apply this dimming for players only. ──
+  function visitWeeks(s){ if(!s) return Infinity;
+    const ss=(typeof shipState!=='undefined')?shipState:{};
+    if(ss.locationId===s.id) return 0;                                   // where you are now = live
+    const log=ss.visitLog;
+    if(!log||log[s.id]==null||typeof imperialOrdinal!=='function'||typeof imperialDate==='undefined') return Infinity;
+    return Math.max(0,(imperialOrdinal(imperialDate)-log[s.id])/7); }
+  // Opacity floor 0.35, reached at a ~3-jump (21-day) staleness horizon.
+  function staleOp(s){ const w=visitWeeks(s); return w===Infinity?0.35:clamp(1-w/3,0.35,1); }
+
   // ── Pixel projection (flat-top axial → screen) ──
   function axialPx(q,r){ return { x:RPX*1.5*q, y:RPX*Math.sqrt(3)*(r+q/2) }; }
   function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
@@ -2001,11 +2015,16 @@ const HX = (function(){
   function drawEconBadges(layer){
     if(typeof window.ECON==='undefined' || !ECON.effectiveProfile) return;
     const bg=NS('g',{'pointer-events':'none'}); layer.appendChild(bg);
-    const STEP=11, MAX=3;
-    const mkText=(x,y,cls,txt,col,op)=>{ const a={x,y,'text-anchor':'middle',class:cls}; if(col)a.fill=col; if(op!=null)a.opacity=op;
-      const t=NS('text',a); t.textContent=txt; bg.appendChild(t); return t; };
+    const STEP=11, MAX=3, isRef=ref(), vset=isRef?null:visitedSet();
+    const mkText=(par,x,y,cls,txt,col,op)=>{ const a={x,y,'text-anchor':'middle',class:cls}; if(col)a.fill=col; if(op!=null)a.opacity=op;
+      const t=NS('text',a); t.textContent=txt; par.appendChild(t); return t; };
     SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;
-      const p=axialPx(s.q,s.r), rows=[];
+      const p=axialPx(s.q,s.r);
+      // Fog: a market the party has never called at shows only a sealed "?" — no produce/
+      // demand intel — until they visit (referees always see the live badges).
+      if(!isRef && !vset.has(s.id)){ mkText(bg, p.x, p.y-13, 'hx-econ-unknown', '?', null, null); return; }
+      const wg=NS('g', isRef?{}:{opacity:staleOp(s).toFixed(2)}); bg.appendChild(wg);   // players' intel fades with weeks since the visit
+      const rows=[];
       if(data.prod.length) rows.push({entries:data.prod.slice(0,MAX), extra:data.prod.length-MAX, kind:'prod'});
       if(data.dem.length)  rows.push({entries:data.dem.slice(0,MAX),  extra:data.dem.length-MAX,  kind:'dem'});
       rows.forEach((row,ri)=>{ const y=p.y-12-ri*12, isProd=row.kind==='prod', col=isProd?'#66c07a':'#e3a24a';
@@ -2014,11 +2033,11 @@ const HX = (function(){
         // clean and the full produce+demand+amount detail unfolds as you zoom in.
         const dim=isProd?'':' hx-econ-dem';
         const n=row.entries.length, startX=p.x-(n-1)*STEP/2;
-        mkText(startX-8, y, 'hx-econ-dir'+dim, isProd?'▲':'▼', col);                   // direction cue
+        mkText(wg, startX-8, y, 'hx-econ-dir'+dim, isProd?'▲':'▼', col);                // direction cue
         row.entries.forEach((e,i)=>{ const x=startX+i*STEP;
-          mkText(x, y, 'hx-econ-ic'+dim, GOOD_ICON[e.good]||'▪');                      // the good's emoji
-          mkText(x+4.7, y+4.7, 'hx-econ-amt', econAmt(e.rate), col); });               // kt/week (zoom-gated)
-        if(row.extra>0) mkText(startX+n*STEP-2, y, 'hx-econ-dir'+dim, '+'+row.extra, col, 0.85); });   // overflow beyond top-3
+          mkText(wg, x, y, 'hx-econ-ic'+dim, GOOD_ICON[e.good]||'▪');                    // the good's emoji
+          mkText(wg, x+4.7, y+4.7, 'hx-econ-amt', econAmt(e.rate), col); });             // kt/week (zoom-gated)
+        if(row.extra>0) mkText(wg, startX+n*STEP-2, y, 'hx-econ-dir'+dim, '+'+row.extra, col, 0.85); });   // overflow beyond top-3
     });
   }
 
@@ -2034,11 +2053,14 @@ const HX = (function(){
     if(typeof window.ECON==='undefined') return;
     const good=[...tradeGoods][0]; if(!good) return;
     const hg=NS('g',{'pointer-events':'none'}); layer.appendChild(hg);
+    const isRef=ref(), vset=isRef?null:visitedSet();
     SYS.forEach(s=>{ const data=econBadgeData(s.id); if(!data) return;   // no stake in this good → no tint
+      if(!isRef && !vset.has(s.id)) return;                              // fog: no price intel for worlds the party has never called at
       let pr=0; try{ pr=mktPressure(s,good); }catch(e){}
       let t=clamp(pr/4,-1,1);
       if(Math.abs(t)<0.25) t = data.prod.length ? 0.45 : -0.45;         // ~equilibrium: fall back to the profile stake
-      const col=t>0?HEAT_BUY:HEAT_SELL, op=0.15+Math.abs(t)*0.32, p=axialPx(s.q,s.r);
+      const col=t>0?HEAT_BUY:HEAT_SELL, p=axialPx(s.q,s.r);
+      const op=(0.15+Math.abs(t)*0.32)*(isRef?1:staleOp(s));            // players' intel fades with weeks since the visit
       hg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:col,'fill-opacity':op.toFixed(2),
         stroke:col,'stroke-opacity':Math.min(0.9,op+0.28).toFixed(2),'stroke-width':1})); });
   }
@@ -2153,6 +2175,8 @@ const HX = (function(){
       shipState.destination=pausing?disp(selected):''; shipState.jumpParsecs=pausing?jumpDist(to,selected):0;
       shipState.visited=Array.isArray(shipState.visited)?shipState.visited:[];
       if(!shipState.visited.includes(to.id)) shipState.visited.push(to.id);   // arriving reveals this stop's market to players
+      shipState.visitLog=shipState.visitLog||{};                              // stamp the call so remote intel can age (revisiting resets it)
+      if(typeof imperialOrdinal==='function'&&typeof imperialDate!=='undefined') shipState.visitLog[to.id]=imperialOrdinal(imperialDate);
       shipState.jumpLog=Array.isArray(shipState.jumpLog)?shipState.jumpLog:[];
       shipState.jumpLog.unshift({ date:(typeof imperialDate!=='undefined'&&typeof formatImperial==='function'?formatImperial(imperialDate):''),
         from:disp(from), to:disp(to), weeks, burn:Math.round(legPlan.total), refuels:0, events:fired.map(e=>({title:e.title,note:e.note||''})) });
@@ -2168,6 +2192,8 @@ const HX = (function(){
     if(typeof shipState==='undefined') return;
     shipState.visited=Array.isArray(shipState.visited)?shipState.visited:[];
     if(!shipState.visited.includes(id)) shipState.visited.push(id);
+    shipState.visitLog=shipState.visitLog||{};                              // stamp the call so remote intel can age (revisiting resets it)
+    if(typeof imperialOrdinal==='function'&&typeof imperialDate!=='undefined') shipState.visitLog[id]=imperialOrdinal(imperialDate);
     if(typeof saveShipState==='function') saveShipState();
     refresh(); toast('System marked visited — its market is now visible to players.');
   }
