@@ -856,6 +856,54 @@ async function pollRevealState(){
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Forced view — the referee is "presenting"; offer a dismissible soft-follow banner
+  try {
+    const resFV = await supaStorage.get('forced-view', true);
+    if(resFV.ok){
+      const fv = resFV.value != null ? (JSON.parse(resFV.value) || null) : null;
+      handleForcedView(fv);
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+}
+
+// ── Forced view (player side) ────────────────────────────────────────────────
+// Rides the existing poll (no new timer). A NEW ts shows the soft-follow banner;
+// {cleared:true} hides it; the ts guard means a dismissed push never re-yanks the
+// player on the next poll. Follow routes through applyViewSpec(); dismiss just hides.
+let lastForcedViewTs = 0;
+let forcedViewPending = null;
+function handleForcedView(fv){
+  if(isReferee()) return;                                     // referee never follows their own push
+  if(!fv || !fv.ts || fv.ts === lastForcedViewTs) return;     // nothing new
+  lastForcedViewTs = fv.ts;
+  if(fv.cleared){ forcedViewHideBanner(); forcedViewPending = null; return; }
+  forcedViewPending = fv;
+  forcedViewShowBanner(fv.label || 'a location');
+}
+function forcedViewShowBanner(label){
+  const b = document.getElementById('forced-view-banner'); if(!b) return;
+  const t = document.getElementById('forced-view-banner-txt');
+  if(t) t.textContent = 'The referee is showing: ' + label;
+  b.classList.remove('hidden');
+}
+function forcedViewHideBanner(){ const b = document.getElementById('forced-view-banner'); if(b) b.classList.add('hidden'); }
+function forcedViewFollow(){ const fv = forcedViewPending; forcedViewHideBanner(); if(fv) applyViewSpec(fv); }
+function forcedViewDismiss(){ forcedViewHideBanner(); }
+
+// Navigate the local view to a spec {view, systemId, bodyId, locId}. Shared by the
+// player soft-follow AND the referee's own "Go there" from a planner location link.
+// Every hop is typeof-guarded so a missing nav module just no-ops.
+function applyViewSpec(spec){
+  if(!spec) return;
+  try {
+    if(spec.view === 'galaxy'){ if(typeof goGalaxy === 'function') goGalaxy(); return; }
+    if(spec.systemId && typeof enterSystem === 'function') enterSystem(spec.systemId);
+    if(spec.view === 'station'){ if(typeof enterStation === 'function') enterStation(); return; }
+    if(spec.view === 'system') return;
+    if(spec.bodyId && typeof goBodyView === 'function') goBodyView(spec.bodyId);
+    if(spec.locId && typeof selectBodyLocation === 'function') selectBodyLocation(spec.locId);
+  } catch(e){ if(typeof pushErr === 'function') pushErr('applyViewSpec failed', e && e.stack, { spec }); }
 }
 
 // Self-scheduling poll (setTimeout, not setInterval) so the interval can grow
