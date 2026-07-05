@@ -1668,15 +1668,16 @@ const HX = (function(){
   function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
   function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); } }
-  // Trader convoy labels live inside the zooming scene, so at high zoom they'd balloon and
-  // clutter. Counter-scale them: keep their natural size when zoomed out, and once zoomed past
-  // fit hold a constant on-screen size that gently shrinks the deeper you go. Driven by a CSS
-  // var so one write restyles every label (they carry font-size:var(--hx-trader-font)). ──
+  // Trader convoy labels live inside the zooming scene, so left alone they'd balloon with the
+  // map at high zoom. Counter-scale them off TRADER_LABEL (00-core-data.js): pick a target
+  // on-screen px, then divide back out by the live map scale so ONE CSS-var write restyles every
+  // label (they carry font-size:var(--hx-trader-font)). z = zoom factor (1 at fit/default). ──
   function scaleTraderLabels(){ if(!svg) return;
-    const r=view.scale/(fitScale||1);                                   // zoom ratio past fit
-    const onScreen=clamp(11 - 2.2*Math.log2(Math.max(1,r)), 5.5, 9);    // target px on screen (shrinks as you zoom in)
-    const scene=Math.min(8.5, onScreen/(view.scale||1));               // ≤ natural, so zoomed-out labels aren't enlarged
-    svg.style.setProperty('--hx-trader-font', scene.toFixed(3)+'px'); }
+    const TL=TRADER_LABEL, z=view.scale/(fitScale||1);                            // zoom factor: 1 = default (fit)
+    // Target on-screen px = SCALE×BASE at z=1, riding z^(1−EXPONENT): EXPONENT 1 holds it
+    // constant on screen, 0 lets it grow with the map, >1 shrinks it as you zoom in. Clamped.
+    const onScreen=clamp(TL.SCALE*TL.BASE*Math.pow(Math.max(z,1e-3),1-TL.ZOOM_EXPONENT), TL.MIN_PX, TL.MAX_PX);
+    svg.style.setProperty('--hx-trader-font', (onScreen/(view.scale||1)).toFixed(3)+'px'); }
 
   // ── Infinite grid: which hexes to tile this frame ──
   // Invert axialPx for the four screen corners to get the q,r box currently in
