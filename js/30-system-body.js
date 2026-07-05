@@ -118,7 +118,14 @@ function lcgNext(seed){ return ((seed * 1664525 + 1013904223) & 0xffffffff) >>> 
 const PZ_MIN = 0.5, PZ_MAX = 8, PZ_TAP_PX = 8;   // zoom clamp + tap/drag threshold
 let pzSuppressTap = false;                        // shared: a drag/pinch just ended → swallow its trailing tap
 
-function attachPinchZoom(svg){
+// onTap(clientX, clientY) — optional; invoked on a genuine single tap (never a
+// drag/pinch, never the 2nd tap of a double-tap-reset). Selection MUST route
+// through here rather than child-node listeners: pointerdown setPointerCapture's
+// this SVG, so pointer/click events retarget to the SVG and any listener on a
+// child (e.g. an orrery body-node disc) never fires — that left planets tappable
+// only via the overview list. The callback hit-tests the element under the
+// release point after capture is released.
+function attachPinchZoom(svg, onTap){
   if(!svg || svg.dataset.pzBound === '1') return;
   svg.dataset.pzBound = '1';
   svg.style.touchAction = 'none';                 // ONLY on this canvas — no page/viewport-meta change
@@ -197,7 +204,10 @@ function attachPinchZoom(svg){
       reset();
       pzSuppressTap = true; setTimeout(() => { pzSuppressTap = false; }, 350);   // swallow the 2nd tap's select
       lastTapTime = 0;
-    } else { lastTapTime = now; lastTapX = e.clientX; lastTapY = e.clientY; }
+    } else {
+      lastTapTime = now; lastTapX = e.clientX; lastTapY = e.clientY;
+      if(typeof onTap === 'function') onTap(e.clientX, e.clientY);   // genuine single tap → resolve/select under-point target
+    }
   }
   svg.addEventListener('pointerup', endPointer);
   svg.addEventListener('pointercancel', endPointer);
@@ -241,7 +251,14 @@ function bindOrreryResize(){
 function buildOrreryNow(){
   const svg = document.getElementById("orrery-svg");
   if(!svg) return;
-  attachPinchZoom(svg);                       // pinch / wheel / drag zoom (bound once; survives rebuilds)
+  attachPinchZoom(svg, (cx, cy) => {          // pinch / wheel / drag zoom (bound once; survives rebuilds)
+    // Selection is driven from here, not per-node listeners: the pinch-zoom
+    // captures the pointer on the SVG, so a click/pointerup on a body-node child
+    // never reaches that child. Hit-test the disc under the tapped point instead.
+    const el = document.elementFromPoint(cx, cy);
+    const node = el && el.closest && el.closest('.body-node');
+    if(node) selectBody(node.getAttribute('data-body'));
+  });
   bindOrreryResize();
   const W=800, H=500;                       // legacy authoring space for the star field
   const bodies = getBodies();
@@ -523,10 +540,8 @@ function buildOrreryNow(){
   });
 
   svg.innerHTML = html;
-  svg.querySelectorAll(".body-node").forEach(el => {
-    el.addEventListener("click", () => selectBody(el.getAttribute("data-body")));
-    el.addEventListener("touchend", e => { e.preventDefault(); selectBody(el.getAttribute("data-body")); });
-  });
+  // Tap-to-select is handled by attachPinchZoom's onTap (see buildOrreryNow):
+  // pointer capture on the SVG means per-node click/touchend listeners never fire.
 }
 
 // Shared renderer for a body's content sections (UWP header, fields, overview,
