@@ -251,6 +251,21 @@ function operatingFuel(tonnage, weeks){
   return (o.powerPlantFractionOfHull * t) * o.tonsPerPPTonPer4Weeks * (w / 4);
 }
 
+// ── Trader convoy name labels (galaxy trade layer) ──────────────────────────
+// Convoy labels (.hx-trade-lbl) live INSIDE the zooming scene, so left alone
+// they scale with the map and balloon at high zoom. scaleTraderLabels() in
+// js/10-galaxy.js counter-scales them off this config: it targets an on-screen
+// px size, then divides back out by the live map scale so ONE CSS-var write
+// (--hx-trader-font) restyles every label. Tunable, no inline magic numbers.
+//   BASE:  the label's pre-2× on-screen px at default zoom (the historical
+//          .hx-trade-lbl size). SCALE×BASE is the resting on-screen size.
+//   SCALE: multiple of BASE to render at default zoom (2 = twice the old size).
+//   ZOOM_EXPONENT: 1 = constant on-screen size (default); >1 = labels shrink on
+//          screen as you zoom in; 0 = old scale-with-map behaviour.
+//   MIN_PX / MAX_PX: clamp the effective on-screen px so extreme zoom in/out
+//          stays sane.
+const TRADER_LABEL = { BASE: 8.5, SCALE: 2, ZOOM_EXPONENT: 1, MIN_PX: 8, MAX_PX: 28 };
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CLIENT ERROR TELEMETRY  —  on-device ring buffer + ref-viewable upload queue
 // ───────────────────────────────────────────────────────────────────────────
