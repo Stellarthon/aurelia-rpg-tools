@@ -482,7 +482,7 @@ function renderBodyManualForm(prefill){
     </div>
     <div class="body-uwp-grid">
       <div class="npc-form-row"><label class="npc-form-lbl">Colour</label>
-        <div class="body-color-row"><input type="color" id="body-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#8b91a8'}"><input type="text" class="npc-form-input" id="body-f-colorhex" value="${escAttr(color)}" oninput="syncBodyColorHex()" style="font-family:monospace"></div></div>
+        <div class="body-color-row"><input type="color" id="body-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#8b91a8'}" oninput="syncBodyColorSwatch()"><input type="text" class="npc-form-input" id="body-f-colorhex" value="${escAttr(color)}" oninput="syncBodyColorHex()" style="font-family:monospace"></div></div>
       <div class="npc-form-row"><label class="npc-form-lbl">Tag</label>${bodyTagSelect(d.tag||'')}</div>
     </div>
     <div class="npc-form-row" id="body-belt-row" style="display:${cls==='belt'?'':'none'}">
@@ -516,6 +516,12 @@ function renderBodyManualForm(prefill){
 function syncBodyColorHex(){
   const hex = (document.getElementById('body-f-colorhex')||{}).value || '';
   if(/^#[0-9a-fA-F]{6}$/.test(hex)){ const c = document.getElementById('body-f-color'); if(c) c.value = hex; }
+}
+// Swatch → hex text: the form saves colour from the hex field, so a pick made in
+// the native colour swatch must be mirrored back or it's silently dropped.
+function syncBodyColorSwatch(){
+  const c = document.getElementById('body-f-color'); if(!c) return;
+  const h = document.getElementById('body-f-colorhex'); if(h) h.value = c.value;
 }
 
 // Maps a body-class choice to the boolean/type flags the renderer expects
