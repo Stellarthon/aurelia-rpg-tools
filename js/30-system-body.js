@@ -1352,7 +1352,7 @@ function renderLocCreatorBody(bodyId){
       <input type="text" class="npc-form-input" id="loc-f-type" value="${escAttr(d.type)}" placeholder="e.g. Mining outpost"></div>
     <div class="body-uwp-grid">
       <div class="npc-form-row"><label class="npc-form-lbl">Colour</label>
-        <div class="body-color-row"><input type="color" id="loc-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#4A90D9'}"><input type="text" class="npc-form-input" id="loc-f-colorhex" value="${escAttr(color)}" oninput="syncLocColorHex()" style="font-family:monospace"></div></div>
+        <div class="body-color-row"><input type="color" id="loc-f-color" value="${/^#[0-9a-fA-F]{6}$/.test(color)?color:'#4A90D9'}" oninput="syncLocColorSwatch()"><input type="text" class="npc-form-input" id="loc-f-colorhex" value="${escAttr(color)}" oninput="syncLocColorHex()" style="font-family:monospace"></div></div>
       <div class="npc-form-row"><label class="npc-form-lbl">Tag</label>
         <select class="body-select" id="loc-f-tag">${TAGS.map(t=>`<option value="${t}"${t===(d.tag||'')?' selected':''}>${t||'(none)'}</option>`).join('')}</select></div>
     </div>
@@ -1373,6 +1373,12 @@ function renderLocCreatorBody(bodyId){
 function syncLocColorHex(){
   const hex = (document.getElementById('loc-f-colorhex')||{}).value || '';
   if(/^#[0-9a-fA-F]{6}$/.test(hex)){ const c=document.getElementById('loc-f-color'); if(c) c.value = hex; }
+}
+// Swatch → hex text: collectLocForm saves colour from the hex field, so a pick
+// made in the native colour swatch must be mirrored back or it's silently dropped.
+function syncLocColorSwatch(){
+  const c = document.getElementById('loc-f-color'); if(!c) return;
+  const h = document.getElementById('loc-f-colorhex'); if(h) h.value = c.value;
 }
 // Re-enter tap-to-place from inside the creator (keeps the draft details)
 function repositionFromCreator(){
