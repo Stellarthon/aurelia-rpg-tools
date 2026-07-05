@@ -149,6 +149,30 @@ async function uploadHandoutBlob(campaignId, id, blob){
   return true;
 }
 
+// ── Session-planner reference docs (Supabase Storage 'session-docs' bucket) ───
+// Referee-only prep PDFs attached to a session plan (js/97). One object per
+// uploaded doc: session-docs/<campaignSlug>/<id>.pdf, overwritten on re-upload;
+// migration 0007. Public-read like rulebooks (private-by-obscurity — the path is
+// a random per-doc id). Opened in the browser's native PDF viewer, no PDF.js.
+const PLANNER_DOC_BASE = SUPABASE_URL + '/storage/v1/object/public/session-docs/';
+function plannerDocObjectPath(campaignId, id){
+  return rulebookSlug(campaignId) + '/' + String(id || '').replace(/[^a-z0-9_-]/gi, '') + '.pdf';
+}
+function plannerDocUrlFor(campaignId, id, ver){
+  const url = PLANNER_DOC_BASE + plannerDocObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadPlannerDocBlob(campaignId, id, file){
+  const path = plannerDocObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/session-docs/' + path, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'application/pdf' },
+    body: file
+  });
+  if(!res.ok) throw new Error('Session doc upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // OFFLINE RESILIENCE  —  write-through cache · outbound queue · connectivity
 // ───────────────────────────────────────────────────────────────────────────
