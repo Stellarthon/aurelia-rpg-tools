@@ -1468,6 +1468,46 @@ function injurySet(field, value){
   renderInjurySection();
 }
 
+// ── Task-check cheat card (display only — no roller, nothing resolves) ─────
+// One row per skill on the sheet, precomputing skill level + characteristic DM
+// for EVERY characteristic (2e leaves the pairing to the referee per task, so
+// showing all six covers Pilot+DEX just as well as Pilot+INT), plus an
+// unskilled row (DM−3, reduced by Jack-of-All-Trades per RAW) and the
+// difficulty ladder. "Roll Pilot" never involves arithmetic again.
+const TASK_LADDER = [['Simple','2+'],['Easy','4+'],['Routine','6+'],['Average','8+'],['Difficult','10+'],['Very Difficult','12+'],['Formidable','14+'],['Impossible','16+']];   // Core 2022 p. 59
+// Free-text skills → [{name, level}]. Accepts "Pilot (Spacecraft) 2, Streetwise 1"
+// and newline lists; a skill with no number is level 0.
+function parseSheetSkills(text){
+  return String(text || '').split(/[,\n;]+/).map(s => s.trim()).filter(Boolean).map(s => {
+    const m = s.match(/^(.*?)[\s:]*(\d+)$/);
+    return m ? { name: m[1].trim(), level: parseInt(m[2], 10) } : { name: s, level: 0 };
+  }).filter(x => x.name);
+}
+function taskCardHTML(data){
+  const eh = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+  const attrs = sheetAttrKeys();
+  const dms = attrs.map(a => charDM(parseInt(data[a.key]) || 0));
+  const skills = parseSheetSkills(data.skills);
+  const fmt = n => (n >= 0 ? '+' : '−') + Math.abs(n);
+  const jot = skills.find(s => /^jack[\s-]?of[\s-]?all[\s-]?trades/i.test(s.name));
+  const unskilled = Math.min(0, -3 + (jot ? jot.level : 0));
+  const head = `<tr><th></th>${attrs.map(a => `<th>${eh(a.label)}</th>`).join('')}</tr>`;
+  const rows = skills.map(s =>
+    `<tr><td>${eh(s.name)} <span class="tc-lvl">${s.level}</span></td>${dms.map(dm => `<td>${fmt(s.level + dm)}</td>`).join('')}</tr>`).join('');
+  const unskilledRow = `<tr class="tc-unskilled"><td>Unskilled <span class="tc-lvl">${fmt(unskilled)}</span>${jot ? ' <span class="tc-lvl">(JoT)</span>' : ''}</td>${dms.map(dm => `<td>${fmt(unskilled + dm)}</td>`).join('')}</tr>`;
+  const ladder = TASK_LADDER.map(([n, t]) => `<span class="tc-diff${n === 'Average' ? ' avg' : ''}">${n} <b>${t}</b></span>`).join('');
+  return `
+    <div class="tc-note">2D + the number below ≥ target. The referee picks which characteristic fits the task — dice stay at the table.</div>
+    ${skills.length
+      ? `<table class="tc-table"><thead>${head}</thead><tbody>${rows}${unskilledRow}</tbody></table>`
+      : '<div class="tc-note">List skills above (e.g. “Pilot (Spacecraft) 2, Streetwise 1”) and the card fills itself in.</div>'}
+    <div class="tc-ladder">${ladder}</div>`;
+}
+function renderTaskCard(){
+  const el = document.getElementById('sheet-taskcard');
+  if(el) el.innerHTML = taskCardHTML(collectSheetData());
+}
+
 function renderSheetForm(data){
   const body = document.getElementById('sheet-card-body');
   const chars = sheetAttrKeys().map(a => [a.label, a.key]);
@@ -1492,7 +1532,11 @@ function renderSheetForm(data){
     <div class="sheet-section" id="sheet-injury-sec">${injurySectionHTML(data)}</div>
     <div class="sheet-section">
       <div class="sheet-section-lbl">Skills</div>
-      <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
+      <textarea class="sheet-textarea" id="sheet-f-skills" oninput="renderTaskCard()" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-section-lbl">Task-check card</div>
+      <div id="sheet-taskcard">${taskCardHTML(data)}</div>
     </div>
     ${renderInventorySection(sheetCurrentCharacter)}
     <div class="sheet-section">
@@ -1588,6 +1632,8 @@ function updateSheetDM(key){
   const dm = charDM(input.value);
   dmEl.textContent = `DM ${dm>=0?'+':''}${dm}`;
   if(key === 'str' || key === 'end') updateEncIndicator();  // live encumbrance as STR/END are edited
+  renderTaskCard();          // characteristic DMs feed the task-check card totals
+  renderInjurySection();     // and the injury bars' maxima / recovery rates
 }
 
 // Merge the current form inputs over the loaded blob, preserving any fields with
