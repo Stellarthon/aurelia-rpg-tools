@@ -1022,6 +1022,9 @@ function buildBodyView(id){
   // Locations on/around this body (surface sites, stations, bases).
   html += renderLocationsSection(body, pm);
 
+  // Player notes (private + party notebook) — same feature as the station areas.
+  html += playerNotesSectionHTML();
+
   // Design-mode body controls, same as the orrery detail panel
   if(designModeOn && isReferee()){
     const added = isAddedBody(body.id);
@@ -1034,9 +1037,23 @@ function buildBodyView(id){
 
   const db = document.getElementById('bv-db');
   if(db) db.innerHTML = html;
+  mountPlayerNotes('body-'+body.id);
 
   setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
+}
+
+// Shared player-notes mount for the planet body/location views. Emits a host
+// section into the detail HTML, then (once that HTML is live) hands the host to
+// renderPlayerNotesTab (js/40-station.js) which fills in the private + party
+// notebook UI. The host carries an id so the notes renderer re-renders in place.
+function playerNotesSectionHTML(){
+  return `<div class="s-sec" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
+    <div class="s-sec-lbl">My Notes</div><div id="body-notes-host"></div></div>`;
+}
+function mountPlayerNotes(key){
+  const host = document.getElementById('body-notes-host');
+  if(host && typeof renderPlayerNotesTab === 'function') renderPlayerNotesTab(host, key);
 }
 
 function goBodyView(id){
@@ -1609,6 +1626,9 @@ function selectBodyLocation(locId){
   // existing loc-<id>-box-* edits showing and gives every location custom boxes.
   html += renderBoxTypesHTML(bt => 'loc-'+locId+'-box-'+bt.key, null, pm, true);
 
+  // Player notes (private + party notebook) — same feature as the station areas.
+  html += playerNotesSectionHTML();
+
   // Design-mode location controls
   if(designModeOn && isReferee()){
     html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
@@ -1620,6 +1640,7 @@ function selectBodyLocation(locId){
   }
 
   const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
+  mountPlayerNotes('loc-'+locId);
   setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){

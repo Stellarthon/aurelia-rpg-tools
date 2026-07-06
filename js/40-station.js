@@ -2,7 +2,6 @@
 // STATION
 // ═══════════════════════════════════════════════════════════════════════════
 let cur=null, curSub=null, curTab="overview";
-const notes={};
 const nodeColours={elevator:"#BA7517",docking:"#185FA5",concourse:"#BA7517",security:"#534AB7",medical:"#0F6E56",maintenance:"#A32D2D"};
 
 function selArea(areaId){
@@ -250,25 +249,26 @@ function renderDetail(){
     d.innerHTML=`<div class="blk-lbl" style="margin-bottom:8px">Select a Sub-Area</div><div class="sub-grid">${keys.map(k=>`<button class="sub-btn" onclick="selSub('${k}')" ontouchend="event.preventDefault();selSub('${k}')"><div class="sub-btn-name">${subs[k].label}</div><div class="sub-btn-desc">${subs[k].sub||""}</div></button>`).join("")}</div>`;
   } else if(curTab==="notes"){
     const key=cur+(curSub?"_"+curSub:"");
-    if(pmCheck.checked){
-      renderPlayerNotesTab(d, key);
-    } else {
-      const saved=notes[key]||"";
-      d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${saved}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
-    }
+    renderPlayerNotesTab(d, key);
   }
 }
 
 // ── Player-facing notes tab: private notes + party notebook ──────────────
+// Shared by the station detail panel AND the planet body/location views, so it
+// remembers which host element it last rendered into (planet hosts aren't
+// #detail) and re-renders there on sub-tab switches / posts.
 let notesSubTab = 'private';
+let playerNotesHostId = 'detail';
 
 async function renderPlayerNotesTab(container, key){
+  if(container && container.id) playerNotesHostId = container.id;
   if(!myIdentity){
     container.innerHTML = '<div class="init-empty">Pick a character name first.</div>';
     showIdentityModal();
     return;
   }
-  container.innerHTML = `<div id="whoami-strip">Playing as <span onclick="changeIdentity()">${myIdentity}</span></div>
+  const verb = ((typeof isReferee === 'function') && isReferee()) ? 'Viewing as' : 'Playing as';
+  container.innerHTML = `<div id="whoami-strip">${verb} <span onclick="changeIdentity()">${escHtml(myIdentity)}</span></div>
     <div class="notes-subtabs">
       <div class="notes-subtab ${notesSubTab==='private'?'on':''}" onclick="setNotesSubTab('${key}','private')">MY NOTES</div>
       <div class="notes-subtab ${notesSubTab==='party'?'on':''}" onclick="setNotesSubTab('${key}','party')">PARTY NOTEBOOK</div>
@@ -278,14 +278,14 @@ async function renderPlayerNotesTab(container, key){
   if(notesSubTab === 'private'){
     const text = await loadPrivateNote(key);
     const body = document.getElementById('player-notes-body');
-    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${text}</textarea>
+    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${escHtml(text)}</textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="savePrivNotesTab('${key}')">Save</button><span class="saved-msg" id="priv-smsg">✓ Saved</span></div>`;
   } else {
     const list = await loadPartyNotes(key);
     const body = document.getElementById('player-notes-body');
     if(body){
       body.innerHTML = (list.length ? list.map(n =>
-        `<div class="party-note-entry"><div class="party-note-author">${n.author}</div><div class="party-note-text">${n.text}</div></div>`
+        `<div class="party-note-entry"><div class="party-note-author">${escHtml(n.author)}</div><div class="party-note-text">${escHtml(n.text)}</div></div>`
       ).join('') : '<div class="init-empty">No party notes yet for this area.</div>')
       + `<textarea class="note-ta" id="party-nta" placeholder="Add a note the whole party can see..." style="margin-top:8px;min-height:60px"></textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="addPartyNoteTab('${key}')">Post</button></div>`;
@@ -295,7 +295,8 @@ async function renderPlayerNotesTab(container, key){
 
 function setNotesSubTab(key, tab){
   notesSubTab = tab;
-  renderPlayerNotesTab(document.getElementById('detail'), key);
+  const host = document.getElementById(playerNotesHostId) || document.getElementById('detail');
+  renderPlayerNotesTab(host, key);
 }
 
 async function savePrivNotesTab(key){
@@ -311,7 +312,8 @@ async function addPartyNoteTab(key){
   if(!ta || !ta.value.trim()) return;
   await addPartyNote(key, ta.value);
   ta.value = '';
-  renderPlayerNotesTab(document.getElementById('detail'), key);
+  const host = document.getElementById(playerNotesHostId) || document.getElementById('detail');
+  renderPlayerNotesTab(host, key);
 }
 
 
@@ -322,12 +324,6 @@ function toggleNPC(id,hdr){
   const open=el.classList.contains("open");
   el.classList.toggle("open",!open);
   if(ch) ch.classList.toggle("open",!open);
-}
-
-function saveNote(){
-  const key=cur+(curSub?"_"+curSub:"");
-  const ta=document.getElementById("nta");
-  if(ta){ notes[key]=ta.value; const m=document.getElementById("smsg"); if(m){m.style.display="inline";setTimeout(()=>m.style.display="none",1500);} showToast('Note saved'); }
 }
 
 function renderFooter(){
