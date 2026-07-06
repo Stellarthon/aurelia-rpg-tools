@@ -71,6 +71,7 @@ function setImperialFromInputs(){
 function afterDateChange(){
   renderImperialDate();
   if(calPanelOpen) renderCalendarPanel();
+  if(typeof shipCostsOnDateChange === 'function') shipCostsOnDateChange();   // recurring ship costs accrue per 28-day period (js/91)
   if(typeof ECON!=='undefined'){ try { ECON.syncToDate(); } catch(e){}   // economy ticks in lockstep with the Imperial week
     if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
     if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); }
@@ -678,6 +679,8 @@ function renderFundsPanel(){
         <button class="disc-mini" onclick="refAdjustPurse('${safe}',1)">+</button><button class="disc-mini" onclick="refAdjustPurse('${safe}',-1)">−</button></span></div>`; });
     h += `</div>`;
   }
+  // Recurring ship costs — pending accruals awaiting referee approval (js/91)
+  if(ref && typeof shipCostsFundsSectionHTML === 'function') h += shipCostsFundsSectionHTML();
   // Ledger — party entries to all; purse entries to that player + referee
   const vis = funds.log.filter(e => ref || e.target === 'party' || e.target === me);
   h += `<div class="fund-lbl" style="margin-top:2px">Ledger</div>`;

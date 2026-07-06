@@ -684,6 +684,19 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Recurring ship costs — other referee devices see accruals/approvals live
+  try {
+    const resSC = await supaStorage.get('ship-costs', true);
+    if(resSC.ok && resSC.value != null){
+      const freshSC = JSON.parse(resSC.value);
+      if(typeof shipCosts !== 'undefined' && freshSC && JSON.stringify(freshSC) !== JSON.stringify(shipCosts)){
+        shipCosts = freshSC;
+        if(typeof shipCostsEnsure === 'function') shipCostsEnsure();
+        if(fundsPanelOpen) renderFundsPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Starport board — players see fresh postings and taken lots live
   try {
     const resSB = await supaStorage.get('starport-board', true);
