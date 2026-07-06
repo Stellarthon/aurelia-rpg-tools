@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1117">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-180.png">
+<title>Aurelian System — Referee Map</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+<script>
+// ── Phone-only layout flag ──────────────────────────────────────────────────
+// Adds `is-phone` to <html> when (and only when) the viewer is on a handset,
+// so the phone layout in app.css (collapsing ☰ nav + full-height detail scroll)
+// never touches tablets or desktops — even a narrow desktop window. Runs during
+// head parse so the class is set before first paint (no menu "flash"). Tablets
+// (incl. iPadOS reporting as desktop Safari) are explicitly excluded.
+(function(){
+  try{
+    var ua = navigator.userAgent || '';
+    var isTablet = /iPad|Tablet|PlayBook|Silk|Kindle|(?:Android(?!.*Mobile))/i.test(ua)
+                   || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); // iPadOS 13+
+    var isPhoneUA = /iPhone|iPod|Android.*Mobile|Windows Phone|IEMobile|BlackBerry|BB10|Opera Mini/i.test(ua);
+    var coarse = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+    var minDim = Math.min(screen.width || 9999, screen.height || 9999);
+    if(!isTablet && (isPhoneUA || (coarse && minDim <= 480))){
+      document.documentElement.classList.add('is-phone');
+    }
+  }catch(e){ /* non-fatal — falls back to the standard responsive layout */ }
+})();
+</script>
+</head>
+<body>
+<!-- Decorative starfield behind every view (populated by buildStarfield at boot) -->
+<div id="starfield" aria-hidden="true"></div>
+<!-- ── Splash overlay — reusable welcome screen ──
+     Drives two moments: the app-entry welcome ("WELCOME TRAVELLER") once the
+     access gate clears, and a per-system welcome ("[SYSTEM NAME] / Welcome
+     Traveller") the first time a traveller visits each system. Content is
+     filled by showSplash(); it fades in over the app, auto-dismisses, and
+     skips on tap or keypress. Purely decorative: if scripts never reveal it,
+     it stays invisible and the app is fully usable underneath. -->
+<div id="app-splash" class="splash" role="dialog" aria-label="Welcome" aria-hidden="true">
+  <div class="splash-nebula" aria-hidden="true"></div>
+  <div class="splash-stars" aria-hidden="true"></div>
+  <div class="splash-stars-far" aria-hidden="true"></div>
+  <div class="splash-shoot" aria-hidden="true"></div>
+  <div class="splash-content">
+    <div class="splash-kicker"></div>
+    <h1 class="splash-title"></h1>
+    <div class="splash-rule"></div>
+    <p class="splash-sub"></p>
+    <div class="splash-hint"></div>
+  </div>
+</div>
+<script>
+// ── Pre-boot splash cover ──────────────────────────────────────────────────
+// Paint the welcome splash on the very FIRST frame — before the app scripts
+// run and draw — so a returning viewer never sees the UI "pop" into existence.
+// Runs inline during parse (no dependency on the app JS). Only covers when the
+// viewer is already past the access gate; otherwise the opaque gate hides the
+// boot and we must not cover it. The app's showIntroSplash() then adopts this
+// cover and fades it out once boot has settled. Defaults mirror
+// SPLASH_DEFAULTS.intro in js/55-auth-gating.js.
+(function(){
+  try {
+    if(localStorage.getItem('aurelia_access') !== '1') return;   // gate will handle it
+    var el = document.getElementById('app-splash');
+    if(!el) return;
+    var intro = {};
+    try { var raw = localStorage.getItem('aurelia_cache_splash-config'); if(raw){ var cfg = JSON.parse(raw); if(cfg && cfg.intro) intro = cfg.intro; } } catch(e){}
+    if(intro.enabled === false) return;                          // referee turned the intro off
+    var pick = function(v, d){ return v != null ? v : d; };
+    var lines = {
+      '.splash-kicker': pick(intro.kicker, 'Aurelian System'),
+      '.splash-title':  pick(intro.title,  'WELCOME TRAVELLER'),
+      '.splash-sub':    pick(intro.sub,    'May the stars ever be full of wonder.'),
+      '.splash-hint':   pick(intro.hint,   'Tap anywhere to begin')
+    };
+    for(var sel in lines){
+      var n = el.querySelector(sel);
+      if(n){ n.textContent = lines[sel] || ''; n.style.display = lines[sel] ? '' : 'none'; }
+    }
+    var sub = el.querySelector('.splash-sub'); if(sub) sub.classList.add('italic');
+    el.setAttribute('aria-hidden', 'false');
+    el.setAttribute('aria-label', lines['.splash-title'] || 'Welcome');
+    el.classList.add('show', 'preboot');                         // opaque on the first frame, no fade-in
+    window.__introPreboot = true;
+    // Safety net: if the app JS never loads/arms the dismissal, uncover anyway.
+    window.__introPrebootSafety = setTimeout(function(){
+      try { el.classList.remove('preboot'); el.classList.remove('show'); el.setAttribute('aria-hidden','true'); } catch(e){}
+    }, 8000);
+  } catch(e){ /* non-fatal — app renders normally without the pre-boot cover */ }
+})();
+</script>
+<div id="pw-gate">
+  <div id="pw-card">
+    <h3>AURELIA REFEREE TOOL</h3>
+    <p>This tool is for an active campaign. Enter the access code your referee gave you.</p>
+    <input type="password" id="pw-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
+    <button id="pw-submit" onclick="checkPassword()">Enter</button>
+    <div id="pw-error"></div>
+  </div>
+</div>
+<div id="root">
+  <!-- ── Player manual refresh (iOS home-screen apps don't run background timers reliably) ── -->
+
+
+  <!-- ── Header ── -->
+  <div id="hdr">
+    <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
+    <div id="hdr-locus">
+      <div id="hdr-title">AURELIAN SYSTEM</div>
+      <span id="build-version" title="Build version">v38</span>
+      <div id="breadcrumb"></div>
+    </div>
+    <!-- ── Station Clock ── -->
+    <div id="clock-wrap">
+      <div id="clock-display" onclick="openClockEdit(event)" title="Tap to set time">00:00</div>
+      <div id="clock-sep" class="ref-only"></div>
+      <button class="clk-btn ref-only" onclick="advanceClock(1)">+1</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(5)">+5</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(10)">+10</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(15)">+15</button>
+      <button class="clk-btn ref-only" onclick="advanceClock(30)">+30</button>
+      <div id="clock-sep" class="ref-only"></div>
+      <button id="clock-reset" class="ref-only" aria-label="Reset clock to 00:00" onclick="resetClock()" title="Reset to 00:00">↺</button>
+    </div>
+    <!-- ── Imperial date chip ── -->
+    <div id="impdate-wrap">
+      <div id="impdate-display" onclick="toggleCalendarPanel()" title="Imperial date — open calendar">001-1105</div>
+    </div>
+    <button id="sheet-trigger-btn" onclick="openSheetMenu()" title="Character sheets">📋 Sheets</button>
+    <button id="header-whoami-btn" class="hidden" onclick="changeIdentity()" title="Tap to switch character"><span id="header-whoami-prefix">Playing as</span> <span id="header-whoami-name"></span></button>
+    <button id="qref-btn" onclick="toggleQref()" title="Quick Reference">📖 Rules</button>
+    <button id="referee-menu-btn" class="ref-only" aria-label="Referee tools" onclick="openRefereeMenu()" title="Referee tools — morality, animations, orbital rings">🛡</button>
+    <button id="design-menu-btn" class="ref-only" aria-label="Design tools" onclick="openDesignMenu()" title="Design tools — boxes, removed items, reset">✎</button>
+        <button id="settings-btn" aria-label="Settings" onclick="openSettingsMenu()" title="Settings & keyboard shortcuts">⚙</button>
+    <div id="search-wrap">
+      <input type="text" id="search-input" placeholder="🔍 Find system, NPC, area, check..." autocomplete="off" oninput="renderSearchResults()" onfocus="renderSearchResults()">
+      <div id="search-results"></div>
+    </div>
+    <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
+    <button id="journal-btn" onclick="toggleJournalPanel()" title="Session Journal — saved recaps">📓 Journal</button>
+    <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
+    <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
+    <button id="funds-btn" onclick="toggleFundsPanel()" title="Funds — party account & character purses">💰 Funds</button>
+    <button id="cargo-btn" onclick="toggleCargoPanel()" title="Cargo manifest — the party's speculative-trade hold">💹 Cargo</button>
+    <button id="gen-btn" class="ref-only" onclick="toggleOraclePanel()" title="Oracle — rumour & encounter generators">🎲 Oracle</button>
+    <button id="more-btn" onclick="openMoreMenu()" title="More tools — Library Data · Wiki · Contacts · Standing · Downtime · Imperial Calendar · Handouts · Turns · NPCs · Economy · Session">⋯ More</button>
+    <!-- Clock edit popover -->
+    <div id="clock-edit">
+      <label>SET STATION TIME</label>
+      <input type="time" id="clock-input" value="00:00">
+      <button id="clock-edit-ok" onclick="setClockFromInput()">Set time</button>
+    </div>
+    <button id="reset-campaign-btn" class="ref-only" onclick="resetCampaign()" title="Wipe reveal status, RSR markers, event log, clock, and initiative tracker" style="display:none"></button>
+    <button id="design-mode-btn" class="ref-only" onclick="toggleDesignMode()" title="Edit area text directly" style="display:none"></button>
+    <button id="design-removed-btn" class="ref-only hidden" onclick="openRemovedItemsPanel()" title="View and restore removed checks, events, or NPC rows" style="display:none"></button>
+    <!-- ── Shared-sync status pill (offline hardening) — updated by updateConnPill() ── -->
+    <div id="conn-pill" class="cp-live" title="Shared sync — Live"><span class="cp-dot">●</span><span class="cp-txt">Live</span></div>
+    <div class="pm-row" onclick="togglePM()" style="cursor:pointer">
+      <span class="pm-label">Traveller View</span>
+      <div class="pm-toggle"><input type="checkbox" id="pm-check" tabindex="-1"><div class="pm-slider"></div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SYSTEM MAP VIEW
+  ══════════════════════════════════════ -->
+
+  <!-- ══════════════════════════════════════
+       GALAXY MAP VIEW (Orion Arm) — landing view
+  ══════════════════════════════════════ -->
+  <div id="view-galaxy" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="galaxy-wrap">
+      <div id="galaxy-canvas">
+    <!-- ══ HEX-JUMP GALAXY (active layer) — rendered by the HX engine in <script> ══ -->
+    <svg id="hx-map" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="hx-legend">
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:#f4d35e"></span>Jump origin</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:rgba(0,229,255,0.5)"></span>In jump range</div>
+      <div class="hx-leg-row" id="hx-leg-lane"><span class="hx-leg-sw" style="background:#00cc88;opacity:.7"></span>Jump lane (−15% fuel)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px solid #3f9d5a;border-radius:50%;width:11px;height:11px"></span>Refined fuel (A/B)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px solid #caa83b;border-radius:50%;width:11px;height:11px"></span>Unrefined skim (C/D/E)</div>
+      <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px dashed #b23a3a;border-radius:50%;width:11px;height:11px"></span>No fuel (port X)</div>
+    </div>
+    <div id="hx-title">The Orion Arm · Hex Navigation</div>
+    <div id="hx-toast"></div>
+    <button id="hx-lane-toggle" onclick="hxToggleLanes()">Lanes: ON</button>
+    <button id="hx-terr-toggle" onclick="hxToggleTerr()">Territories: ON</button>
+    <button id="hx-range-toggle" onclick="hxToggleRange()">Fuel range: OFF</button>
+    <button id="hx-fuel-toggle" onclick="hxToggleFuel()">Fuel: ON</button>
+    <button id="hx-trade-toggle" onclick="hxToggleTrade()">Trade: OFF</button>
+    <!-- Referee territory brush: paint hexes in a transparent colour (colour
+         picker) to draw borders on top of the auto region tint. -->
+    <div id="hx-paint-tools" class="ref-only">
+      <button id="hx-paint-toggle" onclick="hxTogglePaint()">🖌 Paint: OFF</button>
+      <label id="hx-paint-swatch" title="Territory brush colour"><input type="color" id="hx-paint-color" value="#4aa3ff" onchange="hxSetPaintColor(this.value)"></label>
+      <button id="hx-paint-clear" onclick="hxClearPaint()" title="Clear all painted hexes">✕</button>
+    </div>
+    <div id="hx-trade-legend" class="hidden"></div>
+    <div id="hx-zoom">
+      <button class="hx-zoom-btn" onclick="hxZoomBy(1.25)">+</button>
+      <button class="hx-zoom-btn" onclick="hxZoomBy(0.8)">−</button>
+      <button class="hx-zoom-btn" title="Reset view" onclick="hxResetView()">⊚</button>
+    </div>
+      </div><!-- end galaxy-canvas -->
+
+      <div id="galaxy-detail">
+        <div id="hx-phead">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div id="hx-ptitle">JUMP PLOTTER</div>
+            <div id="hx-pdate" title="Imperial date (DDD-YYYY)">001-1105</div>
+          </div>
+          <div id="hx-psub">Hex-grid navigation · 1 hex = 1 parsec</div>
+        </div>
+        <div id="hx-pbody">
+          <div class="hx-sec-lbl">Your Ship</div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Jump drive</span>
+            <div class="hx-jbtns" id="hx-jbtns"></div>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Hull</span>
+            <input class="hx-tnage" id="hx-tonnage" type="number" min="10" step="10">
+            <span class="hx-small">tons → fuel = 10% × jump</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Fuel tank</span>
+            <input class="hx-tnage" id="hx-fuelmax" type="number" min="10" step="10">
+            <span class="hx-small">tons capacity</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Fuel aboard</span>
+            <input class="hx-tnage" id="hx-fuelaboard" type="number" min="0" step="1">
+            <span class="hx-small">tons now</span>
+          </div>
+          <div class="hx-ship-row">
+            <span class="hx-small">Cargo hold</span>
+            <input class="hx-tnage" id="hx-cargohold" type="number" min="0" step="5">
+            <span class="hx-small">t · Broker</span>
+            <input class="hx-tnage" id="hx-broker" type="number" min="0" max="6" step="1" style="width:42px">
+          </div>
+          <div class="hx-note" id="hx-origin-note"></div>
+          <div id="hx-sel-block"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-system" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="sys-wrap">
+      <div id="orrery-panel">
+        <svg id="orrery-svg" viewBox="0 0 800 500"></svg>
+      </div>
+      <div id="sys-detail">
+        <div id="sys-dh">
+          <div id="sys-dname">AURELIAN SYSTEM</div>
+          <div id="sys-dtype">SELECT A BODY TO INSPECT</div>
+        </div>
+        <div id="sys-db">
+          <div id="sys-overview">
+            <!-- Star-info header — filled per-system by renderSystemOverview().
+                 Defaults to the authored Auros copy below for first paint. -->
+            <div id="sys-star-info">
+              <div style="color:var(--tx1);font-size:12px;line-height:1.6;margin-bottom:14px">
+                Star type: <span style="color:#E8A020;font-weight:700">Auros — K3 V Orange Dwarf</span><br>
+                Mass: 0.78 M☉ · Luminosity: 0.42 L☉ · Age: 5.2 Gyr<br>
+                Habitable zone: 0.55–0.85 AU
+              </div>
+            </div>
+            <div id="sys-bodies-section">
+              <div style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;margin-bottom:7px;text-transform:uppercase">System Bodies</div>
+              <table class="btbl" id="body-list-table"></table>
+            </div>
+            <!-- Production & Consumption (system economy) — filled per-system by
+                 renderSystemOverview(); mirrors the galaxy star panel's section. -->
+            <div id="sys-econ-section"></div>
+            <!-- Shown instead of the body list when a system has no charted
+                 bodies — offers manual entry / random UWP generation. -->
+            <div id="sys-blank-prompt" class="v-hidden"></div>
+          </div>
+          <div id="sys-body-detail" class="v-hidden"></div>
+          <button id="btn-view-station" class="view-close-btn v-hidden" onclick="enterStation()">⬡ View Aurelia up close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Aurelia's bespoke #view-aurelia page was retired in Phase 3 — Aurelia now
+       uses the generic body close-up view below, like every other body. -->
+
+  <!-- ══════════════════════════════════════
+       GENERIC BODY CLOSE-UP VIEW (any planet / moon / belt / star)
+  ══════════════════════════════════════ -->
+  <div id="view-body" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+      <div id="body-view-panel">
+        <svg id="body-disc-svg" viewBox="0 0 800 600"></svg>
+      </div>
+      <div id="body-view-detail">
+        <div id="bv-dh">
+          <div id="bv-dname">BODY</div>
+          <div id="bv-dtype">SELECT A BODY</div>
+        </div>
+        <div id="bv-db"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       STATION MAP VIEW
+  ══════════════════════════════════════ -->
+  <div id="view-station" class="v-hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+    <div id="sta-wrap">
+      <div id="map-panel">
+        <!-- Static SVG — exact replica of uploaded station file -->
+        <svg id="mapsvg" viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+          <!-- Station rings -->
+          <ellipse cx="200" cy="210" rx="188" ry="165" fill="none" stroke="#1e2333" stroke-width="22"/>
+          <ellipse cx="200" cy="210" rx="118" ry="100" fill="none" stroke="#1e2333" stroke-width="7" opacity=".35"/>
+          <ellipse cx="200" cy="210" rx="38" ry="28" fill="#181c27" stroke="#252a3a" stroke-width="1"/>
+          <text x="200" y="206" text-anchor="middle" font-size="7" fill="#8b91a8" font-family="system-ui,sans-serif">CENTRAL</text>
+          <text x="200" y="216" text-anchor="middle" font-size="7" fill="#8b91a8" font-family="system-ui,sans-serif">HUB</text>
+          <!-- Corridors -->
+          <line x1="200" y1="44" x2="200" y2="182" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="30" y1="210" x2="162" y2="210" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="200" y1="182" x2="200" y2="110" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="238" y1="210" x2="360" y2="210" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="200" y1="238" x2="200" y2="330" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="238" y1="238" x2="330" y2="310" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="162" y1="238" x2="80" y2="310" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="80" y1="322" x2="200" y2="322" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <line x1="330" y1="322" x2="200" y2="322" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>
+          <!-- Area nodes -->
+          <g id="n-elevator" style="cursor:pointer" onclick="selArea('elevator')">
+            <rect x="155" y="20" width="90" height="34" rx="4" id="r-elevator" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+            <text x="200" y="32" text-anchor="middle" font-size="8" fill="#BA7517" font-weight="600" font-family="system-ui,sans-serif">⚠ OFF LIMITS</text>
+            <text x="200" y="44" text-anchor="middle" font-size="9" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Space Elevator</text>
+          </g>
+          <g id="n-docking" style="cursor:pointer" onclick="selArea('docking')">
+            <rect x="8" y="188" width="122" height="44" rx="4" id="r-docking" fill="#0f1117" stroke="#185FA5" stroke-width="1.5"/>
+            <text x="69" y="201" text-anchor="middle" font-size="8" fill="#185FA5" font-weight="600" font-family="system-ui,sans-serif">ARRIVAL</text>
+            <text x="69" y="213" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">⛵ Docking Hub</text>
+            <text x="69" y="224" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Sector 10 · Bay 15</text>
+          </g>
+          <g id="n-concourse" style="cursor:pointer" onclick="selArea('concourse')">
+            <rect x="148" y="88" width="104" height="44" rx="4" id="r-concourse" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+            <text x="200" y="101" text-anchor="middle" font-size="8" fill="#BA7517" font-weight="600" font-family="system-ui,sans-serif">EXPLORATION</text>
+            <text x="200" y="113" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Main Concourse</text>
+            <text x="200" y="124" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">300m · 4 sub-areas</text>
+          </g>
+          <g id="n-security" style="cursor:pointer" onclick="selArea('security')">
+            <rect x="270" y="188" width="122" height="44" rx="4" id="r-security" fill="#0f1117" stroke="#534AB7" stroke-width="1.5"/>
+            <text x="331" y="201" text-anchor="middle" font-size="8" fill="#534AB7" font-weight="600" font-family="system-ui,sans-serif">RESTRICTED</text>
+            <text x="331" y="213" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Security &amp; Admin</text>
+            <text x="331" y="224" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Upper ring · No entry</text>
+          </g>
+          <g id="n-medical" style="cursor:pointer" onclick="selArea('medical')">
+            <rect x="274" y="298" width="118" height="44" rx="4" id="r-medical" fill="#0f1117" stroke="#0F6E56" stroke-width="1.5"/>
+            <text x="333" y="311" text-anchor="middle" font-size="8" fill="#0F6E56" font-weight="600" font-family="system-ui,sans-serif">KEY NPC</text>
+            <text x="333" y="323" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Medical Suite</text>
+            <text x="333" y="334" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Aurelia Institute</text>
+          </g>
+          <g id="n-maintenance" style="cursor:pointer" onclick="selArea('maintenance')">
+            <rect x="14" y="298" width="118" height="44" rx="4" id="r-maintenance" fill="#0f1117" stroke="#A32D2D" stroke-width="1.5"/>
+            <text x="73" y="311" text-anchor="middle" font-size="8" fill="#A32D2D" font-weight="600" font-family="system-ui,sans-serif">UNDERDECK</text>
+            <text x="73" y="323" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">Maintenance Level</text>
+            <text x="73" y="334" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">Below · Hidden</text>
+          </g>
+          <!-- RSR markers — top-right corner of each node -->
+          <g class="rsr-marker" id="rsr-g-1" onclick="toggleRsrFound(1)" style="cursor:pointer">
+            <circle id="rsr-c-1" cx="130" cy="188" r="6" fill="#A32D2D"/>
+            <text x="123" y="186" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR①</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-2" onclick="toggleRsrFound(2)" style="cursor:pointer">
+            <circle id="rsr-c-2" cx="252" cy="88" r="6" fill="#A32D2D"/>
+            <text x="245" y="86" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR②</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-3" onclick="toggleRsrFound(3)" style="cursor:pointer">
+            <circle id="rsr-c-3" cx="132" cy="298" r="6" fill="#A32D2D"/>
+            <text x="125" y="296" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR③</text>
+          </g>
+          <g class="rsr-marker" id="rsr-g-4" onclick="toggleRsrFound(4)" style="cursor:pointer">
+            <circle id="rsr-c-4" cx="392" cy="298" r="6" fill="#A32D2D"/>
+            <text x="385" y="296" font-size="7" font-weight="700" fill="#fff" font-family="system-ui,sans-serif" text-anchor="end">RSR④</text>
+          </g>
+          <!-- Legend -->
+          <g class="rsr-legend">
+            <circle cx="14" cy="432" r="5" fill="#A32D2D" opacity=".9"/>
+            <text x="24" y="436" font-size="8" font-weight="700" fill="#d45050" font-family="system-ui,sans-serif">RSR symbol · RECON 10+ / Streetwise 6+</text>
+          </g>
+          <line x1="10" y1="452" x2="18" y2="452" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,2"/>
+          <text x="24" y="456" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">corridor / access route</text>
+          <rect x="10" y="463" width="10" height="10" rx="2" fill="#0f1117" stroke="#BA7517" stroke-width="1.5"/>
+          <text x="24" y="471" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">area node · tap to open</text>
+          <text x="210" y="471" font-size="8" fill="#BA7517" font-family="system-ui,sans-serif">⚠ = off limits / warning</text>
+        </svg>
+      </div>
+      <div id="right-panel">
+        <button class="map-back-btn" onclick="showMap()">← Map</button>
+        <div class="top-bar">
+          <div class="top-bar-title">Aurelia Orbital Station</div>
+          <div class="top-bar-sub">Tap an area · sub-areas open inside</div>
+        </div>
+        <div id="area-hdr"></div>
+        <div id="tab-bar"></div>
+        <div id="detail">
+          <div class="empty"><div class="empty-icon">🛰</div><div style="font-size:14px;font-weight:600;color:var(--tx0)">Select an area</div><div style="font-size:12px;max-width:180px;text-align:center">Tap any node on the map.</div></div>
+        </div>
+        <div id="foot">
+          <div class="conn-lbl">CONNECTS TO</div>
+          <div id="conn-row"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Event Log (floating panel) ── -->
+  <!-- ── NPC Health Panel (referee-only, floating panel) ── -->
+  <!-- ── Initiative Tracker (referee-only, floating panel) ── -->
+
+  <!-- ── Identity modal (shown once per device to non-referees) ── -->
+
+  <!-- ── Sheet menu (small popover from the Sheets button) ── -->
+
+  <!-- ── Settings menu (small popover from the gear icon) ── -->
+
+  <!-- ── Quest Log panel ── -->
+
+
+
+  <!-- ── Quest editor modal ── -->
+
+  <!-- ── Character sheet modal ── -->
+  <div id="sheet-modal" class="hidden" onclick="if(event.target===this) closeSheet()">
+    <div id="sheet-layout" onclick="if(event.target===this) closeSheet()">
+      <!-- Funds box (left) — party fund + this character's purse, from the funds system -->
+      <aside id="sheet-funds-aside" class="sheet-aside">
+        <div class="sheet-aside-head">💰 Funds</div>
+        <div class="sheet-aside-body" id="sheet-funds-body"></div>
+      </aside>
+      <div id="sheet-card">
+        <div id="sheet-card-header">
+          <span id="sheet-card-title">CHARACTER SHEET</span>
+          <!-- Referee-only sheet picker: switch between any character's sheet
+               without leaving the modal (populated + shown by openSheet). -->
+          <select id="sheet-char-picker" class="hidden" aria-label="Choose a character sheet" onchange="openSheet(this.value)"></select>
+          <button id="sheet-close-btn" aria-label="Close" onclick="closeSheet()">✕</button>
+        </div>
+        <div id="sheet-card-body"></div>
+        <div id="sheet-card-footer">
+          <span id="sheet-readonly-notice"></span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span id="sheet-save-msg">✓ Saved</span>
+            <button id="sheet-save-btn" onclick="saveCurrentSheet()">Save</button>
+          </span>
+        </div>
+      </div>
+      <!-- Status effects (right) — Traveller 2e conditions applied to this character -->
+      <aside id="sheet-status-aside" class="sheet-aside">
+        <div class="sheet-aside-head">⚠ Status Effects</div>
+        <div class="sheet-aside-body" id="sheet-status-body"></div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ── Item Catalogue modal (inventory add picker + referee authoring) ── -->
+  <div id="catalogue-modal" onclick="if(event.target===this)closeCatalogue()">
+    <div id="catalogue-card">
+      <div id="catalogue-hdr">
+        <span id="catalogue-title">🎒 Item Catalogue</span>
+        <button id="catalogue-close" aria-label="Close" onclick="closeCatalogue()">✕</button>
+      </div>
+      <div id="catalogue-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Inventory item detail modal (tap a grid tile) ── -->
+  <div id="inv-item-modal" onclick="if(event.target===this)closeInvItemModal()">
+    <div id="inv-item-card">
+      <div id="inv-item-hdr">
+        <span id="inv-item-modal-title">Item</span>
+        <button id="inv-item-close" aria-label="Close" onclick="closeInvItemModal()">✕</button>
+      </div>
+      <div id="inv-item-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Design Mode inline editor ── -->
+  <div id="design-edit-panel" class="hidden" onclick="if(event.target===this) closeDesignEdit()">
+    <div id="design-edit-card">
+      <div id="design-edit-header">
+        <span id="design-edit-title">EDIT TEXT</span>
+        <button id="design-edit-close" aria-label="Close" onclick="closeDesignEdit()">✕</button>
+      </div>
+      <div id="design-edit-body">
+        <div id="design-history-list"></div>
+      </div>
+      <div id="design-edit-footer">
+        <span style="display:flex;gap:8px">
+          <button id="design-revert-btn" class="design-edit-btn" onclick="revertDesignEdit()">Revert to Original</button>
+          <button id="design-history-btn" class="design-edit-btn" onclick="toggleDesignHistory()">History</button>
+        </span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span id="design-save-msg">✓ Saved</span>
+          <button id="design-save-btn" class="design-edit-btn" onclick="saveDesignEdit()">Save</button>
+        </span>
+      </div>
+    </div>
+  </div>
+</div><!-- #root -->
+<div id="float-panels">
+  <div id="toast-container"></div>
+
+  <!-- ── Economy editor modal (Design Mode · Production & Consumption) ── -->
+  <div id="econ-editor-modal" onclick="if(event.target===this)closeEconEditor()">
+    <div id="econ-editor-card" role="dialog" aria-modal="true" aria-labelledby="econ-editor-title">
+      <div id="econ-editor-hdr">
+        <span id="econ-editor-title">⚒ Production &amp; Consumption</span>
+        <button id="econ-editor-close" aria-label="Close" onclick="closeEconEditor()">✕</button>
+      </div>
+      <div id="econ-editor-body"></div>
+      <div id="econ-editor-footer">
+        <button class="npc-creator-btn" onclick="econEditRevert()" id="econ-editor-revert">Revert to default</button>
+        <span style="display:flex;align-items:center;gap:10px">
+          <button class="npc-creator-btn" onclick="closeEconEditor()">Cancel</button>
+          <button class="npc-creator-btn primary" onclick="commitEconEditor()" id="econ-editor-save">Save to market</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NPC Creator modal ── -->
+  <div id="npc-creator-modal" onclick="if(event.target===this)closeNpcCreator()">
+    <div id="npc-creator-card">
+      <div id="npc-creator-hdr">
+        <span id="npc-creator-title">✦ Add NPC</span>
+        <button id="npc-creator-close" aria-label="Close" onclick="closeNpcCreator()">✕</button>
+      </div>
+      <div class="npc-creator-tabs">
+        <button class="npc-creator-tab on" id="npc-tab-manual" onclick="setNpcCreatorMode('manual')">✍ Manual</button>
+        <button class="npc-creator-tab" id="npc-tab-random" onclick="setNpcCreatorMode('random')">🎲 Random</button>
+      </div>
+      <div id="npc-creator-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Body Creator modal (reuses npc-creator-* styling) ── -->
+  <div id="body-creator-modal" onclick="if(event.target===this)closeBodyCreator()">
+    <div id="body-creator-card">
+      <div id="body-creator-hdr">
+        <span id="body-creator-title">✦ Add Body</span>
+        <button id="body-creator-close" aria-label="Close" onclick="closeBodyCreator()">✕</button>
+      </div>
+      <div class="npc-creator-tabs" id="body-creator-tabs">
+        <button class="npc-creator-tab on" id="body-tab-manual" onclick="setBodyCreatorMode('manual')">✍ Manual</button>
+        <button class="npc-creator-tab" id="body-tab-random" onclick="setBodyCreatorMode('random')">🎲 Random (UWP)</button>
+      </div>
+      <div id="body-creator-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Location Creator modal (Phase 2) ── -->
+  <div id="loc-creator-modal" onclick="if(event.target===this)closeLocationCreator()">
+    <div id="loc-creator-card">
+      <div id="loc-creator-hdr">
+        <span id="loc-creator-title">✦ Add Location</span>
+        <button id="loc-creator-close" aria-label="Close" onclick="closeLocationCreator()">✕</button>
+      </div>
+      <div id="loc-creator-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Session Tools modal ── -->
+  <div id="session-modal" onclick="if(event.target===this)closeSessionTools()">
+    <div id="session-card">
+      <div id="session-card-hdr">
+        <span id="session-card-title">🎬 Session Tools</span>
+        <button id="session-card-close" aria-label="Close" onclick="closeSessionTools()">✕</button>
+      </div>
+      <div id="session-card-body">
+        <div class="session-section">
+          <div class="session-section-title">Session Recap</div>
+          <div class="session-btn-row">
+            <button class="session-btn primary" onclick="generateSessionRecap()">✨ Generate recap</button>
+            <button class="session-btn" onclick="saveRecapToJournal()">📓 Save to Journal</button>
+          </div>
+          <div id="session-recap-output" class="session-recap-output" style="display:none"></div>
+        </div>
+        <div class="session-section">
+          <div class="session-section-title">Export</div>
+          <div class="session-btn-row">
+            <button class="session-btn" onclick="exportSessionLog()">📄 Export session log (.txt)</button>
+            <button class="session-btn" onclick="copySessionLog()">📋 Copy to clipboard</button>
+          </div>
+        </div>
+        <div class="session-section">
+          <div class="session-section-title">Current Session</div>
+          <div id="session-stats"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ── Session Planner (referee) — prep & run workspace; ties into Oracle, Missions & NPCs ── -->
+  <div id="planner-modal" class="ref-only" onclick="if(event.target===this)closeSessionPlanner()">
+    <div id="planner-card">
+      <div id="planner-hdr">
+        <span id="planner-hdr-title">🗓 Session Planner</span>
+        <button id="planner-view-toggle" onclick="plannerToggleView()" title="Switch between the scene list and the scene board">🗺 Board</button>
+        <button id="planner-new" onclick="plannerNewSession()" title="Start a new session">+ New session</button>
+        <button id="planner-close" aria-label="Close" onclick="closeSessionPlanner()">✕</button>
+      </div>
+      <div id="planner-main">
+        <aside id="planner-rail">
+          <div id="planner-list"></div>
+        </aside>
+        <section id="planner-detail"></section>
+      </div>
+    </div>
+    <!-- link picker overlay (NPCs / missions) -->
+    <div id="planner-picker" class="hidden" onclick="if(event.target===this)closeLinkPicker()">
+      <div id="planner-picker-card"></div>
+    </div>
+  </div>
+  <!-- ── Campaign Studio (referee) — the whole universe as editable pack data ── -->
+  <div id="campaign-studio-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeCampaignStudio()">
+    <div style="background:var(--bg1);border:1px solid var(--bd0);border-radius:10px;max-width:580px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd0)">
+        <span style="font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🌐 Campaign Studio</span>
+        <button aria-label="Close" onclick="closeCampaignStudio()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div id="campaign-studio-tabs" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-bottom:1px solid var(--bd0)"></div>
+      <div id="campaign-studio-body" style="overflow:auto;padding:14px 16px"></div>
+    </div>
+  </div>
+
+  <div id="event-log-wrap">
+    <div id="event-log-header" onclick="toggleEventLog()">
+      <span id="event-log-title">EVENT LOG</span>
+      <span id="event-log-count">0</span>
+      <span id="event-log-toggle">▼</span>
+    </div>
+    <div id="event-log-body"></div>
+    <div id="event-log-clear" onclick="clearEventLog()">Clear log</div>
+    <div class="panel-resize-handle" data-panel="event-log-wrap"></div>
+  </div>
+
+  <div id="health-wrap" class="ref-only">
+    <div id="health-header" onclick="toggleHealthPanel()">
+      <span id="health-title">♥ NPC STATUS</span>
+      <span id="health-count">0</span>
+      <span id="health-toggle">▼</span>
+    </div>
+    <div id="health-body"></div>
+    <div class="panel-resize-handle" data-panel="health-wrap"></div>
+  </div>
+
+  <div id="init-wrap" class="ref-only">
+    <div id="init-header" onclick="toggleInitPanel()">
+      <span id="init-title">⚔ INITIATIVE</span>
+      <span id="init-count">0</span>
+      <span id="init-toggle">▼</span>
+    </div>
+    <div id="init-body"></div>
+    <div id="init-foot">
+      <div id="init-mode-row">
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="init-roll-mode" style="accent-color:var(--accentGold)">
+          Roll 2D6 + mod automatically
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px" title="Show a read-only turn order (names + whose turn) on players' devices. NPC health, scores, and your notes stay private.">
+          <input type="checkbox" id="init-share-players" onchange="toggleInitShare(this.checked)" style="accent-color:var(--accentGold)">
+          Share turn order with players
+        </label>
+      </div>
+      <div id="init-addrow">
+        <input type="text" id="init-name-input" placeholder="Name" maxlength="30">
+        <input type="number" inputmode="numeric" id="init-score-input" placeholder="Score">
+        <input type="number" inputmode="numeric" id="init-dex-input" placeholder="DEX" title="DEX modifier">
+        <input type="number" inputmode="numeric" id="init-int-input" placeholder="INT" title="INT modifier">
+        <button class="init-add-btn" onclick="addCombatant()">+ Add</button>
+      </div>
+      <div id="init-quickadd"></div>
+      <div id="init-actions">
+        <button class="init-action-btn" onclick="sortInitiative()">Sort</button>
+        <button class="init-action-btn" onclick="nextTurn()">Next Turn ▸</button>
+        <button class="init-action-btn primary" onclick="clearInitiative()">Clear All</button>
+      </div>
+    </div>
+    <div class="panel-resize-handle" data-panel="init-wrap"></div>
+  </div>
+
+  <div id="identity-modal" class="hidden">
+    <div id="identity-card">
+      <h3>WHO'S PLAYING?</h3>
+      <p>Pick your character name so the referee knows whose notes they're reading. This is remembered on this device.</p>
+      <div id="identity-quick"></div>
+      <input type="text" id="identity-input" placeholder="Type a name..." maxlength="24">
+      <button id="identity-confirm" onclick="confirmIdentity()">Continue</button>
+    </div>
+  </div>
+
+  <div id="sheet-menu" class="hidden" onclick="if(event.target===this) closeSheetMenu()">
+    <div id="sheet-menu-card"></div>
+  </div>
+
+  <div id="settings-menu" class="hidden" onclick="if(event.target===this) closeSettingsMenu()">
+    <div id="settings-menu-card"></div>
+  </div>
+
+  <div id="referee-menu" class="hidden" onclick="if(event.target===this) closeRefereeMenu()">
+    <div id="referee-menu-card"></div>
+  </div>
+
+  <div id="design-menu" class="hidden" onclick="if(event.target===this) closeDesignMenu()">
+    <div id="design-menu-card"></div>
+  </div>
+
+  <!-- ── "More" overflow menu — houses the occasional tools that used to crowd
+       the header (Library Data, Wiki, Contacts, Standing, Downtime, Imperial
+       Calendar, Handouts, Turns, plus the referee-only NPCs, Economy & Session).
+       The buttons keep their ids so their existing toggles, panel-open
+       highlighting, terminology relabelling and module-flag gating all still
+       work. Player-facing items are visible to everyone; ref-only items auto-hide
+       for players; Turns stays hidden until the referee shares a combat board. ── -->
+  <div id="more-menu" class="hidden" onclick="if(event.target===this) closeMoreMenu()">
+    <div id="more-menu-card">
+      <div class="settings-section-lbl">More Tools</div>
+      <button id="disc-btn" class="more-item" onclick="closeMoreMenu();toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
+      <button id="wiki-btn" class="more-item" onclick="closeMoreMenu();toggleWikiPanel()" title="Wiki — referee-curated campaign lore & factions">📚 Wiki</button>
+      <button id="contacts-btn" class="more-item" onclick="closeMoreMenu();toggleContactsPanel()" title="Contacts — the party's patrons, informants & rivals">🤝 Contacts</button>
+      <button id="rep-btn" class="more-item" onclick="closeMoreMenu();toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
+      <button id="downtime-btn" class="more-item" onclick="closeMoreMenu();toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
+      <button id="cal-btn" class="more-item" onclick="closeMoreMenu();toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Imperial Calendar</button>
+      <button id="handouts-btn" class="more-item" onclick="closeMoreMenu();toggleHandoutsPanel()" title="Handouts — maps, clues & evidence the referee shares">🖼 Handouts</button>
+      <button id="turnorder-btn" class="more-item hidden" onclick="closeMoreMenu();toggleTurnOrderPanel()" title="Turn order — the referee shares it during combat">🎯 Turns</button>
+      <button id="planner-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionPlanner()" title="Session Planner — prep & run sessions; link Oracle, Missions & NPCs (referee)">🗓 Session Planner</button>
+      <button id="npc-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
+      <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
+      <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
+      <button id="present-view-btn" class="more-item ref-only" onclick="closeMoreMenu();plannerSendCurrentView()" title="Show players the view you're on now — their devices offer to follow you there (referee)">📡 Send players to this view</button>
+      <button id="release-view-btn" class="more-item ref-only" onclick="closeMoreMenu();forcedViewRelease()" title="Stop presenting — players navigate freely again (referee)">🔓 Release players</button>
+    </div>
+  </div>
+
+  <!-- ── Forced-view banner (player) — the referee is presenting a location; soft-follow ── -->
+  <div id="forced-view-banner" class="hidden">
+    <span id="forced-view-banner-ic">📡</span>
+    <span id="forced-view-banner-txt">The referee is showing a location</span>
+    <button id="forced-view-follow" onclick="forcedViewFollow()">Follow</button>
+    <button id="forced-view-dismiss" aria-label="Dismiss" onclick="forcedViewDismiss()">✕</button>
+  </div>
+
+  <!-- ── Quick Reference sidebar ── -->
+  <div id="qref-overlay" onclick="if(event.target===this)closeQref()"></div>
+  <div id="qref-panel">
+    <div id="qref-hdr">
+      <span id="qref-title">📖 Quick Reference</span>
+      <button id="qref-close" aria-label="Close" onclick="closeQref()">✕</button>
+    </div>
+    <div id="qref-search-wrap">
+      <input id="qref-search" type="text" placeholder="Filter rules..." oninput="renderQref()">
+    </div>
+    <div id="qref-body"></div>
+  </div>
+
+  <div id="quest-wrap" class="hidden">
+    <div id="quest-header" onclick="toggleQuestCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📜 MISSION LOG</span>
+        <span id="quest-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="quest-toggle">▼</span>
+    </div>
+    <div id="quest-body"></div>
+    <div id="quest-foot" class="ref-only">
+      <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Mission</button>
+    </div>
+    <div class="panel-resize-handle" id="quest-resize"></div>
+  </div>
+
+  <div id="journal-wrap" class="hidden">
+    <div id="journal-header" onclick="toggleJournalCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📓 SESSION JOURNAL</span>
+      </div>
+      <span id="journal-toggle">▼</span>
+    </div>
+    <div id="journal-body"></div>
+    <div class="panel-resize-handle" id="journal-resize"></div>
+  </div>
+
+  <div id="cargo-wrap" class="hidden">
+    <div id="cargo-header" onclick="toggleCargoCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">💹 CARGO MANIFEST</span>
+        <span id="cargo-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="cargo-toggle">▼</span>
+    </div>
+    <div id="cargo-body"></div>
+    <div class="panel-resize-handle" id="cargo-resize"></div>
+  </div>
+
+  <div id="handouts-wrap" class="hidden">
+    <div id="handouts-header" onclick="toggleHandoutsCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🖼 HANDOUTS</span>
+        <span id="handouts-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="handouts-toggle">▼</span>
+    </div>
+    <div id="handouts-body"></div>
+    <div class="panel-resize-handle" id="handouts-resize"></div>
+  </div>
+
+  <!-- Handout lightbox — full-screen view of a shared image -->
+  <div id="handout-lightbox" class="hidden" onclick="if(event.target===this)closeHandout()">
+    <button id="handout-lightbox-close" onclick="closeHandout()" aria-label="Close">✕</button>
+    <img id="handout-lightbox-img" src="" alt="Handout">
+  </div>
+
+  <div id="downtime-wrap" class="hidden">
+    <div id="downtime-header" onclick="toggleDowntimeCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">⏳ DOWNTIME</span>
+        <span id="downtime-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="downtime-toggle">▼</span>
+    </div>
+    <div id="downtime-body"></div>
+    <div class="panel-resize-handle" id="downtime-resize"></div>
+  </div>
+
+  <div id="wiki-wrap" class="hidden">
+    <div id="wiki-header" onclick="toggleWikiCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">📚 WIKI</span>
+        <span id="wiki-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="wiki-toggle">▼</span>
+    </div>
+    <div id="wiki-body"></div>
+    <div class="panel-resize-handle" id="wiki-resize"></div>
+  </div>
+
+  <div id="contacts-wrap" class="hidden">
+    <div id="contacts-header" onclick="toggleContactsCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🤝 CONTACTS</span>
+        <span id="contacts-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="contacts-toggle">▼</span>
+    </div>
+    <div id="contacts-body"></div>
+    <div class="panel-resize-handle" id="contacts-resize"></div>
+  </div>
+
+  <div id="turnorder-wrap" class="hidden">
+    <div id="turnorder-header" onclick="toggleTurnOrderCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🎯 TURN ORDER</span>
+        <span id="turnorder-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="turnorder-toggle">▼</span>
+    </div>
+    <div id="turnorder-body"></div>
+    <div class="panel-resize-handle" id="turnorder-resize"></div>
+  </div>
+
+  <div id="ship-wrap" class="hidden">
+    <div id="ship-header" onclick="toggleShipCollapse()">
+      <div style="display:flex;align-items:baseline;gap:9px;min-width:0">
+        <span id="ship-title">🚀 Ship Data File</span>
+        <span id="ship-name-badge"></span>
+      </div>
+      <span id="ship-toggle">▼</span>
+    </div>
+    <div id="ship-body"></div>
+    <div class="panel-resize-handle" id="ship-resize"></div>
+  </div>
+
+  <!-- ── Space Combat console (Phase 3) ── -->
+  <div id="combat-wrap" class="hidden">
+    <div id="combat-header" onclick="toggleCombatCollapse()">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span id="combat-title">⚔ SPACE COMBAT</span>
+        <span id="combat-phase-badge"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="combat-sfx-btn" onclick="event.stopPropagation();toggleCombatSfx()" title="Toggle combat sound effects">🔊</span>
+        <span id="combat-toggle">▼</span>
+      </div>
+    </div>
+    <div id="combat-body"></div>
+    <div id="combat-fx"></div>
+    <div class="panel-resize-handle" id="combat-resize"></div>
+  </div>
+
+  <!-- ── Enemy/player ship combat-stat editor (referee) ── -->
+  <div id="combat-edit-modal" class="hidden" onclick="if(event.target===this) closeShipEditor()">
+    <div id="combat-edit-card"></div>
+  </div>
+
+  <!-- ── Red Alert dramatic ship state ── -->
+  <div id="ship-alert-overlay"></div>
+  <div id="ship-alert-banner">
+    <span class="sa-dot"></span>
+    <span>Red Alert</span>
+    <span id="ship-alert-msg" class="sa-msg"></span>
+    <span class="sa-x" onclick="muteAlertLocal()" title="Hide alert effect on this device">✕</span>
+  </div>
+  <div id="ship-alert-ctl" class="ref-only"></div>
+
+  <!-- ── AI Takeover (blocking alert tier) ── -->
+  <div id="ai-takeover-overlay">
+    <div class="ait-noise"></div>
+    <div class="ait-scan"></div>
+    <div class="ait-content">
+      <div class="ait-msg" id="ai-takeover-msg">CORE INTELLIGENCE ASSUMING DIRECT CONTROL</div>
+      <div class="ait-sub">⏻ MANUAL OVERRIDE LOCKED</div>
+      <div class="ait-x" onclick="muteAlertLocal()" title="Disable this effect on your device">✕ disable effect on this device</div>
+    </div>
+  </div>
+
+  <!-- ── Imperial Calendar / Campaign Timeline panel ── -->
+  <div id="cal-wrap" class="hidden">
+    <div id="cal-header" onclick="toggleCalCollapse()">
+      <span id="cal-title">📅 IMPERIAL CALENDAR</span>
+      <span id="cal-toggle">▼</span>
+    </div>
+    <div id="cal-body"></div>
+    <div class="panel-resize-handle" id="cal-resize"></div>
+  </div>
+
+  <!-- ── Discovery Log / Codex panel ── -->
+  <div id="disc-wrap" class="hidden">
+    <div id="disc-header" onclick="toggleDiscCollapse()">
+      <span id="disc-title-lbl">🗂 LIBRARY DATA <span id="disc-count">0</span></span>
+      <span id="disc-toggle">▼</span>
+    </div>
+    <div id="disc-body"></div>
+    <div class="panel-resize-handle" id="disc-resize"></div>
+  </div>
+
+  <!-- ── NPC roster panel (referee) ── -->
+  <div id="npc-wrap" class="hidden">
+    <div id="npc-header" onclick="toggleNpcCollapse()">
+      <span id="npc-title-lbl">👥 NPC ROSTER <span id="npc-count">0</span></span>
+      <span id="npc-toggle">▼</span>
+    </div>
+    <div id="npc-body"></div>
+    <div class="panel-resize-handle" id="npc-resize"></div>
+  </div>
+
+  <!-- ── Reputation tracker panel ── -->
+  <!-- ── Funds panel — party account + character purses (all players) ── -->
+  <div id="funds-wrap" class="hidden">
+    <div id="funds-header" onclick="toggleFundsCollapse()">
+      <span id="funds-title-lbl">💰 FUNDS</span>
+      <span id="funds-toggle">▼</span>
+    </div>
+    <div id="funds-body"></div>
+    <div class="panel-resize-handle" id="funds-resize"></div>
+  </div>
+  <div id="rep-wrap" class="hidden">
+    <div id="rep-header" onclick="toggleRepCollapse()">
+      <span id="rep-title-lbl">⚖ REPUTATION</span>
+      <span id="rep-toggle">▼</span>
+    </div>
+    <div id="rep-body"></div>
+    <div class="panel-resize-handle" id="rep-resize"></div>
+  </div>
+
+  <!-- ── Living Economy console — referee-only (Level-2 stocks/flows sim) ── -->
+  <div id="econ-wrap" class="hidden ref-only">
+    <div id="econ-header" onclick="toggleEconCollapse()">
+      <span id="econ-title-lbl">📈 LIVING ECONOMY</span>
+      <span id="econ-toggle">▼</span>
+    </div>
+    <div id="econ-body"></div>
+    <div class="panel-resize-handle" id="econ-resize"></div>
+  </div>
+
+  <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
+  <div id="gen-wrap" class="hidden ref-only">
+    <div id="gen-header" onclick="toggleGenCollapse()">
+      <span id="gen-title-lbl">🎲 ORACLE</span>
+      <span id="gen-toggle">▼</span>
+    </div>
+    <div id="gen-body"></div>
+    <div class="panel-resize-handle" id="gen-resize"></div>
+  </div>
+
+  <div id="quest-edit-modal" class="hidden" onclick="if(event.target===this) closeQuestEditor()">
+    <div id="quest-edit-card">
+      <div id="quest-edit-header">
+        <span id="quest-edit-title">NEW MISSION</span>
+        <button onclick="closeQuestEditor()" style="background:none;border:none;color:var(--tx1);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div id="quest-edit-body">
+        <div class="design-field-group">
+          <div class="design-field-label">Mission Title</div>
+          <input type="text" id="qe-title" class="design-field-input" placeholder="e.g. Find the suppressed report">
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Status</div>
+          <select id="qe-status" class="design-field-input">
+            <option value="active">Active</option>
+            <option value="complete">Complete</option>
+            <option value="hidden">Hidden (referee only)</option>
+          </select>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Player Description (visible to players)</div>
+          <textarea id="qe-player-desc" class="design-field-textarea" placeholder="What the players know about this mission..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Referee Notes (private)</div>
+          <textarea id="qe-ref-note" class="design-field-textarea" placeholder="Your private notes, planned outcomes, hooks..."></textarea>
+        </div>
+        <div class="design-field-group">
+          <div class="design-field-label">Objectives</div>
+          <div id="qe-objectives"></div>
+          <button onclick="addQuestObjective()" style="margin-top:6px;font-size:11px;font-family:monospace;background:transparent;color:var(--accentGold);border:1px dashed var(--accentGold);border-radius:5px;padding:6px 12px;cursor:pointer;width:100%">+ Add Objective</button>
+        </div>
+      </div>
+      <div id="quest-edit-footer">
+        <button id="qe-delete-btn" onclick="deleteQuest()" class="hidden">🗑 Delete</button>
+        <button onclick="closeQuestEditor()">Cancel</button>
+        <button id="qe-save-btn" onclick="saveQuestEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Splash-screen editor (referee, Design Mode) — body rendered by renderSplashEditor() ── -->
+  <div id="splash-edit-modal" class="hidden" onclick="if(event.target===this) closeSplashEditor()">
+    <div id="splash-edit-card"></div>
+  </div>
+</div><!-- #float-panels -->
+<script src="js/00-core-data.js"></script>
+<script src="js/05-campaign-pack.js"></script>
+<script src="js/10-galaxy.js"></script>
+<script src="js/20-station-data.js"></script>
+<script src="js/30-system-body.js"></script>
+<script src="js/40-station.js"></script>
+<script src="js/45-initiative.js"></script>
+<script src="js/50-supabase.js"></script>
+<script src="js/55-auth-gating.js"></script>
+<script src="js/60-tools-settings.js"></script>
+<script src="js/62-campaign-studio.js"></script>
+<script src="js/65-design-mode.js"></script>
+<script src="js/70-panels-quest.js"></script>
+<script src="js/75-ship.js"></script>
+<script src="js/80-combat.js"></script>
+<script src="js/85-records.js"></script>
+<script src="js/90-economy.js"></script>
+<script src="js/92-tools-misc.js"></script>
+<script src="js/96-creators.js"></script>
+<script src="js/97-session-planner.js"></script>
+<script src="js/98-trackers-boot.js"></script>
+<script>
+// Register the offline-shell service worker. Secure-context only (https / the
+// installed PWA), and failure is non-fatal — the app runs identically without it.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+<script>
+// ── Phone nav drawer ────────────────────────────────────────────────────────
+// On phones the header carries ~20 controls; showing them all wraps the bar
+// into a wall of buttons that swallows the screen. Here we inject a single ☰
+// toggle that collapses the nav into a drawer (styling lives in app.css under
+// `html.is-phone`). No-op on tablets/desktops, which never get the is-phone flag.
+(function(){
+  if(!document.documentElement.classList.contains('is-phone')) return;
+  var hdr = document.getElementById('hdr');
+  if(!hdr) return;
+
+  var btn = document.createElement('button');
+  btn.id = 'mnav-toggle';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Menu');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.textContent = '☰';
+  hdr.insertBefore(btn, hdr.firstChild);
+
+  function setOpen(open){
+    hdr.classList.toggle('nav-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.textContent = open ? '✕' : '☰';
+    if(!open) hdr.scrollTop = 0;
+    // Republish the header height synchronously so header-anchored panels
+    // opened by the very same tap (see below) don't anchor to the tall,
+    // still-open drawer — the ResizeObserver in 70-panels-quest.js is async.
+    try { document.documentElement.style.setProperty('--hdr-h', hdr.offsetHeight + 'px'); }catch(e){}
+  }
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    setOpen(!hdr.classList.contains('nav-open'));
+  });
+
+  // Tapping a nav action (which opens a panel/menu elsewhere) closes the drawer,
+  // but interacting with the search box or the clock controls keeps it open.
+  // Capture phase so the drawer collapses *before* the button's own onclick
+  // runs — the panel then measures against the compact header height.
+  hdr.addEventListener('click', function(e){
+    if(!hdr.classList.contains('nav-open')) return;
+    if(e.target.closest('#search-wrap')) return;
+    var b = e.target.closest('button');
+    if(!b || b.id === 'mnav-toggle') return;
+    if(b.classList.contains('clk-btn') || b.id === 'clock-reset') return;
+    setOpen(false);
+  }, true);
+})();
+</script>
+</body>
+</html>
