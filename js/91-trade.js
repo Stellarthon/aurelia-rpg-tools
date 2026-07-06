@@ -1,18 +1,27 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// STATION TRADE — referee deal desk for the world the party is docked at
+// TRADE RUN — Station Trade desk + Starport Board (freight / passengers / mail)
 // ───────────────────────────────────────────────────────────────────────────
-// Needs loaded before it: 00 (helpers), 10 (HX.localMarket), 50 (supaStorage,
-// via the funds/cargo save paths), 55 (isReferee), 70 (panel drag/resize +
-// escQH), 75 (shipState), 85 (funds ledger, trade-cargo manifest, imperial
-// date, fmtCr), 90 (ECON price overlay — optional at runtime).
+// Needs loaded before it: 00 (helpers), 10 (HX.localMarket/worldFacts/hexOf),
+// 50 (supaStorage, via the funds/cargo save paths), 55 (isReferee/canSee),
+// 70 (panel drag/resize + escQH), 75 (shipState), 85 (funds ledger,
+// trade-cargo manifest, imperial date, fmtCr), 90 (ECON — optional at runtime).
 //
-// A REFEREE TOOL: players never get a buy/sell UI — their market intel stays
-// the fog-of-price readout on the hex map. This screen looks up the local
-// market (trade-code Purchase/Sale DMs + live pressure, shown as REFERENCE
-// ONLY) and records deals already resolved at the table with dice — nothing
-// here rolls or auto-resolves a trade. Recording a deal writes the funds
-// ledger (shared key 'funds', imperial-dated) and the cargo manifest (shared
-// key 'trade-cargo') in one step, riding the existing save paths and polls.
+// STATION TRADE is a REFEREE TOOL: players never get a buy/sell UI — their
+// market intel stays the fog-of-price readout on the hex map. It looks up the
+// local market (trade-code Purchase/Sale DMs + live pressure, shown as
+// REFERENCE ONLY) and records deals already resolved at the table with dice —
+// nothing here rolls or auto-resolves a trade. Recording a deal writes the
+// funds ledger (shared key 'funds', imperial-dated) and the cargo manifest
+// (shared key 'trade-cargo') in one step, riding the existing save paths and
+// polls.
+//
+// STARPORT BOARD is diegetic — a public posting board, so players get a
+// read-only view. The referee generates it per MgT2e RAW (Passenger/Freight
+// Traffic 2D tables, mail 12+; these are the referee's own world-simulation
+// rolls, same precedent as the Oracle generators). Player-side checks (Broker/
+// Carouse/Streetwise Effect, Steward, ranks) are rolled AT THE TABLE and typed
+// in as inputs. Accepting a lot / booking a passage is referee-executed and
+// writes funds + cargo/passenger records. Shared key 'starport-board'.
 // ═══════════════════════════════════════════════════════════════════════════
 
 let tradePanelOpen = false, tradeCollapsed = false;
@@ -195,5 +204,327 @@ function renderTradePanel(){
   body.innerHTML = h;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// STARPORT BOARD — freight lots, passengers & mail on offer at the port
+// ═══════════════════════════════════════════════════════════════════════════
+// RAW: Core Update 2022 pp. 238–241. Passage & freight rates by parsecs
+// travelled; traffic rolled 2D + DMs per SOURCE and DESTINATION world
+// (population, starport, zone, TL for freight), −1 per parsec past the first.
+// Zones aren't modelled on the map (known gap), so the referee sets them per
+// generation. Lot sizes: Major 1D×10 dt, Minor 1D×5 dt, Incidental 1D dt.
+// Mail: 2D ≥ 12 → 1D containers, 5 dt each, Cr25,000 flat, all or none.
+
+const PASSAGE_RATES = {   // Cr per passage, by parsecs travelled
+  1:{high:9000,  middle:6500,  basic:2000,  low:700},
+  2:{high:14000, middle:10000, basic:3000,  low:1300},
+  3:{high:21000, middle:14000, basic:5000,  low:2200},
+  4:{high:34000, middle:23000, basic:8000,  low:3900},
+  5:{high:60000, middle:40000, basic:14000, low:7200},
+  6:{high:210000,middle:130000,basic:55000, low:27000},
+};
+const FREIGHT_RATES = { 1:1000, 2:1600, 3:2600, 4:4400, 5:8500, 6:32000 };   // Cr per ton, paid on delivery
+const MAIL_CR = 25000;   // Cr per 5-dt container, flat regardless of distance
+const PAX_CLASSES = [['high','High',-4],['middle','Middle',0],['basic','Basic',0],['low','Low',1]];
+const FRT_SIZES   = [['major','Major',-4,10],['minor','Minor',0,5],['incidental','Incidental',2,1]];
+
+let starBoard = { world:'', worldLabel:'', date:'', entries: [] };
+let boardPanelOpen = false, boardCollapsed = false;
+// Sticky generate form. Effects/skills are TABLE-ROLLED then typed in here;
+// armed=null means "derive from the ship's weapon mounts".
+let boardGen = { dest:'', srcZone:'green', destZone:'green', effPax:'0', steward:'0', effFrt:'0', navRank:'0', socDM:'0', armed:null };
+
+async function loadStarportBoard(){
+  try { const r = await supaStorage.get('starport-board', true);
+    if(r.value != null){ const v = JSON.parse(r.value); if(v && Array.isArray(v.entries)) starBoard = v; } } catch(e){}
+}
+async function saveStarportBoard(){
+  try { await supaStorage.set('starport-board', JSON.stringify(starBoard), true); }
+  catch(e){ console.error('Starport board save failed:', e); }
+}
+function toggleBoardPanel(){
+  boardPanelOpen = !boardPanelOpen;
+  const w = document.getElementById('board-wrap'), b = document.getElementById('board-btn');
+  if(!w) return;
+  w.classList.toggle('hidden', !boardPanelOpen);
+  if(b) b.classList.toggle('panel-open', boardPanelOpen);
+  if(boardPanelOpen) renderBoardPanel();
+}
+function toggleBoardCollapse(){
+  const h = document.getElementById('board-header');
+  if(h && h.dataset.suppressClick === '1') return;
+  boardCollapsed = !boardCollapsed;
+  document.getElementById('board-toggle').textContent = boardCollapsed ? '▲' : '▼';
+  document.getElementById('board-body').classList.toggle('collapsed', boardCollapsed);
+  document.getElementById('board-wrap').classList.toggle('panel-collapsed', boardCollapsed);
+}
+
+// ── Dice + RAW DM tables ─────────────────────────────────────────────────────
+function bd6(){ return 1 + Math.floor(Math.random() * 6); }
+function bdD(n){ let s = 0; for(let i = 0; i < n; i++) s += bd6(); return s; }
+function bdUid(){ return 'bd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+function bdPortDM(port){ return port === 'A' ? 2 : port === 'B' ? 1 : port === 'E' ? -1 : port === 'X' ? -3 : 0; }
+// Per-world passenger DM: Pop ≤1 −4 · 6–7 +1 · 8+ +3; port A+2/B+1/E−1/X−3; Amber +1; Red −4.
+function bdPaxWorldDM(f, zone){
+  if(!f) return 0; let dm = 0; const p = f.pop | 0;
+  if(p <= 1) dm -= 4; else if(p >= 8) dm += 3; else if(p >= 6) dm += 1;
+  dm += bdPortDM(f.port);
+  if(zone === 'amber') dm += 1; else if(zone === 'red') dm -= 4;
+  return dm;
+}
+// Per-world freight DM: Pop ≤1 −4 · 6–7 +2 · 8+ +4; port as above; TL ≤6 −1 · TL 9+ +2; Amber −2; Red −6.
+function bdFrtWorldDM(f, zone){
+  if(!f) return 0; let dm = 0; const p = f.pop | 0;
+  if(p <= 1) dm -= 4; else if(p >= 8) dm += 4; else if(p >= 6) dm += 2;
+  dm += bdPortDM(f.port);
+  const tl = f.tl | 0; if(tl <= 6) dm -= 1; else if(tl >= 9) dm += 2;
+  if(zone === 'amber') dm -= 2; else if(zone === 'red') dm -= 6;
+  return dm;
+}
+// Traffic tables (modified 2D → number of D6 to roll). Passenger: ≤1:0 · 2–3:1D ·
+// 4–6:2D · 7–10:3D · 11–13:4D · 14–15:5D · 16:6D … 19:9D · 20+:10D.
+function bdPaxDice(v){ return v <= 1 ? 0 : v <= 3 ? 1 : v <= 6 ? 2 : v <= 10 ? 3 : v <= 13 ? 4 : v <= 15 ? 5 : v >= 20 ? 10 : v - 10; }
+// Freight: ≤1:0 · 2–3:1D · 4–5:2D · 6–8:3D · 9–11:4D · 12–14:5D · 15–16:6D · 17:7D … 20+:10D.
+function bdFrtDice(v){ return v <= 1 ? 0 : v <= 3 ? 1 : v <= 5 ? 2 : v <= 8 ? 3 : v <= 11 ? 4 : v <= 14 ? 5 : v <= 16 ? 6 : v >= 20 ? 10 : v - 10; }
+
+// Candidate destinations: market worlds within the 6-pc rate table.
+function bdDestinations(){
+  if(typeof HX === 'undefined' || !HX.hexOf) return [];
+  const src = (typeof shipState !== 'undefined') ? shipState.locationId : null;
+  const o = src ? HX.hexOf(src) : null; if(!o) return [];
+  const out = [];
+  (typeof GALAXY_NODES !== 'undefined' ? GALAXY_NODES : []).forEach(n => {
+    if(n.id === src) return;
+    try { if(typeof ECON !== 'undefined' && ECON.isMarketId && !ECON.isMarketId(n.id)) return; } catch(e){}
+    const h = HX.hexOf(n.id); if(!h) return;
+    const pc = (Math.abs(o.q - h.q) + Math.abs(o.r - h.r) + Math.abs(o.q + o.r - h.q - h.r)) / 2;
+    if(pc >= 1 && pc <= 6) out.push({ id: n.id, label: n.label || n.name || n.id, pc });
+  });
+  return out.sort((a, b) => a.pc - b.pc || a.label.localeCompare(b.label));
+}
+function boardInput(field, value){ if(field in boardGen) boardGen[field] = value; }
+function boardArmed(){
+  if(boardGen.armed != null) return !!boardGen.armed;
+  return !!(typeof shipState !== 'undefined' && Array.isArray(shipState.weapons) && shipState.weapons.length);
+}
+
+// ── Generate the board for one destination (referee) ───────────────────────
+// The 2D traffic rolls are the referee's own world-simulation dice (Oracle
+// precedent); the typed-in Effects came from checks rolled at the table.
+function boardGenerate(){
+  if(typeof isReferee === 'function' && !isReferee()){ if(typeof showToast === 'function') showToast('Referee only', 'error'); return; }
+  const src = (typeof shipState !== 'undefined') ? shipState.locationId : null;
+  const mkt = (typeof HX !== 'undefined' && HX.localMarket) ? HX.localMarket() : null;
+  if(!src || !mkt){ if(typeof showToast === 'function') showToast('No current location', 'error'); return; }
+  const dests = bdDestinations();
+  const d = dests.find(x => x.id === boardGen.dest) || dests[0];
+  if(!d){ if(typeof showToast === 'function') showToast('No market world within 6 pc', 'error'); return; }
+  boardGen.dest = d.id;
+  const sf = HX.worldFacts(src), df = HX.worldFacts(d.id);
+  const distDM = -(d.pc - 1);
+  const int0 = v => { const n = parseInt(v, 10); return isFinite(n) ? n : 0; };
+  const effPax = int0(boardGen.effPax), steward = int0(boardGen.steward), effFrt = int0(boardGen.effFrt);
+  const navRank = int0(boardGen.navRank), socDM = int0(boardGen.socDM), armed = boardArmed();
+  const today = (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '';
+
+  // A new port wipes the old port's postings (taken entries live on the ship's
+  // books, not here); re-rolling the same destination replaces its open posts.
+  if(starBoard.world !== src) starBoard = { world: src, worldLabel: mkt.label, date: today, entries: [] };
+  starBoard.entries = starBoard.entries.filter(e => !(e.dest === d.id && e.status === 'open'));
+
+  const paxBase = effPax + steward + bdPaxWorldDM(sf, boardGen.srcZone) + bdPaxWorldDM(df, boardGen.destZone) + distDM;
+  PAX_CLASSES.forEach(([cls, lbl, cdm]) => {
+    const roll = bdD(2), tot = roll + paxBase + cdm;
+    const dice = bdPaxDice(tot), count = dice > 0 ? bdD(dice) : 0;
+    if(count > 0) starBoard.entries.push({ id: bdUid(), kind: 'pax', sub: cls, dest: d.id, destLabel: d.label, pc: d.pc,
+      count, taken: 0, fare: PASSAGE_RATES[d.pc][cls], status: 'open', roll, dm: paxBase + cdm, date: today });
+  });
+  const frtBase = effFrt + bdFrtWorldDM(sf, boardGen.srcZone) + bdFrtWorldDM(df, boardGen.destZone) + distDM;
+  FRT_SIZES.forEach(([sub, lbl, cdm, mult]) => {
+    const roll = bdD(2), tot = roll + frtBase + cdm;
+    const dice = bdFrtDice(tot), lots = dice > 0 ? bdD(dice) : 0;
+    for(let i = 0; i < lots; i++){
+      const tons = bd6() * mult;   // Major 1D×10 · Minor 1D×5 · Incidental 1D
+      starBoard.entries.push({ id: bdUid(), kind: 'freight', sub, dest: d.id, destLabel: d.label, pc: d.pc,
+        tons, rate: FREIGHT_RATES[d.pc], pay: tons * FREIGHT_RATES[d.pc], status: 'open', roll, dm: frtBase + cdm, date: today });
+    }
+  });
+  // Mail: bracket the net freight DM, 2D ≥ 12; 1D containers, all or none.
+  const bracket = frtBase <= -10 ? -2 : frtBase <= -5 ? -1 : frtBase <= 4 ? 0 : frtBase <= 9 ? 1 : 2;
+  const mailDM = bracket + (armed ? 2 : 0) + ((sf && (sf.tl | 0) <= 5) ? -4 : 0) + navRank + socDM;
+  const mailRoll = bdD(2);
+  if(mailRoll + mailDM >= 12){
+    const n = bd6();
+    starBoard.entries.push({ id: bdUid(), kind: 'mail', sub: 'mail', dest: d.id, destLabel: d.label, pc: d.pc,
+      count: n, tons: n * 5, pay: n * MAIL_CR, status: 'open', roll: mailRoll, dm: mailDM, date: today });
+  }
+  starBoard.date = today;
+  saveStarportBoard(); renderBoardPanel();
+  if(typeof showToast === 'function') showToast('Board posted — ' + starBoard.worldLabel + ' → ' + d.label);
+}
+function boardClear(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  starBoard.entries = starBoard.entries.filter(e => e.status !== 'open');
+  saveStarportBoard(); renderBoardPanel();
+}
+
+// ── Referee accepts a posting (checks already rolled at the table) ──────────
+function boardAccept(id){
+  if(typeof isReferee === 'function' && !isReferee()){ if(typeof showToast === 'function') showToast('Referee only', 'error'); return; }
+  const e = starBoard.entries.find(x => x.id === id);
+  if(!e || e.status !== 'open') return;
+  const today = (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '';
+  if(typeof normalizeFunds === 'function') normalizeFunds();
+
+  if(e.kind === 'pax'){
+    // Book k of the remaining seats; fares are collected on boarding.
+    const inp = document.getElementById('bd-take-' + e.id);
+    const remaining = (Number(e.count) || 0) - (Number(e.taken) || 0);
+    let k = inp ? parseInt(inp.value, 10) : remaining;
+    k = Math.max(1, Math.min(isFinite(k) ? k : remaining, remaining));
+    e.taken = (Number(e.taken) || 0) + k;
+    if(e.taken >= e.count) e.status = 'taken';
+    shipState.passengers = Array.isArray(shipState.passengers) ? shipState.passengers : [];
+    shipState.passengers.push({ id: 'pax_' + Date.now().toString(36), cls: e.sub, count: k, dest: e.dest, destLabel: e.destLabel, fare: e.fare, date: today });
+    const total = k * e.fare;
+    funds.party = (Number(funds.party) || 0) + total;
+    fundsLog('party', total, `${k}× ${e.sub} passage to ${e.destLabel} — fares collected at ${starBoard.worldLabel}`);
+    saveShipState(); saveFunds();
+  } else {
+    // Freight & mail ride in the hold and PAY ON DELIVERY (RAW) — the lot goes
+    // on the cargo manifest now, the credits land when it's delivered.
+    e.status = 'taken';
+    tradeCargo.lots = tradeCargo.lots || [];
+    tradeCargo.lots.push({
+      id: 'lot_' + Date.now().toString(36),
+      good: e.kind === 'mail' ? `Mail — ${e.count} container${e.count > 1 ? 's' : ''} → ${e.destLabel}` : `Freight (${e.sub}) → ${e.destLabel}`,
+      tons: e.tons, buyCr: 0, world: starBoard.worldLabel, date: today,
+      kind: e.kind, dest: e.dest, destLabel: e.destLabel, pay: e.pay
+    });
+    saveTradeCargo();
+  }
+  saveStarportBoard(); renderBoardPanel();
+  if(typeof showToast === 'function') showToast(e.kind === 'pax' ? 'Passage booked' : 'Contract accepted — pays on delivery');
+  if(typeof fundsPanelOpen !== 'undefined' && fundsPanelOpen && typeof renderFundsPanel === 'function') renderFundsPanel();
+  if(typeof cargoPanelOpen !== 'undefined' && cargoPanelOpen && typeof renderCargoPanel === 'function') renderCargoPanel();
+  if(typeof shipPanelOpen !== 'undefined' && shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
+}
+
+// ── Delivery / disembark (referee, from the Aboard manifest) ────────────────
+function boardDeliver(lotId){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const lot = (tradeCargo.lots || []).find(l => l.id === lotId);
+  if(!lot || !(lot.kind === 'freight' || lot.kind === 'mail')) return;
+  if(typeof normalizeFunds === 'function') normalizeFunds();
+  const pay = Math.round(Number(lot.pay) || 0);
+  funds.party = (Number(funds.party) || 0) + pay;
+  fundsLog('party', pay, `Delivered: ${lot.good} (${lot.tons} dt)`);
+  tradeCargo.lots = tradeCargo.lots.filter(l => l.id !== lotId);
+  saveFunds(); saveTradeCargo(); renderBoardPanel();
+  if(typeof showToast === 'function') showToast('Delivered — ' + trdCr(pay) + ' collected');
+  if(typeof fundsPanelOpen !== 'undefined' && fundsPanelOpen && typeof renderFundsPanel === 'function') renderFundsPanel();
+  if(typeof cargoPanelOpen !== 'undefined' && cargoPanelOpen && typeof renderCargoPanel === 'function') renderCargoPanel();
+  if(typeof shipPanelOpen !== 'undefined' && shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
+}
+function boardDisembark(paxId){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const pax = Array.isArray(shipState.passengers) ? shipState.passengers : [];
+  shipState.passengers = pax.filter(p => p.id !== paxId);
+  saveShipState(); renderBoardPanel();
+  if(typeof shipPanelOpen !== 'undefined' && shipPanelOpen && typeof renderShipPanel === 'function') renderShipPanel();
+}
+
+// ── Render ──────────────────────────────────────────────────────────────────
+function bdKindChip(e){
+  if(e.kind === 'pax') return `<span class="bd-chip bd-chip-pax">🧍 ${escQH(e.sub)}</span>`;
+  if(e.kind === 'mail') return `<span class="bd-chip bd-chip-mail">✉ mail</span>`;
+  return `<span class="bd-chip bd-chip-frt">📦 ${escQH(e.sub)}</span>`;
+}
+function bdEntryLine(e, ref){
+  const dice = `<span class="bd-dice" title="Referee's traffic roll: 2D ${e.roll} + DM ${e.dm >= 0 ? '+' : ''}${e.dm}">2D:${e.roll}${e.dm >= 0 ? '+' : ''}${e.dm}</span>`;
+  let what, pay, act = '';
+  if(e.kind === 'pax'){
+    const remaining = (Number(e.count) || 0) - (Number(e.taken) || 0);
+    what = `${remaining}${e.taken ? ' of ' + e.count : ''} × ${escQH(e.sub)} passage → <b>${escQH(e.destLabel)}</b>`;
+    pay = `${trdCr(e.fare)}/berth`;
+    if(ref && e.status === 'open') act = `<input id="bd-take-${escQH(e.id)}" class="bd-take" type="number" min="1" max="${remaining}" value="${remaining}">
+      <button class="disc-mini" onclick="boardAccept('${escQH(e.id)}')">Book</button>`;
+  } else if(e.kind === 'mail'){
+    what = `${e.count} sealed mail container${e.count > 1 ? 's' : ''} (${e.tons} dt) → <b>${escQH(e.destLabel)}</b> · all or none`;
+    pay = `${trdCr(e.pay)} on delivery`;
+    if(ref && e.status === 'open') act = `<button class="disc-mini" onclick="boardAccept('${escQH(e.id)}')">Accept</button>`;
+  } else {
+    what = `${escQH(e.sub)} lot · ${e.tons} dt → <b>${escQH(e.destLabel)}</b>`;
+    pay = `${trdCr(e.pay)} on delivery (${trdCr(e.rate)}/dt)`;
+    if(ref && e.status === 'open') act = `<button class="disc-mini" onclick="boardAccept('${escQH(e.id)}')">Accept</button>`;
+  }
+  const taken = e.status !== 'open' ? `<span class="bd-taken">TAKEN</span>` : '';
+  return `<div class="bd-entry${e.status !== 'open' ? ' bd-entry-taken' : ''}">${bdKindChip(e)}
+    <span class="bd-what">${what}</span><span class="bd-pay">${pay}</span>${ref ? dice : ''}${taken}${act}</div>`;
+}
+function renderBoardPanel(){
+  const body = document.getElementById('board-body'); if(!body) return;
+  const ref = (typeof isReferee === 'function') ? isReferee() : false;
+  const src = (typeof shipState !== 'undefined') ? shipState.locationId : null;
+  const here = starBoard.world && starBoard.world === src;
+  let h = '';
+
+  // ── The posted board (players see this — it's literally a public board) ──
+  if(!starBoard.world || !starBoard.entries.length){
+    h += `<div class="cal-empty">${ref ? 'No postings — generate the board below on arrival.' : 'Nothing posted at this port yet.'}</div>`;
+  } else {
+    h += `<div class="fund-lbl">📌 Posted at ${escQH(starBoard.worldLabel)} · ${escQH(starBoard.date)}${here ? '' : ' · <span style="color:#e8c65a">left behind — the ship has moved on</span>'}</div>`;
+    const open = starBoard.entries.filter(e => e.status === 'open'), done = starBoard.entries.filter(e => e.status !== 'open');
+    open.concat(done).forEach(e => { h += bdEntryLine(e, ref && here); });
+    if(ref && here) h += `<div class="trd-note">Freight is paid on delivery; late delivery docks (1D+4)×10% — adjust in 💰 ${typeof TERM === 'function' ? escQH(TERM('funds')) : 'Funds'} if it comes up. Booking and broker haggling happen at the table; the board only records it.</div>`;
+  }
+
+  // ── Aboard — accepted contracts & booked passengers (diegetic manifest) ──
+  const lots = (typeof tradeCargo !== 'undefined' && tradeCargo && Array.isArray(tradeCargo.lots)) ? tradeCargo.lots.filter(l => l.kind === 'freight' || l.kind === 'mail') : [];
+  const pax = (typeof shipState !== 'undefined' && Array.isArray(shipState.passengers)) ? shipState.passengers : [];
+  if(lots.length || pax.length){
+    h += `<div class="fund-lbl" style="margin-top:4px">🚀 Aboard</div>`;
+    lots.forEach(l => {
+      h += `<div class="bd-entry">${l.kind === 'mail' ? '✉' : '📦'} <span class="bd-what">${escQH(l.good)} · ${Number(l.tons) || 0} dt</span>
+        <span class="bd-pay">${trdCr(l.pay)} on delivery</span>
+        ${ref ? `<button class="disc-mini" onclick="boardDeliver('${escQH(l.id)}')" title="Arrived — collect payment into the party fund">✓ Delivered</button>` : ''}</div>`;
+    });
+    pax.forEach(p => {
+      h += `<div class="bd-entry">🧍 <span class="bd-what">${Number(p.count) || 0} × ${escQH(p.cls)} passenger${(Number(p.count) || 0) > 1 ? 's' : ''} → ${escQH(p.destLabel)}</span>
+        <span class="bd-pay">fares collected</span>
+        ${ref ? `<button class="disc-mini" onclick="boardDisembark('${escQH(p.id)}')" title="Arrived — passengers disembark">✓ Disembark</button>` : ''}</div>`;
+    });
+  }
+
+  // ── Referee: generate form ──
+  if(ref){
+    const dests = bdDestinations();
+    if(!boardGen.dest && dests.length) boardGen.dest = dests[0].id;
+    const zoneSel = (field) => `<select class="bd-sel" onchange="boardInput('${field}',this.value)">
+      ${[['green','Green'],['amber','Amber'],['red','Red']].map(([v, l]) => `<option value="${v}"${boardGen[field] === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const numIn = (field, lbl, title) => `<label class="bd-in" title="${escQH(title)}">${lbl}<input type="number" value="${escQH(boardGen[field])}" oninput="boardInput('${field}',this.value)"></label>`;
+    h += `<div class="fund-card"><div class="fund-lbl">Generate the board (referee) — RAW 2D traffic rolls</div>
+      <div class="fund-row"><label class="bd-in" style="flex:1">Destination
+        <select class="bd-sel" style="width:100%" onchange="boardInput('dest',this.value)">
+          ${dests.map(x => `<option value="${escQH(x.id)}"${x.id === boardGen.dest ? ' selected' : ''}>${escQH(x.label)} · ${x.pc} pc</option>`).join('')}
+        </select></label></div>
+      <div class="fund-row"><label class="bd-in">Zone here ${zoneSel('srcZone')}</label><label class="bd-in">Zone there ${zoneSel('destZone')}</label>
+        <label class="bd-in" title="Derived from the ship's weapon mounts — override for the mail DM">✚ Armed <input type="checkbox"${boardArmed() ? ' checked' : ''} onchange="boardGen.armed=this.checked"></label></div>
+      <div class="fund-row">${numIn('effPax', 'Pax check Effect', 'Effect of the Average (8+) Broker, Carouse or Streetwise check — rolled at the table')}
+        ${numIn('steward', 'Steward', "Highest Steward skill aboard")}</div>
+      <div class="fund-row">${numIn('effFrt', 'Freight check Effect', 'Effect of the Average (8+) Broker or Streetwise check — rolled at the table')}
+        ${numIn('navRank', 'Naval/Scout rank', 'Highest Naval or Scout rank aboard (mail)')}
+        ${numIn('socDM', 'SOC DM', 'Highest SOC DM aboard (mail)')}</div>
+      <div class="fund-row"><button class="cal-add-btn" onclick="boardGenerate()">🎲 Roll traffic & post the board</button>
+        <button class="disc-mini" onclick="boardClear()" title="Take down un-taken postings">✕ Clear open</button></div>
+      <div class="trd-note">Check Effects above come from dice rolled at the table — the app only rolls the port's traffic (the referee's own 2D world rolls) and does the rate lookups.</div>
+    </div>`;
+  }
+  body.innerHTML = h;
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+loadStarportBoard();   // shared board — renders on-demand when its panel opens
 makePanelDraggable('trade-wrap', 'trade-header');
 makePanelResizable('trade-wrap');
+makePanelDraggable('board-wrap', 'board-header');
+makePanelResizable('board-wrap');

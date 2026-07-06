@@ -739,6 +739,7 @@
       <button id="downtime-btn" class="more-item" onclick="closeMoreMenu();toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
       <button id="cal-btn" class="more-item" onclick="closeMoreMenu();toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Imperial Calendar</button>
       <button id="handouts-btn" class="more-item" onclick="closeMoreMenu();toggleHandoutsPanel()" title="Handouts — maps, clues & evidence the referee shares">🖼 Handouts</button>
+      <button id="board-btn" class="more-item" onclick="closeMoreMenu();toggleBoardPanel()" title="Starport board — freight lots, passengers & mail posted at this port">📦 Starport Board</button>
       <button id="turnorder-btn" class="more-item hidden" onclick="closeMoreMenu();toggleTurnOrderPanel()" title="Turn order — the referee shares it during combat">🎯 Turns</button>
       <button id="planner-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionPlanner()" title="Session Planner — prep & run sessions; link Oracle, Missions & NPCs (referee)">🗓 Session Planner</button>
       <button id="npc-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
@@ -997,6 +998,16 @@
     </div>
     <div id="trade-body"></div>
     <div class="panel-resize-handle" id="trade-resize"></div>
+  </div>
+
+  <!-- ── Starport Board — public postings (players read; referee generates & accepts) ── -->
+  <div id="board-wrap" class="hidden">
+    <div id="board-header" onclick="toggleBoardCollapse()">
+      <span id="board-title-lbl">📦 STARPORT BOARD</span>
+      <span id="board-toggle">▼</span>
+    </div>
+    <div id="board-body"></div>
+    <div class="panel-resize-handle" id="board-resize"></div>
   </div>
 
   <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
