@@ -1012,6 +1012,13 @@ textarea{font-family:var(--font)}
 .con-edit-row input{flex:1}
 .con-known-grid{display:flex;flex-direction:column;gap:5px;border-top:.5px dashed var(--bd0);border-bottom:.5px dashed var(--bd0);padding:6px 0}
 .con-known-lbl{display:flex;flex-direction:column;gap:3px;font-size:9.5px;color:var(--accentGold);font-family:monospace}
+.con-rel{font-family:monospace;font-size:8.5px;font-weight:700;letter-spacing:.5px;border:.5px solid;border-radius:3px;padding:1px 4px;flex-shrink:0}
+.con-owner{font-family:monospace;font-size:8.5px;font-weight:700;letter-spacing:.5px;color:var(--tx1);border:.5px solid var(--bd0);border-radius:3px;padding:1px 4px;flex-shrink:0}
+.con-fav{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:4px 10px 8px;font-size:10.5px;color:var(--tx1)}
+.con-fav b{color:var(--tx0);font-family:monospace}
+.con-fav .dt-mini{padding:1px 7px}
+.con-mynote{display:block;width:calc(100% - 20px);box-sizing:border-box;background:var(--bg1);border:.5px solid var(--bd0);border-left:2px solid var(--accentGold);border-radius:5px;color:var(--tx0);padding:6px 8px;font-size:10.5px;font-family:inherit;margin:0 10px 8px;resize:vertical}
+.con-fav-edit label{display:flex;flex-direction:column;gap:3px;font-size:9.5px;color:var(--tx1);font-family:monospace;flex:1}
 .journal-empty{color:var(--tx1);font-size:11px;text-align:center;padding:18px 6px;line-height:1.5}
 .journal-entry{background:var(--bg0);border-radius:6px;border-left:3px solid var(--accentGold);overflow:hidden}
 .journal-entry-head{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:.5px solid var(--bd0)}
