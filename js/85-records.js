@@ -1821,7 +1821,39 @@ function renderHandoutsPanel(){
 // Player clients redact to the viewer's own layer (honour-system, like the
 // combat/codex redaction — true secrecy needs the get-content path). Shared key
 // 'contacts'.
-//   contact = { id, name, role, faction, location, blurb, known:{identity:text}, refNote, visibleTo }
+//   contact = { id, name, role, faction, location, blurb, known:{identity:text}, refNote, visibleTo,
+//               owner, rel, favOwed, favOwing }
+// V2 adds the per-character ledger: `owner` ('' = party contact, or a character
+// name — that character's personal contact, visible only to them + referee),
+// `rel` relationship type, and favour tallies (favOwed = they owe the party/
+// character; favOwing = the party/character owes them). The owning player can
+// annotate their own contacts: their `known` layer plus the favour tallies.
+// Complements the faction-level reputation tracker; the two stay separate.
+
+const CONTACT_RELS = [['contact','Contact','var(--accentGold)'],['ally','Ally','#7fd07f'],['rival','Rival','#e0b050'],['enemy','Enemy','#d45050']];
+function contactRelChip(rel){
+  const r = CONTACT_RELS.find(x => x[0] === rel);
+  return r ? `<span class="con-rel" style="color:${r[2]};border-color:${r[2]}">${r[1].toUpperCase()}</span>` : '';
+}
+// Referee edits everything; the owning character may annotate their own contact.
+function contactCanAnnotate(c){
+  if(typeof isReferee === 'function' && isReferee()) return true;
+  return !!(c && c.owner && typeof myIdentity !== 'undefined' && myIdentity && c.owner === myIdentity);
+}
+function contactFav(id, key, delta){
+  const c = contacts.find(x => x.id === id); if(!c || !contactCanAnnotate(c)) return;
+  if(key !== 'favOwed' && key !== 'favOwing') return;
+  c[key] = Math.max(0, (parseInt(c[key]) || 0) + delta);
+  saveContacts(); renderContactsPanel();
+}
+// Owning player's inline note — writes their own `known` layer (referee uses the editor).
+function contactMyNote(id, val){
+  const c = contacts.find(x => x.id === id); if(!c || !contactCanAnnotate(c)) return;
+  if(typeof myIdentity === 'undefined' || !myIdentity) return;
+  c.known = c.known || {};
+  if(String(val).trim()) c.known[myIdentity] = val; else delete c.known[myIdentity];
+  saveContacts();
+}
 
 let contacts = [];
 let contactsPanelOpen = false, contactsCollapsed = false, contactsEditingId = null, contactsExpanded = {};
@@ -1853,7 +1885,7 @@ function toggleContactsCollapse(){
 function contactsToggleExpand(id){ contactsExpanded[id] = !contactsExpanded[id]; renderContactsPanel(); }
 function contactAdd(){
   if(!isReferee()) return;
-  const c = { id: 'con_' + Date.now().toString(36), name: '', role: '', faction: '', location: '', blurb: '', known: {}, refNote: '', visibleTo: 'all' };
+  const c = { id: 'con_' + Date.now().toString(36), name: '', role: '', faction: '', location: '', blurb: '', known: {}, refNote: '', visibleTo: 'all', owner: '', rel: 'contact', favOwed: 0, favOwing: 0 };
   contacts.push(c); contactsEditingId = c.id; contactsExpanded[c.id] = true;
   renderContactsPanel(); const f = document.getElementById('contact-f-name'); if(f) f.focus();
 }
@@ -1867,6 +1899,10 @@ function contactSave(){
   c.role = gv('contact-f-role'); c.faction = gv('contact-f-faction'); c.location = gv('contact-f-location');
   c.blurb = gv('contact-f-blurb'); c.refNote = gv('contact-f-refnote');
   c.visibleTo = (typeof parseCalVis === 'function') ? parseCalVis(gv('contact-f-vis')) : 'all';
+  c.owner = gv('contact-f-owner');
+  c.rel = gv('contact-f-rel') || 'contact';
+  c.favOwed = Math.max(0, parseInt(gv('contact-f-favowed')) || 0);
+  c.favOwing = Math.max(0, parseInt(gv('contact-f-favowing')) || 0);
   c.known = c.known || {};
   (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).forEach((nm, i) => {
     const v = gv('contact-f-known-' + i).trim(); if(v) c.known[nm] = v; else delete c.known[nm];
@@ -1887,10 +1923,14 @@ function contactEditorHTML(c){
   const chars = (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [];
   const visRaw = (typeof calVisRaw === 'function') ? calVisRaw(c.visibleTo) : '';
   const knownFields = chars.map((nm, i) => `<label class="con-known-lbl">${escQH(nm)} knows<textarea id="contact-f-known-${i}" rows="2" placeholder="What ${escQH(nm)} knows…">${escQH((c.known && c.known[nm]) || '')}</textarea></label>`).join('');
+  const ownerOpts = ['<option value="">Party contact (shared)</option>'].concat(chars.map(nm => `<option value="${escA(nm)}"${c.owner === nm ? ' selected' : ''}>${escQH(nm)}'s contact</option>`)).join('');
+  const relOpts = CONTACT_RELS.map(([v, lbl]) => `<option value="${v}"${(c.rel || 'contact') === v ? ' selected' : ''}>${lbl}</option>`).join('');
   return `<div class="con-edit">
     <input id="contact-f-name" placeholder="Name" maxlength="60" value="${escA(c.name)}">
     <div class="con-edit-row"><input id="contact-f-role" placeholder="Role" maxlength="50" value="${escA(c.role)}"><input id="contact-f-faction" placeholder="Faction" maxlength="50" value="${escA(c.faction)}"></div>
-    <div class="con-edit-row"><input id="contact-f-location" placeholder="Where" maxlength="50" value="${escA(c.location)}"><input id="contact-f-vis" placeholder="all / referee / Rhett Calder" value="${escA(visRaw)}"></div>
+    <div class="con-edit-row"><input id="contact-f-location" placeholder="Where (system / station)" maxlength="50" value="${escA(c.location)}"><input id="contact-f-vis" placeholder="all / referee / Rhett Calder" value="${escA(visRaw)}"></div>
+    <div class="con-edit-row"><select id="contact-f-owner" title="Whose contact is this? A character's personal contact is visible only to them (and you)">${ownerOpts}</select><select id="contact-f-rel" title="Relationship type">${relOpts}</select></div>
+    <div class="con-edit-row con-fav-edit"><label>Favours they owe<input id="contact-f-favowed" type="number" inputmode="numeric" min="0" value="${parseInt(c.favOwed) || 0}"></label><label>Favours owed to them<input id="contact-f-favowing" type="number" inputmode="numeric" min="0" value="${parseInt(c.favOwing) || 0}"></label></div>
     <textarea id="contact-f-blurb" rows="2" placeholder="Shared blurb — what everyone knows">${escQH(c.blurb || '')}</textarea>
     <div class="con-known-grid">${knownFields}</div>
     <textarea id="contact-f-refnote" rows="2" placeholder="Referee-only note (honour-system)">${escQH(c.refNote || '')}</textarea>
@@ -1900,7 +1940,9 @@ function contactEditorHTML(c){
 function renderContactsPanel(){
   const body = document.getElementById('contacts-body'); if(!body) return;
   const ref = isReferee();
-  const visible = contacts.filter(c => ref || (typeof canSee === 'function' ? canSee(c.visibleTo) : true));
+  // Party contacts follow the audience rule; a character's personal contact is
+  // theirs alone (plus the referee) regardless of visibleTo.
+  const visible = contacts.filter(c => ref || ((!c.owner || c.owner === myIdentity) && (typeof canSee === 'function' ? canSee(c.visibleTo) : true)));
   const cnt = document.getElementById('contacts-count'); if(cnt) cnt.textContent = visible.length;
   let list;
   if(!visible.length){
@@ -1909,9 +1951,11 @@ function renderContactsPanel(){
     list = visible.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => {
       if(ref && contactsEditingId === c.id) return `<div class="con-card editing">${contactEditorHTML(c)}</div>`;
       const exp = !!contactsExpanded[c.id];
+      const canAnn = contactCanAnnotate(c);
       const mineKnown = (!ref && c.known && myIdentity) ? c.known[myIdentity] : '';
       const meta = [c.role, c.faction, c.location].filter(Boolean).map(x => escQH(x)).join(' · ');
       const ctl = ref ? `<span class="wiki-ctl"><button class="dt-mini" onclick="event.stopPropagation();contactEdit('${c.id}')">✏</button><button class="dt-mini del" onclick="event.stopPropagation();contactRemove('${c.id}')">✕</button></span>` : '';
+      const ownerChip = c.owner ? `<span class="con-owner">${ref ? escQH(c.owner) : 'YOURS'}</span>` : '';
       let detail = '';
       if(exp){
         if(c.blurb) detail += `<div class="con-blurb">${escQH(c.blurb).replace(/\n/g, '<br>')}</div>`;
@@ -1919,13 +1963,24 @@ function renderContactsPanel(){
           const layers = Object.keys(c.known || {}).map(nm => `<div class="con-layer"><span class="con-layer-who">${escQH(nm)}</span> ${escQH(c.known[nm]).replace(/\n/g, '<br>')}</div>`).join('');
           if(layers) detail += `<div class="con-layers">${layers}</div>`;
           if(c.refNote) detail += `<div class="con-refnote">↳ ${escQH(c.refNote).replace(/\n/g, '<br>')}</div>`;
-        } else if(mineKnown){
+        } else if(mineKnown && !canAnn){
           detail += `<div class="con-layer mine"><span class="con-layer-who">You know</span> ${escQH(mineKnown).replace(/\n/g, '<br>')}</div>`;
+        }
+        // Favour ledger — tallied by the referee or the owning character.
+        const owed = parseInt(c.favOwed) || 0, owing = parseInt(c.favOwing) || 0;
+        if(owed || owing || canAnn){
+          const step = key => canAnn ? `<button class="dt-mini" onclick="contactFav('${c.id}','${key}',-1)">−</button><button class="dt-mini" onclick="contactFav('${c.id}','${key}',1)">+</button>` : '';
+          detail += `<div class="con-fav"><span>They owe <b>${owed}</b> ${step('favOwed')}</span><span>Owed to them <b>${owing}</b> ${step('favOwing')}</span></div>`;
+        }
+        // Owning player annotates their own contact in place.
+        if(!ref && canAnn){
+          detail += `<textarea class="con-mynote" rows="2" placeholder="Your notes on this contact…" onchange="contactMyNote('${c.id}', this.value)">${escQH((c.known && c.known[myIdentity]) || '')}</textarea>`;
         }
       }
       return `<div class="con-card">
         <div class="con-hd" onclick="contactsToggleExpand('${c.id}')">
           <span class="con-name">${escQH(c.name || 'Contact')}</span>
+          ${contactRelChip(c.rel)}${ownerChip}
           ${meta ? `<span class="con-meta">${meta}</span>` : ''}
           ${ctl}<span class="wiki-exp">${exp ? '▲' : '▼'}</span>
         </div>
