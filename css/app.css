@@ -338,6 +338,17 @@ textarea{font-family:var(--font)}
   white-space:pre-wrap;max-height:340px;overflow-y:auto;font-family:var(--font)
 }
 .session-recap-empty{color:var(--tx1);font-style:italic;font-size:11px}
+/* ── "Previously on…" campaign recap draft ── */
+.po-since-row{align-items:center;flex-wrap:wrap}
+.po-since-lbl{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx1);white-space:nowrap}
+.po-since-lbl input{width:64px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:5px 7px;font-size:11px;font-family:inherit}
+.po-draft{
+  margin-top:10px;background:var(--bg0);border:.5px solid var(--accentGold);border-radius:6px;
+  padding:12px;font-size:12px;line-height:1.6;color:var(--tx0);
+  max-height:340px;overflow-y:auto;font-family:var(--font);outline:none
+}
+.po-draft h4{margin:10px 0 4px;font-size:10px;font-family:monospace;letter-spacing:1px;text-transform:uppercase;color:var(--accentGold)}
+.po-draft p{margin:0 0 6px}
 .session-stat-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--bg2);color:var(--tx0)}
 .session-stat-row:last-child{border-bottom:none}
 .session-stat-row span:first-child{color:var(--tx1)}

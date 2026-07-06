@@ -586,6 +586,19 @@
       </div>
       <div id="session-card-body">
         <div class="session-section">
+          <div class="session-section-title">Previously on… (campaign recap)</div>
+          <div class="session-btn-row po-since-row">
+            <label class="po-since-lbl">Since day <input id="po-since-day" type="number" inputmode="numeric" min="1" max="365"> of <input id="po-since-year" type="number" inputmode="numeric"></label>
+            <button class="session-btn primary" onclick="assemblePreviouslyOn()">📻 Assemble</button>
+          </div>
+          <div class="cargo-hint">Pulls the journal, timeline, funds ledger, Library Data reveals and reputation shifts since the chosen date. Edit the draft down, then read it aloud — nothing is invented.</div>
+          <div id="po-draft" class="po-draft" contenteditable="true" style="display:none" onblur="this.innerHTML = sanitizeRich(this.innerHTML)"></div>
+          <div class="session-btn-row" id="po-actions" style="display:none">
+            <button class="session-btn" onclick="poCopy()">📋 Copy</button>
+            <button class="session-btn" onclick="poMarkPoint()">📍 Mark recap point (today)</button>
+          </div>
+        </div>
+        <div class="session-section">
           <div class="session-section-title">Session Recap</div>
           <div class="session-btn-row">
             <button class="session-btn primary" onclick="generateSessionRecap()">✨ Generate recap</button>

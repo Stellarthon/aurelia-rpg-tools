@@ -460,6 +460,11 @@ function openSessionTools(){
   // Reset recap output
   const out = document.getElementById('session-recap-output');
   if(out){ out.style.display = 'none'; out.textContent = ''; }
+  // Reset the "Previously on…" draft and refill the since-date from the marker
+  const po = document.getElementById('po-draft'), act = document.getElementById('po-actions');
+  if(po){ po.style.display = 'none'; po.innerHTML = ''; }
+  if(act) act.style.display = 'none';
+  loadRecapPoint().then(poFillSinceInputs);
 }
 
 function closeSessionTools(){
@@ -621,6 +626,107 @@ function generateSessionRecap(){
   }
 
   out.textContent = parts.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "PREVIOUSLY ON…" — campaign recap since a chosen Imperial date
+// ═══════════════════════════════════════════════════════════════════════════
+// Assembles a read-aloud draft from EXISTING campaign state — journal entries,
+// timeline events, the funds ledger, Library Data reveals and reputation
+// milestones — strictly since the chosen date (default: the last recap point).
+// Nothing is generated; the only new stored datum is the 'recap-point' marker
+// {day,year} the referee stamps after reading. The draft is an editable
+// contenteditable (sanitizeRich whitelist) the referee trims before reading.
+
+let recapPoint = null;   // {day,year} | null — where the last recap left off
+
+async function loadRecapPoint(){
+  try { const r = await supaStorage.get('recap-point', true); recapPoint = r.value != null ? JSON.parse(r.value) : null; }
+  catch(e){ recapPoint = null; }
+}
+function poDefaultSince(){
+  if(recapPoint && recapPoint.day != null) return recapPoint;
+  // No marker yet: fall back to the latest dated journal entry, else 28 days back.
+  const dated = (typeof sessionLog !== 'undefined' ? sessionLog : []).filter(e => e.imperialDate).map(e => e.imperialDate);
+  if(dated.length) return dated.reduce((a, b) => imperialOrdinal(a) >= imperialOrdinal(b) ? a : b);
+  try { return addImperialDays(imperialDate, -28); } catch(e){ return { day: 1, year: 1105 }; }
+}
+function poFillSinceInputs(){
+  const d = document.getElementById('po-since-day'), y = document.getElementById('po-since-year');
+  if(!d || !y) return;
+  const s = poDefaultSince();
+  d.value = s.day; y.value = s.year;
+}
+
+function assemblePreviouslyOn(){
+  if(!isReferee()) return;
+  const box = document.getElementById('po-draft'), act = document.getElementById('po-actions');
+  if(!box) return;
+  const d = parseInt((document.getElementById('po-since-day') || {}).value, 10) || 1;
+  const y = parseInt((document.getElementById('po-since-year') || {}).value, 10) || imperialDate.year;
+  const sinceOrd = imperialOrdinal({ day: d, year: y });
+  const eh = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+  const ord = x => { try { return imperialOrdinal(x); } catch(e){ return -Infinity; } };
+  const since = x => !!(x && x.day != null) && ord(x) >= sinceOrd;
+  const parts = [];
+
+  // Captain's log — saved journal recaps
+  const jl = (typeof sessionLog !== 'undefined' ? sessionLog : []).filter(e => since(e.imperialDate));
+  if(jl.length) parts.push('<h4>Captain’s log</h4>' + jl.map(e =>
+    `<p><b>${eh(formatImperial(e.imperialDate))}</b> — ${eh(e.title || '')}${e.body ? '<br>' + eh(e.body).replace(/\n/g, '<br>') : ''}</p>`).join(''));
+
+  // Campaign timeline events
+  const ev = ((typeof campaignEvents !== 'undefined' ? campaignEvents : []) || []).filter(e => since(e));
+  if(ev.length) parts.push('<h4>Events</h4>' + ev.slice().sort((a, b) => ord(a) - ord(b)).map(e =>
+    `<p><b>${eh(formatImperial(e))}</b> — ${eh(e.title || '')}${e.note ? ' — ' + eh(e.note) : ''}</p>`).join(''));
+
+  // Funds ledger — dated movements plus the net
+  const fl = (((typeof funds !== 'undefined' ? funds : {}) || {}).log || []).filter(e => since(e));
+  if(fl.length){
+    const net = fl.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    parts.push('<h4>Funds</h4>' + fl.slice().reverse().map(e =>
+      `<p><b>${eh(formatImperial(e))}</b> — ${eh(e.by || '')}: ${(Number(e.amount) || 0) >= 0 ? '+' : '−'}${eh(fmtCr(Math.abs(Number(e.amount) || 0)))} (${eh(e.target || '')})${e.note ? ' — ' + eh(e.note) : ''}</p>`).join('') +
+      `<p><b>Net</b> ${net >= 0 ? '+' : '−'}${eh(fmtCr(Math.abs(net)))}</p>`);
+  }
+
+  // Library Data revealed since
+  const dl = ((typeof discoveryLog !== 'undefined' ? discoveryLog : []) || []).filter(e =>
+    e.state && e.state !== 'hidden' && e.state !== 'pending' && since(e.revealedAt));
+  if(dl.length) parts.push('<h4>Library Data revealed</h4>' + dl.map(e =>
+    `<p><b>${eh(e.title || '')}</b>${e.body ? ' — ' + eh(e.body).replace(/\n/g, '<br>') : ''}</p>`).join(''));
+
+  // Reputation shifts
+  const rm = (((typeof reputation !== 'undefined' ? reputation : {}) || {}).milestones || []).filter(m => since(m));
+  if(rm.length){
+    const facName = id => { const f = ((reputation || {}).factions || []).find(x => x.id === id); return f ? f.name : (id || ''); };
+    parts.push('<h4>Standing</h4>' + rm.slice().sort((a, b) => ord(a) - ord(b)).map(m =>
+      `<p><b>${eh(formatImperial(m))}</b> — ${eh(facName(m.factionId))} ${(Number(m.delta) || 0) >= 0 ? '+' : ''}${Number(m.delta) || 0}${m.title ? ' — ' + eh(m.title) : ''}</p>`).join(''));
+  }
+
+  const head = `<p><i>Previously, since ${eh(formatImperial({ day: d, year: y }))}…</i></p>`;
+  box.innerHTML = sanitizeRich(parts.length ? head + parts.join('') : head + '<p>Nothing recorded since that date — journal, timeline, funds, Library Data and reputation are all quiet.</p>');
+  box.style.display = 'block';
+  if(act) act.style.display = 'flex';
+}
+
+function poCopy(){
+  const box = document.getElementById('po-draft'); if(!box) return;
+  const text = box.innerText || '';
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => showToast('Recap copied')).catch(() => showToast('Copy failed', 'error'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast('Recap copied'); } catch(e){ showToast('Copy failed', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+function poMarkPoint(){
+  if(!isReferee()) return;
+  recapPoint = imperialNow();
+  try { supaStorage.set('recap-point', JSON.stringify(recapPoint), true); } catch(e){}
+  poFillSinceInputs();
+  showToast('Recap point marked — the next "Previously on" starts from today');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
