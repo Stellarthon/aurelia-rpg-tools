@@ -1345,6 +1345,129 @@ function toggleSheetStatus(id){
   saveSheet(sheetCurrentCharacter, collectSheetData());
 }
 
+// ── Injury & recovery (MgT2e healing rules — bookkeeping & display only) ────
+// Tracks characteristic damage per character and shows the RAW recovery maths
+// against the Imperial calendar. The app never rolls: Medic checks and their
+// Effects happen at the table and the referee applies the points by hand via
+// the steppers. Stored inside the character's sheet blob as `injury`, so it
+// syncs with the sheet and needs no new keys.
+//   injury = { dmg:{str,dex,end}, mode:'none'|'natural'|'medcare',
+//              doctorMedic, needSurgery, notes }
+function emptyInjury(){ return { dmg:{ str:0, dex:0, end:0 }, mode:'none', doctorMedic:0, needSurgery:false, notes:'' }; }
+function sheetInjury(data){
+  const inj = (data && data.injury) || {};
+  return {
+    dmg: Object.assign({ str:0, dex:0, end:0 }, inj.dmg || {}),
+    mode: (inj.mode === 'natural' || inj.mode === 'medcare') ? inj.mode : 'none',
+    doctorMedic: parseInt(inj.doctorMedic) || 0,
+    needSurgery: !!inj.needSurgery,
+    notes: inj.notes || ''
+  };
+}
+// All the RAW-derived numbers in one place (Core 2022 pp. 82–83):
+//  • damage applies END-first at the table; here we just track per-stat totals
+//  • STR or DEX at 0 → unconscious; all three physical at 0 → dead
+//  • natural healing: 1D + END DM per day (avg 3.5); if surgery is still
+//    required, END DM only per day — may never heal, or worsen
+//  • medical care: 3 + patient END DM + doctor's Medic per day, split evenly
+//  • DMs recalculate while damaged — rates use the CURRENT (damaged) END DM
+function injuryCalc(data){
+  const inj = sheetInjury(data);
+  const cur = {}, max = {};
+  ['str','dex','end'].forEach(k => {
+    max[k] = parseInt(data[k]) || 0;
+    inj.dmg[k] = Math.max(0, Math.min(parseInt(inj.dmg[k]) || 0, max[k]));
+    cur[k] = max[k] - inj.dmg[k];
+  });
+  const totalDmg = inj.dmg.str + inj.dmg.dex + inj.dmg.end;
+  const endDM = charDM(cur.end);
+  const dead = totalDmg > 0 && cur.str <= 0 && cur.dex <= 0 && cur.end <= 0;
+  const unconscious = !dead && totalDmg > 0 && (cur.str <= 0 || cur.dex <= 0);
+  const allThree = inj.dmg.str > 0 && inj.dmg.dex > 0 && inj.dmg.end > 0;
+  let rate = 0, rateLbl = '';
+  if(inj.mode === 'natural'){
+    if(inj.needSurgery){ rate = endDM; rateLbl = `END DM only (surgery still required): ${endDM >= 0 ? '+' : ''}${endDM}/day`; }
+    else { rate = 3.5 + endDM; rateLbl = `1D + END DM (${endDM >= 0 ? '+' : ''}${endDM}) ≈ ${rate.toFixed(1)}/day — roll the 1D at the table`; }
+  } else if(inj.mode === 'medcare'){
+    rate = 3 + endDM + inj.doctorMedic;
+    rateLbl = `3 + END DM (${endDM >= 0 ? '+' : ''}${endDM}) + Medic ${inj.doctorMedic} = ${rate}/day, split evenly`;
+  }
+  let expected = null, expectedDays = 0, never = false;
+  if(totalDmg > 0 && inj.mode !== 'none'){
+    if(rate <= 0) never = true;
+    else { expectedDays = Math.ceil(totalDmg / rate); try { expected = addImperialDays(imperialDate, expectedDays); } catch(e){} }
+  }
+  return { inj, cur, max, totalDmg, endDM, dead, unconscious, allThree, rate, rateLbl, expected, expectedDays, never };
+}
+function injurySectionHTML(data){
+  const c = injuryCalc(data);
+  const eh = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+  const bar = (typeof healthBarHTML === 'function') ? healthBarHTML : (() => '');
+  const COLS = { str:'#C0392B', dex:'#4A90D9', end:'#4CAF50' };   // matches the NPC damage bars (js/45)
+  const rows = ['str','dex','end'].map(k => `
+    <div class="inj-row">
+      ${bar(k.toUpperCase(), c.cur[k], c.max[k], COLS[k])}
+      <span class="inj-dm">DM ${charDM(c.cur[k]) >= 0 ? '+' : ''}${charDM(c.cur[k])}</span>
+      <button class="init-btn" onclick="injuryAdjust('${k}',1)" title="Take 1 more ${k.toUpperCase()} damage">−1</button>
+      <button class="init-btn" onclick="injuryAdjust('${k}',-1)" title="Heal 1 ${k.toUpperCase()} (points from a table-rolled Medic check or daily care)">+1</button>
+    </div>`).join('');
+  let banner = '';
+  if(c.dead) banner = '<div class="hp-status-banner dead" style="position:static;margin-bottom:6px">DEAD — all three physical characteristics at 0</div>';
+  else if(c.unconscious) banner = '<div class="hp-status-banner downed" style="position:static;margin-bottom:6px">UNCONSCIOUS — STR or DEX at 0 · END check each minute to wake (cumulative +1 per failure)</div>';
+  let recovery = '';
+  if(c.totalDmg > 0){
+    const modeSel = `<select class="inj-sel" onchange="injurySet('mode', this.value)">
+      <option value="none"${c.inj.mode === 'none' ? ' selected' : ''}>No care set</option>
+      <option value="natural"${c.inj.mode === 'natural' ? ' selected' : ''}>Natural healing (full rest)</option>
+      <option value="medcare"${c.inj.mode === 'medcare' ? ' selected' : ''}>Medical care (hospital/sickbay + bed rest)</option>
+    </select>`;
+    const medicIn = c.inj.mode === 'medcare' ? `<label class="inj-lbl">Doctor's Medic <input type="number" inputmode="numeric" value="${c.inj.doctorMedic}" onchange="injurySet('doctorMedic', this.value)"></label>` : '';
+    const surgery = `<label class="inj-lbl inj-chk"><input type="checkbox"${c.inj.needSurgery ? ' checked' : ''} onchange="injurySet('needSurgery', this.checked)"> Surgery still required</label>`;
+    let eta = '';
+    if(c.inj.mode === 'none') eta = '<div class="inj-hint">Set a recovery regime to see the expected date.</div>';
+    else if(c.never) eta = `<div class="inj-hint" style="color:#e08040">⚠ No recovery at ${c.rate >= 0 ? '+' : ''}${(+c.rate.toFixed(1))}/day — ${c.inj.needSurgery ? 'surgery is needed first' : 'needs better care'}${c.rate < 0 ? ' (worsens daily)' : ''}.</div>`;
+    else if(c.expected) eta = `<div class="inj-eta">Expected recovered by <b>${eh(formatImperial(c.expected))}</b> (~${c.expectedDays} day${c.expectedDays === 1 ? '' : 's'})</div>`;
+    let checks = '<div class="inj-hint">First aid (once, within 1 min, medikit): Medic (EDU) — restores Effect points, min 1, split as desired.</div>';
+    if(c.allThree) checks += '<div class="inj-hint" style="color:#e08040">All three characteristics damaged — surgery before medical care: Medic (EDU) in a hospital/sickbay; a failed check costs 3 + Effect more points.</div>';
+    checks += '<div class="inj-hint">Augments: Medic checks take −(facility TL − implant TL). Mental (INT/EDU) damage heals 1 point/day each. All checks roll at the table.</div>';
+    recovery = `<div class="inj-recover">
+      <div class="inj-ctl-row">${modeSel}${medicIn}${surgery}</div>
+      <div class="inj-rate">${c.inj.mode !== 'none' ? eh(c.rateLbl) : ''}</div>
+      ${eta}${checks}
+      <textarea class="sheet-textarea" rows="2" placeholder="Surgery / augment / treatment notes…" onchange="injurySet('notes', this.value)">${eh(c.inj.notes)}</textarea>
+    </div>`;
+  } else {
+    recovery = '<div class="inj-hint">Uninjured. Damage applies to END first, overflow to STR or DEX (character’s choice) — use −1 on the stat that takes it.</div>';
+  }
+  return `<div class="sheet-section-lbl">Injury &amp; Recovery${c.totalDmg > 0 ? ` <span class="inj-count">−${c.totalDmg}</span>` : ''}</div>${banner}${rows}${recovery}`;
+}
+function renderInjurySection(){
+  const el = document.getElementById('sheet-injury-sec');
+  if(el) el.innerHTML = injurySectionHTML(collectSheetData());
+}
+function injuryAdjust(stat, delta){
+  if(!sheetCurrentCharacter || !sheetCurrentData) return;
+  const data = collectSheetData();
+  const inj = sheetInjury(data);
+  const max = parseInt(data[stat]) || 0;
+  inj.dmg[stat] = Math.max(0, Math.min(max, (parseInt(inj.dmg[stat]) || 0) + delta));
+  data.injury = inj; sheetCurrentData = data;
+  saveSheet(sheetCurrentCharacter, data);
+  renderInjurySection();
+}
+function injurySet(field, value){
+  if(!sheetCurrentCharacter || !sheetCurrentData) return;
+  const data = collectSheetData();
+  const inj = sheetInjury(data);
+  if(field === 'mode') inj.mode = value;
+  else if(field === 'doctorMedic') inj.doctorMedic = parseInt(value) || 0;
+  else if(field === 'needSurgery') inj.needSurgery = !!value;
+  else if(field === 'notes') inj.notes = value;
+  data.injury = inj; sheetCurrentData = data;
+  saveSheet(sheetCurrentCharacter, data);
+  renderInjurySection();
+}
+
 function renderSheetForm(data){
   const body = document.getElementById('sheet-card-body');
   const chars = sheetAttrKeys().map(a => [a.label, a.key]);
@@ -1366,6 +1489,7 @@ function renderSheetForm(data){
         `; }).join('')}
       </div>
     </div>
+    <div class="sheet-section" id="sheet-injury-sec">${injurySectionHTML(data)}</div>
     <div class="sheet-section">
       <div class="sheet-section-lbl">Skills</div>
       <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
