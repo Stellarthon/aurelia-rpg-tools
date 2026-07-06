@@ -98,7 +98,9 @@ function makeShipStats(overrides){
     armour: '', armourRating: 0,
     tonnage: 100, jumpRating: 1,
     hullPoints: 40, hullPointsMax: 40,
-    structurePoints: 40, structurePointsMax: 40,
+    // MgT2e 2022 has no Structure track (Hull 0 = wrecked). Kept at 0 as an
+    // opt-in HOUSE lever — set both on a boss ship to give it an overflow pool.
+    structurePoints: 0, structurePointsMax: 0,
     driveReaction: '', driveManoeuvre: '',
     thrust: 1, power: 0, powerMax: 0, sensorDM: 0,
     fuel: 0, fuelMax: 0, fuelProcessor: '',

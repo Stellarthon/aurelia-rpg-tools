@@ -1310,16 +1310,22 @@ const WGEN = (function(){
   function ehex(n){ return EHEX[clamp(Math.round(n),0,EHEX.length-1)]; }
   function d6(rng){ return 1 + Math.floor((rng||Math.random)()*6); }
   function roll2d6(rng){ return d6(rng) + d6(rng); }
-  function genStarport(rng){ const r=roll2d6(rng); return r<=4?'E':r<=6?'D':r<=8?'C':r<=10?'B':'A'; }
+  // Starport: 2D + Population DM (RAW): Pop 8–9 +1, 10+ +2, Pop 3–4 −1, ≤2 −2.
+  // Pass pop when known; omitted → flat 2D (legacy callers).
+  function genStarport(rng, pop){
+    let dm=0; if(pop!=null){ pop|=0; dm = pop>=10?2 : pop>=8?1 : pop<=2?-2 : pop<=4?-1 : 0; }
+    const r=roll2d6(rng)+dm;
+    return r<=2?'X':r<=4?'E':r<=6?'D':r<=8?'C':r<=10?'B':'A';
+  }
   // Tech Level: 1D + DMs (starport/size/atmo/hydro/pop/gov) — MgT2e RAW.
   function genTechLevel(rng, starport, size, atm, hydro, pop, gov){
     let dm=0;
     dm += ({A:6,B:4,C:2,X:-4})[starport] || 0;
     if(size<=1) dm+=2; else if(size<=4) dm+=1;
     if(atm<=3 || atm>=10) dm+=1;
-    if(hydro===9) dm+=1; else if(hydro===10) dm+=2;
-    if(pop>=1 && pop<=5) dm+=1; else if(pop===9) dm+=2; else if(pop>=10) dm+=4;
-    if(gov===0 || gov===5) dm+=1; else if(gov===7) dm+=2; else if(gov>=13) dm-=2;
+    if(hydro===0 || hydro===9) dm+=1; else if(hydro===10) dm+=2;
+    if(pop>=1 && pop<=5) dm+=1; else if(pop===8) dm+=1; else if(pop===9) dm+=2; else if(pop>=10) dm+=4;
+    if(gov===0 || gov===5) dm+=1; else if(gov===7) dm+=2; else if(gov===13 || gov===14) dm-=2;
     return clamp(d6(rng)+dm, 0, 33);
   }
   // Generate a UWP. opts:{ rng, port, core, deep, tlFloor }.
@@ -1332,23 +1338,44 @@ const WGEN = (function(){
   function genUWP(opts){
     opts = opts || {};
     const rng = opts.rng || Math.random;
-    const port = opts.port || genStarport(rng);
-    if(opts.deep){ return { port, size:0, atmo:0, hydro:0, pop: rng()<.5?1:2, gov:0, law:0, tl: opts.core?12:10 }; }
+    if(opts.deep){ const port = opts.port || genStarport(rng);
+      return { port, size:0, atmo:0, hydro:0, pop: rng()<.5?1:2, gov:0, law:0, tl: opts.core?12:10 }; }
     const size = clamp(roll2d6(rng)-2, 0, 10);
     const atmo = size===0 ? 0 : clamp(roll2d6(rng)-7+size, 0, 15);
+    // Temperature: 2D + atmosphere DM (RAW), rolled before hydrographics because
+    // hot/boiling climates bake surface water off (−2 / −6, unless Atmo D/F).
+    const tdm = (atmo===2||atmo===3)?-2 : (atmo===4||atmo===5||atmo===14)?-1
+              : (atmo===8||atmo===9)?1 : (atmo===10||atmo===13||atmo===15)?2
+              : (atmo===11||atmo===12)?6 : 0;
+    const temp = roll2d6(rng)+tdm;
     let hydro;
     if(size<=1) hydro=0;
-    else { let dm=0; if(atmo<=1||atmo>=10) dm-=4; hydro = clamp(roll2d6(rng)-7+atmo+dm, 0, 10); }   // hydro DM keys off ATMOSPHERE (RAW), not size
+    else { let dm=0; if(atmo<=1||atmo>=10) dm-=4;
+      if(atmo!==13&&atmo!==15){ if(temp>=12) dm-=6; else if(temp>=10) dm-=2; }
+      hydro = clamp(roll2d6(rng)-7+atmo+dm, 0, 10); }   // hydro DM keys off ATMOSPHERE (RAW), not size
     let pop = clamp(roll2d6(rng)-2, 0, 12); if(opts.core) pop = clamp(pop+1, 0, 12);
     const gov = pop===0 ? 0 : clamp(roll2d6(rng)-7+pop, 0, 15);
     const law = pop===0 ? 0 : clamp(roll2d6(rng)-7+gov, 0, 15);
+    // Starport is rolled AFTER Population so its RAW Pop DM can apply. Map worlds
+    // pass a fixed opts.port, so their seeded dice sequence is unchanged by this.
+    const port = opts.port || genStarport(rng, pop);
     let tl = pop===0 ? 0 : genTechLevel(rng, port, size, atmo, hydro, pop, gov);
     if(opts.core) tl = clamp(tl+2, 0, 33);
     if(opts.tlFloor!=null) tl = clamp(Math.max(tl, opts.tlFloor), 0, 33);
-    return { port, size, atmo, hydro, pop, gov, law, tl };
+    return { port, size, atmo, hydro, pop, gov, law, tl, temp };
   }
   // Field-flexible accessors so both UWP shapes work.
   const fAtm = u => (u.atmo!=null?u.atmo:u.atm)|0, fTl = u => (u.tl!=null?u.tl:u.tech)|0, fPort = u => u.port||u.starport;
+  // Temperature band label (RAW). Atmo 0–1 worlds have no climate to speak of —
+  // extreme day/night swings; authored UWPs without a stored temp return null.
+  function tempBand(u){ if(u==null) return null; if(fAtm(u)<=1) return 'Extreme swings';
+    const t=u.temp; if(t==null) return null;
+    return t<=2?'Frozen':t<=4?'Cold':t<=9?'Temperate':t<=11?'Hot':'Boiling'; }
+  // Environmental minimum TL to sustain a population (RAW life-support viability);
+  // 0 = shirt-sleeve world, no floor.
+  function envMinTL(u){ const a=fAtm(u);
+    return (a<=1||a===10)?8 : (a===2||a===3)?5 : (a===4||a===7||a===9)?3
+         : (a===11)?9 : (a===12)?10 : (a===13||a===14)?5 : (a===15)?8 : 0; }
   function uwpStr(u){ return fPort(u)+ehex(u.size)+ehex(fAtm(u))+ehex(u.hydro)+ehex(u.pop)+ehex(u.gov)+ehex(u.law)+'-'+ehex(fTl(u)); }
   // Canonical MgT2e trade codes (single source of truth).
   function tradeCodes(u){
@@ -1364,6 +1391,7 @@ const WGEN = (function(){
     if(atmo<=1&&hydro>=1) c.push('Ic');
     if([0,1,2,4,7,9,10,11,12].includes(atmo) && pop>=9) c.push('In'); // Industrial: canonical atmo set
     if(pop>=1&&pop<=3) c.push('Lo');
+    if(pop>=1&&tl<=5) c.push('Lt');                                    // Low-Tech: Pop 1+, TL ≤ 5
     if(atmo<=3&&hydro<=3&&pop>=6) c.push('Na');
     if(pop>=4&&pop<=6) c.push('Ni');
     if(atmo>=2&&atmo<=5&&hydro<=3) c.push('Po');
@@ -1372,7 +1400,7 @@ const WGEN = (function(){
     if(hydro===10) c.push('Wa');
     return c;
   }
-  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes };
+  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes, tempBand, envMinTL };
 })();
 
 // ═══ GALAXY MAP — HEX-JUMP ENGINE (ported onto main; replaces the Orion render layer) ═══
@@ -1505,7 +1533,9 @@ const HX = (function(){
   function onLane(a,b){ return typeof GX_LANES!=='undefined' && typeof gxLaneKey==='function'
     && GX_LANES.has(gxLaneKey(a.id,b.id)); }
 
-  // ── Refuelling: starport class (A/B refined, C/D/E unrefined, X none).
+  // ── Refuelling: starport class (A/B refined, C/D unrefined, X none; E stocks
+  //    no fuel of its own (RAW) — wilderness skim only, if the system offers a
+  //    gas/ice giant or surface water).
   //    Prefer the real surveyed main-world UWP[0]; else a label override; else default.
   const PORT_OVERRIDE={ 'Aurelia ★':'B','Watchtower':'B','Vega':'A','Castor':'B','Alpha Centauri':'B',
     'Kronos Prime':'B','The Anvil':'B','Terminus':'B','Avalon':'B','Vestalia':'B','The Hammer':'B','The Forge':'B',
@@ -1526,7 +1556,17 @@ const HX = (function(){
   // market regardless of any surveyed starport class.
   const NO_MARKET_FACS={ vast:1, archon:1 };
   function hasMarket(s){ return !!s && !NO_MARKET_FACS[s.fac]; }
-  function fuelAt(s){ if(s&&NO_MARKET_FACS[s.fac]) return 'none'; const p=portOf(s); return (p==='A'||p==='B')?'refined':(p==='X'?'none':'unrefined'); }
+  // Wilderness refuelling source: a gas/ice giant to skim, or surface water to purify.
+  function skimSourceAt(s){
+    try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[])||[];
+      if(bodies.some(b=> b.discStyle==='gasgiant' || /gas giant|ice giant/i.test(b.type||''))) return true; }catch(e){}
+    try{ return (uwpOf(s).hydro|0)>=1; }catch(e){ return false; }
+  }
+  function fuelAt(s){ if(s&&NO_MARKET_FACS[s.fac]) return 'none'; const p=portOf(s);
+    if(p==='A'||p==='B') return 'refined';
+    if(p==='X') return 'none';
+    if(p==='E') return skimSourceAt(s)?'unrefined':'none';
+    return 'unrefined'; }
   const FUEL_INFO={ refined:{c:'#3f9d5a',t:'Refined fuel'}, unrefined:{c:'#caa83b',t:'Unrefined (skim)'}, none:{c:'#b23a3a',t:'No fuel'} };
 
   // ── UWP + trade (MgT2e). Prefer the real surveyed UWP; else generate deterministically. ──
@@ -1545,35 +1585,42 @@ const HX = (function(){
     s._uwp=u; return u; }
   function uwpStr(s){ return WGEN.uwpStr(uwpOf(s)); }
   function tradeCodes(s){ return WGEN.tradeCodes(uwpOf(s)); }
+  // MgT2e Core 2022 Trade Goods table (curated subset for the map catalogue).
+  // Cells verified against the rulebook (2e rules audit, 114-2026); deviations
+  // kept on purpose are marked HOUSE. Negative DMs are real — bestDM() honours
+  // them when they're the only applicable entry in a column.
   const TRADE_GOODS=[
-    {name:'Common Electronics',base:20000,buy:{In:2,Ht:3,Ri:1},sell:{Ni:2,Lo:1,Po:1},avail:'all'},
-    {name:'Common Industrial',base:10000,buy:{Na:2,In:5},sell:{Na:3,Ag:2},avail:'all'},
-    {name:'Common Manufactured',base:20000,buy:{Na:2,In:5},sell:{Na:3,Hi:2},avail:'all'},
+    {name:'Common Electronics',base:20000,buy:{In:2,Ht:3,Ri:1},sell:{Ni:2,Lt:1,Po:1},avail:'all'},
+    {name:'Common Industrial',base:10000,buy:{Na:2,In:5},sell:{Ni:3,Ag:2},avail:'all'},
+    {name:'Common Manufactured',base:20000,buy:{Na:2,In:5},sell:{Ni:3,Hi:2},avail:'all'},
     {name:'Common Raw Materials',base:5000,buy:{Ag:3,Ga:2},sell:{In:2,Po:2},avail:'all'},
-    {name:'Common Consumables',base:2000,buy:{Ag:3,Wa:2,Ga:1},sell:{Hi:1,In:2,As:1,Fl:1},avail:'all'},
+    {name:'Common Consumables',base:2000,buy:{Ag:3,Wa:2,Ga:1,As:-4},sell:{As:1,Fl:1,Ic:1,Hi:1},avail:'all'},   // HOUSE: base Cr2,000 (RAW Cr500)
     {name:'Common Ore',base:1000,buy:{As:4},sell:{In:3,Ni:1},avail:'all'},
     {name:'Advanced Electronics',base:100000,buy:{In:2,Ht:3},sell:{Ni:1,Ri:2,As:3},avail:['In','Ht']},
     {name:'Biochemicals',base:50000,buy:{Ag:1,Wa:2},sell:{In:2},avail:['Ag','Wa']},
     {name:'Crystals & Gems',base:20000,buy:{As:2,De:1,Ic:1},sell:{In:3,Ri:2},avail:['As','De','Ic']},
     {name:'Cybernetics',base:250000,buy:{Ht:1},sell:{As:1,Ic:1,Ri:2},avail:['Ht']},
     {name:'Luxury Goods',base:200000,buy:{Hi:1},sell:{Ri:4},avail:['Hi']},
-    {name:'Medical Supplies',base:50000,buy:{Ht:1,Hi:1},sell:{In:2,Po:1,Ri:1},avail:['Ht','Hi']},
-    {name:'Petrochemicals',base:10000,buy:{De:2,Fl:1,Ic:1,Wa:1},sell:{In:3,Ag:1},avail:['De','Fl','Ic','Wa']},
-    {name:'Pharmaceuticals',base:100000,buy:{As:2,Hi:1,Wa:1},sell:{Ri:2,Lo:1},avail:['As','Hi','Wa']},
-    {name:'Precious Metals',base:50000,buy:{As:3,De:1,Ic:2,Fl:1},sell:{Ri:3,In:1,Ht:1},avail:['As','De','Ic','Fl']},
-    {name:'Radioactives',base:1000000,buy:{As:2,Lo:2},sell:{In:3,Ht:1},avail:['As','Lo']},
-    {name:'Spices',base:6000,buy:{De:2},sell:{Hi:2,Ri:3,Po:3},avail:['De']},
+    {name:'Medical Supplies',base:50000,buy:{Ht:2},sell:{In:2,Po:1,Ri:1},avail:['Ht','Hi']},
+    {name:'Petrochemicals',base:10000,buy:{De:2,Fl:1,Ic:1,Wa:1},sell:{In:2,Ag:1,Lt:2},avail:['De','Fl','Ic','Wa']},   // HOUSE: buy Fl/Ic/Wa +1 (RAW De+2 only)
+    {name:'Pharmaceuticals',base:100000,buy:{As:2,Hi:1},sell:{Ri:2,Lt:1},avail:['As','De','Hi','Wa']},
+    {name:'Precious Metals',base:50000,buy:{As:3,De:1,Ic:2},sell:{Ri:3,In:2,Ht:1},avail:['As','De','Ic','Fl']},
+    {name:'Radioactives',base:1000000,buy:{As:2,Lo:2},sell:{In:3,Ht:1,Ni:-2,Ag:-3},avail:['As','Lo']},
+    {name:'Spices',base:6000,buy:{De:2},sell:{Hi:2,Ri:3,Po:3},avail:['Ga','De','Wa']},
     {name:'Textiles',base:3000,buy:{Ag:7},sell:{Hi:3,Na:2},avail:['Ag','Ni']},
     {name:'Wood',base:1000,buy:{Ag:6},sell:{Ri:2,In:1},avail:['Ag','Ga']},
   ];
   const PURCHASE_PCT=[3.0,2.5,2.0,1.75,1.5,1.35,1.25,1.20,1.15,1.10,1.05,1.00,0.95,0.90,0.85,0.80,0.75,0.70,0.65,0.60,0.55,0.50,0.45,0.40,0.35,0.30,0.25,0.20,0.15];
-  const SALE_PCT=[0.10,0.20,0.30,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,1.00,1.10,1.20,1.30,1.40,1.50,1.60,1.75,2.00,2.50,3.00,3.50,4.00,5.00,6.00];
+  const SALE_PCT=[0.10,0.20,0.30,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,1.00,1.05,1.10,1.15,1.20,1.25,1.30,1.40,1.50,1.60,1.75,2.00,2.50,3.00,4.00];
   function priceMult(arr,roll){ const i=clamp(Math.round(roll)+3,0,arr.length-1); return arr[i]; }
   function kCr(n){ n=Math.round(n); const a=Math.abs(n);
     if(a>=1e6) return 'Cr'+(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M';
     if(a>=1e3) return 'Cr'+(n/1e3).toFixed(1).replace(/\.0$/,'')+'k'; return 'Cr'+n; }
-  function bestDM(dm,codes){ let m=0; for(const c of codes) if(dm[c]!=null) m=Math.max(m,dm[c]); return m; }
-  const AVG_ROLL=10.5;
+  // Largest applicable DM per column (RAW "use only the largest"). A negative DM
+  // counts when it's the only applicable entry; no applicable codes at all → 0.
+  function bestDM(dm,codes){ let m=null; for(const c of codes) if(dm[c]!=null) m=(m==null)?dm[c]:Math.max(m,dm[c]); return m==null?0:m; }
+  const AVG_ROLL=10.5;             // 3D average — panel shows indicative prices; play rolls 3D6
+  const COUNTERPARTY_BROKER=2;     // RAW: supplier/buyer Broker skill (default 2), subtracted from both rolls
   // ── Living market ──────────────────────────────────────────────────────────
   // Every system carries its own supply/demand quirk, and the whole market
   // drifts with the Imperial calendar so prices are never static. `mktPressure`
@@ -1626,8 +1673,8 @@ const HX = (function(){
   function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
     const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
     TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
-      const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker+mktPressure(src,g.name),
-            sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-mktPressure(dst,g.name);
+      const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker-COUNTERPARTY_BROKER+mktPressure(src,g.name),
+            sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-COUNTERPARTY_BROKER-mktPressure(dst,g.name);
       let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
       // Price-level overlay (referee manual adjustment × sticky inflation) layered OUTSIDE the
       // bounded priceMult table, so a sustained shortage can push the level past the table's cap.
@@ -2199,10 +2246,15 @@ const HX = (function(){
   }
   function refuelHere(){
     if(!ref()){ toast('Referee only.'); return; }
-    if(fuelAt(origin)==='none'){ toast('No fuel here.'); return; }
-    if(typeof shipState!=='undefined'){ shipState.fuel=fuelMax; if(typeof saveShipState==='function') saveShipState();
+    const kind=fuelAt(origin); if(kind==='none'){ toast('No fuel here.'); return; }
+    let costNote='';
+    if(typeof shipState!=='undefined'){
+      // RAW price hint only — the honour-system Funds ledger stays manual.
+      const tons=Math.max(0, fuelMax-(Number(shipState.fuel)||0)), rate=(kind==='refined')?500:100;
+      if(tons>0) costNote=` — log ${kCr(tons*rate)} in Funds (${kind} Cr${rate}/t)`;
+      shipState.fuel=fuelMax; if(typeof saveShipState==='function') saveShipState();
       if(typeof shipPanelOpen!=='undefined'&&shipPanelOpen&&typeof renderShipPanel==='function') renderShipPanel(); }
-    refresh(); toast(`Refuelled at <b>${eh(disp(origin))}</b> — tank ${fuelMax}t.`);
+    refresh(); toast(`Refuelled at <b>${eh(disp(origin))}</b> — tank ${fuelMax}t${costNote}.`);
   }
   function selectSys(s){ selected=s;
     if(typeof shipState!=='undefined'&&s){ shipState.destination=(s===origin)?'':disp(s); shipState.jumpParsecs=(s===origin)?0:jumpDist(origin,s);
@@ -2270,6 +2322,13 @@ const HX = (function(){
     html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
     html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
     const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    { const selU=uwpOf(s), climate=WGEN.tempBand(selU);
+      if(climate) html+=`<div class="hx-kv"><span class="k">Climate</span><span class="v">${climate}${selU.temp!=null?` <span style="opacity:.6">(${selU.temp})</span>`:''}</span></div>`;
+      // RAW life-support viability: a populated world under its environmental TL
+      // floor is a story hook (imported tech, domes, a colony in decline) — flag, don't reroll.
+      const minTL=WGEN.envMinTL(selU), selTL=(selU.tl!=null?selU.tl:selU.tech)|0;
+      if((selU.pop|0)>0 && minTL>selTL)
+        html+=`<div class="hx-small" style="color:#e8c65a">⚠ TL ${selTL} is below the TL ${minTL} survival floor for this atmosphere — life here needs a story.</div>`; }
     // Corporate presence — which trading houses are HQ'd or have expanded here (player-visible, like trade codes).
     if(typeof ECON!=='undefined' && ECON.isMarketId && ECON.isMarketId(s.id)){
       try{ const corps=Object.values(ECON.corps()).filter(c=>!c.defunct && (c.home===s.id || (c.invests||[]).some(iv=>iv.world===s.id)));

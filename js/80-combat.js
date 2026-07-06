@@ -204,7 +204,7 @@ async function pollCombatEncounter(){
 // ───────────────────────────────────────────────────────────────────────────
 // Read-only correctness first: this implements round/phase/initiative
 // sequencing, per-pair range bands + Thrust allocation, 2D attack resolution
-// with an INSPECTABLE DM breakdown, damage → Hull → Structure → criticals, and
+// with an INSPECTABLE DM breakdown, damage → Hull → criticals, and
 // point defence — all referee-driven and written to the shared encounter so the
 // battle log is the authoritative record. No combat visuals yet (Phase 3).
 //
@@ -241,9 +241,12 @@ const MGT2E = {
   // ── Interpretation-dependent tunables (FLAGGED — confirm against your printing)
   tunables: {
     attackDifficulty: 8,        // Average (8+) task — the core space-attack target number
-    sensorLockDM: 1,            // DM to attacks vs a locked target (some tables read +2 / a Boon)
-    rangeAttackDM: {            // core uses a flat 8+; left at 0 unless your table applies range DMs
-      Adjacent:0, Close:0, Short:0, Medium:0, Long:0, 'Very Long':0, Distant:0
+    sensorLockDM: 2,            // DM to attacks vs a locked target (2022 core: DM+2 until broken)
+    rangeAttackDM: {            // 2022 core attack DMs by range band
+      Adjacent:0, Close:0, Short:1, Medium:0, Long:-2, 'Very Long':-4, Distant:-6
+    },
+    weaponAttackDM: {           // 2022 core to-hit DMs by weapon type; a mount's own
+      'beam-laser':4, 'pulse-laser':2   // numeric `attackDM` field overrides these
     },
     pointDefenceStep: -1,       // cumulative DM per extra PD attempt this round (1st = 0)
     dodgePerThrust: -1          // attacker DM per Thrust the target spends dodging (cap = pilot skill)
@@ -251,15 +254,11 @@ const MGT2E = {
 };
 
 const COMBAT_SHIP_SIZE_DM = (tonnage) => {
-  // Target-size DM (larger ships are easier to hit). Approximate MgT2e scaling —
-  // FLAGGED as a tunable-class value; referee can disable by returning 0.
+  // Target-size DM: +1 per full 1,000 tons of target, max +6 (2022 core).
+  // HOUSE: small craft (<100 t) are harder to hit at −1 — not a core rule.
   const t = Number(tonnage) || 0;
-  if(t >= 100000) return 6;
-  if(t >= 25000)  return 4;
-  if(t >= 5000)   return 2;
-  if(t >= 1000)   return 1;
-  if(t < 100)     return -1; // small craft / fighters are harder to hit
-  return 0;
+  if(t < 100) return -1;
+  return Math.min(6, Math.floor(t / 1000));
 };
 
 function combatRoll2D(){ const a=1+Math.floor(Math.random()*6), b=1+Math.floor(Math.random()*6); return {a,b,sum:a+b}; }
@@ -296,18 +295,20 @@ function removeCombatShip(id){
 }
 
 // ── Referee: initiative & round/phase sequencing ────────────────────────────
-// Initiative = 2D + Commander's Tactics (Naval) skill (verified). The Commander
-// may, in the Action phase, attempt a Leadership check to adjust NEXT round's
-// initiative — exposed as adjustInitiative() for the referee to apply that Effect.
+// Initiative = 2D + pilot's Pilot skill + ship's Thrust (2022 core). The
+// commander's Tactics (naval) check Effect and Action-phase Leadership checks
+// are both dice rolled at the table — the referee enters the Effect via
+// adjustInitiative(), which applies from the next round rollover.
 function rollInitiative(){
   if(!isReferee() || !combatEncounter) return;
   combatEncounter.ships.forEach(s => {
     const st = combatStatsOf(s);
-    const tactics = (st && st.crewSkills && Number(st.crewSkills.tactics)) || 0;
+    const pilot = (st && st.crewSkills && Number(st.crewSkills.pilot)) || 0;
+    const thrust = (st && Number(st.thrust)) || 0;
     const r = combatRoll2D();
-    s.initiativeScore = r.sum + tactics;
-    combatLog('initiative', `${s.name} initiative ${s.initiativeScore} (2D ${r.sum} + Tactics ${tactics}).`,
-      { shipId: s.id, roll: r.sum, tactics, total: s.initiativeScore });
+    s.initiativeScore = r.sum + pilot + thrust;
+    combatLog('initiative', `${s.name} initiative ${s.initiativeScore} (2D ${r.sum} + Pilot ${pilot} + Thrust ${thrust}).`,
+      { shipId: s.id, roll: r.sum, pilot, thrust, total: s.initiativeScore });
   });
   combatEncounter.initiative = combatEncounter.ships.slice()
     .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
@@ -439,10 +440,16 @@ function buildAttackDM(attackerId, targetId, weapon){
   const atk = combatShipById(attackerId), tgt = combatShipById(targetId);
   const aSt = combatStatsOf(atk), tSt = combatStatsOf(tgt);
   const band = getRangeBand(attackerId, targetId) || 'Long';
+  // RAW is 2D + Gunner + DEX DM; crew are abstracted to one skill number here,
+  // so fold the gunner's DEX DM into the Gunnery value when it matters.
   const gunnery = (aSt && aSt.crewSkills && Number(aSt.crewSkills.gunnery)) || 0;
   const locked = !!(atk && atk.sensorLocks && atk.sensorLocks[targetId]);
   const dm = [];
   dm.push({ label: 'Gunnery', value: gunnery });
+  const wdm = (weapon && weapon.attackDM != null && weapon.attackDM !== '')
+    ? (Number(weapon.attackDM) || 0)
+    : (MGT2E.tunables.weaponAttackDM[(weapon && weapon.type) || ''] || 0);
+  if(wdm) dm.push({ label: `Weapon (${(weapon && (weapon.name || weapon.type)) || '?'})`, value: wdm });
   if(locked) dm.push({ label: 'Sensor lock', value: MGT2E.tunables.sensorLockDM });
   const rdm = MGT2E.tunables.rangeAttackDM[band] || 0;
   if(rdm) dm.push({ label: `Range (${band})`, value: rdm });
@@ -485,7 +492,8 @@ function resolveAttack(attackerId, targetId, weaponId){
   return { roll, effect, hit, breakdown: bd, travel, damage: dmgInfo };
 }
 
-// ── Damage → Hull → Structure → criticals (verified mechanics) ───────────────
+// ── Damage → Hull → criticals (2022 core: Hull 0 = wrecked; Structure is an
+//    opt-in HOUSE overflow pool — see makeShipStats) ──────────────────────────
 function rollDamage(weapon, effect){
   // Weapon damage is an editable dice expression on the mount (e.g. '2D', '3D6').
   // Effect of the attack is added to damage (verified). No guessing on weapon
@@ -512,14 +520,14 @@ function applyCombatDamage(targetId, weapon, effect){
            summary: `${dmg} damage (rolled ${raw} − ${armour} armour) → Hull ${res.hull}/${res.maxHull}${critTxt}` };
 }
 
-// Apply a resolved (post-armour) damage amount through Hull → Structure overflow,
-// the Sustained-Damage crit thresholds, the Effect≥6 crit, the destruction check
-// and the player Red Alert wiring. The single damage pipeline shared by the
-// full attack loop (applyCombatDamage) and the quick-resolve path.
+// Apply a resolved (post-armour) damage amount to Hull, then the Sustained-Damage
+// crit thresholds, the Effect≥6 crit, the destruction check and the player Red
+// Alert wiring. The single damage pipeline shared by the full attack loop
+// (applyCombatDamage) and the quick-resolve path.
 function applyNetDamage(targetId, dmg, effect){
   const tgt = combatShipById(targetId); if(!tgt) return null;
   const st = combatStatsOf(tgt); if(!st) return null;
-  // Apply to Hull first, overflow to Structure (verified: Hull breached → Structure).
+  // Hull first; any HOUSE Structure pool (default 0 — not a 2022 rule) absorbs overflow.
   const beforeHull = Number(st.hullPoints) || 0;
   let hull = beforeHull - Math.max(0, Number(dmg) || 0);
   let struct = Number(st.structurePoints) || 0;
@@ -535,11 +543,12 @@ function applyNetDamage(targetId, dmg, effect){
     const crossedAfter  = Math.floor((maxHull - Math.max(0, hull)) / step);
     for(let i = crossedBefore; i < crossedAfter; i++){ crits.push(applyCrit(targetId, rollCritLocation(), 1)); }
   }
-  // Effect ≥ 6 also scores a critical (verified).
-  if((Number(effect) || 0) >= MGT2E.critEffectThreshold){ crits.push(applyCrit(targetId, rollCritLocation(), 1)); }
-  // Destruction check. Use Structure if the ship has any; otherwise fall back to
-  // Hull, so a ship with no Structure defined can still be destroyed (and one
-  // with Structure isn't killed merely by Hull reaching 0).
+  // Effect ≥ 6 on an attack that actually caused damage scores a critical at
+  // Severity = Effect − 5 (2022 core; armour-bounced hits do not crit).
+  const eff = Number(effect) || 0;
+  if(dmg > 0 && eff >= MGT2E.critEffectThreshold){ crits.push(applyCrit(targetId, rollCritLocation(), eff - 5)); }
+  // Destruction check. RAW: Hull 0 = wrecked. A ship given a HOUSE Structure
+  // pool instead dies when that pool empties (Hull 0 alone won't kill it).
   const maxStruct = Number(st.structurePointsMax) || 0;
   const maxHullCap = Number(st.hullPointsMax) || 0;
   const dead = maxStruct > 0 ? (st.structurePoints <= 0)
@@ -1409,7 +1418,7 @@ function genShipStats(opts){
   return makeShipStats({
     name: opts.name || ('TL' + tl + ' ' + role.charAt(0).toUpperCase() + role.slice(1)),
     tonnage, jumpRating: r.jump, armourRating: r.armour,
-    hullPoints: hp, hullPointsMax: hp, structurePoints: hp, structurePointsMax: hp,
+    hullPoints: hp, hullPointsMax: hp,   // no Structure — RAW durability (makeShipStats defaults it to 0)
     thrust: r.thrust, power: pwr, powerMax: pwr, sensorDM: (tl>=14?2:(tl>=12?1:0)),
     crewSkills: { pilot:r.pilot, gunnery:r.gun, engineer:1, sensors:1, tactics:r.tac, leadership:Math.max(0,r.tac-1) },
     weapons: (r.weps || []).map(fromCatalog)

@@ -662,7 +662,7 @@ function rollFullUwp(){
 function rerollUwpField(field){
   if(!bodyCreatorDraft || !bodyCreatorDraft._uwp) return;
   const u = bodyCreatorDraft._uwp;
-  if(field === 'starport') u.starport = WGEN.genStarport();
+  if(field === 'starport') u.starport = WGEN.genStarport(null, u.pop);   // RAW: 2D + Population DM
   else if(field === 'size') u.size = clamp(roll2d6()-2,0,10);
   else if(field === 'atm') u.atm = u.size===0?0:clamp(roll2d6()-7+u.size,0,15);
   else if(field === 'hydro'){ let dm=0; if(u.atm<=1||u.atm>=10)dm-=4; u.hydro = u.size<=1?0:clamp(roll2d6()-7+u.atm+dm,0,10); }
