@@ -40,6 +40,9 @@ until you flip), and the flip migrations. **Do the steps in order.** Do not appl
 5. **Flip enforcement** (this is what closes Findings 4/5/2c and the last advisories):
    - `0011_lock_state_writes.sql` — drop anon INSERT/UPDATE on `aurelia_state`.
    - `0012_lock_storage_writes.sql` — drop anon INSERT/UPDATE on the four buckets.
+
+   (Both are committed in `supabase/migrations/` but were intentionally NOT applied
+   in this pass — apply them only after steps 1–4.)
 6. **(Optional) purge legacy leaks:** delete `note-private-%` rows from
    `aurelia_state` (see the commented statement in `0010`) so old private notes stop
    being anon-readable. New private notes already go to `private_notes`.

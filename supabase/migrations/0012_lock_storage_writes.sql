@@ -16,8 +16,9 @@
 --      4. THEN apply this migration.
 --
 -- VIEWING is unaffected — these buckets stay public=true here, so /object/public/…
--- keeps serving. (Real privatization of the sensitive buckets is Finding 2b /
--- migration 0013, sequenced after signed-URL resolvers ship.) Idempotent.
+-- keeps serving. (Real privatization of the sensitive buckets — Finding 2b: set
+-- them public=false + serve via signed URLs — is the documented residual in
+-- docs/security-hardening-rollout.md, scoped out of this pass.) Idempotent.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 drop policy if exists "portraits_anon_insert"    on storage.objects;
