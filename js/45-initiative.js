@@ -288,7 +288,7 @@ function renderInit(){
     return `<div class="init-row ${isCurrent?'current':''} ${c.down?'down':''}">
       <div class="init-row-top">
         <span class="init-score" title="Click to reroll" onclick="rerollScore(${c.id})" style="cursor:pointer">${c.score}</span>
-        <span class="init-name">${c.name}</span>
+        <span class="init-name">${(typeof escHtml==='function')?escHtml(c.name):c.name}</span>
         ${ambushTag}
       </div>
       ${healthHTML}
@@ -301,7 +301,7 @@ function renderInit(){
         <button class="init-btn" onclick="toggleDown(${c.id})" title="Toggle down/out">${c.down?'Revive':'Down'}</button>
         <button class="init-btn danger" onclick="removeCombatant(${c.id})" title="Remove">✕</button>
       </div>
-      <textarea class="init-notes" placeholder="Notes (wounds, conditions...)" oninput="updateNotes(${c.id}, this.value)">${c.notes||''}</textarea>
+      <textarea class="init-notes" placeholder="Notes (wounds, conditions...)" oninput="updateNotes(${c.id}, this.value)">${(typeof escHtml==='function')?escHtml(c.notes||''):(c.notes||'')}</textarea>
     </div>`;
   }).join('');
 
@@ -368,7 +368,7 @@ function renderHealthPanel(){
       </div>`;
     }
     return `<div class="health-card ${c.down?'down':''}">
-      <div class="health-card-name">${c.name}</div>
+      <div class="health-card-name">${(typeof escHtml==='function')?escHtml(c.name):c.name}</div>
       ${healthHTML}
     </div>`;
   }).join('');

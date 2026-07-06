@@ -489,6 +489,34 @@ function npcRosterAdd(){ if(!isReferee()) return; const n = emptyNpc(); n.name =
 function npcRosterDuplicate(id){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const c = JSON.parse(JSON.stringify(n)); c.id = 'npc_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); c.name = (n.name||'NPC')+' (copy)'; npcRoster.push(c); npcEditingId = c.id; saveNpcRoster(); renderNpcPanel(); }
 function npcRosterRemove(id){ if(!isReferee()) return; if(!confirm('Remove this NPC from the roster?')) return; npcRoster = npcRoster.filter(n => n.id !== id); if(npcEditingId === id) npcEditingId = null; saveNpcRoster(); renderNpcPanel(); }
 function npcEdit(id){ if(!isReferee()) return; npcEditingId = (npcEditingId === id ? null : id); renderNpcPanel(); }
+
+// ── NPC roster → encounter (one-click add to the initiative tracker) ──
+// Carries the whole stat block across so mid-fight adds need no retyping:
+// DEX/INT DMs feed the initiative modifier fields, STR/DEX/END become the
+// detailed damage bars, and skills/weapons/equipment land in the combatant
+// notes. No dice are rolled — the score starts blank at 0; the referee taps
+// it to reroll or reorders manually, per the tracker's existing controls.
+function npcToEncounter(id){
+  if(!isReferee()) return;
+  const n = npcById(id); if(!n) return;
+  if(typeof combatants === 'undefined' || typeof sortInitiative !== 'function') return;
+  const dm = (typeof charDM === 'function') ? charDM : (() => 0);
+  const raw = c => Math.max(1, parseInt(n[c]) || 7);
+  const kit = [n.skills, n.weapons, n.equipment].filter(Boolean).join(' · ');
+  combatants.push({
+    id: combatantIdSeed++,
+    name: n.name || 'NPC', score: 0,
+    dex: dm(raw('dex')), int: dm(raw('intl')),
+    ambush: null, down: false, notes: kit,
+    healthMode: 'detailed',
+    hp: 10, maxHp: 10,
+    cStr: raw('str'), maxCStr: raw('str'),
+    cDex: raw('dex'), maxCDex: raw('dex'),
+    cEnd: raw('end'), maxCEnd: raw('end')
+  });
+  sortInitiative();
+  if(typeof showToast === 'function') showToast((n.name || 'NPC') + ' added to the encounter — tap the score to roll initiative');
+}
 function npcEditField(id, field, value){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const numeric = ['str','dex','end','intl','edu','soc']; n[field] = numeric.includes(field) ? (parseInt(value)||0) : value; saveNpcRoster(); }
 
 function renderNpcCard(n){
@@ -498,6 +526,7 @@ function renderNpcCard(n){
   const meta = [n.role, n.faction, n.location].filter(Boolean).map(ea).join(' · ');
   let hd = `<div class="disc-card-hd"><span class="disc-title">${ea(n.name||'(unnamed)')}</span>
     <div class="disc-ctl">
+      <button class="disc-mini" onclick="npcToEncounter('${n.id}')" title="Add to encounter (initiative tracker)">⚔</button>
       <button class="disc-mini" onclick="npcEdit('${n.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
       <button class="disc-mini" onclick="npcRosterDuplicate('${n.id}')" title="Duplicate">⧉</button>
       <button class="disc-mini del" onclick="npcRosterRemove('${n.id}')" title="Remove">✕</button>
