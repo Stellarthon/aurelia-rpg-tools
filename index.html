@@ -736,6 +736,7 @@
       <button id="wiki-btn" class="more-item" onclick="closeMoreMenu();toggleWikiPanel()" title="Wiki — referee-curated campaign lore & factions">📚 Wiki</button>
       <button id="contacts-btn" class="more-item" onclick="closeMoreMenu();toggleContactsPanel()" title="Contacts — the party's patrons, informants & rivals">🤝 Contacts</button>
       <button id="rep-btn" class="more-item" onclick="closeMoreMenu();toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
+      <button id="clocks-btn" class="more-item" onclick="closeMoreMenu();toggleClocksPanel()" title="Clocks — faction schemes, threats & deadlines ticking down">🕗 Clocks</button>
       <button id="downtime-btn" class="more-item" onclick="closeMoreMenu();toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
       <button id="cal-btn" class="more-item" onclick="closeMoreMenu();toggleCalendarPanel()" title="Imperial calendar & campaign timeline">📅 Imperial Calendar</button>
       <button id="handouts-btn" class="more-item" onclick="closeMoreMenu();toggleHandoutsPanel()" title="Handouts — maps, clues & evidence the referee shares">🖼 Handouts</button>
@@ -959,6 +960,16 @@
     </div>
     <div id="npc-body"></div>
     <div class="panel-resize-handle" id="npc-resize"></div>
+  </div>
+
+  <!-- ── Faction / countdown clocks panel (referee authors; players see revealed) ── -->
+  <div id="clocks-wrap" class="hidden">
+    <div id="clocks-header" onclick="toggleClocksCollapse()">
+      <span id="clocks-title-lbl">🕗 CLOCKS <span id="clocks-count">0</span></span>
+      <span id="clocks-toggle">▼</span>
+    </div>
+    <div id="clocks-body"></div>
+    <div class="panel-resize-handle" id="clocks-resize"></div>
   </div>
 
   <!-- ── Reputation tracker panel ── -->

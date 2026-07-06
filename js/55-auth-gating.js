@@ -888,6 +888,18 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Clocks — players see revealed faction/countdown clocks fill up live
+  try {
+    const resClk = await supaStorage.get('clocks', true);
+    if(resClk.ok){
+      const freshClk = resClk.value != null ? JSON.parse(resClk.value) || [] : [];
+      if(typeof clocks !== 'undefined' && JSON.stringify(freshClk) !== JSON.stringify(clocks)){
+        clocks = freshClk;
+        if(typeof clocksPanelOpen !== 'undefined' && clocksPanelOpen) renderClocksPanel();
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Forced view — the referee is "presenting"; offer a dismissible soft-follow banner
   try {
     const resFV = await supaStorage.get('forced-view', true);

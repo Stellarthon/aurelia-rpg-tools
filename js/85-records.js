@@ -72,6 +72,7 @@ function afterDateChange(){
   renderImperialDate();
   if(calPanelOpen) renderCalendarPanel();
   if(typeof shipCostsOnDateChange === 'function') shipCostsOnDateChange();   // recurring ship costs accrue per 28-day period (js/91)
+  if(typeof clocksOnDateChange === 'function') clocksOnDateChange();         // date-linked clocks prompt the referee (never auto-tick)
   if(typeof ECON!=='undefined'){ try { ECON.syncToDate(); } catch(e){}   // economy ticks in lockstep with the Imperial week
     if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
     if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); }
@@ -578,6 +579,165 @@ function renderNpcPanel(){
         <div class="npc-meta">${escQH(p.sub||'')} — tap to open</div></div>`).join('');
   }
   body.innerHTML = searchBox + rosHtml + addBtn + placedHtml;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FACTION / COUNTDOWN CLOCKS
+// ───────────────────────────────────────────────────────────────────────────
+// Referee-authored progress clocks (4–12 segments, ticked up/down by hand)
+// for faction schemes, looming threats and deadlines. Bookkeeping of tension
+// only — nothing resolves automatically. Referee-only by default; a per-clock
+// "reveal" shows it on players' devices as name + fill ONLY (referee notes
+// and linked dates never render for players — spoiler control via canSee's
+// honour-system model, like the rest of the app). A clock may be linked to
+// an Imperial date: when the campaign date reaches it the referee is PROMPTED
+// (toast + DUE badge) — the clock is never ticked automatically.
+// Shared state in aurelia_state key 'clocks'; players ride the existing 4 s
+// poll (js/55) — no new timers.
+let clocks = [];
+let clocksPanelOpen = false, clocksCollapsed = false, clocksEditingId = null;
+
+async function loadClocks(){
+  try { const r = await supaStorage.get('clocks', true); clocks = (r.value != null ? JSON.parse(r.value) : []); if(!Array.isArray(clocks)) clocks = []; }
+  catch(e){ clocks = []; }
+}
+async function saveClocks(){ try { await supaStorage.set('clocks', JSON.stringify(clocks), true); } catch(e){ console.error('Clocks save failed', e); } }
+function clockById(id){ return clocks.find(c => c.id === id) || null; }
+
+function toggleClocksPanel(){
+  clocksPanelOpen = !clocksPanelOpen;
+  const w = document.getElementById('clocks-wrap'), b = document.getElementById('clocks-btn');
+  if(w) w.classList.toggle('hidden', !clocksPanelOpen);
+  if(b) b.classList.toggle('panel-open', clocksPanelOpen);
+  if(clocksPanelOpen) renderClocksPanel();
+}
+function toggleClocksCollapse(){
+  const h = document.getElementById('clocks-header'); if(h && h.dataset.suppressClick === '1') return;
+  clocksCollapsed = !clocksCollapsed;
+  document.getElementById('clocks-toggle').textContent = clocksCollapsed ? '▲' : '▼';
+  document.getElementById('clocks-body').classList.toggle('collapsed', clocksCollapsed);
+  document.getElementById('clocks-wrap').classList.toggle('panel-collapsed', clocksCollapsed);
+}
+
+function clockAdd(){
+  if(!isReferee()) return;
+  const c = { id:'clk_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), name:'New clock', segments:6, filled:0, revealed:false, notes:'', due:null, duePrompted:false };
+  clocks.push(c); clocksEditingId = c.id; saveClocks(); renderClocksPanel();
+}
+function clockRemove(id){ if(!isReferee()) return; if(!confirm('Remove this clock?')) return; clocks = clocks.filter(c => c.id !== id); if(clocksEditingId === id) clocksEditingId = null; saveClocks(); renderClocksPanel(); }
+function clockEdit(id){ if(!isReferee()) return; clocksEditingId = (clocksEditingId === id ? null : id); renderClocksPanel(); }
+function clockTick(id, dir){
+  if(!isReferee()) return;
+  const c = clockById(id); if(!c) return;
+  c.filled = Math.max(0, Math.min(c.segments, (c.filled||0) + dir));
+  saveClocks(); renderClocksPanel();
+}
+function clockToggleReveal(id){ if(!isReferee()) return; const c = clockById(id); if(!c) return; c.revealed = !c.revealed; saveClocks(); renderClocksPanel(); }
+function clockEditField(id, field, value){
+  if(!isReferee()) return;
+  const c = clockById(id); if(!c) return;
+  if(field === 'segments'){ c.segments = Math.max(2, Math.min(12, parseInt(value)||6)); c.filled = Math.min(c.filled||0, c.segments); }
+  else c[field] = value;
+  saveClocks(); renderClocksPanel();
+}
+function clockSetDue(id){
+  if(!isReferee()) return;
+  const c = clockById(id); if(!c) return;
+  const d = parseInt((document.getElementById('clk-due-day-'+id)||{}).value, 10);
+  const y = parseInt((document.getElementById('clk-due-year-'+id)||{}).value, 10);
+  if(!isFinite(d) || !isFinite(y)) return;
+  c.due = { day: Math.max(1, Math.min(IMPERIAL_YEAR_DAYS, d)), year: y };
+  c.duePrompted = false;   // re-arm the prompt for the new date
+  saveClocks(); renderClocksPanel();
+}
+function clockClearDue(id){ if(!isReferee()) return; const c = clockById(id); if(!c) return; c.due = null; c.duePrompted = false; saveClocks(); renderClocksPanel(); }
+
+function clockIsDue(c){
+  if(!c || !c.due) return false;
+  try { return imperialOrdinal(imperialDate) >= imperialOrdinal(c.due); } catch(e){ return false; }
+}
+// Called from afterDateChange() — prompts the referee (never ticks) when a
+// linked date arrives. Runs only on the device that advanced the date, which
+// advanceImperial/setImperialFromInputs already gate to the referee.
+function clocksOnDateChange(){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  let dirty = false;
+  clocks.forEach(c => {
+    if(clockIsDue(c) && !c.duePrompted){
+      c.duePrompted = true; dirty = true;
+      if(typeof showToast === 'function') showToast('⏰ Clock due: "' + (c.name||'clock') + '" reached ' + formatImperial(c.due) + ' — advance it?', 'info');
+    }
+  });
+  if(dirty) saveClocks();
+  if(clocksPanelOpen) renderClocksPanel();
+}
+
+function clockSegmentsHTML(c){
+  let cells = '';
+  const seg = Math.max(1, c.segments||1), fill = Math.max(0, Math.min(seg, c.filled||0));
+  for(let i = 0; i < seg; i++) cells += `<span class="clk-seg${i < fill ? ' fill' : ''}"></span>`;
+  return `<div class="clk-track">${cells}</div>`;
+}
+
+function renderClockCardRef(c){
+  const ea = (typeof escQH==='function') ? escQH : (x=>String(x==null?'':x));
+  const ea2 = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));
+  const editing = clocksEditingId === c.id;
+  const hd = `<div class="clk-hd">
+    <span class="clk-name">${ea(c.name||'(unnamed)')}</span>
+    <div class="disc-ctl">
+      ${clockIsDue(c) ? '<span class="clk-due">DUE</span>' : ''}
+      <button class="disc-mini${c.revealed?' clk-rev-on':''}" onclick="clockToggleReveal('${c.id}')" title="${c.revealed?'Revealed to players — tap to hide':'Hidden from players — tap to reveal (name + fill only)'}">${c.revealed?'👁':'🚫'}</button>
+      <button class="disc-mini" onclick="clockEdit('${c.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
+      <button class="disc-mini del" onclick="clockRemove('${c.id}')" title="Remove">✕</button>
+    </div></div>`;
+  const tick = `<div class="clk-ctl">
+    <button class="disc-mini" onclick="clockTick('${c.id}',-1)" title="Tick back">−</button>
+    <span class="clk-fill-lbl">${(c.filled||0)}/${c.segments}</span>
+    <button class="disc-mini" onclick="clockTick('${c.id}',1)" title="Advance one segment">+</button>
+    ${c.revealed ? '<span class="clk-fill-lbl" style="margin-left:auto">visible to players</span>' : ''}
+  </div>`;
+  let ed = '';
+  if(editing){
+    const segSel = [4,6,8,10,12].map(n=>`<option value="${n}"${c.segments===n?' selected':''}>${n} segments</option>`).join('');
+    ed = `<div class="disc-add">
+      <input value="${ea2(c.name)}" placeholder="Clock name (players see this when revealed)" onchange="clockEditField('${c.id}','name',this.value)">
+      <select onchange="clockEditField('${c.id}','segments',this.value)">${segSel}</select>
+      <div class="disc-add-row">
+        <input type="number" inputmode="numeric" id="clk-due-day-${c.id}" placeholder="Day" min="1" max="${IMPERIAL_YEAR_DAYS}" value="${c.due?c.due.day:''}">
+        <input type="number" inputmode="numeric" id="clk-due-year-${c.id}" placeholder="Year" value="${c.due?c.due.year:imperialDate.year}">
+        <button class="disc-mini" onclick="clockSetDue('${c.id}')" title="Link to an Imperial date — you'll be prompted when it arrives (never auto-ticked)">📅</button>
+        ${c.due?`<button class="disc-mini del" onclick="clockClearDue('${c.id}')" title="Unlink date">✕</button>`:''}
+      </div>
+      ${c.due?`<div class="npc-meta">Due ${formatImperial(c.due)} — you'll be prompted when the date arrives; nothing ticks itself.</div>`:''}
+      <textarea rows="2" placeholder="Referee notes (never shown to players)" onchange="clockEditField('${c.id}','notes',this.value)">${ea(c.notes||'')}</textarea>
+    </div>`;
+  } else if(c.notes){
+    ed = `<div class="npc-meta">${ea(c.notes).replace(/\n/g,'<br>')}</div>`;
+  }
+  return `<div class="clk-card">${hd}${clockSegmentsHTML(c)}${tick}${ed}</div>`;
+}
+
+function renderClocksPanel(){
+  const body = document.getElementById('clocks-body'); if(!body) return;
+  const ea = (typeof escQH==='function') ? escQH : (x=>String(x==null?'':x));
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const visible = ref ? clocks : clocks.filter(c => c.revealed);
+  const cnt = document.getElementById('clocks-count'); if(cnt) cnt.textContent = visible.length;
+  if(!ref){
+    // Players: revealed clocks only, name + fill. Notes and dates stay referee-side.
+    body.innerHTML = visible.length
+      ? visible.map(c => `<div class="clk-card">
+          <div class="clk-hd"><span class="clk-name">${ea(c.name||'(unnamed)')}</span>
+          <span class="clk-fill-lbl">${(c.filled||0)}/${c.segments}</span></div>
+          ${clockSegmentsHTML(c)}</div>`).join('')
+      : '<div class="cal-empty">Nothing the referee has chosen to show yet.</div>';
+    return;
+  }
+  const addBtn = `<button class="cal-add-btn" style="width:100%" onclick="clockAdd()">+ New clock</button>`;
+  body.innerHTML = (visible.length
+    ? visible.map(renderClockCardRef).join('')
+    : '<div class="cal-empty">No clocks yet. Track a faction scheme, a looming threat, or a deadline.</div>') + addBtn;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2118,6 +2278,8 @@ makePanelDraggable('npc-wrap', 'npc-header');
 makePanelResizable('npc-wrap');
 makePanelDraggable('rep-wrap', 'rep-header');
 makePanelResizable('rep-wrap');
+makePanelDraggable('clocks-wrap', 'clocks-header');
+makePanelResizable('clocks-wrap');
 makePanelDraggable('funds-wrap', 'funds-header');
 makePanelResizable('funds-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');
@@ -2204,6 +2366,7 @@ loadImperialDate().then(() => { renderImperialDate(); if(currentView === 'galaxy
 loadCampaignEvents().then(() => { if(calPanelOpen) renderCalendarPanel(); });
 loadDiscoveryLog().then(() => { if(discPanelOpen) renderDiscoveryPanel(); });
 loadReputation().then(() => { if(repPanelOpen) renderReputationPanel(); });
+loadClocks().then(() => { if(clocksPanelOpen) renderClocksPanel(); });   // faction/countdown clocks
 loadFunds().then(() => { if(fundsPanelOpen) renderFundsPanel(); });
 loadFactionStores().then(() => { rebuildFactionsFromOverlay();   // fold in any referee-added / edited / removed regions
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
