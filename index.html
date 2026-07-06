@@ -743,6 +743,7 @@
       <button id="planner-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionPlanner()" title="Session Planner — prep & run sessions; link Oracle, Missions & NPCs (referee)">🗓 Session Planner</button>
       <button id="npc-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleNpcPanel()" title="NPC roster — author & browse NPCs (referee)">👥 NPCs</button>
       <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
+      <button id="trade-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleTradePanel()" title="Station Trade — local market reference & deal recorder (referee)">🛒 Station Trade</button>
       <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
       <button id="present-view-btn" class="more-item ref-only" onclick="closeMoreMenu();plannerSendCurrentView()" title="Show players the view you're on now — their devices offer to follow you there (referee)">📡 Send players to this view</button>
       <button id="release-view-btn" class="more-item ref-only" onclick="closeMoreMenu();forcedViewRelease()" title="Stop presenting — players navigate freely again (referee)">🔓 Release players</button>
@@ -988,6 +989,16 @@
     <div class="panel-resize-handle" id="econ-resize"></div>
   </div>
 
+  <!-- ── Station Trade — referee-only local-market reference & deal recorder ── -->
+  <div id="trade-wrap" class="hidden ref-only">
+    <div id="trade-header" onclick="toggleTradeCollapse()">
+      <span id="trade-title-lbl">🛒 STATION TRADE</span>
+      <span id="trade-toggle">▼</span>
+    </div>
+    <div id="trade-body"></div>
+    <div class="panel-resize-handle" id="trade-resize"></div>
+  </div>
+
   <!-- ── Oracle (rumour & encounter generators) panel — referee-only ── -->
   <div id="gen-wrap" class="hidden ref-only">
     <div id="gen-header" onclick="toggleGenCollapse()">
@@ -1061,6 +1072,7 @@
 <script src="js/80-combat.js"></script>
 <script src="js/85-records.js"></script>
 <script src="js/90-economy.js"></script>
+<script src="js/91-trade.js"></script>
 <script src="js/92-tools-misc.js"></script>
 <script src="js/96-creators.js"></script>
 <script src="js/97-session-planner.js"></script>

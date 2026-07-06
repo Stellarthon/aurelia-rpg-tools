@@ -677,6 +677,7 @@ async function pollRevealState(){
       if(JSON.stringify(freshTC) !== JSON.stringify(tradeCargo)){
         tradeCargo = freshTC;
         if(cargoPanelOpen) renderCargoPanel();
+        if(typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -765,6 +766,7 @@ async function pollRevealState(){
       if(JSON.stringify(freshShip) !== JSON.stringify(shipState)){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
+        if(typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
         // Fuel/jump changes can flip the out-of-range advisory — refresh lanes.
         if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
       }
@@ -841,6 +843,7 @@ async function pollRevealState(){
       if(JSON.stringify(freshFunds) !== JSON.stringify(funds)){
         funds = freshFunds;
         if(fundsPanelOpen) renderFundsPanel();
+        if(typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
       }
     }
   } catch(e){ /* silent — next poll will retry */ }

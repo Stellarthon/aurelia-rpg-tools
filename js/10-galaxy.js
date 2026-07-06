@@ -1681,6 +1681,30 @@ const HX = (function(){
       try { if(window.ECON && ECON.priceOverlay){ buyP*=ECON.priceOverlay(src.id,g.name); sellP*=ECON.priceOverlay(dst.id,g.name); } } catch(e){}
       out.push({good:g.name,buyP,sellP,profit:sellP-buyP}); });
     return out.sort((a,b)=>b.profit-a.profit); }
+  // ── Local market snapshot (Station Trade screen, js/91-trade.js) ───────────
+  // One world, every catalogue good: the largest applicable Purchase/Sale DM
+  // (reference only — play still rolls 3D6), the live market pressure, and the
+  // SAME indicative prices the map shows (AVG_ROLL + party Broker vs the RAW
+  // default counterparty Broker-2), so the station screen and the hex map can
+  // never quote different numbers. `availHere` = the supplier actually stocks
+  // it (Common, or a trade code matches); anything can still be SOLD here.
+  function localMarket(id){
+    readShared();   // pick up live locationId/broker even if the map was never opened
+    const s = id ? BY_ID[id] : origin;
+    if(!s) return null;
+    if(!hasMarket(s)){ const f=effFac(s.fac); return { id:s.id, label:disp(s), noMarket:true, faction:(f&&f.name)||'' }; }
+    const codes=tradeCodes(s);
+    const rows=TRADE_GOODS.map(g=>{
+      const availHere = g.avail==='all' || g.avail.some(c=>codes.includes(c));
+      const buyDM=bestDM(g.buy,codes), sellDM=bestDM(g.sell,codes), pr=mktPressure(s,g.name);
+      const buyRoll =AVG_ROLL+buyDM-sellDM+broker-COUNTERPARTY_BROKER+pr,
+            sellRoll=AVG_ROLL+sellDM-buyDM+broker-COUNTERPARTY_BROKER-pr;
+      let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
+      try { if(window.ECON && ECON.priceOverlay){ const ov=ECON.priceOverlay(s.id,g.name); buyP*=ov; sellP*=ov; } } catch(e){}
+      return { good:g.name, base:g.base, availHere, buyDM, sellDM, pressure:pr, buyP, sellP };
+    });
+    return { id:s.id, label:disp(s), port:portOf(s), codes, broker, rows };
+  }
 
   // ── State (mirrors shared state; refreshed from shipState/imperialDate each render) ──
   let jumpRating=2, tonnage=200, fuelMax=80, fuelAboard=24, cargoHold=30, broker=2;
@@ -2660,7 +2684,7 @@ const HX = (function(){
     return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, get origin(){ return origin; } };
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){
