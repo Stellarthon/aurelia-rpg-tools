@@ -300,7 +300,7 @@ function buildOrreryNow(){
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><span style="display:inline-block;width:7px;height:7px;border-radius:${b.isStar?'0':'50%'};background:${b.color};margin-right:7px;vertical-align:middle"></span>
-            <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${b.name}</span></td>
+            <span style="color:${b.hook?'#E8A020':'var(--tx0)'};font-size:12px;font-weight:${b.hook?'700':'400'}">${escHtml(b.name)}</span></td>
         <td style="color:var(--tx1);font-size:10px">${(b.type||'').split('·')[0].trim()}</td>
         <td style="color:var(--accentGold);font-family:monospace;font-size:10px">${bodyProfileCell(b)}</td>
         <td style="font-size:11px;color:#E8A020">${b.hook?'!':''}${b.tag==='CLASSIFIED'?'<span style="color:#C0392B;font-size:9px;font-family:monospace"> CLASSIF.</span>':''}${b.tag==='RESTRICTED'?'<span style="color:#9B59B6;font-size:9px;font-family:monospace"> RESTR.</span>':''}</td>`;
@@ -435,8 +435,8 @@ function buildOrreryNow(){
     // Belt click target + label at the fan position
     const [bpx,bpy] = orbitPoint(va, vb, ORR_PLANET_T);
     if(selectedBody===b.id) html += `<ellipse cx="${ORR_SX}" cy="${ORR_SY}" rx="${(va+2).toFixed(1)}" ry="${(vb+2).toFixed(1)}" fill="${col}" opacity="0.08" transform="rotate(${tiltDeg},${ORR_SX},${ORR_SY})" pointer-events="none"/>`;
-    html += `<circle cx="${bpx.toFixed(1)}" cy="${bpy.toFixed(1)}" r="28" fill="transparent" data-body="${b.id}" class="body-node" style="cursor:pointer"/>`;
-    html += `<text x="${bpx.toFixed(1)}" y="${(bpy+32).toFixed(1)}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
+    html += `<circle cx="${bpx.toFixed(1)}" cy="${bpy.toFixed(1)}" r="28" fill="transparent" data-body="${escAttr(b.id)}" class="body-node" style="cursor:pointer"/>`;
+    html += `<text x="${bpx.toFixed(1)}" y="${(bpy+32).toFixed(1)}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${escHtml(b.name)}</text>`;
     if(b.hook) html += `<text x="${(bpx+18).toFixed(1)}" y="${(bpy-12).toFixed(1)}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
   });
 
@@ -483,7 +483,7 @@ function buildOrreryNow(){
     }
 
     if(b.hook) html += `<text x="${px+r+2}" y="${py-r-1}" fill="#E8A020" font-size="11" font-weight="700" pointer-events="none">!</text>`;
-    html += `<text x="${px}" y="${py+r+14}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${b.name}</text>`;
+    html += `<text x="${px}" y="${py+r+14}" text-anchor="middle" fill="${b.hook?'#E8A020':'#8b91a8'}" font-size="9" font-family="monospace" pointer-events="none">${escHtml(b.name)}</text>`;
     html += `</g>`;
   });
 
@@ -621,10 +621,10 @@ function renderBodyContentSections(body, pm){
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
+        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
-          <div class="skill-row">${n.skills}</div>
+          <div class="skill-row">${sanitizeRich(n.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;
@@ -636,12 +636,14 @@ function renderBodyContentSections(body, pm){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
     const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
     body.checks.forEach(c=>{
-      html += `<div class="chk"><div class="chk-t">${c.skill}</div>`;
-      c.degrees.forEach(d=>{
+      // body.checks/events come from the effective (override-applied) body, which
+      // is stored in anon-writable state — sanitise these design fields at the sink.
+      html += `<div class="chk"><div class="chk-t">${sanitizeRich(c.skill)}</div>`;
+      (c.degrees||[]).forEach(d=>{
         const cls=d.cls||degCls[d.c]||"deg-p";
         const lbl=d.label||d.l||"";
         const txt=d.text||d.t||"";
-        html+=`<div class="deg-row"><div class="${cls}">${lbl}</div><div style="font-size:11px">${txt}</div></div>`;
+        html+=`<div class="deg-row"><div class="${escAttr(cls)}">${sanitizeRich(lbl)}</div><div style="font-size:11px">${sanitizeRich(txt)}</div></div>`;
       });
       html += `</div>`;
     });
@@ -650,7 +652,7 @@ function renderBodyContentSections(body, pm){
 
   if(!pm&&body.events&&body.events.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
-    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`);
+    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${sanitizeRich(e.t)}</div>${sanitizeRich(e.e)}</div>`);
     html += `</div>`;
   }
   return html;

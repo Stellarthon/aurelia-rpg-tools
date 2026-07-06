@@ -127,8 +127,9 @@ function setNpcCreatorMode(mode){
   renderNpcCreatorBody();
 }
 
-function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// escAttr / escHtml are defined canonically (and more strictly — escAttr here
+// also escapes '>' and single quotes) in js/00-core-data.js. The weaker local
+// copies were removed so the canonical definitions are the single source of truth.
 
 function renderNpcCreatorBody(){
   const body = document.getElementById('npc-creator-body');

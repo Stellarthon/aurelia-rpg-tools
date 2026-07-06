@@ -2,6 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Content-Security-Policy (defense-in-depth for the stored-XSS fix). GitHub Pages
+     can't set response headers, so this is delivered as a <meta> tag. The primary
+     XSS defense is escaping/sanitising at every sink (js/00-core-data.js escapers +
+     sanitizeRich); this CSP is the backstop that limits what a payload could do if
+     one slipped through.
+     KNOWN GAP (deliberate, pragmatic option): the app wires behaviour through inline
+     onclick= handlers and inline style= attributes throughout, so script-src / style-src
+     keep 'unsafe-inline' — dropping it would require migrating every handler to
+     delegated addEventListener first. What this policy DOES buy, even with inline
+     scripts allowed, is blocking the most useful payloads: no plugins (object-src
+     'none'), no <base> hijack (base-uri 'none'), and — most importantly — a tight
+     connect-src/img-src allowlist so an injected script cannot exfiltrate campaign
+     state to an arbitrary origin or beacon out via an <img>. Only 'self' and the
+     campaign's own Supabase project are reachable.
+     NOTE: frame-ancestors and X-Content-Type-Options are header-only (ignored in a
+     <meta> CSP); fully setting them requires fronting Pages with a CDN. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://rarxefzcqvgqvxutprcq.supabase.co; media-src 'self' blob: https://rarxefzcqvgqvxutprcq.supabase.co; connect-src 'self' https://rarxefzcqvgqvxutprcq.supabase.co; font-src 'self'; frame-src 'self' https://rarxefzcqvgqvxutprcq.supabase.co; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

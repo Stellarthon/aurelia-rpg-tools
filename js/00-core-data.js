@@ -381,6 +381,65 @@ function sanitizeRich(html){
   return doc.body.innerHTML;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OUTPUT ESCAPERS  —  the safe primitives every innerHTML sink should use
+// ───────────────────────────────────────────────────────────────────────────
+// `aurelia_state` is world-writable (anon key), so ANY value read back through
+// supaStorage.get is attacker-controllable. These are the canonical escapers,
+// defined in the earliest-loading module so every later module can rely on them
+// (a duplicate weaker copy used to live in js/96-creators.js — removed so this
+// stronger definition is the single source of truth).
+//
+//   escHtml  — text context (between tags). Escapes & < >.
+//   escAttr  — attribute context inside "…" OR '…'. Escapes & < > " ' so the
+//              value can't terminate either quote style (escHtml is NOT enough:
+//              it leaves quotes intact).
+//   escOnclickArg — the value sits inside a single-quoted JS string inside a
+//              double-quoted HTML attribute:  onclick="fn('HERE')". That is TWO
+//              parsers: HTML entity-decoding runs first, then JS. Entity-escaping
+//              a quote (&#39;) is decoded back to ' BEFORE the JS runs, so it
+//              does NOT protect the JS string — the JS-string delimiter must be
+//              backslash-escaped, and newlines (which break a JS string literal)
+//              too. Then the HTML-attribute layer is escaped so the value can't
+//              break out of the "…" either. Prefer restricting ids to a safe
+//              charset at write time; this makes existing/inline-handler ids safe
+//              without hunting every write path.
+function escHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escOnclickArg(s){
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'")        // JS single-quoted string layer
+    .replace(/\r/g,'\\r').replace(/\n/g,'\\n')        // newlines terminate a JS string literal
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); // HTML "…" attr layer
+}
+
+// Deep sanitiser for DESIGN-MODE content (read-aloud / descriptions / referee
+// notes / checks / events / NPC rows). Design content is authored as rich HTML
+// and stored — via overrides/additions — in the anon-writable state table, so an
+// attacker can plant a payload in any of it. resolveContent() (js/65) is the ONE
+// function that returns the override-or-original for these fields, so routing its
+// output through here sanitises every design sink centrally: strings pass through
+// the rich allow-list (formatting survives, scripts/handlers die); arrays/objects
+// (checks {skill,degrees[]}, events {t,e}, NPC rows [k,v]) are recursed so every
+// nested string is cleaned while shape/number/bool values are untouched.
+function sanitizeDesign(v){
+  if(v == null) return v;
+  if(typeof v === 'string') return sanitizeRich(v);
+  if(Array.isArray(v)) return v.map(sanitizeDesign);
+  if(typeof v === 'object'){
+    const out = Array.isArray(v) ? [] : {};
+    for(const k in v){ if(Object.prototype.hasOwnProperty.call(v,k)) out[k] = sanitizeDesign(v[k]); }
+    return out;
+  }
+  return v; // number / boolean — safe as-is
+}
+
 // Plain-text projection of rich HTML — recap/export lines, graph popovers, previews.
 function richToPlain(html){
   const src = String(html == null ? '' : html);

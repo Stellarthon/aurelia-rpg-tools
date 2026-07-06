@@ -101,8 +101,8 @@ function calVisLabel(v){
 }
 function renderCalEvent(e, ref, nowOrd){
   const past = imperialOrdinal(e) <= nowOrd;
-  const visTag = ref ? `<span class="cal-ev-vis" onclick="cycleCalEventVis('${e.id}')" title="Click to change who can see this">${calVisLabel(e.visibleTo)}</span>` : '';
-  const del = ref ? `<span class="cal-ev-del" onclick="deleteCalEvent('${e.id}')" title="Delete event">✕</span>` : '';
+  const visTag = ref ? `<span class="cal-ev-vis" onclick="cycleCalEventVis('${escOnclickArg(e.id)}')" title="Click to change who can see this">${calVisLabel(e.visibleTo)}</span>` : '';
+  const del = ref ? `<span class="cal-ev-del" onclick="deleteCalEvent('${escOnclickArg(e.id)}')" title="Delete event">✕</span>` : '';
   return `<div class="cal-ev${past ? ' past' : ''}">
     <span class="cal-ev-date">${formatImperial(e)}</span>
     <div class="cal-ev-body"><div class="cal-ev-title">${escQH(e.title)}</div>${e.note ? `<div class="cal-ev-note">${escQH(e.note)}</div>` : ''}</div>
@@ -273,8 +273,8 @@ function renderDiscCard(e, ref){
     const bodyTxt = e.body ? escQH(e.body).replace(/\n/g,'<br>') : '';
     const ctl = ref
       ? `<div class="disc-ctl">
-           <button class="disc-mini approve" onclick="approveRumour('${e.id}')" title="Approve → enters the fog as a rumour">✓ Approve</button>
-           <button class="disc-mini del" onclick="rejectRumour('${e.id}')" title="Reject &amp; delete">✕ Reject</button>
+           <button class="disc-mini approve" onclick="approveRumour('${escOnclickArg(e.id)}')" title="Approve → enters the fog as a rumour">✓ Approve</button>
+           <button class="disc-mini del" onclick="rejectRumour('${escOnclickArg(e.id)}')" title="Reject &amp; delete">✕ Reject</button>
          </div>`
       : `<div class="disc-pending-note">📥 Awaiting Referee</div>`;
     return `<div class="disc-card state-pending">
@@ -294,10 +294,10 @@ function renderDiscCard(e, ref){
   const when = e.revealedAt ? `<span class="disc-when" title="Revealed">${formatImperial(e.revealedAt)}</span>` : '';
   const refCtl = ref ? `
     <div class="disc-ctl">
-      <button class="disc-mini state-${e.state}" onclick="cycleDiscState('${e.id}')" title="Hidden → Rumoured → Known">${discStateLabel(e.state)}</button>
-      <button class="disc-mini" onclick="cycleDiscVis('${e.id}')" title="Who can see it">${calVisLabel(e.visibleTo)}</button>
-      <button class="disc-mini" onclick="editDiscEntry('${e.id}')" title="Edit">✏</button>
-      <button class="disc-mini del" onclick="deleteDiscEntry('${e.id}')" title="Delete">✕</button>
+      <button class="disc-mini state-${e.state}" onclick="cycleDiscState('${escOnclickArg(e.id)}')" title="Hidden → Rumoured → Known">${discStateLabel(e.state)}</button>
+      <button class="disc-mini" onclick="cycleDiscVis('${escOnclickArg(e.id)}')" title="Who can see it">${calVisLabel(e.visibleTo)}</button>
+      <button class="disc-mini" onclick="editDiscEntry('${escOnclickArg(e.id)}')" title="Edit">✏</button>
+      <button class="disc-mini del" onclick="deleteDiscEntry('${escOnclickArg(e.id)}')" title="Delete">✕</button>
     </div>` : '';
   return `<div class="disc-card state-${ref ? e.state : stage}">
     <div class="disc-card-hd">${catTag}<span class="disc-title">${escQH(e.title)}</span>${when}</div>
@@ -497,9 +497,9 @@ function renderNpcCard(n){
   const meta = [n.role, n.faction, n.location].filter(Boolean).map(ea).join(' · ');
   let hd = `<div class="disc-card-hd"><span class="disc-title">${ea(n.name||'(unnamed)')}</span>
     <div class="disc-ctl">
-      <button class="disc-mini" onclick="npcEdit('${n.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
-      <button class="disc-mini" onclick="npcRosterDuplicate('${n.id}')" title="Duplicate">⧉</button>
-      <button class="disc-mini del" onclick="npcRosterRemove('${n.id}')" title="Remove">✕</button>
+      <button class="disc-mini" onclick="npcEdit('${escOnclickArg(n.id)}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
+      <button class="disc-mini" onclick="npcRosterDuplicate('${escOnclickArg(n.id)}')" title="Duplicate">⧉</button>
+      <button class="disc-mini del" onclick="npcRosterRemove('${escOnclickArg(n.id)}')" title="Remove">✕</button>
     </div></div>`;
   if(!editing){
     let b = hd; if(meta) b += `<div class="npc-meta">${meta}</div>`;
@@ -507,20 +507,20 @@ function renderNpcCard(n){
     return `<div class="disc-card">${b}</div>`;
   }
   const chars = ['str','dex','end','intl','edu','soc'].map(c =>
-    `<label>${c.toUpperCase()}<input type="number" value="${parseInt(n[c])||0}" onchange="npcEditField('${n.id}','${c}',this.value)"></label>`).join('');
+    `<label>${c.toUpperCase()}<input type="number" value="${parseInt(n[c])||0}" onchange="npcEditField('${escOnclickArg(n.id)}','${c}',this.value)"></label>`).join('');
   const ed = `<div class="disc-add">
-    <input value="${ea2(n.name)}" placeholder="Name" onchange="npcEditField('${n.id}','name',this.value)">
+    <input value="${ea2(n.name)}" placeholder="Name" onchange="npcEditField('${escOnclickArg(n.id)}','name',this.value)">
     <div class="disc-add-row">
-      <input value="${ea2(n.role)}" placeholder="Role / title" onchange="npcEditField('${n.id}','role',this.value)">
-      <input value="${ea2(n.faction)}" placeholder="Faction" onchange="npcEditField('${n.id}','faction',this.value)">
+      <input value="${ea2(n.role)}" placeholder="Role / title" onchange="npcEditField('${escOnclickArg(n.id)}','role',this.value)">
+      <input value="${ea2(n.faction)}" placeholder="Faction" onchange="npcEditField('${escOnclickArg(n.id)}','faction',this.value)">
     </div>
-    <input value="${ea2(n.location)}" placeholder="Where found (system / station / world)" onchange="npcEditField('${n.id}','location',this.value)">
-    <textarea rows="2" placeholder="Description" onchange="npcEditField('${n.id}','desc',this.value)">${ea(n.desc||'')}</textarea>
+    <input value="${ea2(n.location)}" placeholder="Where found (system / station / world)" onchange="npcEditField('${escOnclickArg(n.id)}','location',this.value)">
+    <textarea rows="2" placeholder="Description" onchange="npcEditField('${escOnclickArg(n.id)}','desc',this.value)">${ea(n.desc||'')}</textarea>
     <div class="npc-chars">${chars}</div>
-    <input value="${ea2(n.skills)}" placeholder="Skills (e.g. Gun Combat 1, Persuade 2)" onchange="npcEditField('${n.id}','skills',this.value)">
-    <input value="${ea2(n.equipment)}" placeholder="Equipment" onchange="npcEditField('${n.id}','equipment',this.value)">
-    <input value="${ea2(n.weapons)}" placeholder="Weapons" onchange="npcEditField('${n.id}','weapons',this.value)">
-    <textarea rows="2" placeholder="Referee notes" onchange="npcEditField('${n.id}','notes',this.value)">${ea(n.notes||'')}</textarea>
+    <input value="${ea2(n.skills)}" placeholder="Skills (e.g. Gun Combat 1, Persuade 2)" onchange="npcEditField('${escOnclickArg(n.id)}','skills',this.value)">
+    <input value="${ea2(n.equipment)}" placeholder="Equipment" onchange="npcEditField('${escOnclickArg(n.id)}','equipment',this.value)">
+    <input value="${ea2(n.weapons)}" placeholder="Weapons" onchange="npcEditField('${escOnclickArg(n.id)}','weapons',this.value)">
+    <textarea rows="2" placeholder="Referee notes" onchange="npcEditField('${escOnclickArg(n.id)}','notes',this.value)">${ea(n.notes||'')}</textarea>
   </div>`;
   return `<div class="disc-card">${hd}${ed}</div>`;
 }
@@ -727,9 +727,9 @@ function renderReputationPanel(){
     const b = repBand(f.standing);
     const pct = ((f.standing + 6) / 12) * 100;
     const ctl = ref ? `<div class="rep-fac-ctl">
-        <button class="disc-mini" onclick="adjustStanding('${f.id}',-1)">−</button>
-        <button class="disc-mini" onclick="adjustStanding('${f.id}',1)">+</button>
-        <button class="disc-mini del" onclick="removeFaction('${f.id}')" title="Remove faction">✕</button>
+        <button class="disc-mini" onclick="adjustStanding('${escOnclickArg(f.id)}',-1)">−</button>
+        <button class="disc-mini" onclick="adjustStanding('${escOnclickArg(f.id)}',1)">+</button>
+        <button class="disc-mini del" onclick="removeFaction('${escOnclickArg(f.id)}')" title="Remove faction">✕</button>
       </div>` : '';
     return `<div class="rep-fac">
       <div class="rep-fac-hd"><span class="rep-fac-name">${escQH(f.name)}</span>
@@ -747,8 +747,8 @@ function renderReputationPanel(){
   } else {
     mHTML = visM.map(m => {
       const dStr = (m.delta > 0 ? '+' : '') + m.delta;
-      const del = ref ? `<span class="cal-ev-del" onclick="deleteMilestone('${m.id}')" title="Delete">✕</span>` : '';
-      const vis = ref ? `<span class="cal-ev-vis" onclick="cycleMilestoneVis('${m.id}')" title="Who can see it">${calVisLabel(m.visibleTo)}</span>` : '';
+      const del = ref ? `<span class="cal-ev-del" onclick="deleteMilestone('${escOnclickArg(m.id)}')" title="Delete">✕</span>` : '';
+      const vis = ref ? `<span class="cal-ev-vis" onclick="cycleMilestoneVis('${escOnclickArg(m.id)}')" title="Who can see it">${calVisLabel(m.visibleTo)}</span>` : '';
       return `<div class="rep-mile">
         <span class="cal-ev-date">${formatImperial(m)}</span>
         <div class="cal-ev-body"><div class="cal-ev-title">${escQH(m.title)}</div>
@@ -759,7 +759,7 @@ function renderReputationPanel(){
   }
 
   const now = imperialNow();
-  const facOpts = reputation.factions.map(f => `<option value="${f.id}">${escQH(f.name)}</option>`).join('');
+  const facOpts = reputation.factions.map(f => `<option value="${escAttr(f.id)}">${escQH(f.name)}</option>`).join('');
   const addM = ref ? `<div class="disc-add">
     <div class="disc-add-ttl">New milestone — applies delta to standing</div>
     <input id="rep-m-title" placeholder="What happened…" maxlength="90">
@@ -1356,7 +1356,7 @@ function renderJournalPanel(){
   }
   body.innerHTML = visible.map(e => {
     const when = e.imperialDate ? formatImperial(e.imperialDate) : (e.realDate || '');
-    const del = ref ? `<button class="journal-del" onclick="deleteJournalEntry('${e.id}')" title="Delete entry">✕</button>` : '';
+    const del = ref ? `<button class="journal-del" onclick="deleteJournalEntry('${escOnclickArg(e.id)}')" title="Delete entry">✕</button>` : '';
     return `<div class="journal-entry">
       <div class="journal-entry-head">
         <span class="journal-entry-title">${escQH(e.title)}</span>
@@ -1465,7 +1465,7 @@ function renderCargoPanel(){
   } else {
     list = lots.map(l => {
       const invested = (Number(l.tons) || 0) * (Number(l.buyCr) || 0);
-      const del = ref ? `<button class="cargo-del" onclick="cargoRemoveLot('${l.id}')" title="Sold / remove from hold">✕</button>` : '';
+      const del = ref ? `<button class="cargo-del" onclick="cargoRemoveLot('${escOnclickArg(l.id)}')" title="Sold / remove from hold">✕</button>` : '';
       return `<div class="cargo-lot">${del}
         <div class="cargo-lot-hd"><span class="cargo-good">${escQH(l.good)}</span><span class="cargo-tons">${Number(l.tons) || 0} dt</span></div>
         <div class="cargo-lot-meta">Bought ${fmt(l.buyCr)}/dt${l.world ? (' · ' + escQH(l.world)) : ''}${l.date ? (' · ' + escQH(l.date)) : ''} · in ${fmt(invested)}${cargoSignalChip(l.good)}</div>
@@ -1599,9 +1599,9 @@ function renderHandoutsPanel(){
     grid = `<div class="handout-grid">` + list.map(h => {
       const url = (typeof handoutUrlFor === 'function') ? handoutUrlFor(hoCampaign(), h.id, h.ver) : '';
       const who = (h.visibleTo && h.visibleTo !== 'all') ? (Array.isArray(h.visibleTo) ? h.visibleTo.join(', ') : h.visibleTo) : 'All';
-      const del = ref ? `<button class="handout-del" onclick="event.stopPropagation();removeHandout('${h.id}')" title="Remove">✕</button>` : '';
-      return `<div class="handout-thumb" onclick="openHandout('${h.id}')" title="${escQH(h.name || 'Handout')}">
-        ${del}<img src="${url}" alt="${escQH(h.name || '')}" loading="lazy" onerror="this.style.display='none'">
+      const del = ref ? `<button class="handout-del" onclick="event.stopPropagation();removeHandout('${escOnclickArg(h.id)}')" title="Remove">✕</button>` : '';
+      return `<div class="handout-thumb" onclick="openHandout('${escOnclickArg(h.id)}')" title="${escAttr(h.name || 'Handout')}">
+        ${del}<img src="${escAttr(url)}" alt="${escAttr(h.name || '')}" loading="lazy" onerror="this.style.display='none'">
         <div class="handout-cap">${escQH(h.name || 'Handout')}${ref ? ` · ${escQH(who)}` : ''}</div>
       </div>`;
     }).join('') + `</div>`;
@@ -1942,9 +1942,9 @@ function renderDowntimePanel(){
       const badge = st === 'done' ? '<span class="dt-badge done">Resolved</span>' : st === 'failed' ? '<span class="dt-badge fail">Failed</span>' : '<span class="dt-badge">Planned</span>';
       const ctl = ref
         ? (st === 'planned'
-            ? `<div class="dt-ctl"><button class="dt-mini ok" onclick="resolveDowntime('${e.id}',true)">✓ Resolve</button><button class="dt-mini bad" onclick="resolveDowntime('${e.id}',false)">✗ Failed</button><button class="dt-mini del" onclick="removeDowntime('${e.id}')">🗑</button></div>`
-            : `<div class="dt-ctl"><button class="dt-mini" onclick="reopenDowntime('${e.id}')">↺ Reopen</button><button class="dt-mini del" onclick="removeDowntime('${e.id}')">🗑</button></div>`)
-        : (mine && st === 'planned' ? `<div class="dt-ctl"><button class="dt-mini del" onclick="removeDowntime('${e.id}')">Cancel</button></div>` : '');
+            ? `<div class="dt-ctl"><button class="dt-mini ok" onclick="resolveDowntime('${escOnclickArg(e.id)}',true)">✓ Resolve</button><button class="dt-mini bad" onclick="resolveDowntime('${escOnclickArg(e.id)}',false)">✗ Failed</button><button class="dt-mini del" onclick="removeDowntime('${escOnclickArg(e.id)}')">🗑</button></div>`
+            : `<div class="dt-ctl"><button class="dt-mini" onclick="reopenDowntime('${escOnclickArg(e.id)}')">↺ Reopen</button><button class="dt-mini del" onclick="removeDowntime('${escOnclickArg(e.id)}')">🗑</button></div>`)
+        : (mine && st === 'planned' ? `<div class="dt-ctl"><button class="dt-mini del" onclick="removeDowntime('${escOnclickArg(e.id)}')">Cancel</button></div>` : '');
       return `<div class="dt-entry dt-${st}">
         <div class="dt-entry-hd">${ref ? `<span class="dt-by">${escQH(e.by)}</span>` : ''}<span class="dt-kind">${escQH(kindLbl(e.kind))}${e.weeks ? ' · ' + e.weeks + 'wk' : ''}</span>${badge}</div>
         <div class="dt-action">${escQH(e.action)}</div>

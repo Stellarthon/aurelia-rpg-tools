@@ -1347,8 +1347,8 @@ function renderSheetForm(data){
   body.innerHTML = `
     ${renderPortrait(sheetCurrentCharacter, data)}
     <div class="sheet-name-row">
-      <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${(data.name||'').replace(/"/g,'&quot;')}">
-      <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${(data.age||'').replace(/"/g,'&quot;')}">
+      <input type="text" class="sheet-name-input" id="sheet-f-name" placeholder="Character name" value="${escAttr(data.name)}">
+      <input type="text" class="sheet-name-input" id="sheet-f-age" placeholder="Age" style="flex:0 0 80px" value="${escAttr(data.age)}">
     </div>
     <div class="sheet-section">
       <div class="sheet-section-lbl">Characteristics</div>
@@ -1364,12 +1364,12 @@ function renderSheetForm(data){
     </div>
     <div class="sheet-section">
       <div class="sheet-section-lbl">Skills</div>
-      <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${data.skills||''}</textarea>
+      <textarea class="sheet-textarea" id="sheet-f-skills" placeholder="e.g. Pilot (Spacecraft) 2, Gun Combat (Slug) 1, Streetwise 1...">${escHtml(data.skills)}</textarea>
     </div>
     ${renderInventorySection(sheetCurrentCharacter)}
     <div class="sheet-section">
       <div class="sheet-section-lbl">Notes</div>
-      <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${data.notes||''}</textarea>
+      <textarea class="sheet-textarea" id="sheet-f-notes" placeholder="Anything else worth tracking...">${escHtml(data.notes)}</textarea>
     </div>
     <div class="sheet-section" style="text-align:right">
       <button class="cal-add-btn" style="width:auto;display:inline-block;padding:7px 14px" onclick="printCharacterSheet()">🖨 Print / save as PDF</button>

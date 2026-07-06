@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- CSP backstop — self-contained prototype page. Keeps inline script/style (this
+     page is built from them) but blocks plugins and <base> hijack and pins network
+     egress to self + the campaign Supabase origin. See index.html for rationale. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:; img-src 'self' data: blob: https://rarxefzcqvgqvxutprcq.supabase.co; connect-src 'self' https://rarxefzcqvgqvxutprcq.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Aurelia RPG Tools — Campaign Setup</title>
 <!--

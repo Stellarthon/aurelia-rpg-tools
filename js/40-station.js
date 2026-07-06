@@ -159,13 +159,16 @@ function renderDetail(){
       const delNpcBtn = (designModeOn && isAddition)
         ? `<button class="design-edit-pencil-inline danger" style="margin-left:6px" onclick="event.stopPropagation();deleteAddedNpc('${npcListKey}','${nidKey}')" title="Delete this NPC">🗑</button>`
         : '';
+      // Added NPCs come from contentAdditions (anon-writable state), so name /
+      // role / stats / skills are attacker-controllable and must be escaped/
+      // sanitised at the sink (they don't pass through resolveContent).
       return `<div class="npc-card"${hasLocEditor ? ' style="overflow:visible"' : ''}><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div>${locBadge}${dispoBadge}</div>
+        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div>${locBadge}${dispoBadge}</div>
         <span style="display:flex;align-items:center;gap:2px">${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
         <div class="npc-body${bodyOpen}" id="${nid}">
           ${locEditor}
-          <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
-          <div class="skill-row">${n.skills}</div>
+          <div class="stat-grid">${Object.entries(n.stats||{}).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>
+          <div class="skill-row">${sanitizeRich(n.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;
@@ -205,10 +208,10 @@ function renderDetail(){
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
         return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>🎲 ${cdata.skill}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(dg=>{
-          const cls=dg.cls||degCls[dg.c]||"deg-p";
+          const cls=dg.cls||degCls[dg.c]||"deg-p";     // attr context — escAttr, not the sanitised (element-context) value
           const lbl=dg.label||dg.l||"";
           const txt=dg.text||dg.t||"";
-          return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
+          return `<div class="deg-row"><span class="${escAttr(cls)}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
         }).join("")}</div>`;
       }).join("");
     }
@@ -254,7 +257,7 @@ function renderDetail(){
       renderPlayerNotesTab(d, key);
     } else {
       const saved=notes[key]||"";
-      d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${saved}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
+      d.innerHTML=backBtn+`<div class="blk-lbl" style="margin-bottom:8px">Session Notes</div><textarea class="note-ta" id="nta" placeholder="Track what happened here, player choices, NPC reactions...">${escHtml(saved)}</textarea><div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="saveNote()">Save</button><span class="saved-msg" id="smsg">✓ Saved</span></div>`;
     }
   }
 }
@@ -278,14 +281,14 @@ async function renderPlayerNotesTab(container, key){
   if(notesSubTab === 'private'){
     const text = await loadPrivateNote(key);
     const body = document.getElementById('player-notes-body');
-    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${text}</textarea>
+    if(body) body.innerHTML = `<textarea class="note-ta" id="priv-nta" placeholder="Your private notes — only you and the referee can see these...">${escHtml(text)}</textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="savePrivNotesTab('${key}')">Save</button><span class="saved-msg" id="priv-smsg">✓ Saved</span></div>`;
   } else {
     const list = await loadPartyNotes(key);
     const body = document.getElementById('player-notes-body');
     if(body){
       body.innerHTML = (list.length ? list.map(n =>
-        `<div class="party-note-entry"><div class="party-note-author">${n.author}</div><div class="party-note-text">${n.text}</div></div>`
+        `<div class="party-note-entry"><div class="party-note-author">${escHtml(n.author)}</div><div class="party-note-text">${escHtml(n.text)}</div></div>`
       ).join('') : '<div class="init-empty">No party notes yet for this area.</div>')
       + `<textarea class="note-ta" id="party-nta" placeholder="Add a note the whole party can see..." style="margin-top:8px;min-height:60px"></textarea>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px"><button class="save-btn" onclick="addPartyNoteTab('${key}')">Post</button></div>`;

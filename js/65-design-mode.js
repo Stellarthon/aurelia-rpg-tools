@@ -411,8 +411,20 @@ function closeRemovedItemsPanel(){
 
 // Resolves the text actually shown for a given key — override if one
 // exists, otherwise the original hardcoded value passed in.
+//
+// SECURITY: contentOverrides is loaded from the anon-writable `aurelia_state`
+// table, so an override is attacker-controllable. This function is the single
+// choke point that returns override-or-original for every design field
+// (read-aloud, descriptions, referee notes, checks, events, NPC rows), so we
+// sanitise its output here — centrally — rather than at each of the dozens of
+// innerHTML sinks. sanitizeDesign() preserves the intentional rich-text
+// formatting (bold/italic/lists/headings/links) while stripping <script>,
+// event handlers and other injection vectors, and recurses into the structured
+// check/event/row shapes. The hardcoded originals are trusted, but sanitising
+// them too is harmless (allow-listed tags survive unchanged).
 function resolveContent(key, originalText){
-  return Object.prototype.hasOwnProperty.call(contentOverrides, key) ? contentOverrides[key] : originalText;
+  const raw = Object.prototype.hasOwnProperty.call(contentOverrides, key) ? contentOverrides[key] : originalText;
+  return sanitizeDesign(raw);
 }
 
 const DESIGN_MODE_CODE = 'ilovetwix2012!';

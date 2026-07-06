@@ -245,38 +245,45 @@ function renderQuestPanel(){
 }
 
 function renderQuestCard(q, ref){
-  const statusLabel = {active:'Active', complete:'Complete', hidden:'Hidden'}[q.status] || q.status;
+  // quest-log is loaded from the anon-writable state table, so id / status /
+  // text are all attacker-controllable. id lands in element ids, class names and
+  // inline onclick JS-string args, so it gets escOnclickArg (JS+attr safe) for
+  // handlers and escAttr for plain attributes; status lands in a class + a label.
+  const idJs   = escOnclickArg(q.id);
+  const idAttr = escAttr(q.id);
+  const statusAttr = escAttr(q.status);
+  const statusLabel = {active:'Active', complete:'Complete', hidden:'Hidden'}[q.status] || escHtml(q.status);
 
   const objHTML = (q.objectives||[]).length ? `
     <div class="quest-objectives">
       ${q.objectives.map((obj,i) => `
         <div class="quest-obj-row${obj.done?' done':''}">
           ${ref
-            ? `<div class="quest-obj-check${obj.done?' checked':''}" onclick="toggleObjective('${q.id}',${i})" title="Toggle done">${obj.done?'✓':''}</div>`
+            ? `<div class="quest-obj-check${obj.done?' checked':''}" onclick="toggleObjective('${idJs}',${i})" title="Toggle done">${obj.done?'✓':''}</div>`
             : `<div class="quest-obj-check${obj.done?' checked':''}" style="cursor:default">${obj.done?'✓':''}</div>`
           }
-          <span class="quest-obj-text">${escQH(obj.text)}</span>
+          <span class="quest-obj-text">${escHtml(obj.text)}</span>
         </div>
-        ${ref && obj.refNote ? `<div class="quest-obj-ref">↳ ${escQH(obj.refNote)}</div>` : ''}
+        ${ref && obj.refNote ? `<div class="quest-obj-ref">↳ ${escHtml(obj.refNote)}</div>` : ''}
       `).join('')}
     </div>` : '';
 
   const refNoteHTML = ref && q.refNote ? `
     <div class="quest-ref-note">
       <div class="quest-ref-note-lbl">Referee Note</div>
-      ${escQH(q.refNote).replace(/\n/g,'<br>')}
+      ${escHtml(q.refNote).replace(/\n/g,'<br>')}
     </div>` : '';
 
-  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${q.id}')">✏ Edit Mission</button>` : '';
+  const editBtn = ref ? `<button class="quest-edit-btn" onclick="openQuestEditor('${idJs}')">✏ Edit Mission</button>` : '';
 
   return `
-    <div class="quest-card status-${q.status}" id="qcard-${q.id}">
-      <div class="quest-card-header" onclick="toggleQuestCard('${q.id}')">
-        <span class="quest-title">${escQH(q.title)}</span>
+    <div class="quest-card status-${statusAttr}" id="qcard-${idAttr}">
+      <div class="quest-card-header" onclick="toggleQuestCard('${idJs}')">
+        <span class="quest-title">${escHtml(q.title)}</span>
         <span class="quest-status-badge">${statusLabel}</span>
       </div>
-      <div class="quest-card-body" id="qbody-${q.id}">
-        ${q.playerDesc ? `<div class="quest-player-desc">${escQH(q.playerDesc).replace(/\n/g,'<br>')}</div>` : ''}
+      <div class="quest-card-body" id="qbody-${idAttr}">
+        ${q.playerDesc ? `<div class="quest-player-desc">${escHtml(q.playerDesc).replace(/\n/g,'<br>')}</div>` : ''}
         ${objHTML}
         ${refNoteHTML}
         ${editBtn}
@@ -284,7 +291,8 @@ function renderQuestCard(q, ref){
     </div>`;
 }
 
-function escQH(s){
-  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+// Kept as a thin alias to the canonical text escaper (js/00-core-data.js). The
+// old local version did NOT escape quotes; callers that place a value inside an
+// attribute or an inline handler must use escAttr / escOnclickArg instead.
+function escQH(s){ return escHtml(s); }
 
