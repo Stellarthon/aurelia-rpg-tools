@@ -522,8 +522,169 @@ function renderBoardPanel(){
   body.innerHTML = h;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RECURRING SHIP COSTS — accrue on calendar advance, referee approves
+// ═══════════════════════════════════════════════════════════════════════════
+// RAW (Core Update 2022 p.160): per Maintenance Period (4 weeks / 28 days) —
+// mortgage = price ÷ 240; maintenance = 0.1% of price per year ÷ 12; life
+// support Cr1,000/stateroom + Cr1,000/person + Cr100/occupied low berth;
+// salaries Pilot 6,000 · Astrogator 5,000 · Engineer 4,000 · Medic 3,000 ·
+// Steward 2,000 · Gunner 1,000 · Marine 1,000. Amounts are referee-editable
+// (staterooms/crew aren't on the sheet, so life support & salaries can't be
+// derived — the RAW formulae ride the tooltips instead). When the Imperial
+// date crosses a 28-day boundary each enabled item lands as a PENDING entry;
+// NOTHING is ever deducted until the referee approves it into the ledger.
+// Shared key 'ship-costs'; the review UI lives in the 💰 Funds panel.
+
+const SHIP_COST_PERIOD = 28;   // days per Maintenance Period (RAW)
+const SHIP_COST_HINTS = {
+  maintenance: 'RAW: 0.1% of purchase price per year, billed monthly (÷12)',
+  mortgage:    'RAW: purchase price ÷ 240, every 4 weeks for 40 years',
+  lifeSupport: 'RAW: Cr1,000 per stateroom + Cr1,000 per person aboard + Cr100 per occupied low berth',
+  salaries:    'RAW per period: Pilot 6,000 · Astrogator 5,000 · Engineer 4,000 · Medic 3,000 · Steward 2,000 · Gunner 1,000 · Marine 1,000',
+};
+let shipCosts = { cfg: null, lastOrd: null, pending: [] };
+let shipCostsCfgOpen = false;   // rates editor visibility (device-local)
+
+// "MCr64", "MCr 42.6", "Cr42,600,000", "42600000" → credits (0 if unparseable).
+function parseCrStr(s){
+  if(typeof s === 'number' && isFinite(s)) return Math.round(s);
+  s = String(s || '').replace(/,/g, '');
+  const m = s.match(/(\d+(?:\.\d+)?)/); if(!m) return 0;
+  let v = parseFloat(m[1]);
+  if(/mcr/i.test(s)) v *= 1e6;
+  return Math.round(v);
+}
+// RAW defaults off the ship sheet where derivable; sheet cost strings as fallback.
+function shipCostsDefaults(){
+  const ss = (typeof shipState !== 'undefined') ? shipState : {};
+  const price = parseCrStr(ss.purchaseCost);
+  return [
+    { id: 'maintenance', label: 'Maintenance',   amount: price > 0 ? Math.round(price * 0.001 / 12) : parseCrStr(ss.maintenance), on: true },
+    { id: 'mortgage',    label: 'Mortgage',      amount: price > 0 ? Math.round(price / 240) : parseCrStr(ss.mortgage), on: true },
+    { id: 'lifeSupport', label: 'Life support',  amount: 0, on: true },
+    { id: 'salaries',    label: 'Crew salaries', amount: 0, on: true },
+  ];
+}
+function shipCostsEnsure(){
+  if(!shipCosts || typeof shipCosts !== 'object') shipCosts = { cfg: null, lastOrd: null, pending: [] };
+  if(!shipCosts.cfg || !Array.isArray(shipCosts.cfg.items)) shipCosts.cfg = { items: shipCostsDefaults() };
+  if(!Array.isArray(shipCosts.pending)) shipCosts.pending = [];
+}
+async function loadShipCosts(){
+  try { const r = await supaStorage.get('ship-costs', true);
+    if(r.value != null){ const v = JSON.parse(r.value); if(v && typeof v === 'object') shipCosts = v; } } catch(e){}
+  shipCostsEnsure();
+}
+async function saveShipCosts(){
+  try { await supaStorage.set('ship-costs', JSON.stringify(shipCosts), true); }
+  catch(e){ console.error('Ship costs save failed:', e); }
+}
+
+// Called from afterDateChange() (85-records.js) whenever the referee moves the
+// Imperial date. Crossing a 28-day boundary queues each enabled item as pending.
+function shipCostsOnDateChange(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCostsEnsure();
+  const cur = imperialOrdinal(imperialDate);
+  if(shipCosts.lastOrd == null || cur < shipCosts.lastOrd){   // first run / date moved back: re-baseline, no back-billing
+    shipCosts.lastOrd = cur; saveShipCosts(); return;
+  }
+  let accrued = 0;
+  while(cur >= shipCosts.lastOrd + SHIP_COST_PERIOD){
+    shipCosts.lastOrd += SHIP_COST_PERIOD;
+    const due = formatImperial(ordinalToImperial(shipCosts.lastOrd));
+    shipCosts.cfg.items.forEach(it => {
+      const amt = Math.round(Number(it.amount) || 0);
+      if(it.on && amt > 0){ shipCosts.pending.push({ id: 'sc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), itemId: it.id, label: it.label, amount: amt, due }); accrued++; }
+    });
+  }
+  if(accrued){
+    saveShipCosts();
+    if(typeof fundsPanelOpen !== 'undefined' && fundsPanelOpen && typeof renderFundsPanel === 'function') renderFundsPanel();
+    if(typeof showToast === 'function') showToast(`⏱ Maintenance period ended — ${accrued} ship cost${accrued > 1 ? 's' : ''} pending in 💰 ${typeof TERM === 'function' ? TERM('funds') : 'Funds'}`);
+  }
+}
+function shipCostApprove(id){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const p = shipCosts.pending.find(x => x.id === id); if(!p) return;
+  if(typeof normalizeFunds === 'function') normalizeFunds();
+  funds.party = (Number(funds.party) || 0) - p.amount;
+  fundsLog('party', -p.amount, `${p.label} — maintenance period ending ${p.due}`);
+  shipCosts.pending = shipCosts.pending.filter(x => x.id !== id);
+  saveFunds(); saveShipCosts();
+  if(typeof renderFundsPanel === 'function') renderFundsPanel();
+}
+function shipCostWaive(id){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCosts.pending = shipCosts.pending.filter(x => x.id !== id);
+  saveShipCosts();
+  if(typeof renderFundsPanel === 'function') renderFundsPanel();
+}
+function shipCostApproveAll(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCosts.pending.slice().forEach(p => shipCostApprove(p.id));
+}
+function shipCostSetAmount(itemId, value){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCostsEnsure();
+  const it = shipCosts.cfg.items.find(x => x.id === itemId); if(!it) return;
+  it.amount = Math.max(0, Math.round(Number(value) || 0));
+  saveShipCosts();
+}
+function shipCostToggle(itemId){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCostsEnsure();
+  const it = shipCosts.cfg.items.find(x => x.id === itemId); if(!it) return;
+  it.on = !it.on;
+  saveShipCosts();
+}
+function shipCostsToggleCfg(){ shipCostsCfgOpen = !shipCostsCfgOpen; if(typeof renderFundsPanel === 'function') renderFundsPanel(); }
+function shipCostsRederive(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  shipCostsEnsure();
+  const def = shipCostsDefaults();
+  shipCosts.cfg.items.forEach(it => { const d = def.find(x => x.id === it.id); if(d && d.amount > 0) it.amount = d.amount; });
+  saveShipCosts();
+  if(typeof renderFundsPanel === 'function') renderFundsPanel();
+  if(typeof showToast === 'function') showToast('Rates re-derived from the ship sheet where possible');
+}
+
+// Referee section rendered inside the 💰 Funds panel (see renderFundsPanel).
+function shipCostsFundsSectionHTML(){
+  shipCostsEnsure();
+  let h = `<div class="fund-lbl" style="margin-top:2px">Ship running costs · every ${SHIP_COST_PERIOD} days</div><div class="fund-card">`;
+  if(!shipCosts.pending.length){
+    h += `<div class="trd-note">Nothing pending — costs accrue as the Imperial date advances, and only land in the ledger when you approve them.</div>`;
+  } else {
+    shipCosts.pending.forEach(p => {
+      h += `<div class="fund-purse"><span>${escQH(p.label)} <span style="opacity:.6;font-size:10px">due ${escQH(p.due)}</span></span>
+        <span style="display:flex;gap:6px;align-items:center"><b style="font-family:monospace;color:#d45050">−${fmtCr(p.amount)}</b>
+        <button class="disc-mini" onclick="shipCostApprove('${escQH(p.id)}')" title="Deduct from the party fund and log it">✓ Pay</button>
+        <button class="disc-mini" onclick="shipCostWaive('${escQH(p.id)}')" title="Dismiss without charging (deferred, story reasons…)">✕</button></span></div>`;
+    });
+    if(shipCosts.pending.length > 1){
+      const tot = shipCosts.pending.reduce((s, p) => s + p.amount, 0);
+      h += `<div class="fund-row"><button class="disc-mini" onclick="shipCostApproveAll()">✓ Pay all — ${fmtCr(tot)}</button></div>`;
+    }
+  }
+  h += `<div class="fund-row"><button class="disc-mini" onclick="shipCostsToggleCfg()">${shipCostsCfgOpen ? '▴ Hide rates' : '⚙ Rates'}</button></div>`;
+  if(shipCostsCfgOpen){
+    shipCosts.cfg.items.forEach(it => {
+      h += `<div class="fund-purse" title="${escQH(SHIP_COST_HINTS[it.id] || '')}">
+        <span><input type="checkbox"${it.on ? ' checked' : ''} onchange="shipCostToggle('${escQH(it.id)}')"> ${escQH(it.label)}</span>
+        <span><input class="fund-inp" style="width:84px" type="number" min="0" value="${Math.round(Number(it.amount) || 0)}" onchange="shipCostSetAmount('${escQH(it.id)}',this.value)"> Cr</span></div>`;
+    });
+    h += `<div class="fund-row"><button class="disc-mini" onclick="shipCostsRederive()" title="Maintenance & mortgage from the sheet's purchase cost (0.1%/yr ÷12 · price ÷240)">↺ Derive from ship sheet</button></div>
+      <div class="trd-note">Life support & salaries aren't derivable (staterooms/crew aren't on the sheet) — RAW formulae are in each row's tooltip; set what fits the ship.</div>`;
+  }
+  h += `</div>`;
+  return h;
+}
+
 // ── Boot ────────────────────────────────────────────────────────────────────
 loadStarportBoard();   // shared board — renders on-demand when its panel opens
+loadShipCosts();       // recurring-cost config + pending queue (reviewed in Funds)
 makePanelDraggable('trade-wrap', 'trade-header');
 makePanelResizable('trade-wrap');
 makePanelDraggable('board-wrap', 'board-header');
