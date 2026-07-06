@@ -16,7 +16,7 @@ const SHELL = [
   './js/30-system-body.js', './js/40-station.js', './js/45-initiative.js',
   './js/50-supabase.js', './js/55-auth-gating.js', './js/60-tools-settings.js',
   './js/62-campaign-studio.js', './js/65-design-mode.js', './js/70-panels-quest.js', './js/75-ship.js',
-  './js/80-combat.js', './js/85-records.js', './js/90-economy.js',
+  './js/80-combat.js', './js/85-records.js', './js/90-economy.js', './js/91-trade.js',
   './js/92-tools-misc.js', './js/96-creators.js', './js/97-session-planner.js', './js/98-trackers-boot.js',
 ];
 

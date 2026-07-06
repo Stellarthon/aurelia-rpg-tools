@@ -84,6 +84,7 @@ const PACK_DEFAULTS = {
     station:'Station', missions:'Missions', libraryData:'Library Data',
     oracle:'Oracle', standing:'Standing', funds:'Funds', ship:'Ship',
     combat:'Combat', economy:'Economy', npcs:'NPCs', rules:'Rules', sheets:'Sheets',
+    trade:'Station Trade',
   },
   // Per-campaign feature switches. false hides the subsystem entirely.
   modules: { economy:true, combat:true, morality:true, generation:true, oracle:true, calendar:true },
@@ -314,7 +315,7 @@ function applyPackTheme(){
 // Feature flags: hide the header/nav entry points for disabled subsystems. Maps
 // a module key to the DOM ids it governs. Default (all true) hides nothing.
 const MODULE_DOM = {
-  economy:  ['econ-btn'],
+  economy:  ['econ-btn', 'trade-btn'],
   combat:   ['combat-btn'],
   calendar: ['cal-btn'],
   oracle:   ['gen-btn'],
@@ -340,6 +341,7 @@ function applyTerminology(){
   btnLabel('combat-btn', '⚔', TERM('combat'));
   btnLabel('cal-btn', '📅', TERM('calendar'));
   btnLabel('econ-btn', '📈', TERM('economy'));
+  btnLabel('trade-btn', '🛒', TERM('trade'));
   btnLabel('disc-btn', '🗂', TERM('libraryData'));
   btnLabel('npc-btn', '👥', TERM('npcs'));
   btnLabel('rep-btn', '⚖', TERM('standing'));
