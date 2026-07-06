@@ -678,6 +678,20 @@ async function pollRevealState(){
         tradeCargo = freshTC;
         if(cargoPanelOpen) renderCargoPanel();
         if(typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+        if(typeof boardPanelOpen !== 'undefined' && boardPanelOpen) renderBoardPanel();
+        if(shipPanelOpen) renderShipPanel();   // sheet manifest lists contracted freight/mail
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Starport board — players see fresh postings and taken lots live
+  try {
+    const resSB = await supaStorage.get('starport-board', true);
+    if(resSB.ok){
+      const freshSB = resSB.value != null ? (JSON.parse(resSB.value) || { world:'', entries:[] }) : { world:'', entries:[] };
+      if(typeof starBoard !== 'undefined' && JSON.stringify(freshSB) !== JSON.stringify(starBoard)){
+        starBoard = freshSB;
+        if(typeof boardPanelOpen !== 'undefined' && boardPanelOpen) renderBoardPanel();
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
@@ -767,6 +781,7 @@ async function pollRevealState(){
         shipState = freshShip;
         if(shipPanelOpen) renderShipPanel();
         if(typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+        if(typeof boardPanelOpen !== 'undefined' && boardPanelOpen) renderBoardPanel();
         // Fuel/jump changes can flip the out-of-range advisory — refresh lanes.
         if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
       }

@@ -67,6 +67,7 @@ let shipState = {
   broker: 2,             // Broker skill for trade price estimates (0–6)
   jumpLog: [],           // captain's log: [{date,from,to,weeks,burn,refuels,events}]
   visited: [],           // galaxy-node ids the party has physically called at — gates market/trade intel from players until they've been there
+  passengers: [],        // booked passages (starport board, js/91): [{id,cls,count,dest,destLabel,fare,date}]
   // ── Combat stats (Phase 1 — additive; lazy-default merged on load) ─────────
   // These extend the sheet with the numerics MgT2e *core* space combat needs.
   // They are dormant until the combat module reads them; existing rows simply
@@ -309,6 +310,22 @@ function renderShipPanel(){
       <div class="sf-row"><span class="sf-lbl">Fuel Processor</span><span class="sf-fld">${sfTextField('fuelProcessor')}</span></div>
     </div>
   </div>`);
+
+  // ── MANIFEST — booked passengers & contracted freight/mail (diegetic; read-only
+  //    here — booking/delivery happens on the 📦 Starport Board, js/91) ──
+  {
+    const pax = Array.isArray(shipState.passengers) ? shipState.passengers : [];
+    const contracts = (typeof tradeCargo !== 'undefined' && tradeCargo && Array.isArray(tradeCargo.lots))
+      ? tradeCargo.lots.filter(l => l.kind === 'freight' || l.kind === 'mail') : [];
+    if(pax.length || contracts.length){
+      const rows = pax.map(p => `<div class="sf-row"><span class="sf-lbl">🧍 ${Number(p.count) || 0}× ${escQH(p.cls)}</span><span class="sf-fld">→ ${escQH(p.destLabel || '')}</span></div>`)
+        .concat(contracts.map(l => `<div class="sf-row"><span class="sf-lbl">${l.kind === 'mail' ? '✉' : '📦'} ${Number(l.tons) || 0} dt</span><span class="sf-fld">→ ${escQH(l.destLabel || '')}</span></div>`));
+      sec.push(`<div class="sf-sec">
+        <div class="sf-tab">Manifest</div>
+        <div class="sf-card">${rows.join('')}</div>
+      </div>`);
+    }
+  }
 
   // ── COST BARS ──
   const costRow = (field, label) => `<div class="sf-cost"><span class="sf-cost-lbl">${label}</span><span class="sf-cost-fld">${sfTextField(field)}</span></div>`;
