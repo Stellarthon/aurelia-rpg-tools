@@ -24,7 +24,42 @@ const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
 //   body.textureUrl (full URL escape hatch) > '__none__' (force procedural) >
 //   body.texture (explicit catalog file) > auto-match by planet type.
 const TEXTURE_BASE = SUPABASE_URL + '/storage/v1/object/public/globes/';
-let textureCatalog = []; // filenames in the globes bucket, loaded at runtime
+
+// Static texture manifest — the committed source of truth for the globes catalog.
+// Shipping this lets us DROP the anon list policy on the public 'globes' bucket
+// (migration 0009), which closes the storage-enumeration advisory, while textures
+// keep resolving with zero network dependency. loadTextureCatalog() still tries a
+// live list first so that if a list policy is ever (re-)granted, newly uploaded
+// textures appear without a code change; otherwise it falls back to this manifest.
+// To refresh after uploading new globes: re-run the list query and update this array.
+const TEXTURE_MANIFEST = [
+  "Csilla (Diffuse 4k)_1920x1080.png",
+  "Desert 02 (Diffuse)_1920x1080.png",
+  "Desert 04 (Diffuse)_1920x1080.png",
+  "Desert 05 (Diffuse)_1920x1080.png",
+  "Desert 07 (Diffuse)_1920x1080_1920x1080.png",
+  "Desert 08 (Diffuse)_1920x1080_1920x1080.png",
+  "Exotic 01 (Diffuse) 4k_1920x1080_1920x1080.png",
+  "Exotic 02 (Diffuse 4k)_1920x1080.png",
+  "Exotic 03 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Felucia (Diffuse)_1920x1080.png",
+  "Gaseous 01 (Diffuse 4k)_1920x1080.png",
+  "Gaseous 02 (Diffuse 4k)_1920x1080.png",
+  "Gaseous 03 (Diffuse 4k)_1920x1080.png",
+  "Ice 05 (Diffuse) 4k_1920x1080_1920x1080.png",
+  "Ice 06 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Korriban (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Oceanic 05 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Terran 05 (Diffuse)_1920x1080_1920x1080.png",
+  "Terran 06 (Diffuse)_1920x1080_1920x1080.png",
+  "Terran 09 (Diffuse 2 4k)_1920x1080_1920x1080.png",
+  "Terran 09 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Terran 10 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Volcanic 01 (Diffuse)_1920x1080_1920x1080.png",
+  "Volcanic 05 (Diffuse 4k)_1920x1080_1920x1080.png",
+  "Volcanic 06 (Diffuse 4k)_1920x1080_1920x1080.png"
+];
+let textureCatalog = TEXTURE_MANIFEST.slice(); // start from the manifest; refreshed live below if listing is allowed
 
 async function loadTextureCatalog(){
   try {
@@ -33,12 +68,13 @@ async function loadTextureCatalog(){
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
-    if(!res.ok) return;
+    if(!res.ok) return;                    // listing blocked (expected once 0009 lands) — keep the manifest
     const list = await res.json();
-    textureCatalog = (Array.isArray(list) ? list : [])
+    const live = (Array.isArray(list) ? list : [])
       .filter(o => o && o.id && /\.(png|jpe?g|webp)$/i.test(o.name))  // real image files only (skip folders/placeholders)
       .map(o => o.name);
-  } catch(e){ /* offline / blocked — leave empty; bodies with an explicit texture still resolve */ }
+    if(live.length) textureCatalog = live; // a working list policy supersedes the manifest so uploads need no code change
+  } catch(e){ /* offline / blocked — keep the manifest; bodies with an explicit texture still resolve */ }
 }
 
 // Which texture category best fits a body, from its type keywords / disc style.

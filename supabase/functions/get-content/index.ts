@@ -63,12 +63,37 @@ function canSee(audience: unknown, role: string, audiences: string[]): boolean {
 // TASK 6 — break-glass: the lock auto-expires 12h after it was pinned.
 const LOCK_TTL_MS = 12 * 60 * 60 * 1000;
 
-// The caller's public IP as the edge function sees it (Supabase forwards it in
-// x-forwarded-for; x-real-ip is a fallback). First hop is the real client.
+// The caller's public IP as a TRUSTED hop sees it.
+//
+// SECURITY (Finding 6): `x-forwarded-for` is a list the CLIENT can seed. Anything
+// the client sends is prepended on the LEFT; each trusted proxy appends the real
+// observed peer IP on the RIGHT. So the LEFTMOST entry is attacker-controlled —
+// reading it (as this used to) let a player spoof the referee's IP and defeat the
+// venue lock by simply sending `X-Forwarded-For: <referee ip>`. We now take the
+// RIGHTMOST entry, which is the IP the closest trusted proxy actually saw, and
+// which the client cannot forge (their forged values stay to the left of it).
+// `x-real-ip` (platform-set) is only a fallback for when XFF is unexpectedly empty.
+//
+// This is PUBLIC-IP pinning, not network attestation: browsers can't read Wi-Fi/
+// SSID, so "same network" is approximated by "same public IP". Two devices behind
+// the same NAT share a public IP; a VPN/mobile-data device does not.
+//
+// CONFIRMING THE CHAIN: if the deployed platform ever fronts this function with an
+// extra hop (so the rightmost entry becomes an internal proxy IP), send a request
+// with header `x-debug-ipchain: 1` from a known client and read the logged chain
+// to pick the correct trusted index. Left as the last-entry default per the
+// standard reverse-proxy convention until such a hop is observed.
 function clientIp(req: Request): string {
+  if (req.headers.get("x-debug-ipchain")) {
+    console.log("ipchain", JSON.stringify({
+      xff: req.headers.get("x-forwarded-for"),
+      xRealIp: req.headers.get("x-real-ip"),
+    }));
+  }
   const xff = req.headers.get("x-forwarded-for") || "";
-  const first = xff.split(",")[0].trim();
-  return first || (req.headers.get("x-real-ip") || "").trim();
+  const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length) return parts[parts.length - 1];   // rightmost = trusted hop's observed peer
+  return (req.headers.get("x-real-ip") || "").trim();
 }
 
 Deno.serve(async (req) => {
