@@ -15,6 +15,14 @@ const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
 const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
 
+// Token-gated edge functions (Findings 2c / 4 / 5). Used only when this device
+// holds a token (getContentToken); otherwise the legacy direct anon paths run, so
+// behaviour is unchanged until tokens are provisioned and the anon write/upload
+// policies are dropped (migrations 0011/0012). See docs/security-hardening-rollout.md.
+const PUT_STATE_FN     = SUPABASE_URL + '/functions/v1/put-state';
+const UPLOAD_OBJECT_FN = SUPABASE_URL + '/functions/v1/upload-object';
+const PRIVATE_NOTES_FN = SUPABASE_URL + '/functions/v1/private-notes';
+
 // ── Hosted planet-surface globe textures ────────────────────────────────────
 // Pre-rendered lit globe PNGs in the public Supabase Storage bucket "globes".
 // The catalog SELF-POPULATES at runtime by listing the bucket (an anon SELECT
@@ -124,14 +132,36 @@ function portraitUrlFor(characterName, ver){
   const url = PORTRAIT_BASE + encodeURIComponent(portraitPath(characterName));
   return ver ? (url + '?v=' + ver) : url;
 }
-async function uploadPortraitBlob(characterName, blob){
-  const res = await fetch(SUPABASE_URL + '/storage/v1/object/portraits/' + encodeURIComponent(portraitPath(characterName)), {
+// Shared upload path. When this device holds a token, the write is routed through
+// the token-gated upload-object edge function (Finding 2c: server verifies the
+// token, constrains bucket/path/mime/size, writes with the service role). With no
+// token the legacy direct storage upsert runs — identical to current behaviour —
+// so uploads keep working until tokens are provisioned and the anon INSERT/UPDATE
+// policies are dropped (migration 0012). Retains upsert/overwrite-on-reupload.
+async function _uploadObject(bucket, objectPath, contentType, body, label){
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(token){
+    const q = '?bucket=' + encodeURIComponent(bucket) + '&path=' + encodeURIComponent(objectPath);
+    const res = await fetch(UPLOAD_OBJECT_FN + q, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': contentType },
+      body
+    });
+    if(!res.ok) throw new Error(label + ' upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+    return true;
+  }
+  const encPath = objectPath.split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + encPath, {
     method: 'POST',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
-    body: blob
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': contentType },
+    body
   });
-  if(!res.ok) throw new Error('Portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  if(!res.ok) throw new Error(label + ' upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
   return true;
+}
+
+async function uploadPortraitBlob(characterName, blob){
+  return _uploadObject('portraits', portraitPath(characterName), 'image/jpeg', blob, 'Portrait');
 }
 
 // ── BYO rulebook (Supabase Storage 'rulebooks' bucket) ───────────────────────
@@ -151,13 +181,7 @@ function rulebookUrlFor(campaignId, ver){
   return ver ? (url + '?v=' + ver) : url;
 }
 async function uploadRulebookBlob(campaignId, file){
-  const res = await fetch(SUPABASE_URL + '/storage/v1/object/rulebooks/' + encodeURIComponent(rulebookPath(campaignId)), {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'application/pdf' },
-    body: file
-  });
-  if(!res.ok) throw new Error('Rulebook upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
-  return true;
+  return _uploadObject('rulebooks', rulebookPath(campaignId), 'application/pdf', file, 'Rulebook');
 }
 
 // ── Handouts (Supabase Storage 'handouts' bucket) ────────────────────────────
@@ -175,14 +199,7 @@ function handoutUrlFor(campaignId, id, ver){
   return ver ? (url + '?v=' + ver) : url;
 }
 async function uploadHandoutBlob(campaignId, id, blob){
-  const path = handoutObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
-  const res = await fetch(SUPABASE_URL + '/storage/v1/object/handouts/' + path, {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
-    body: blob
-  });
-  if(!res.ok) throw new Error('Handout upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
-  return true;
+  return _uploadObject('handouts', handoutObjectPath(campaignId, id), 'image/jpeg', blob, 'Handout');
 }
 
 // ── Session-planner reference docs (Supabase Storage 'session-docs' bucket) ───
@@ -199,14 +216,7 @@ function plannerDocUrlFor(campaignId, id, ver){
   return ver ? (url + '?v=' + ver) : url;
 }
 async function uploadPlannerDocBlob(campaignId, id, file){
-  const path = plannerDocObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
-  const res = await fetch(SUPABASE_URL + '/storage/v1/object/session-docs/' + path, {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'application/pdf' },
-    body: file
-  });
-  if(!res.ok) throw new Error('Session doc upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
-  return true;
+  return _uploadObject('session-docs', plannerDocObjectPath(campaignId, id), 'application/pdf', file, 'Session doc');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -286,8 +296,29 @@ const supaStorage = {
       return { ok: false, value: this.cacheGet(key), fromCache: true };
     }
   },
-  // Raw upsert — throws on any failure. Used by both set() and the queue flush.
+  // Raw upsert — throws on any failure. Used by both set() and the queue flush,
+  // so the offline queue / write-through cache / last-write-wins semantics are
+  // unchanged: a throw here parks the write and it replays on reconnect.
+  //
+  // WRITE GATING (Findings 4 & 5): when this device holds a token, writes go
+  // through the token-gated put-state edge function (server verifies the token and
+  // enforces referee-only keys, then writes with the service role). With NO token
+  // the legacy direct anon upsert is used — byte-for-byte the current behaviour —
+  // so nothing changes until (a) the device is given a token and (b) the anon
+  // write policies are dropped (migration 0011). `key` is already campaign-
+  // namespaced by the caller; put-state strips the camp:<id>: prefix for its
+  // referee-only-key check.
   async _post(key, value){
+    const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+    if(token){
+      const res = await fetch(PUT_STATE_FN, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: String(value) })
+      });
+      if(!res.ok) throw new Error('put-state ' + res.status + ' ' + (await res.text().catch(() => '')));
+      return true;
+    }
     const res = await fetch(SUPABASE_REST, {
       method: 'POST',
       headers: {

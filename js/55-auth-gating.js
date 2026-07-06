@@ -1215,9 +1215,35 @@ function changeIdentity(){
   showIdentityModal();
 }
 
-// ── Private + party notes (shared storage) ───────────────────────────────
+// ── Private + party notes ────────────────────────────────────────────────
+// PRIVATE notes (Finding 4b): historically stored in aurelia_state under
+// `note-private-<identity>-<area>`, which is world-readable with the publishable
+// key — so they leaked to everyone. When this device holds a token they now go
+// through the private-notes edge function (owner identity derived from the token;
+// backed by public.private_notes, which has NO anon read). A small localStorage
+// mirror preserves offline read. With NO token the legacy shared-table path runs,
+// unchanged, so behaviour is preserved until tokens are provisioned.
+function _privNoteCacheKey(key){ return 'aurelia_privnote_' + (myIdentity || '') + '_' + key; }
+
 async function loadPrivateNote(key){
   if(!myIdentity) return '';
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(token){
+    try {
+      const res = await fetch(PRIVATE_NOTES_FN, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'get', key })
+      });
+      if(res.ok){
+        const d = await res.json();
+        const v = (d && d.value != null) ? d.value : '';
+        try { localStorage.setItem(_privNoteCacheKey(key), v); } catch(e){}
+        return v;
+      }
+    } catch(e){ /* offline — fall back to the local mirror below */ }
+    try { return localStorage.getItem(_privNoteCacheKey(key)) || ''; } catch(e){ return ''; }
+  }
   try {
     const res = await supaStorage.get(`note-private-${myIdentity}-${key}`, false);
     return res.value != null ? res.value : '';
@@ -1226,6 +1252,18 @@ async function loadPrivateNote(key){
 
 async function savePrivateNote(key, text){
   if(!myIdentity) return;
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(token){
+    try { localStorage.setItem(_privNoteCacheKey(key), text); } catch(e){}
+    try {
+      await fetch(PRIVATE_NOTES_FN, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'set', key, value: text })
+      });
+    } catch(e){ console.error('Private note save failed', e); }
+    return;
+  }
   try { await supaStorage.set(`note-private-${myIdentity}-${key}`, text, false); }
   catch(e){ console.error('Private note save failed', e); }
 }
