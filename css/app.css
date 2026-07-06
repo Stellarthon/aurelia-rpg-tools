@@ -2680,6 +2680,18 @@ input#ui-scale-range{
   font-size:10px;color:var(--accentGold);letter-spacing:1.5px;text-transform:uppercase;
   font-family:monospace;margin-bottom:8px;border-bottom:.5px solid var(--bd0);padding-bottom:4px
 }
+/* ── Task-check cheat card (character sheet; display only) ── */
+.tc-table{width:100%;border-collapse:collapse;font-family:monospace;font-size:11px}
+.tc-table th{font-size:9px;letter-spacing:.5px;color:var(--accentGold);text-align:center;padding:2px 3px;border-bottom:.5px solid var(--bd0)}
+.tc-table th:first-child{text-align:left}
+.tc-table td{text-align:center;padding:3px;border-bottom:.5px solid var(--bg2);color:var(--tx0)}
+.tc-table td:first-child{text-align:left;font-family:var(--font,inherit);font-size:11px;word-break:break-word}
+.tc-lvl{color:var(--tx1);font-family:monospace;font-size:10px}
+.tc-unskilled td{color:var(--tx1)}
+.tc-note{font-size:10px;color:var(--tx1);line-height:1.45;margin-bottom:6px}
+.tc-ladder{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:10px;color:var(--tx1)}
+.tc-diff b{font-family:monospace;color:var(--tx0)}
+.tc-diff.avg b{color:var(--accentGold)}
 /* ── Injury & recovery section (character sheet; reuses the js/45 hp bars) ── */
 .inj-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .inj-row .hp-row{flex:1;margin-bottom:0}
