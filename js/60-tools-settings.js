@@ -2010,6 +2010,7 @@ function closeCatalogue(){
   const m = document.getElementById('catalogue-modal');
   if(m) m.classList.remove('open');
   catalogueEditingId = null;
+  impView = null;
 }
 function catSetFilter(c){ catalogueCatFilter = c; renderCatalogueModal(); }
 function catSetSearch(v){
@@ -2024,6 +2025,7 @@ function catAddToChar(defId){ if(catalogueTargetChar) invAddFromCatalogue(catalo
 function renderCatalogueModal(){
   const body = document.getElementById('catalogue-body');
   if(!body) return;
+  if(impView && isReferee()){ body.innerHTML = renderImpView(); return; }
   body.innerHTML = (catalogueEditingId && isReferee())
     ? renderCatalogueEditor(catById(catalogueEditingId))
     : renderCatalogueBrowser();
@@ -2042,10 +2044,11 @@ function renderCatalogueBrowser(){
   const chips = ['all'].concat(ITEM_CATEGORIES).map(c =>
     `<button class="cat-chip${catalogueCatFilter === c ? ' on' : ''}" onclick="catSetFilter('${c}')">${c === 'all' ? 'All' : ea(_catLabel(c))}</button>`).join('');
   const newBtn = ref ? `<button class="cat-new-btn" onclick="catAdd()">＋ New item</button>` : '';
+  const impBtn = (ref && !catalogueTargetChar) ? `<button class="cat-new-btn" onclick="impOpenImport()">📥 Import</button>` : '';
   return `${note}
     <div class="cat-controls">
       <input id="cat-search" class="cat-search" placeholder="Search items…" value="${eatt(catalogueSearch)}" oninput="catSetSearch(this.value)">
-      ${newBtn}
+      ${newBtn}${impBtn}
     </div>
     <div class="cat-chips">${chips}</div>
     <div id="catalogue-list">${renderCatalogueList()}</div>`;
@@ -2561,3 +2564,519 @@ async function onPortraitFile(e){
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULEBOOK PDF IMPORT  (referee-only; populates the item catalogue)
+// ───────────────────────────────────────────────────────────────────────────
+// The referee uploads their OWN Mongoose 2e rulebook PDFs (Core Rulebook
+// Update 2022, Central Supply Catalogue) and the equipment tables are parsed
+// on-device into item-catalogue definitions, previewed, then merged into the
+// shared 'item-catalogue' key. Nothing here contains rulebook data: the code
+// only knows the *shape* of the stat tables (their column headers) — the
+// catalogue still ships empty, and no book content or PDF ever leaves the
+// device (pdf.js runs locally; only the referee-approved item stats are saved
+// to the campaign's own store, like hand-typed entries).
+//
+// pdf.js (vendor/pdfjs/, Apache-2.0) is lazy-loaded only when the referee
+// opens the importer — it is deliberately NOT in the sw.js SHELL precache.
+//
+// Parser input page shape: { num: 1-based pdf page, items: [{ str, x, y }] }
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Column-header vocabulary → catalogue field. Keys are lower-cased header cells.
+const IMP_COLMAP = {
+  'tl':'tl', 'cost':'cost', 'kg':'mass', 'mass':'mass', 'tons':'tons',
+  'range':'range', 'damage':'damage', 'protection':'protection', 'rad':'rad',
+  'magazine':'magazine', 'magazine cost':'magazineCost',
+  'power pack cost':'magazineCost', 'pack cost':'magazineCost',
+  'traits':'traits', 'improvements':'traits', 'required skill':'skill',
+  'processing':'processing', 'slots':'slots', 'str':'reqStr', 'dex':'dex',
+  'bandwidth':'bandwidth', 'pistol':'ammoPistol', 'rifle':'ammoRifle',
+  'shotgun':'ammoShotgun', 'heavy':'ammoHeavy'
+};
+
+// Book profiles keyed on page count — only structural facts (which PDF pages
+// belong to which chapter), used to categorise items the headers alone can't.
+const IMP_BOOKS = [
+  { id:'csc', label:'Central Supply Catalogue', pages:152, itemPages:[11,147],
+    skipPages:[[71,77]],            // robot stat blocks, not personal equipment
+    augment:[[87,94]], consumable:[[82,86],[139,142]] },
+  { id:'crb', label:'Core Rulebook Update 2022', pages:266, itemPages:[98,136],
+    augment:[[107,107]], consumable:[] }
+];
+
+function impBookFor(numPages){
+  return IMP_BOOKS.find(b => b.pages === numPages) || null;
+}
+function impInRanges(ranges, p){
+  return !!(ranges || []).find(r => p >= r[0] && p <= r[1]);
+}
+
+// Group raw positioned items into visual lines (y within 2.5pt), x-sorted.
+function impLines(rawItems){
+  const its = rawItems.filter(i => i.str && i.str.trim() !== '')
+    .map(i => ({ str: i.str.trim(), x: i.x, y: i.y }));
+  its.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+  const lines = [];
+  for (const it of its){
+    const ln = lines.length && Math.abs(lines[lines.length - 1].y - it.y) < 2.5
+      ? lines[lines.length - 1] : null;
+    if (ln) ln.items.push(it);
+    else lines.push({ y: it.y, items: [it] });
+  }
+  for (const ln of lines) ln.items.sort((a, b) => a.x - b.x);
+  return lines;
+}
+
+// Find a table header in a line: the longest contiguous run of IMP_COLMAP
+// tokens (must include Cost). The cell just before the run is the name column
+// if it reads like a short label rather than prose or a stray value.
+function impFindHeader(line){
+  let best = null;
+  for (let s = 0; s < line.items.length; s++){
+    let e = s;
+    while (e < line.items.length && IMP_COLMAP[line.items[e].str.toLowerCase()] !== undefined){
+      // keep the run x-contiguous: columns in one table sit < 240pt apart
+      if (e > s && line.items[e].x - line.items[e - 1].x > 240) break;
+      e++;
+    }
+    const run = line.items.slice(s, e);
+    if (run.length >= 2 && run.some(i => i.str.toLowerCase() === 'cost')){
+      if (!best || run.length > best.run.length) best = { s, run };
+    }
+    if (e > s) s = e - 1;
+  }
+  if (!best) return null;
+  const cols = best.run.map(i => ({ x: i.x, field: IMP_COLMAP[i.str.toLowerCase()] }));
+  let nameCol = null;
+  if (best.s > 0){
+    const prev = line.items[best.s - 1];
+    const txt = prev.str;
+    if (cols[0].x - prev.x < 250 && txt.length <= 26 && !/[.:;]$/.test(txt) &&
+        !/^\d\d\/\d+/.test(txt) && /[a-zA-Z]/.test(txt) &&
+        !/^(m?cr|kcr)?[\d.,]+m?$/i.test(txt)){
+      nameCol = { x: prev.x, field: 'name' };
+    }
+  }
+  // a 2-column stat run is only a header when a name column fronts it
+  // (Item | TL | Cost — the augment tables); ≥3 stat columns stand alone
+  if (cols.length < 3 && (!nameCol || !cols.some(c => c.field === 'tl'))) return null;
+  const nameLabel = nameCol ? line.items[best.s - 1].str.toLowerCase() : '';
+  return { y: line.y, cols, nameCol, nameLabel };
+}
+
+// Assign a line's items to header columns by x alignment (left-aligned tables).
+function impAssign(line, hdr){
+  const cols = hdr.nameCol ? [hdr.nameCol].concat(hdr.cols) : hdr.cols;
+  const cells = {}; let matched = 0;
+  for (const it of line.items){
+    let bestC = null, bestD = 3.5;
+    for (const c of cols){
+      const d = Math.abs(it.x - c.x);
+      if (d < bestD){ bestD = d; bestC = c; }
+    }
+    if (bestC){
+      cells[bestC.field] = (cells[bestC.field] ? cells[bestC.field] + ' ' : '') + it.str;
+      matched++;
+    }
+  }
+  return { cells, matched };
+}
+
+// Extract every table on a page: header + data rows, with wrapped-name,
+// subsection-label and TL-variant handling (the Mongoose layouts).
+function impTablesOnPage(lines){
+  const tables = [];
+  for (let li = 0; li < lines.length; li++){
+    const hdr = impFindHeader(lines[li]);
+    if (!hdr) continue;
+    const rows = [];
+    let lastY = hdr.y, misses = 0;
+    for (let j = li + 1; j < lines.length; j++){
+      const ln = lines[j];
+      if (impFindHeader(ln)) { if (rows.length) break; else continue; }
+      const { cells, matched } = impAssign(ln, hdr);
+      const statCount = Object.keys(cells).filter(k => k !== 'name').length;
+      const gap = lastY - ln.y;
+      if (!matched){
+        if (gap > 20) break;
+        misses++; if (misses > 6) break;
+        continue;
+      }
+      // subsection labels (PISTOLS, RIFLES …) sit between rows: allow a
+      // matched row past the 26pt limit if only a line or two intervened
+      if (gap > 26 && !(misses > 0 && gap <= 44 && statCount >= 2)) break;
+      if (cells.name !== undefined && statCount >= 2){
+        rows.push(cells);
+      } else if (cells.name === undefined && statCount >= 3 && rows.length){
+        cells.name = rows[rows.length - 1].name;   // TL-variant row of same item
+        cells._variant = true;
+        rows.push(cells);
+      } else if (rows.length){
+        const prev = rows[rows.length - 1];        // wrapped name / traits line
+        for (const k in cells){
+          // guard against two-column prose bleeding into a wrapped name
+          if (k === 'name' && (cells[k].length > 32 || /[.:]/.test(cells[k]))) continue;
+          const joiner = (k === 'name' && prev[k] && /-$/.test(prev[k])) ? '' : ' ';
+          prev[k] = (prev[k] ? prev[k] + joiner : '') + cells[k];
+        }
+      } else if (cells.name !== undefined && statCount === 0){
+        continue;                                   // stray label before data
+      } else {
+        continue;
+      }
+      lastY = ln.y; misses = 0;
+    }
+    if (rows.length) tables.push({ hdr, rows, headerIndex: li });
+  }
+  return tables;
+}
+
+// Nearest ALL-CAPS title line above the header in the same column, plus the
+// description prose between them (per-item layout of the CSC).
+function impTitleAbove(lines, table){
+  const hdr = table.hdr;
+  const x0 = (hdr.nameCol || hdr.cols[0]).x;
+  let title = null, titleIdx = -1;
+  for (let j = table.headerIndex - 1; j >= 0; j--){
+    const ln = lines[j];
+    if (ln.y - hdr.y > 260) break;
+    const first = ln.items[0];
+    if (first.x < x0 - 60 || first.x > x0 + 200) continue;
+    const txt = ln.items.map(i => i.str).join(' ').trim();
+    if (/^\d\d\/\d+/.test(txt)) continue;
+    const alpha = txt.replace(/[^a-zA-Z]/g, '');
+    if (alpha.length >= 3 && alpha === alpha.toUpperCase()){
+      title = txt; titleIdx = j; break;
+    }
+  }
+  if (!title) return { title: null, desc: '' };
+  const descLines = [];
+  for (let j = titleIdx + 1; j < table.headerIndex; j++){
+    const ln = lines[j];
+    if (Math.abs(ln.items[0].x - x0) > 32) continue;
+    descLines.push(ln.items.filter(i => i.x < x0 + 300).map(i => i.str).join(' '));
+  }
+  let desc = descLines.join(' ').replace(/\s+/g, ' ').trim();
+  if (desc.length > 300) desc = desc.slice(0, 300).replace(/\s+\S*$/, '') + '…';
+  return { title, desc };
+}
+
+function impTitleCase(s){
+  return s.toLowerCase().replace(/(^|[\s\-–—(/])([a-z])/g, (m, p, c) => p + c.toUpperCase());
+}
+function impParseTL(v){
+  if (v == null) return '';
+  const m = String(v).match(/(\d+)/);
+  return m ? Number(m[1]) : '';
+}
+function impParseCost(v){
+  if (v == null) return { cost: 0, raw: '' };
+  const s = String(v).replace(/,/g, '').trim();
+  let m = s.match(/^MCr\s*([\d.]+)$/i);
+  if (m) return { cost: Math.round(Number(m[1]) * 1e6), raw: '' };
+  m = s.match(/^K?Cr\s*([\d.]+)$/i);
+  if (m) return { cost: Math.round(Number(m[1]) * (/^k/i.test(s) ? 1000 : 1)), raw: '' };
+  if (/^[—–-]$/.test(s) || s === '') return { cost: 0, raw: '' };
+  return { cost: 0, raw: s };                       // e.g. 'x3', '+100% of augment'
+}
+function impParseMass(v, isTons){
+  if (v == null) return 0;
+  const s = String(v).replace(/,/g, '');
+  const m = s.match(/([\d.]+)/);
+  if (!m) return 0;
+  let kg = Number(m[1]);
+  if (isTons || /ton/i.test(s)) kg *= 1000;
+  return kg;
+}
+
+// One parsed row + context → an item-catalogue definition (matches
+// emptyItemDef()'s shape; ids are assigned at confirm time).
+function impRowToDef(row, table, pageNum, book, title, desc){
+  const h = table.hdr;
+  const fields = h.cols.map(c => c.field);
+  const isAmmo = fields.indexOf('ammoPistol') !== -1;
+  let category = 'gear';
+  if (fields.indexOf('protection') !== -1) category = 'armour';
+  else if (isAmmo) category = 'consumable';
+  else if (fields.indexOf('damage') !== -1) category = 'weapon';
+  else if (book && impInRanges(book.augment, pageNum)) category = 'augment';
+  if (category === 'gear' && book && impInRanges(book.consumable, pageNum)) category = 'consumable';
+
+  let name = (row.name || '').replace(/\s+/g, ' ').trim();
+  if (!name && title) name = impTitleCase(title);
+  if (!name) return null;
+  if (h.nameLabel === 'toolkits' && !/toolkit/i.test(name)) name += ' Toolkit';
+  let tlVal = impParseTL(row.tl);
+  // some tables name their rows by TL alone (radio transceivers) — fold the
+  // table label back in so the item reads 'Radio Transceivers TL9', not 'TL9'
+  const mTL = name.match(/^TL(\d+)\b/);
+  if (mTL){
+    if (tlVal === '') tlVal = Number(mTL[1]);
+    if (h.nameLabel && ['item', 'weapon', 'armour type'].indexOf(h.nameLabel) === -1){
+      name = impTitleCase(h.nameLabel) + ' ' + name;
+    }
+  }
+  if (/^[\d.\s]*$/.test(name) || name.length < 2) return null;
+  if (row._variant || row._dupName){
+    if (tlVal !== '' && !/\bTL\d/.test(name)) name += ' (TL' + tlVal + ')';
+  }
+
+  const costP = impParseCost(row.cost);
+  const noteBits = [];
+  if (book) noteBits.push(book.label + ', p.' + (pageNum - 1));
+  if (costP.raw) noteBits.push('Cost: ' + costP.raw);
+  if (row.processing) noteBits.push('Processing: ' + row.processing);
+  if (row.bandwidth) noteBits.push('Bandwidth: ' + row.bandwidth);
+  if (row.slots) noteBits.push('Slots: ' + row.slots);
+  if (row.dex) noteBits.push('DEX: ' + row.dex);
+  if (isAmmo){
+    const per = ['ammoPistol', 'ammoRifle', 'ammoShotgun', 'ammoHeavy']
+      .map((k, i) => row[k] && row[k] !== '—' && row[k] !== '-'
+        ? ['Pistol', 'Rifle', 'Shotgun', 'Heavy'][i] + ': ' + row[k] : null)
+      .filter(Boolean);
+    if (per.length) noteBits.push(per.join(' · '));
+  }
+
+  const mass = impParseMass(row.mass !== undefined ? row.mass : row.tons,
+    row.tons !== undefined);
+  const clean = v => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim());
+  return {
+    name, category,
+    tl: tlVal,
+    mass, cost: costP.cost,
+    desc: desc || '',
+    notes: noteBits.join(' · '),
+    range: clean(row.range), damage: clean(row.damage),
+    magazine: clean(row.magazine), magazineCost: clean(row.magazineCost),
+    traits: clean(row.traits), skill: clean(row.skill),
+    protection: clean(row.protection), rad: clean(row.rad),
+    reqStr: clean(row.reqStr)
+  };
+}
+
+// Whole-document parse: pages → deduped item definitions.
+function impParseDoc(pages, numPages){
+  const book = impBookFor(numPages);
+  const out = [];
+  const seen = {};                                   // name|tl|category → true
+  for (const page of pages){
+    if (book && book.itemPages &&
+        (page.num < book.itemPages[0] || page.num > book.itemPages[1])) continue;
+    if (book && impInRanges(book.skipPages, page.num)) continue;
+    const lines = impLines(page.items);
+    const tables = impTablesOnPage(lines);
+    for (const table of tables){
+      // duplicate names inside one table are TL variants — mark them
+      const counts = {};
+      for (const r of table.rows){
+        const n = (r.name || '').trim().toLowerCase();
+        if (n) counts[n] = (counts[n] || 0) + 1;
+      }
+      for (const r of table.rows){
+        const n = (r.name || '').trim().toLowerCase();
+        if (n && counts[n] > 1) r._dupName = true;
+      }
+      const needTitle = !table.hdr.nameCol || table.rows.length <= 3;
+      const t = needTitle ? impTitleAbove(lines, table) : { title: null, desc: '' };
+      for (const row of table.rows){
+        const def = impRowToDef(row, table, page.num, book, t.title,
+          table.hdr.nameCol && table.rows.length > 3 ? '' : t.desc);
+        if (!def) continue;
+        const key = def.name.toLowerCase() + '|' + def.tl + '|' + def.category;
+        if (seen[key]) continue;
+        seen[key] = true;
+        out.push(def);
+      }
+    }
+  }
+  return { book, items: out };
+}
+
+// ── pdf.js lazy loader (vendored; not in the SHELL precache) ────────────────
+let impPdfJsPromise = null;
+function impEnsurePdfJs(){
+  if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+  if (impPdfJsPromise) return impPdfJsPromise;
+  impPdfJsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'vendor/pdfjs/pdf.min.js';
+    s.onload = () => {
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
+        resolve();
+      } catch(e){ impPdfJsPromise = null; reject(e); }
+    };
+    s.onerror = () => {
+      impPdfJsPromise = null;
+      reject(new Error('Could not load the PDF engine — it downloads once, so check your connection and try again.'));
+    };
+    document.head.appendChild(s);
+  });
+  return impPdfJsPromise;
+}
+
+async function impParsePdfFile(file, onProgress){
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = [];
+  for (let p = 1; p <= doc.numPages; p++){
+    const pg = await doc.getPage(p);
+    const tc = await pg.getTextContent();
+    pages.push({ num: p, items: tc.items.map(i => ({ str: i.str, x: i.transform[4], y: i.transform[5] })) });
+    if (onProgress && (p % 10 === 0 || p === doc.numPages)) onProgress(p, doc.numPages);
+  }
+  const res = impParseDoc(pages, doc.numPages);
+  try { doc.destroy(); } catch(e){}
+  return res;
+}
+
+// ── Import UI (rendered inside #catalogue-body) ─────────────────────────────
+// impView: null | { phase:'pick'|'parsing'|'preview', err, items, srcLabels }
+let impView = null;
+
+function impOpenImport(){
+  if(!isReferee()) return;
+  impView = { phase:'pick' };
+  renderCatalogueModal();
+}
+function impCancel(){
+  impView = null;
+  renderCatalogueModal();
+}
+
+function renderImpView(){
+  const ea = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  if(impView.phase === 'pick'){
+    const err = impView.err ? `<div class="cat-empty" style="border-color:var(--txD);color:var(--txD)">${ea(impView.err)}</div>` : '';
+    return `${err}
+      <div class="imp-intro">Import equipment from your own rulebook PDFs. The book is read
+        entirely on this device — the PDF itself is never uploaded or stored, and the catalogue
+        only receives the item entries you approve on the next screen.<br><br>
+        Tuned for the <b>Core Rulebook Update 2022</b> and the <b>Central Supply Catalogue</b> (2016);
+        other Mongoose 2e books with standard stat tables will import on a best-effort basis.</div>
+      <div class="imp-file"><input type="file" accept=".pdf,application/pdf" multiple onchange="impFilesPicked(this)"></div>
+      <div class="cat-controls"><button class="cat-new-btn" onclick="impCancel()">‹ Back to catalogue</button></div>`;
+  }
+  if(impView.phase === 'parsing'){
+    return `<div class="imp-progress" id="imp-progress">Loading PDF engine…</div>`;
+  }
+  // preview
+  const items = impView.items || [];
+  const groups = {};
+  items.forEach((it, i) => {
+    const c = it.def.category || 'gear';
+    (groups[c] = groups[c] || []).push(i);
+  });
+  const order = ['weapon', 'armour', 'gear', 'augment', 'consumable'];
+  const selCount = items.filter(it => it.sel).length;
+  const src = (impView.srcLabels || []).join(' + ');
+  let html = `<div class="imp-intro">Found <b>${items.length}</b> items${src ? ' in ' + ea(src) : ''}.
+    Untick anything you don't want; entries already in the catalogue start unticked.
+    Everything stays editable in the catalogue afterwards.</div>`;
+  for(const cat of order){
+    const idxs = groups[cat]; if(!idxs) continue;
+    html += `<div class="imp-group"><b>${ea(_catLabel(cat))} (${idxs.length})</b>
+      <button class="imp-mini" onclick="impSelectCat('${cat}',true)">all</button>
+      <button class="imp-mini" onclick="impSelectCat('${cat}',false)">none</button></div>`;
+    html += idxs.map(i => {
+      const it = items[i]; const d = it.def;
+      const meta = [];
+      if(d.tl !== '' && d.tl != null) meta.push('TL' + ea(String(d.tl)));
+      meta.push((Number(d.mass) || 0) + 'kg');
+      if(Number(d.cost)) meta.push('Cr' + Number(d.cost).toLocaleString());
+      if(d.damage) meta.push(ea(d.damage));
+      if(d.protection) meta.push('Prot ' + ea(d.protection));
+      const exists = it.exists ? ` <span class="imp-exists">already in catalogue</span>` : '';
+      return `<label class="imp-row${it.sel ? '' : ' off'}" id="imp-row-${i}">
+        <input type="checkbox" ${it.sel ? 'checked' : ''} onchange="impToggle(${i},this.checked)">
+        <span><b>${ea(d.name)}</b>${exists}<br><span class="imp-meta">${meta.join(' · ')}</span></span>
+      </label>`;
+    }).join('');
+  }
+  html += `<div class="imp-foot">
+    <button class="cat-new-btn" id="imp-add-btn" onclick="impConfirmImport()">Add ${selCount} items</button>
+    <button class="cat-new-btn" onclick="impCancel()">Cancel</button>
+  </div>`;
+  return html;
+}
+
+function impToggle(i, on){
+  if(!impView || !impView.items || !impView.items[i]) return;
+  impView.items[i].sel = !!on;
+  const row = document.getElementById('imp-row-' + i);
+  if(row) row.classList.toggle('off', !on);
+  impUpdateCount();
+}
+function impSelectCat(cat, on){
+  if(!impView || !impView.items) return;
+  impView.items.forEach((it, i) => {
+    if((it.def.category || 'gear') !== cat) return;
+    it.sel = !!on;
+    const row = document.getElementById('imp-row-' + i);
+    if(row){
+      row.classList.toggle('off', !on);
+      const cb = row.querySelector('input'); if(cb) cb.checked = !!on;
+    }
+  });
+  impUpdateCount();
+}
+function impUpdateCount(){
+  const btn = document.getElementById('imp-add-btn');
+  if(btn && impView && impView.items)
+    btn.textContent = 'Add ' + impView.items.filter(it => it.sel).length + ' items';
+}
+
+async function impFilesPicked(input){
+  const files = Array.prototype.slice.call((input && input.files) || []);
+  if(input) input.value = '';
+  if(!files.length || !impView) return;
+  impView = { phase:'parsing' };
+  renderCatalogueModal();
+  const prog = t => { const el = document.getElementById('imp-progress'); if(el) el.textContent = t; };
+  try {
+    await impEnsurePdfJs();
+    const all = []; const srcLabels = []; const seen = {};
+    for(const f of files){
+      prog('Reading ' + f.name + '…');
+      const res = await impParsePdfFile(f, (p, n) => prog('Scanning ' + f.name + ' — page ' + p + ' of ' + n));
+      srcLabels.push(res.book ? res.book.label : f.name);
+      for(const def of res.items){
+        const key = def.name.toLowerCase() + '|' + def.tl + '|' + def.category;
+        if(seen[key]) continue;
+        seen[key] = true;
+        all.push(def);
+      }
+    }
+    await loadItemCatalogue();      // freshest copy for the already-there check
+    const have = {};
+    ITEM_CATALOGUE.forEach(d => { have[(d.name || '').trim().toLowerCase()] = true; });
+    const items = all.map(def => {
+      const exists = !!have[def.name.trim().toLowerCase()];
+      return { def, exists, sel: !exists };
+    });
+    if(!items.length){
+      impView = { phase:'pick', err:'No stat tables found in that PDF — is it a text-based (not scanned) copy of a Mongoose 2e book?' };
+    } else {
+      impView = { phase:'preview', items, srcLabels };
+    }
+  } catch(e){
+    if(typeof pushErr === 'function') pushErr('PDF import failed: ' + (e && e.message), e && e.stack, { feature:'pdf-import' });
+    impView = { phase:'pick', err: (e && e.message) ? e.message : 'Import failed — try again.' };
+  }
+  renderCatalogueModal();
+}
+
+async function impConfirmImport(){
+  if(!isReferee() || !impView || impView.phase !== 'preview') return;
+  const chosen = impView.items.filter(it => it.sel).map(it => it.def);
+  if(!chosen.length){ impCancel(); return; }
+  for(const def of chosen){
+    const f = footprintFromMass(def.mass);
+    ITEM_CATALOGUE.push(Object.assign({}, emptyItemDef(), def, { w:f.w, h:f.h, fpManual:false }));
+  }
+  await saveItemCatalogue();
+  impView = null;
+  if(typeof showToast === 'function') showToast('Imported ' + chosen.length + ' items into the catalogue');
+  renderCatalogueModal();
+}

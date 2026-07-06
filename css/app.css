@@ -2941,6 +2941,22 @@ input#ui-scale-range{
 .cat-mini-btn{background:var(--bg0);border:.5px solid var(--bd0);color:var(--tx1);border-radius:4px;font-size:9px;font-family:monospace;padding:5px 6px;cursor:pointer}
 .cat-editor-actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:10px;border-top:.5px solid var(--bd1)}
 
+/* ── Rulebook PDF import (item catalogue, referee-only) ── */
+.imp-intro{font-size:11px;color:var(--tx1);line-height:1.6;margin-bottom:10px}
+.imp-intro b{color:var(--tx0)}
+.imp-file{margin:12px 0;font-size:11px;color:var(--tx0)}
+.imp-file input{font-size:11px;color:var(--tx1);max-width:100%}
+.imp-progress{font-size:11px;color:var(--tx1);font-family:monospace;background:var(--bg0);border:.5px dashed var(--bd0);border-radius:6px;padding:18px;text-align:center}
+.imp-group{margin:14px 0 4px;display:flex;align-items:baseline;gap:10px}
+.imp-group b{font-size:10px;color:var(--tx0);text-transform:uppercase;letter-spacing:.6px;font-family:monospace}
+.imp-mini{background:none;border:none;color:var(--txI);font-size:10px;cursor:pointer;text-decoration:underline;padding:0;font-family:monospace}
+.imp-row{display:flex;align-items:flex-start;gap:9px;padding:6px 8px;border-bottom:.5px solid var(--bd0);font-size:11px;color:var(--tx0);cursor:pointer}
+.imp-row.off{opacity:.4}
+.imp-row input{margin-top:2px;flex-shrink:0}
+.imp-meta{color:var(--tx1);font-size:10px;font-family:monospace}
+.imp-exists{color:var(--txW);font-size:9px;font-family:monospace;margin-left:6px}
+.imp-foot{position:sticky;bottom:0;background:var(--bg1);padding:10px 0;display:flex;gap:8px;border-top:.5px solid var(--bd1);margin-top:12px}
+
 /* ── Encumbrance indicator + equip slots + item actions (Phase 3) ── */
 .enc-bar{background:var(--bg0);border:.5px solid var(--bd0);border-left:3px solid var(--bd0);border-radius:6px;padding:9px 11px;margin-bottom:10px}
 .enc-line{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
