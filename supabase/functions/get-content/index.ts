@@ -41,7 +41,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const cors = {
   "Access-Control-Allow-Origin": "*",
   // Must list every header the browser sends, or the preflight blocks the call.
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-debug-ipchain",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (body: unknown, status = 200) =>

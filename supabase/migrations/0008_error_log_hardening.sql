@@ -58,6 +58,29 @@ create trigger error_log_prune_trg
   for each statement
   execute function public.error_log_prune();
 
+-- The prune function is only ever meant to run as a trigger. As a SECURITY DEFINER
+-- function it is otherwise callable by anon/authenticated via /rest/v1/rpc — revoke
+-- EXECUTE so it can't be invoked directly. (Trigger execution does not require the
+-- inserting role to hold EXECUTE, so pruning still works.)
+revoke execute on function public.error_log_prune() from public;
+revoke execute on function public.error_log_prune() from anon;
+revoke execute on function public.error_log_prune() from authenticated;
+
+-- 3. Make the anon INSERT policy non-trivial: enforce the same caps in WITH CHECK
+--    instead of `true`. Keeps anon telemetry writes working (Finding 7 says direct
+--    anon insert is acceptable if hardened) while clearing the rls_policy_always_true
+--    advisory for this table. The CHECK constraints above are belt-and-braces.
+drop policy if exists "error_log_anon_insert" on public.error_log;
+create policy "error_log_anon_insert" on public.error_log
+  for insert to anon, authenticated
+  with check (
+    (message     is null or char_length(message)     <= 4096) and
+    (stack       is null or char_length(stack)       <= 2048) and
+    (player      is null or char_length(player)      <= 512)  and
+    (app_version is null or char_length(app_version) <= 512)  and
+    (ua          is null or char_length(ua)          <= 512)
+  );
+
 -- (Write-only property preserved: still no SELECT/UPDATE/DELETE policy for anon.
 --  The prune trigger runs as SECURITY DEFINER so it can delete without a client
 --  DELETE policy — clients still cannot read, alter, or remove rows themselves.)
