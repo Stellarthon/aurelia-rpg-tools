@@ -210,8 +210,9 @@ function renderTradePanel(){
 // RAW: Core Update 2022 pp. 238–241. Passage & freight rates by parsecs
 // travelled; traffic rolled 2D + DMs per SOURCE and DESTINATION world
 // (population, starport, zone, TL for freight), −1 per parsec past the first.
-// Zones aren't modelled on the map (known gap), so the referee sets them per
-// generation. Lot sizes: Major 1D×10 dt, Minor 1D×5 dt, Incidental 1D dt.
+// Zones prefill from the hex map's travel-zone flags (Design Mode system
+// editor, bdSystemZone) and stay overridable per generation.
+// Lot sizes: Major 1D×10 dt, Minor 1D×5 dt, Incidental 1D dt.
 // Mail: 2D ≥ 12 → 1D containers, 5 dt each, Cr25,000 flat, all or none.
 
 const PASSAGE_RATES = {   // Cr per passage, by parsecs travelled
@@ -301,7 +302,17 @@ function bdDestinations(){
   });
   return out.sort((a, b) => a.pc - b.pc || a.label.localeCompare(b.label));
 }
-function boardInput(field, value){ if(field in boardGen) boardGen[field] = value; }
+// Travel zone flagged on the map (Design Mode system editor) — '' / 'amber' / 'red'.
+function bdSystemZone(id){
+  const n = (typeof GX_MAP !== 'undefined' && id) ? GX_MAP[id] : null;
+  return (n && (n.zone === 'amber' || n.zone === 'red')) ? n.zone : 'green';
+}
+function boardInput(field, value){
+  if(!(field in boardGen)) return;
+  boardGen[field] = value;
+  // Picking a destination pulls its map zone flag into the DM (still overridable).
+  if(field === 'dest'){ boardGen.destZone = bdSystemZone(value); renderBoardPanel(); }
+}
 function boardArmed(){
   if(boardGen.armed != null) return !!boardGen.armed;
   return !!(typeof shipState !== 'undefined' && Array.isArray(shipState.weapons) && shipState.weapons.length);
@@ -498,7 +509,14 @@ function renderBoardPanel(){
   // ── Referee: generate form ──
   if(ref){
     const dests = bdDestinations();
-    if(!boardGen.dest && dests.length) boardGen.dest = dests[0].id;
+    if(!boardGen.dest && dests.length){ boardGen.dest = dests[0].id; boardGen.destZone = bdSystemZone(boardGen.dest); }
+    // Re-seed both zones from the map whenever the port we're standing at changes.
+    const hereId = (typeof shipState !== 'undefined') ? shipState.locationId : null;
+    if(boardGen._srcId !== hereId){
+      boardGen._srcId = hereId;
+      boardGen.srcZone = bdSystemZone(hereId);
+      boardGen.destZone = bdSystemZone(boardGen.dest);
+    }
     const zoneSel = (field) => `<select class="bd-sel" onchange="boardInput('${field}',this.value)">
       ${[['green','Green'],['amber','Amber'],['red','Red']].map(([v, l]) => `<option value="${v}"${boardGen[field] === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
     const numIn = (field, lbl, title) => `<label class="bd-in" title="${escQH(title)}">${lbl}<input type="number" value="${escQH(boardGen[field])}" oninput="boardInput('${field}',this.value)"></label>`;
