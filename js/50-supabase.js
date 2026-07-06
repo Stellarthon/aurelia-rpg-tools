@@ -98,24 +98,30 @@ async function uploadPortraitBlob(characterName, blob){
   return true;
 }
 
-// ── BYO rulebook (Supabase Storage 'rulebooks' bucket) ───────────────────────
-// The referee's OWN, legally-owned rulebook PDF — one object per campaign
-// (rulebooks/<campaignId>.pdf), overwritten on re-upload; migration
-// 0003_rulebooks_bucket.sql. USER-SUPPLIED, never shipped in the repo, so the
-// codebase stays copyright-clean. A version stamp in the shared 'rulebook-config'
-// key cache-busts the public URL across devices. Opened in the browser's native
+// ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────
+// The referee's OWN, legally-owned rulebook PDFs — one object per book per
+// campaign, overwritten on re-upload; migration 0003_rulebooks_bucket.sql.
+// USER-SUPPLIED, never shipped in the repo, so the codebase stays
+// copyright-clean. Version stamps in the shared 'rulebook-config' key
+// cache-bust the public URLs across devices. Opened in the browser's native
 // PDF viewer (no PDF.js dependency); '#page=N' jumps to a cited page.
+// bookId 'core' (or omitted) keeps the original <campaign>.pdf path so a
+// pre-library upload stays valid; supplements land at <campaign>-<bookId>.pdf.
 const RULEBOOK_BASE = SUPABASE_URL + '/storage/v1/object/public/rulebooks/';
 function rulebookSlug(campaignId){
   return String(campaignId || 'default').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
 }
-function rulebookPath(campaignId){ return rulebookSlug(campaignId) + '.pdf'; }
-function rulebookUrlFor(campaignId, ver){
-  const url = RULEBOOK_BASE + encodeURIComponent(rulebookPath(campaignId));
+function rulebookPath(campaignId, bookId){
+  const slug = rulebookSlug(campaignId);
+  const b = String(bookId || 'core').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return (!b || b === 'core') ? slug + '.pdf' : slug + '-' + b + '.pdf';
+}
+function rulebookUrlFor(campaignId, ver, bookId){
+  const url = RULEBOOK_BASE + encodeURIComponent(rulebookPath(campaignId, bookId));
   return ver ? (url + '?v=' + ver) : url;
 }
-async function uploadRulebookBlob(campaignId, file){
-  const res = await fetch(SUPABASE_URL + '/storage/v1/object/rulebooks/' + encodeURIComponent(rulebookPath(campaignId)), {
+async function uploadRulebookBlob(campaignId, file, bookId){
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/rulebooks/' + encodeURIComponent(rulebookPath(campaignId, bookId)), {
     method: 'POST',
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'application/pdf' },
     body: file

@@ -1,5 +1,8 @@
 # Claude Code local, machine-specific settings (permission grants etc.)
 .claude/settings.local.json
 
+# Private rules reference extracted from the referee's own rulebooks — never publish
+.claude/skills/traveller-2e-rules/
+
 # Self-contained local-viewing bundle (built by tools/build-local.mjs; the modular index.html is the source of truth)
 index.local.html

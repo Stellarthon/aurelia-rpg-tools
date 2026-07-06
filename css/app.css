@@ -2387,8 +2387,9 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .rr-del{position:absolute;top:4px;right:5px;background:transparent;border:none;color:var(--txD,#d45050);cursor:pointer;font-size:11px;line-height:1;opacity:.55}
 .rr-del:hover{opacity:1}
 .rr-add{margin-top:8px;display:flex;flex-direction:column;gap:5px;border-top:.5px dashed var(--bd0);padding-top:8px}
-.rr-add input{background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:6px 8px;font-size:11px;box-sizing:border-box;min-width:0}
-.rr-add > input{width:100%}
+.rr-add input,.rr-add textarea{background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:6px 8px;font-size:11px;box-sizing:border-box;min-width:0}
+.rr-add > input,.rr-add > textarea{width:100%}
+.rr-add textarea{resize:vertical;font-family:inherit}
 .rr-add-row{display:flex;gap:5px}
 .rr-add-row input{flex:1}
 .rr-hint{font-size:9px;color:var(--tx1);opacity:.7;line-height:1.35}

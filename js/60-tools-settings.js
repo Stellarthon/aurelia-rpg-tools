@@ -593,6 +593,10 @@ function renderSettingsMenu(showArchon){
       <div class="settings-row" style="font-size:11px;color:var(--tx1)">Apply your <b>referee token</b> above to lock the campaign to your network and hand out player tokens.</div>`;
   }
 
+  // ── Rulebook Library (referee) — BYO PDFs for page-reference deep links.
+  // Defined in js/92 (loads later); menus render at open time, so guard only.
+  if(typeof rulebookLibraryHTML === 'function') html += rulebookLibraryHTML();
+
   html += kbdSettingsHTML();
   card.innerHTML = html;
 }

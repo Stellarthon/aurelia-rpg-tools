@@ -151,14 +151,17 @@ function renderQref(){
   if(!_rulesLoaded){ loadRulesIndex().then(() => { if(qrefOpen) renderQref(); }); }
   if(!_rbLoaded){ loadRulebookConfig().then(() => { if(qrefOpen) renderQref(); }); }
   const query = (document.getElementById('qref-search')?.value || '').toLowerCase().trim();
+  // Word-level matching: every word must appear somewhere, in any order — so
+  // "jumping rolls" finds "Jump procedure" where a literal phrase match fails.
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const tokensMatch = plain => tokens.every(t => plain.includes(t));
 
   let html = '';
   QREF_DATA.forEach(section => {
     const sectionHTML = section.content();
-    // Simple filter: check title and rendered text content
-    if(query){
+    if(tokens.length){
       const plain = section.title.toLowerCase() + ' ' + sectionHTML.replace(/<[^>]+>/g,' ').toLowerCase();
-      if(!plain.includes(query)) return;
+      if(!tokensMatch(plain)) return;
     }
     html += `
       <div class="qref-section">
@@ -167,7 +170,7 @@ function renderQref(){
       </div>`;
   });
 
-  const rrHtml = rulesIndexHTML(query);   // referee-authored page references (licensing-safe)
+  const rrHtml = rulesIndexHTML(tokens);   // referee-authored page references (licensing-safe)
   if(!html && !rrHtml){
     html = '<p class="qref-note" style="text-align:center;padding:20px 0">No matches found.</p>';
   } else {
@@ -206,18 +209,45 @@ function addRuleRef(){
   renderQref();
   showToast('Page reference added');
 }
+// Bulk import — paste a JSON array of {topic, book, page, pdf?, note?}. `pdf`
+// is the PDF page number the ↗ button jumps to when it differs from the
+// printed page (Mongoose PDFs run printed+1). Dedupes on topic+book+page.
+function importRuleRefs(){
+  if(!isReferee()) return;
+  const el = document.getElementById('rr-import'); if(!el || !el.value.trim()) return;
+  let arr;
+  try { arr = JSON.parse(el.value); } catch(e){ showToast('Not valid JSON', 'error'); return; }
+  if(!Array.isArray(arr)){ showToast('Expected a JSON array of references', 'error'); return; }
+  const key = r => ((r.topic||'')+'|'+(r.book||'')+'|'+(r.page||'')).toLowerCase();
+  const have = new Set(rulesIndex.map(key));
+  let n = 0;
+  arr.forEach(r => {
+    if(!r || typeof r.topic !== 'string' || !r.topic.trim()) return;
+    const rec = { id:'rr_'+Date.now().toString(36)+'_'+n, topic:String(r.topic).trim().slice(0,60),
+      book:String(r.book||'').slice(0,40), page:String(r.page||'').slice(0,12),
+      pdf:String(r.pdf||'').slice(0,12), note:String(r.note||'').slice(0,80) };
+    if(have.has(key(rec))) return;
+    have.add(key(rec)); rulesIndex.push(rec); n++;
+  });
+  rulesIndex.sort((a,b) => (a.topic||'').localeCompare(b.topic||''));
+  saveRulesIndex();
+  el.value = '';
+  renderQref();
+  showToast(n ? (n + ' reference' + (n===1?'':'s') + ' imported') : 'Nothing new to import');
+}
 function deleteRuleRef(id){
   if(!isReferee()) return;
   rulesIndex = rulesIndex.filter(r => r.id !== id);
   saveRulesIndex();
   renderQref();
 }
-function rulesIndexHTML(query){
+function rulesIndexHTML(tokens){
   const ref = (typeof isReferee === 'function') && isReferee();
-  const up = !!(rulebookConfig && rulebookConfig.uploaded);
+  tokens = tokens || [];
   const items = rulesIndex.filter(r => {
-    if(!query) return true;
-    return ((r.topic||'')+' '+(r.book||'')+' '+(r.page||'')+' '+(r.note||'')).toLowerCase().includes(query);
+    if(!tokens.length) return true;
+    const plain = ((r.topic||'')+' '+(r.book||'')+' '+(r.page||'')+' '+(r.note||'')).toLowerCase();
+    return tokens.every(t => plain.includes(t));
   });
   let cards = '';
   if(items.length){
@@ -226,8 +256,12 @@ function rulesIndexHTML(query){
       let pageEl = '';
       if(r.page){
         const pg = escQH(r.page);
-        pageEl = up
-          ? `<button class="rr-page" onclick="openRulebook('${(r.page||'').replace(/[^0-9A-Za-z .\-]/g,'')}')" title="Open your rulebook at this page">p.${pg} ↗</button>`
+        // Link only when the citation matches an uploaded book; the anchor uses
+        // the PDF page (r.pdf) when it differs from the printed page shown.
+        const bk = rbBookForCitation(r.book);
+        const anchor = (String(r.pdf || r.page).match(/\d+/) || [''])[0];
+        pageEl = (bk && anchor)
+          ? `<button class="rr-page" onclick="openRulebook('${anchor}','${bk.id}')" title="Open ${escQH(bk.label||'rulebook')} at this page">p.${pg} ↗</button>`
           : `<span class="rr-cite">p.${pg}</span>`;
       }
       const cite = (bookTxt || pageEl) ? `<span class="rr-cite-wrap">${bookTxt}${pageEl}</span>` : '';
@@ -237,7 +271,7 @@ function rulesIndexHTML(query){
         ${r.note ? `<div class="rr-note">${escQH(r.note)}</div>` : ''}
       </div>`;
     }).join('');
-  } else if(query){
+  } else if(tokens.length){
     cards = '<div class="qref-note" style="padding:4px 0">No page references match.</div>';
   } else if(!ref){
     cards = '<div class="qref-note" style="padding:4px 0">No page references yet.</div>';
@@ -251,6 +285,8 @@ function rulesIndexHTML(query){
       </div>
       <input id="rr-note" placeholder="Optional note" maxlength="80">
       <button class="cal-add-btn" onclick="addRuleRef()">+ Add page reference</button>
+      <textarea id="rr-import" rows="2" placeholder='Bulk import — paste JSON: [{"topic":"Jump procedure","book":"Core Rulebook","page":"150","pdf":"151","note":"…"}]'></textarea>
+      <button class="cal-add-btn" onclick="importRuleRefs()">⇪ Import references (JSON)</button>
       <div class="rr-hint">Stores only topic + book + page — never rulebook text, so the app stays copyright-clean.</div>
     </div>` : '';
   const bar = (typeof rulebookBarHTML === 'function') ? rulebookBarHTML() : '';
@@ -262,15 +298,26 @@ function rulesIndexHTML(query){
 }
 // escQH is defined in js/70 (loaded earlier); used here at render time.
 
-// ── BYO rulebook — upload (referee) + open at page (everyone) ────────────────
-// The referee uploads their own legally-owned rulebook PDF to the private
-// per-campaign Storage bucket (js/50 uploadRulebookBlob); a small shared config
-// ('rulebook-config') tells every device it exists + its display name + a
-// cache-bust version. Opened in the browser's native PDF viewer; a cited page
-// deep-links via '#page=N'. Never ships in the repo — user content only.
-let rulebookConfig = {};   // { uploaded, name, ver } for the active campaign
+// ── BYO rulebook library — upload (referee, in Settings) + open (everyone) ───
+// The referee uploads their own legally-owned rulebook PDFs (Core + supplements
+// like High Guard or the Central Supply Catalogue) to the per-campaign Storage
+// bucket (js/50 uploadRulebookBlob); a small shared config ('rulebook-config')
+// tells every device what exists + display labels + cache-bust versions.
+// Opened in the browser's native PDF viewer; a cited page deep-links via
+// '#page=N'. Never ships in the repo — user content only. Management lives in
+// Settings ▸ Rulebook Library (rulebookLibraryHTML, called from js/60);
+// the Rules panel keeps per-book open buttons for the whole table.
+let rulebookConfig = {};   // { books:[{id,label,name,ver}] } — legacy {uploaded,name,ver} still read
 let _rbLoaded = false;
 let _rbBusy = false;
+
+const RB_PRESETS = [
+  { id:'core',              label:'Core Rulebook' },
+  { id:'high-guard',        label:'High Guard' },
+  { id:'csc',               label:'Central Supply Catalogue' },
+  { id:'specialist-forces', label:'Specialist Forces' },
+  { id:'robot-handbook',    label:'Robot Handbook' },
+];
 
 async function loadRulebookConfig(){
   try { const r = await supaStorage.get('rulebook-config', true); if(r.value != null) rulebookConfig = JSON.parse(r.value) || {}; }
@@ -282,46 +329,118 @@ async function saveRulebookConfig(){
   catch(e){ console.error('Rulebook config save failed:', e); }
 }
 function rbCampaign(){ return (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default'; }
-function openRulebook(page){
-  if(!rulebookConfig || !rulebookConfig.uploaded){ showToast('No rulebook uploaded yet', 'error'); return; }
+// The book list, reading the pre-library single-book config as 'core'.
+function rbBooks(){
+  if(rulebookConfig && Array.isArray(rulebookConfig.books)) return rulebookConfig.books;
+  if(rulebookConfig && rulebookConfig.uploaded)
+    return [{ id:'core', label:'Core Rulebook', name:rulebookConfig.name||'Rulebook', ver:rulebookConfig.ver }];
+  return [];
+}
+// Match a card's free-text book citation to an uploaded book. No citation →
+// the first (core-first) book; a citation naming a book we don't hold → null,
+// so a High Guard reference never opens the Core PDF at the wrong page.
+function rbBookForCitation(book){
+  const books = rbBooks(); if(!books.length) return null;
+  const q = String(book||'').toLowerCase().trim();
+  if(!q) return books[0];
+  return books.find(b => { const l = String(b.label||'').toLowerCase();
+    return l && (q.includes(l) || l.includes(q)); }) || null;
+}
+function openRulebook(page, bookId){
+  const books = rbBooks();
+  const b = books.find(x => x.id === bookId) || books[0];
+  if(!b){ showToast('No rulebook uploaded yet', 'error'); return; }
   if(typeof rulebookUrlFor !== 'function'){ showToast('Rulebook viewer unavailable', 'error'); return; }
-  const url = rulebookUrlFor(rbCampaign(), rulebookConfig.ver) + (page ? ('#page=' + encodeURIComponent(page)) : '');
+  const url = rulebookUrlFor(rbCampaign(), b.ver, b.id) + (page ? ('#page=' + encodeURIComponent(page)) : '');
   try { window.open(url, '_blank', 'noopener'); } catch(e){ location.href = url; }
 }
-function onRulebookFile(input){
+function rbSlugId(label){
+  return String(label||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24) || ('book-' + Date.now().toString(36));
+}
+function rbAddBook(input){
   if(!isReferee()) return;
-  const file = input && input.files && input.files[0];
-  if(!file){ return; }
+  const file = input && input.files && input.files[0]; if(!file) return;
+  const sel = document.getElementById('rb-add-label');
+  let id, label;
+  if(sel && sel.value === '__custom'){
+    label = (prompt('Book name (shown on the open button):') || '').trim();
+    if(!label){ input.value = ''; return; }
+    id = rbSlugId(label);
+    if(rbBooks().some(b => b.id === id)) id += '-' + Date.now().toString(36).slice(-3);
+  } else {
+    const p = RB_PRESETS.find(x => x.id === (sel && sel.value));
+    if(!p){ input.value = ''; return; }
+    id = p.id; label = p.label;
+  }
+  rbUpload(input, file, id, label);
+}
+function rbReplaceBook(input, bookId){
+  if(!isReferee()) return;
+  const file = input && input.files && input.files[0]; if(!file) return;
+  const b = rbBooks().find(x => x.id === bookId); if(!b) return;
+  rbUpload(input, file, bookId, b.label);
+}
+function rbUpload(input, file, id, label){
   if(file.type && file.type !== 'application/pdf'){ showToast('Please choose a PDF', 'error'); input.value = ''; return; }
   if(file.size > 80 * 1024 * 1024){ showToast('PDF too large (max 80 MB)', 'error'); input.value = ''; return; }
   if(_rbBusy) return;
-  _rbBusy = true; showToast('Uploading rulebook…', 'info');
-  uploadRulebookBlob(rbCampaign(), file)
-    .then(() => { rulebookConfig = { uploaded: true, name: file.name, ver: Date.now() }; return saveRulebookConfig(); })
-    .then(() => { showToast('Rulebook uploaded'); if(qrefOpen) renderQref(); })
+  _rbBusy = true; showToast('Uploading ' + label + '…', 'info');
+  uploadRulebookBlob(rbCampaign(), file, id)
+    .then(() => {
+      const books = rbBooks().filter(b => b.id !== id);
+      books.push({ id, label, name: file.name, ver: Date.now() });
+      books.sort((a,b) => a.id==='core' ? -1 : b.id==='core' ? 1 : String(a.label).localeCompare(String(b.label)));
+      rulebookConfig = { books };
+      return saveRulebookConfig();
+    })
+    .then(() => { showToast(label + ' uploaded'); if(qrefOpen) renderQref(); if(typeof refreshOpenMenus === 'function') refreshOpenMenus(); })
     .catch(err => { showToast('Upload failed — is the rulebooks bucket set up? (migration 0003)', 'error'); console.error(err); })
     .finally(() => { _rbBusy = false; if(input) input.value = ''; });
 }
-function removeRulebookRef(){
+function rbForgetBook(bookId){
   if(!isReferee()) return;
-  if(!confirm('Forget the uploaded rulebook? The file stays in storage; this just hides it from the group.')) return;
-  rulebookConfig = {};
+  const b = rbBooks().find(x => x.id === bookId); if(!b) return;
+  if(!confirm('Forget "' + (b.label||bookId) + '"? The file stays in storage; this just hides it from the group.')) return;
+  rulebookConfig = { books: rbBooks().filter(x => x.id !== bookId) };
   saveRulebookConfig();
   if(qrefOpen) renderQref();
+  if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+}
+// Settings ▸ Rulebook Library — rendered by renderSettingsMenu (js/60).
+function rulebookLibraryHTML(){
+  if(!(typeof isReferee === 'function' && isReferee())) return '';
+  if(!_rbLoaded){ loadRulebookConfig().then(() => { if(typeof refreshOpenMenus === 'function') refreshOpenMenus(); }); }
+  const books = rbBooks();
+  const chip = 'padding:6px 8px;background:var(--bg2);border:1px solid var(--bd0);color:var(--tx0);border-radius:var(--rad);font-size:11px;cursor:pointer';
+  let h = `<div class="settings-section-lbl">📚 Rulebook Library</div>`;
+  books.forEach(b => {
+    h += `<div class="settings-row" style="gap:6px">
+      <span class="settings-row-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis" title="${escQH(b.name||'')}">📖 ${escQH(b.label||b.id)}</span>
+      <label style="${chip}">Replace<input type="file" accept="application/pdf" style="display:none" onchange="rbReplaceBook(this,'${escQH(b.id)}')"></label>
+      <button style="${chip};color:#d45050" onclick="rbForgetBook('${escQH(b.id)}')" title="Forget (file stays in storage)">✕</button>
+    </div>`;
+  });
+  const used = new Set(books.map(b => b.id));
+  const opts = RB_PRESETS.filter(p => !used.has(p.id)).map(p => `<option value="${p.id}">${escQH(p.label)}</option>`).join('')
+             + `<option value="__custom">Other supplement…</option>`;
+  h += `<div class="settings-row" style="gap:6px">
+      <select id="rb-add-label" style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--bd0);border-radius:var(--rad);color:var(--tx0);padding:7px;font-size:12px">${opts}</select>
+      <label style="${chip};white-space:nowrap">⬆ Add PDF<input type="file" accept="application/pdf" style="display:none" onchange="rbAddBook(this)"></label>
+    </div>
+    <div class="settings-row" style="font-size:11px;color:var(--tx1)">Your own legally-owned PDFs, stored for this campaign's group only — never part of the app. Page references in the Rules panel open the matching book at the cited page. (Needs the <code>rulebooks</code> bucket — migration 0003.)</div>`;
+  return h;
 }
 function rulebookBarHTML(){
   const ref = (typeof isReferee === 'function') && isReferee();
-  const up = !!(rulebookConfig && rulebookConfig.uploaded);
-  if(up){
-    let h = `<div class="rb-bar"><button class="rb-open" onclick="openRulebook()">📖 Open rulebook</button>`;
-    h += `<span class="rb-name" title="${escQH(rulebookConfig.name||'')}">${escQH(rulebookConfig.name||'Rulebook')}</span>`;
-    if(ref) h += `<label class="rb-replace">Replace<input type="file" accept="application/pdf" style="display:none" onchange="onRulebookFile(this)"></label><button class="rb-forget" onclick="removeRulebookRef()" title="Forget">✕</button>`;
-    return h + `</div>`;
+  const books = rbBooks();
+  if(books.length){
+    let h = `<div class="rb-bar" style="flex-wrap:wrap">`;
+    books.forEach(b => { h += `<button class="rb-open" onclick="openRulebook('','${escQH(b.id)}')" title="${escQH(b.name||'')}">📖 ${escQH(b.label||'Rulebook')}</button>`; });
+    h += `</div>`;
+    if(ref) h += `<div class="rr-hint">Manage books in Settings ▸ 📚 Rulebook Library.</div>`;
+    return h;
   }
-  if(ref){
-    return `<div class="rb-bar"><label class="rb-open">⬆ Upload your rulebook (PDF)<input type="file" accept="application/pdf" style="display:none" onchange="onRulebookFile(this)"></label></div>
-      <div class="rr-hint">Your own legally-owned PDF, stored for your group and never shipped in the app. Page references below then open it at the right page. (Needs the <code>rulebooks</code> bucket — supabase/migrations/0003.)</div>`;
-  }
+  if(ref) return `<div class="rr-hint">No rulebooks uploaded — add your own PDFs in Settings ▸ 📚 Rulebook Library. Page references below still show book + page as plain citations.</div>`;
   return '';
 }
 
