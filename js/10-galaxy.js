@@ -1908,6 +1908,10 @@ const HX = (function(){
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
         if(fa==='none') ring.setAttribute('stroke-dasharray','2,2'); g.appendChild(ring); }
+      // Travel-zone ring (MgT2e convention): amber = caution, red = interdicted.
+      // Drawn for everyone — zones are public traveller data, not a referee secret.
+      if(s.zone==='amber'||s.zone==='red'){ g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:7.5,fill:'none',
+        stroke:s.zone==='red'?'#ff5a4d':'#e8c65a','stroke-width':1.4,opacity:inRange?0.9:0.3})); }
       if(isOrigin) g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:9,fill:'none',stroke:'#f4d35e','stroke-width':1.5,opacity:.8}));
       if(range&&s===range.farthest){ g.appendChild(NS('circle',{cx:p.x,cy:p.y,r:9,fill:'none',stroke:'#D4A843','stroke-width':1.5,opacity:.95}));
         const ml=NS('text',{x:p.x,y:p.y+20,'text-anchor':'middle',class:'hx-range-lbl'}); ml.textContent='◆ MAX RANGE'; g.appendChild(ml); }
@@ -2340,6 +2344,8 @@ const HX = (function(){
       const surveyed=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[]).length>0;
       html+=`<div class="hx-small" style="color:${surveyed?'#4caf82':'var(--tx1)'};margin:-4px 0 6px">${surveyed?'✓ Surveyed':'○ Unsurveyed — estimated data'}</div>`;
     }
+    if(s.zone==='amber') html+=`<div class="hx-small" style="color:#e8c65a">⚠ Amber Zone — caution advised; passenger &amp; freight traffic runs thinner here.</div>`;
+    else if(s.zone==='red') html+=`<div class="hx-small" style="color:#ff5a4d">⛔ Red Zone — interdicted. Almost no legitimate traffic in or out.</div>`;
     if(!s.deep && s.pc!=null) html+=`<div class="hx-kv"><span class="k">Real distance from Sol <span style="opacity:.6">(ref)</span></span><span class="v">${s.pc.toFixed(2)} pc</span></div>`;
     html+=`<div class="hx-kv"><span class="k">Hex (q,r)</span><span class="v">${s.q}, ${s.r}</span></div>`;
     const selFuel=fuelAt(s);
@@ -2447,6 +2453,9 @@ const HX = (function(){
         html+=`<label class="hx-edit-row"><span>Name</span><input class="hx-edit-in" value="${ea(disp(s))}" onchange="hxEditSystemField('${s.id}','label',this.value)"></label>`;
         html+=`<label class="hx-edit-row"><span>Star</span><input class="hx-edit-in" value="${ea(s.star||'')}" onchange="hxEditSystemField('${s.id}','name',this.value)"></label>`;
         html+=`<label class="hx-edit-row"><span>Faction</span><select class="hx-edit-in" onchange="hxEditSystemField('${s.id}','faction',this.value)">${facOpts}</select></label>`;
+        const zoneOpts=[['','Green — no advisory'],['amber','Amber — caution advised'],['red','Red — interdicted']].map(([v,l])=>`<option value="${v}"${(nd.zone||'')===v?' selected':''}>${l}</option>`).join('');
+        html+=`<label class="hx-edit-row"><span>Zone</span><select class="hx-edit-in" onchange="hxEditSystemField('${s.id}','zone',this.value)">${zoneOpts}</select></label>`;
+        html+=`<div class="hx-small" style="margin:2px 0 6px">Zone rings show on the map for everyone and feed the Starport Board's passenger &amp; freight DMs (amber +1/−2, red −4/−6).</div>`;
         html+=`<label class="hx-edit-row hx-edit-col"><span>Notes</span><textarea class="hx-edit-in" rows="2" onchange="hxEditSystemField('${s.id}','desc',this.value)">${eh(nd.desc||'')}</textarea></label>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> above to add or randomly generate bodies.</div>`;
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMoveSystem('${s.id}')">✎ Move on map</button> <button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="hxRemoveSystem('${s.id}')">🗑 Remove</button></div>`;
@@ -2615,13 +2624,13 @@ const HX = (function(){
       if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
     // Add new / update existing.
     Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
-      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id; s.zone=n.zone||''; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
         if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
           if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
             s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
       else { let q=n.q, r=n.r;
         if(q==null||r==null||occupied.has(q+','+r)){ const a=FACTION_ANCHOR[n.faction]||[0,0]; const f=nearestFreeHex(q!=null?q:a[0], r!=null?r:a[1]); q=f.q; r=f.r; }
-        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), campaign:true, q, r };
+        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), zone:n.zone||'', campaign:true, q, r };
         SYS.push(s); BY_ID[id]=s; BY_KEY[q+','+r]=s; occupied.add(q+','+r); } });
     if(selected&&!BY_ID[selected.id]) selected=null;
     if(origin&&!BY_ID[origin.id]) origin=BY_ID['aurelia']||SYS[0]||null;
