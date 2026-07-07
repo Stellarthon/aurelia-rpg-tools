@@ -5,3 +5,14 @@
 # the function via the players table + service role.)
 [functions.get-content]
 verify_jwt = false
+
+# Same opaque-token scheme as get-content — the JWT gate must stay off for all
+# of these; each one authorises internally against the players table.
+[functions.put-state]
+verify_jwt = false
+
+[functions.private-notes]
+verify_jwt = false
+
+[functions.upload-object]
+verify_jwt = false
