@@ -223,6 +223,7 @@ const supaStorage = {
   _nk(key){ return campaignKeyPrefix() + key; },   // namespaced key for the active campaign
   cacheGet(key){ try { return localStorage.getItem(CACHE_PREFIX + key); } catch(e){ return null; } },
   cacheSet(key, value){
+    if(DISPLAY_MODE) return;   // the table TV shares localStorage with the referee window — never write it
     try {
       if(value == null) localStorage.removeItem(CACHE_PREFIX + key);
       else localStorage.setItem(CACHE_PREFIX + key, value);
@@ -272,6 +273,7 @@ const supaStorage = {
     return true;
   },
   async set(key, value, shared){
+    if(DISPLAY_MODE) return { ok: true };  // table TV is strictly read-only — a write here would corrupt the referee's own session
     key = this._nk(key);                   // isolate by active campaign (built-in stays un-prefixed)
     const str = String(value);
     this.cacheSet(key, str);               // optimistic: survives a reload even if the POST never lands
@@ -300,6 +302,7 @@ function queueWrite(key, value){
 }
 let flushing = false;
 async function flushQueue(){
+  if(DISPLAY_MODE) return; // never race the referee window over its own outbound queue
   if(flushing) return;
   const keys = Object.keys(loadQueue());
   if(!keys.length) return;

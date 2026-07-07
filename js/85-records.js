@@ -1792,8 +1792,11 @@ function renderHandoutsPanel(){
       const url = (typeof handoutUrlFor === 'function') ? handoutUrlFor(hoCampaign(), h.id, h.ver) : '';
       const who = (h.visibleTo && h.visibleTo !== 'all') ? (Array.isArray(h.visibleTo) ? h.visibleTo.join(', ') : h.visibleTo) : 'All';
       const del = ref ? `<button class="handout-del" onclick="event.stopPropagation();removeHandout('${h.id}')" title="Remove">✕</button>` : '';
+      // "→ Table" push (js/93) — only when a table display can actually be driven.
+      const toTv = (ref && typeof displayCanSend === 'function' && displayCanSend())
+        ? `<button class="handout-send" onclick="event.stopPropagation();sendHandoutToTable('${h.id}')" title="Show on the table display">📺</button>` : '';
       return `<div class="handout-thumb" onclick="openHandout('${h.id}')" title="${escQH(h.name || 'Handout')}">
-        ${del}<img src="${url}" alt="${escQH(h.name || '')}" loading="lazy" onerror="this.style.display='none'">
+        ${del}${toTv}<img src="${url}" alt="${escQH(h.name || '')}" loading="lazy" onerror="this.style.display='none'">
         <div class="handout-cap">${escQH(h.name || 'Handout')}${ref ? ` · ${escQH(who)}` : ''}</div>
       </div>`;
     }).join('') + `</div>`;

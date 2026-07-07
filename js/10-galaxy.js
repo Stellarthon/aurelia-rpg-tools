@@ -1752,7 +1752,21 @@ const HX = (function(){
   function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
   function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
-  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); } }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); }
+    // Table-display camera mirror (js/93): the referee window sets this hook to
+    // broadcast pan/zoom; it is rAF-throttled on the other side. Nothing else
+    // in the app assigns it, so this is a no-op outside Follow mode.
+    if(typeof window.onHXCameraChanged==='function') window.onHXCameraChanged(view); }
+  // External camera control for the table display window (js/93). setCamera
+  // locks out fitView's auto-fit so a mirrored camera is never stomped by the
+  // deferred fit scheduled in enter() or by a window resize; the grid retile
+  // (full render) is debounced because camera frames arrive at up to 60/s.
+  let extCamLock=false, extCamRenderT=null;
+  function getCamera(){ return { x:view.x, y:view.y, scale:view.scale }; }
+  function setCamera(c){ if(!c) return;
+    view.x=Number(c.x)||0; view.y=Number(c.y)||0; view.scale=Number(c.scale)||1;
+    extCamLock=true; fitted=true; applyTransform();
+    clearTimeout(extCamRenderT); extCamRenderT=setTimeout(()=>{ if(svg) render(); },120); }
   // Trader convoy labels live inside the zooming scene, so left alone they'd balloon with the
   // map at high zoom. Counter-scale them off TRADER_LABEL (00-core-data.js): pick a target
   // on-screen px, then divide back out by the live map scale so ONE CSS-var write restyles every
@@ -2518,7 +2532,8 @@ const HX = (function(){
 
   // ── Pan / zoom (transform-only — no DOM rebuild) ──
   function zoomBy(f){ view.scale=clamp(view.scale*f,0.3,4); applyTransform(); }
-  function fitView(){ if(!svg) return; const rect=svg.getBoundingClientRect(); if(!rect.width||!rect.height){ render(); return; }
+  function fitView(){ if(!svg) return; if(extCamLock){ render(); return; }   // a mirrored camera (table display) owns the view — never auto-fit over it
+    const rect=svg.getBoundingClientRect(); if(!rect.width||!rect.height){ render(); return; }
     let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9; SYS.forEach(s=>{const p=axialPx(s.q,s.r); minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
     const pad=70, cw=(maxX-minX)+pad*2, ch=(maxY-minY)+pad*2;
     view.scale=clamp(Math.min(rect.width/cw,rect.height/ch),0.3,1.6); fitScale=view.scale;
@@ -2693,7 +2708,7 @@ const HX = (function(){
     return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, get origin(){ return origin; } };
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){
