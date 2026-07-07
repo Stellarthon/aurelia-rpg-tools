@@ -7,6 +7,15 @@
 // query param — keep it that way (see docs/table-presentation-plan.md §2.2).
 const DISPLAY_MODE = new URLSearchParams(location.search).has('display');
 
+// Phone player-lock — handsets default to the player view (the referee runs the
+// table from a laptop/TV, and referee chrome crowds a small screen). A per-device
+// Settings toggle stores aurelia_phone_ref='1' to opt this phone back into full
+// referee mode. Defined in the first module so isReferee() (js/55) and the boot
+// pm-active guard (js/30) can both use it. Desktops/tablets never carry is-phone,
+// so phonePlayerLock() is always false for them.
+function phoneRefereeEnabled(){ try { return localStorage.getItem('aurelia_phone_ref') === '1'; } catch(e){ return false; } }
+function phonePlayerLock(){ try { return document.documentElement.classList.contains('is-phone') && !phoneRefereeEnabled(); } catch(e){ return false; } }
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM DATA
 // ═══════════════════════════════════════════════════════════════════════════

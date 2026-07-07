@@ -2346,7 +2346,9 @@ const HX = (function(){
         regKeys.forEach(k=>{ const f=FAC[k]||{}; const hid=(typeof factionHidden!=='undefined'&&!!factionHidden[k]);
           const eye=ref()?`<button class="hx-fac-eye ${hid?'hidden-fac':'shown-fac'}" title="${hid?'Hidden from players — tap to reveal':'Visible to players — tap to hide'}" onclick="event.stopPropagation();toggleFactionHidden('${k}')">${hid?'🙈':'👁'}</button>`:'';
           html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
-      html+=`<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
+      html+=document.documentElement.classList.contains('is-phone')
+        ? `<div class="hx-small" style="margin-top:8px">Pick a system above to inspect it and plan a jump — the map itself is on the table display.</div>`
+        : `<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
     } else {
     html+=sec('sel','Selected System',true);
     html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
@@ -2520,6 +2522,24 @@ const HX = (function(){
       el.addEventListener('toggle',ev=>{ const d=ev.target; if(d&&d.tagName==='DETAILS'&&d.dataset&&d.dataset.sec) secState[d.dataset.sec]=d.open; },true); }
   }
 
+  // ── Phone-only system picker — on handsets the map canvas is hidden (the
+  //    table display is the map), so this dropdown replaces tap-to-select.
+  //    Lists exactly the stars the map would show; hidden-region stars appear
+  //    under their real label, same as they do on the map itself. ──
+  function renderPicker(){ const el=document.getElementById('hx-sys-picker'); if(!el) return;
+    if(!document.documentElement.classList.contains('is-phone')) return;   // never populated off-phone
+    if(document.activeElement===el) return;   // don't rebuild under an open picker sheet
+    const key=s=>s.q+','+s.r;
+    const opt=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; };
+    el.innerHTML='';
+    el.appendChild(opt('','— Galaxy overview —'));
+    const gCh=document.createElement('optgroup'); gCh.label='Charted systems';
+    const gUn=document.createElement('optgroup'); gUn.label='Uncharted stars';
+    SYS.slice().sort((a,b)=>disp(a).localeCompare(disp(b)))
+      .forEach(s=>{ (s.uncharted?gUn:gCh).appendChild(opt(key(s),disp(s)+(s===origin?' ◆ here':''))); });
+    el.appendChild(gCh); if(gUn.children.length) el.appendChild(gUn);
+    el.value=(selected&&BY_KEY[key(selected)]===selected)?key(selected):''; }
+
   // ── Ship-stat inputs (shared with shipState) ──
   function bindInputs(){ [['hx-tonnage','tonnage'],['hx-fuelmax','fuelMax'],['hx-fuelaboard','fuel'],['hx-cargohold','cargoHold'],['hx-broker','broker']].forEach(pair=>{
     const id=pair[0], field=pair[1], elx=document.getElementById(id); if(!elx) return;
@@ -2559,7 +2579,7 @@ const HX = (function(){
     svg.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); if(lastDist) zoomBy(d/lastDist); lastDist=d; } },{passive:false});
     svg.addEventListener('touchend',()=>{ lastDist=null; scheduleViewportRender(); }); }
 
-  function refresh(){ readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); }
+  function refresh(){ readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); renderPicker(); }
 
   // ── Lifecycle hooks (enter/exit driven by goGalaxy + navBack) ──
   function ensure(){ if(built) return; svg=document.getElementById('hx-map'); if(!svg) return;
@@ -2568,7 +2588,7 @@ const HX = (function(){
     if(!fitted) requestAnimationFrame(()=>requestAnimationFrame(()=>{ if(svg) fitView(); renderSel(); })); }
   function onResize(){ if(typeof currentView!=='undefined'&&currentView!=='galaxy') return; if(!built||!svg) return; render(); }
   function selectById(id){ ensure(); const s=BY_ID[id]; if(s) selected=s; readShared(); refresh(); }
-  function externalRefresh(){ if(!built||!svg){ return; } readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); }
+  function externalRefresh(){ if(!built||!svg){ return; } readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); renderPicker(); }
 
   // ── window onclick shims (referenced by inline handlers / overlay buttons) ──
   window.hxToggleLanes=()=>{ showLanes=!showLanes; const b=document.getElementById('hx-lane-toggle'); if(b){ b.textContent='Lanes: '+(showLanes?'ON':'OFF'); b.classList.toggle('off',!showLanes); } render(); };
@@ -2624,6 +2644,8 @@ const HX = (function(){
   window.hxRefuelHere=refuelHere;
   window.hxMarkVisited=markVisited;
   window.hxSelectByKey=k=>{ const s=BY_KEY[k]; if(s) selectSys(s); };
+  // Phone picker onchange — empty value returns to the galaxy overview.
+  window.hxPickSystem=k=>{ if(!k){ deselect(); return; } const s=BY_KEY[k]; if(s) selectSys(s); };
 
   // ── Design Mode: live add / move / remove of campaign systems ──
   // syncNodes() diffs the host's effective GALAXY_NODES set into SYS/BY_ID/BY_KEY/

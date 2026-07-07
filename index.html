@@ -28,6 +28,12 @@
     var minDim = Math.min(screen.width || 9999, screen.height || 9999);
     if(!isTablet && (isPhoneUA || (coarse && minDim <= 480))){
       document.documentElement.classList.add('is-phone');
+      // Phones lock to the player view by default (the referee runs the table
+      // from a laptop/TV). Settings ▸ Display re-enables referee mode per-device
+      // by setting aurelia_phone_ref; reflect it as a class before first paint.
+      if(localStorage.getItem('aurelia_phone_ref') === '1'){
+        document.documentElement.classList.add('phone-ref');
+      }
     }
   }catch(e){ /* non-fatal — falls back to the standard responsive layout */ }
 })();
@@ -114,7 +120,7 @@
     <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div id="hdr-locus">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v44</span>
+      <span id="build-version" title="Build version">v45</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -189,7 +195,6 @@
       <div class="hx-leg-row"><span class="hx-leg-sw" style="background:transparent;border:1.5px dashed #b23a3a;border-radius:50%;width:11px;height:11px"></span>No fuel (port X)</div>
     </div>
     <div id="hx-title">The Orion Arm · Hex Navigation</div>
-    <div id="hx-toast"></div>
     <button id="hx-lane-toggle" onclick="hxToggleLanes()">Lanes: ON</button>
     <button id="hx-terr-toggle" onclick="hxToggleTerr()">Territories: ON</button>
     <button id="hx-range-toggle" onclick="hxToggleRange()">Fuel range: OFF</button>
@@ -209,6 +214,9 @@
       <button class="hx-zoom-btn" title="Reset view" onclick="hxResetView()">⊚</button>
     </div>
       </div><!-- end galaxy-canvas -->
+    <!-- Toast lives outside galaxy-canvas so jump/refuel feedback still shows
+         on phones, where the canvas (map) is hidden entirely. -->
+    <div id="hx-toast"></div>
 
       <div id="galaxy-detail">
         <div id="hx-phead">
@@ -219,6 +227,17 @@
           <div id="hx-psub">Hex-grid navigation · 1 hex = 1 parsec</div>
         </div>
         <div id="hx-pbody">
+          <!-- Phone-only system picker: on handsets the hex map is hidden (the
+               table display is the map), so this dropdown replaces tap-to-select.
+               Hidden off-phone via #hx-phone-picker CSS; populated by HX. -->
+          <div id="hx-phone-picker">
+            <div class="hx-sec-lbl">System</div>
+            <select id="hx-sys-picker" onchange="hxPickSystem(this.value)"></select>
+            <div class="hx-small" id="hx-phone-picker-note">The map is on the table display — pick a system here to inspect it and plan a jump.</div>
+          </div>
+          <!-- Ship-stat inputs — hidden on phones (#hx-ship-block CSS): the
+               plotter there is a read-only lookup, the map is on the table. -->
+          <div id="hx-ship-block">
           <div class="hx-sec-lbl">Your Ship</div>
           <div class="hx-ship-row">
             <span class="hx-small">Jump drive</span>
@@ -245,6 +264,7 @@
             <span class="hx-small">t · Broker</span>
             <input class="hx-tnage" id="hx-broker" type="number" min="0" max="6" step="1" style="width:42px">
           </div>
+          </div><!-- end hx-ship-block -->
           <div class="hx-note" id="hx-origin-note"></div>
           <div id="hx-sel-block"></div>
         </div>
