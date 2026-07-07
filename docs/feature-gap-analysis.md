@@ -69,8 +69,9 @@ Tier-3 progress:
 | Downtime / between-jump actions log (§5.10) | ✅ shipped (PR #42) — players declare a downtime action per jump, referee resolves; `downtime` key, honour-gated to own entries |
 | Referee-curated wiki / lore pages (§5.9) | ✅ shipped (PR #43) — ref-only markdown-lite articles with `visibleTo` gating; `wiki` key |
 | Contact / faction dossier with secret layers (§6) | ✅ shipped (PR #44) — per-PC known-layers + referee-only note; each player sees only their own layer (`contacts` key) |
-| Scene ambience presets (§7 Tier-3.15) | ⏳ not started — needs an audio-approach decision (no bundled copyrighted audio; likely referee-supplied URLs played on the referee's device, players stay quiet). Low priority per Q6 |
-| Complete per-player secrecy (§7 Tier-3.16) | ⏳ not started — deploy/verify the flag-gated `get-content` edge path so redaction is enforced, not honour-system. Security-critical, multi-day; **plan-first before touching production**, and best landed before/with open-sourcing |
+| Scene ambience presets (§7 Tier-3.15) | 📋 planned — audio approach decided (referee-supplied URLs / deep links, no SDK); detailed as Phase 3 of `docs/table-presentation-plan.md` |
+| Complete per-player secrecy (§7 Tier-3.16) | ⏳ not started — deploy/verify the flag-gated `get-content` edge path so redaction is enforced, not honour-system. Security-critical, multi-day; **plan-first before touching production**, and best landed before/with open-sourcing. Sequenced as Phase 4 of `docs/table-presentation-plan.md` |
+| Table Display Mode + scene push (TV second screen) | 📋 planned — new since this analysis; Phases 1–2 of `docs/table-presentation-plan.md` |
 
 Space-combat §7.1 reconsiderations (the deferred containment pass):
 
