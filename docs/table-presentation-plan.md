@@ -332,8 +332,9 @@ stop. **Full (open):** planner links, per-beat display cut.
 ## 6. Phase 4 — Per-player secrecy migration (existing plan, sequenced here)
 
 This is `docs/per-player-redaction-plan.md`, Stages 0–4 (foundations → edge
-function → referee cutover → player cutover → harden). Status there: design
-approved, **not yet built**. It stays the most important engineering item on
+function → referee cutover → player cutover → harden). Status there (verified
+2026-07-07): **Stages 0–3 shipped; Stage 4 remains** — see that doc's status
+header. It stays the most important engineering item on
 the roadmap because (a) every secrecy-adjacent feature added before it
 widens the honour-system surface, and (b) the gap analysis flags it as a
 precondition for open-sourcing (§7 item 16).
@@ -344,8 +345,8 @@ Two sequencing notes added by this plan:
   so shipping them first is safe.
 - **Phase 5 (whispers) must not ship before Stage 4** of the redaction plan
   (or must ship with an explicit honour-system caveat) — see §8.
-- Maintenance: the redaction plan's `index.html:NNNN` anchors predate the
-  22-module split and are stale; refresh them as Stage 0's first task.
+- Maintenance: the redaction plan's `index.html:NNNN` anchors predated the
+  22-module split; ✅ refreshed 2026-07-07 as part of the Stage 0 verification.
 
 ---
 

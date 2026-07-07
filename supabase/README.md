@@ -1,15 +1,22 @@
-# Supabase — per-player redaction (Stages 0 & 1)
+# Supabase — per-player redaction (server-side pieces)
 
 Server-side pieces for the per-player redaction plan
-(`../docs/per-player-redaction-plan.md`). **Nothing here is deployed** — these
-are reviewable files you apply deliberately, in order. Stages 0 and 1 are
-**additive and cannot break the live app**: the client still uses its hardcoded
-data until the Stage 2/3 client cutover (not in this changeset).
+(`../docs/per-player-redaction-plan.md`). **Deployment state (verified
+2026-07-07):** Stages 0–3 are live in production — the tables exist and are
+seeded, `get-content` is deployed, and the shipped bundle is stripped. The
+steps below are kept as the runbook for re-applying/re-seeding and for the
+remaining Stage 4 work. The repo is the source of truth: **redeploy functions
+from these files only**, never hand-edit in the dashboard (the 2026-07-06
+session's dashboard-side deploys had to be back-filled into git).
 
 ```
 supabase/
   migrations/0001_per_player_redaction.sql   players + campaign_content tables, RLS
+  migrations/0009_private_notes.sql          private_notes table (record of live schema)
   functions/get-content/index.ts             authenticated, per-identity content API
+  functions/put-state/index.ts               referee-gated aurelia_state writes (Stage 4)
+  functions/private-notes/index.ts           per-identity private notes (token-gated)
+  functions/upload-object/index.ts           token-gated storage uploads
   seed/                                       generated — DO regenerate, don't hand-edit
     campaign_content.json                     the audience-tagged fragments
     campaign_content.seed.sql                 ready-to-run seed (SQL editor)
@@ -25,7 +32,8 @@ node tools/extract-content.mjs        # reads index.html → supabase/seed/*
 Open `seed/classification-report.md` and confirm:
 - **0 fail-closed defaults** (or review any that appear).
 - The "current-render leaks this migration fixes" section — e.g. `MAIN.*.desc`
-  currently leaks to players (`index.html:5954`); redaction closes it.
+  used to leak to players from the baked-in literals (historic `index.html:5954`,
+  now `js/20-station-data.js`); redaction closed it.
 - Spot-check the player-visible (`all`) list: nothing secret should be there.
 
 > The report is the human gate. Don't seed until the `all` list looks right.
@@ -98,8 +106,8 @@ verified end to end.
 
 ## Step 6 — Stage 2 client (already in index.html, default OFF)
 
-`index.html` now contains the secure-content client (`hydrateSecureContent` et
-al.). **It is a no-op until a token is stored**, so the live app is unchanged.
+`js/55-auth-gating.js` contains the secure-content client (`hydrateSecureContent`
+et al.). **It is a no-op until a token is stored**, so the live app is unchanged.
 To test the per-player path in a browser:
 
 ```js
@@ -146,3 +154,26 @@ intentionally kept in the bundle as non-secret.
    default and fail-closed then come for free (no secrets remain to fall back to).
 
 Publish the stripped `index.html` only after steps 1–2 pass.
+
+## Step 8 — Stage 4: lock `aurelia_state` writes ✅ DONE (2026-07-07)
+
+Applied on the owner's go-ahead: migration 0010 dropped the anonymous
+INSERT/UPDATE policies (`Allow public read` kept); `put-state` v2 requires a
+valid token for every write and the referee token for the 46 referee-only
+keys; the v42 client routes all writes through it. Post-apply advisors: both
+`aurelia_state` `rls_policy_always_true` WARNs cleared.
+
+- **Publish v42 promptly** — v41 devices' writes queue locally against the
+  locked table and only flush (via `put-state`) once the device reloads v42
+  with a token stored.
+- Every device needs a token (Settings → Secure Content) for writes now —
+  tokenless devices are read-only + local queue.
+- Rollback if the table stalls (instant): re-create the two policies — SQL is
+  in the migration's header comment.
+
+> **Known follow-up (read side):** `aurelia_state` still allows public SELECT,
+> and some referee-only keys hold referee prose (`npc-roster`,
+> `session-plans`, raw `combat-encounter`, unrevealed `clocks`,
+> `campaign-events`). Closing that needs a staged read cutover through
+> `get-content` — see the plan doc §8. Do NOT just drop the SELECT policy;
+> today every device reads shared keys anonymously and would break.
