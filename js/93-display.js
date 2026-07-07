@@ -409,8 +409,9 @@ function fireBeat(id){
   if(DISPLAY_MODE || (typeof isReferee === 'function' && !isReferee())) return;
   const b = sceneBeats.find(x => x.id === id); if(!b) return;
   if(!b.audioUrl){
-    // Deep-link beat: hand off to the external app (existing window.open pattern).
-    if(b.externalUrl){ try { window.open(b.externalUrl, '_blank', 'noopener'); } catch(e){ location.href = b.externalUrl; } }
+    // Deep-link beat: hand off to the external app (existing window.open pattern)
+    // and fade out whatever is playing here — one source of sound at a time.
+    if(b.externalUrl){ try { window.open(b.externalUrl, '_blank', 'noopener'); } catch(e){ location.href = b.externalUrl; } stopBeat(); }
     else if(typeof showToast === 'function') showToast('This beat has no audio URL yet — edit it below', 'info');
     return;
   }
