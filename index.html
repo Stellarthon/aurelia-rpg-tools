@@ -114,7 +114,7 @@
     <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div id="hdr-locus">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v42</span>
+      <span id="build-version" title="Build version">v43</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -748,6 +748,7 @@
       <button id="disc-btn" class="more-item" onclick="closeMoreMenu();toggleDiscoveryPanel()" title="Library Data — revealed lore & intel">🗂 Library Data</button>
       <button id="wiki-btn" class="more-item" onclick="closeMoreMenu();toggleWikiPanel()" title="Wiki — referee-curated campaign lore & factions">📚 Wiki</button>
       <button id="contacts-btn" class="more-item" onclick="closeMoreMenu();toggleContactsPanel()" title="Contacts — the party's patrons, informants & rivals">🤝 Contacts</button>
+      <button id="whisper-btn" class="more-item" onclick="closeMoreMenu();toggleWhispersPanel()" title="Whispers — pass the referee a secret note without the table seeing">🤫 Whispers <span id="whisper-badge" class="wsp-badge hidden">0</span></button>
       <button id="rep-btn" class="more-item" onclick="closeMoreMenu();toggleReputationPanel()" title="Faction reputation & milestones">⚖ Standing</button>
       <button id="clocks-btn" class="more-item" onclick="closeMoreMenu();toggleClocksPanel()" title="Clocks — faction schemes, threats & deadlines ticking down">🕗 Clocks</button>
       <button id="downtime-btn" class="more-item" onclick="closeMoreMenu();toggleDowntimePanel()" title="Downtime — between-jump actions (train, repair, contacts)">⏳ Downtime</button>
@@ -998,6 +999,19 @@
     </div>
     <div id="clocks-body"></div>
     <div class="panel-resize-handle" id="clocks-resize"></div>
+  </div>
+
+  <!-- ── Whispers panel — secret player↔referee notes (table plan §8).
+       Content is fetched per-token from get-content (server-side redaction):
+       a player's device only ever RECEIVES their own thread, the referee gets
+       all of them. Never rendered in display mode. ── -->
+  <div id="whispers-wrap" class="hidden">
+    <div id="whispers-header" onclick="toggleWhispersCollapse()">
+      <span id="whispers-title-lbl">🤫 WHISPERS <span id="whispers-count" class="wsp-badge hidden">0</span></span>
+      <span id="whispers-toggle">▼</span>
+    </div>
+    <div id="whispers-body"></div>
+    <div class="panel-resize-handle" id="whispers-resize"></div>
   </div>
 
   <!-- ── Reputation tracker panel ── -->
