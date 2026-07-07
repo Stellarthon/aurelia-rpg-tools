@@ -21,8 +21,11 @@
 //   POST /functions/v1/get-content
 //   Authorization: Bearer <token>
 //   Body (optional): { "networkLock": { "set": true|false } }  // referee only
-//   → 200 { identity, role, content:[{path,value}], reveals,
+//                    { "whispersOnly": true }   // light mode for the 4s poll
+//   → 200 { identity, role, content:[{path,value}], reveals, whispers,
 //           networkLock?, players? }            // networkLock/players: referee only
+//     with whispersOnly: { identity, role, whispers } and nothing else — the
+//     poll loop must not drag the full campaign content over the wire every 4s.
 //     401 { error } on a bad/missing token
 //     403 { error:"network-locked", message } when the venue-network lock blocks you
 //
@@ -180,6 +183,30 @@ Deno.serve(async (req) => {
     }, 403);
   }
 
+  // 3b. Whisper notes (table-presentation plan §8). The raw `whispers` row is
+  //     excluded from the public SELECT policy (migration 0011), so this
+  //     token-checked, per-identity filter is the ONLY way whisper text reaches
+  //     a device: the referee gets every item, a player gets exactly the items
+  //     whose `visibleTo` names them (their own notes + replies addressed to
+  //     them). Items without a well-formed `visibleTo` are dropped for players
+  //     — fail CLOSED, never "malformed means public".
+  const who = [player.identity, ...audiences];
+  let whispers: any[] = [];
+  try {
+    const { data: wRow } = await supabase
+      .from("aurelia_state").select("value").eq("key", "whispers").maybeSingle();
+    const all = wRow?.value != null ? JSON.parse(wRow.value) : [];
+    if (Array.isArray(all)) {
+      whispers = role === "referee"
+        ? all
+        : all.filter((it) => it && Array.isArray(it.visibleTo) && canSee(it.visibleTo, role, who));
+    }
+  } catch { whispers = []; }
+
+  if (body && body.whispersOnly === true) {
+    return json({ identity: player.identity, role, whispers });
+  }
+
   // 4. Read all fragments, then redact in memory. (Content is small — a few
   //    hundred rows — so a full read + filter is simplest and avoids trusting
   //    jsonb query predicates with the secret data.)
@@ -204,7 +231,7 @@ Deno.serve(async (req) => {
     try { reveals = JSON.parse(rev.value); } catch { /* leave {} */ }
   }
 
-  const out: any = { identity: player.identity, role, content, reveals };
+  const out: any = { identity: player.identity, role, content, reveals, whispers };
 
   // 6. Referee-only extras. These are NEVER added to a player's response, so
   //    tokens and lock internals never leave the service-role boundary for a

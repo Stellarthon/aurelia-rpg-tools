@@ -6,10 +6,15 @@ per-player-secrecy migration. Optional follow-on: Whisper Notes.
 
 **Status:** Phases 1–3 (ambience at MVP scope) are **implemented** — shipped
 as `js/93-display.js` + the small gate/hook edits listed per phase, shell
-`orion-shell-v13` / build v41. Phase 3 Full items (planner links, per-beat
-display cut) and Phase 5 remain open; Phase 4 stays plan-first per its own
-doc. The display figure ships without the name caption (a handout's name can
-itself be a spoiler) — the `name` still rides the message for a future toggle.
+`orion-shell-v13` / build v41. **Phase 5 (whisper notes) is implemented**
+(2026-07-07, build v43 / `orion-shell-v15`, on the referee's go-ahead after
+Phase 4 Stage 4 went live) — see §8 for the as-built shape; server deploy
+steps (migration 0011 + two function redeploys) are in `supabase/README.md`
+step 9. Phase 3 Full items (planner links, per-beat display cut) remain open;
+Phase 4 shipped through Stage 4 per its own doc (read-side cutover is that
+doc's follow-up). The display figure ships without the name caption (a
+handout's name can itself be a spoiler) — the `name` still rides the message
+for a future toggle.
 **Relationship to other docs:** extends `docs/feature-gap-analysis.md` (this
 plan details and supersedes its open Tier-3 items 15 "Scene ambience presets"
 and slots around 16 "Complete per-player secrecy"); Phase 4 below *is*
@@ -377,20 +382,51 @@ cannot host the display link — the referee control cluster hides itself when
 
 ---
 
-## 8. Phase 5 (optional) — Whisper notes  ·  S effort  ·  not scheduled
+## 8. Phase 5 (optional) — Whisper notes  ·  S effort  ·  ✅ implemented 2026-07-07
 
 The one in-person use for "chat": a player passes the referee a secret note
-("I pocket the data crystal") without the table seeing. Not scheduled;
-build only if the table actually hits this, and **after Phase 4 Stage 4**
-(before that, whispers ride the world-readable `aurelia_state` KV and are
-honour-system private — acceptable for ambience URLs, not for secret notes).
+("I pocket the data crystal") without the table seeing. Built on the
+referee's go-ahead after Phase 4 Stage 4 (the write lock) went live. **Not a
+chat system** — no player↔player messages, no group channel, no typing
+indicators; a player sees only their own thread, the referee sees all of
+them.
 
-Sketch when its time comes: KV key `whispers`
-(`{id, from, ts, text, resolved}`); a one-line composer in the player tools;
-referee panel with unread badge; referee is notified by the existing player
-poll cycle diffing the key (`pollRevealState`, `js/55:505`) plus a
-`showToast` (`js/92:740`). Referee replies become items with
-`visibleTo: [sender]` — same audience mechanics as contacts/wiki.
+**As built** (build v43 / `orion-shell-v15`) — the sketch survived contact
+with the Stage 4 reality on the *write* side, but the *read* side needed one
+correction: `aurelia_state` still allows public SELECT (the redaction plan's
+documented read-side follow-up), so a plain KV row would have been
+world-readable — CSS-hiding all over again. The as-built data path:
+
+- **Store:** `aurelia_state` key `whispers`, array of
+  `{id, from, ts, text, resolved, visibleTo[, ref, re]}`. The row is
+  **excluded from the public SELECT policy** (migration
+  `0011_whispers_select_carveout.sql`) — every other key keeps today's reads.
+- **Writes:** `put-state` grows `append`/`resolve` ops; whole-array writes of
+  this key are refused for every role. `id/from/ts/visibleTo` are stamped
+  server-side from the token, so a sender cannot be forged and no player can
+  erase another's thread. Composer sends go through
+  `supaStorage.sendWhisper()` (`js/50`), which parks offline sends in the
+  existing outbound queue under unique `whisper#<id>` keys (two offline
+  whispers never last-write-wins each other away).
+- **Reads:** `get-content` gains a `{whispersOnly:true}` light mode and
+  filters items server-side with the same `canSee` port used for content
+  fragments — a player's device never even receives another thread.
+- **Notification, existing plumbing only:** players pick up replies on the
+  4s `pollRevealState` cycle (`js/55`); the referee — who never runs the
+  player poll — rides the existing 8s outbound-queue heartbeat (`js/55`), so
+  no new timer exists. Arrival = `showToast` (`js/92:740`) only; deliberately
+  **no sound**. Unread count badges the ⋯ More button and the panel title.
+- **UI:** `🤫 Whispers` in the ⋯ More menu → floating panel (`js/85`),
+  player composer + own thread; referee list newest-first with inline reply
+  and a resolve toggle that collapses items behind "Show resolved (n)".
+- **Display mode:** the TV never fetches, stores, or renders whisper state
+  (`DISPLAY_MODE` guards in `pollWhispers`/`applyWhispers`/panel toggle; the
+  heartbeat's `isReferee()` is always false on the TV).
+
+Verified end-to-end (20 scripted checks) against a stubbed backend with the
+real client in four browser contexts (referee / player A / player B / TV);
+the live Supabase pieces ship as repo files with deploy steps in
+`supabase/README.md` step 9.
 
 ---
 
@@ -415,7 +451,7 @@ poll cycle diffing the key (`pollRevealState`, `js/55:505`) plus a
 | Month 1 | **Phase 1** Table Display Mode (M) — ✅ built | Acceptance §3; one real session with the TV |
 | Month 2 | **Phase 2** Scene push (S) + **Phase 3** ambience MVP (S) — ✅ built | Acceptance §4/§5; run a ground-combat scene and a scene-beat cut at the table |
 | Month 3+ | **Phase 4** redaction Stages 0–2 (plan-first, per its own doc) | `get-content` parity proven on referee device |
-| Following | **Phase 4** Stages 3–4; then Phase 3 Full / Phase 5 if wanted | Security advisors clear; open-sourcing unblocked |
+| Following | **Phase 4** Stages 3–4 — ✅ live; **Phase 5** whispers — ✅ built (deploy per `supabase/README.md` §9); Phase 3 Full still open | Security advisors clear; open-sourcing unblocked; whisper acceptance (§8) re-run on two real devices post-deploy |
 
 After each phase: update the status tables in `docs/feature-gap-analysis.md`
 (§2) and this document's header.

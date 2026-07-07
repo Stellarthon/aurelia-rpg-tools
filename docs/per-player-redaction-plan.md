@@ -243,3 +243,12 @@ keys through `get-content` (which already returns `reveals`) and then drop
 public SELECT — and needs its own staged migration exactly like Stages 2–3:
 client first, verify, then lock. Do **not** simply drop the SELECT policy;
 every device reads shared keys anonymously today and would break.
+
+> **Precedent (2026-07-07):** the whisper-notes feature
+> (`docs/table-presentation-plan.md` §8) is the first key built on the
+> post-Stage-4 pattern this follow-up wants: its `whispers` row is excluded
+> from the public SELECT policy (migration 0011), reads go only through
+> `get-content` (token-checked, per-identity redaction), and writes go only
+> through `put-state` ops that stamp the sender server-side. New
+> secret-bearing keys should copy that shape; the Stage 4.5 read cutover for
+> the pre-existing keys above remains open.

@@ -177,3 +177,55 @@ keys; the v42 client routes all writes through it. Post-apply advisors: both
 > `campaign-events`). Closing that needs a staged read cutover through
 > `get-content` — see the plan doc §8. Do NOT just drop the SELECT policy;
 > today every device reads shared keys anonymously and would break.
+
+## Step 9 — Whisper notes (table plan §8) — deploy for build v43
+
+Whisper notes (secret player→referee notes, `docs/table-presentation-plan.md`
+§8) need three server-side pieces, all committed here. Order doesn't matter
+much — nothing live touches the `whispers` key until the v43 client is
+published — but do all three **before publishing v43**:
+
+1. **Redeploy both functions from the repo files** (never the dashboard copy):
+
+   ```bash
+   supabase functions deploy put-state  --no-verify-jwt   # adds whisper append/resolve ops
+   supabase functions deploy get-content --no-verify-jwt  # adds whispers + {whispersOnly:true} poll mode
+   ```
+
+2. **Apply `migrations/0011_whispers_select_carveout.sql`** (SQL editor). It
+   re-creates `Allow public read` on `aurelia_state` excluding only the
+   `whispers` row, so whisper text can never be read with the shipped anon
+   key. Everything else keeps today's reads; instant rollback SQL is in the
+   migration header.
+
+3. **Verify** (mirrors the E2E suite's server checks):
+
+   ```bash
+   URL=https://rarxefzcqvgqvxutprcq.supabase.co/functions/v1
+
+   # Player appends a whisper — the server stamps from/visibleTo itself.
+   curl -s -X POST $URL/put-state -H "Authorization: Bearer <PLAYER_TOKEN>" \
+     -H 'Content-Type: application/json' \
+     -d '{"key":"whispers","append":{"text":"deploy check — ignore"}}'
+
+   # That player's poll returns their item; ANOTHER player's poll returns [].
+   curl -s -X POST $URL/get-content -H "Authorization: Bearer <PLAYER_TOKEN>" -d '{"whispersOnly":true}'
+   curl -s -X POST $URL/get-content -H "Authorization: Bearer <OTHER_PLAYER>" -d '{"whispersOnly":true}'
+
+   # Raw anon read of the row is refused (migration 0011): expect []
+   curl -s "https://rarxefzcqvgqvxutprcq.supabase.co/rest/v1/aurelia_state?key=eq.whispers&select=value" \
+     -H "apikey: <ANON_KEY>" -H "Authorization: Bearer <ANON_KEY>"
+
+   # Whole-array forgery is refused for every role: expect 403
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/put-state \
+     -H "Authorization: Bearer <PLAYER_TOKEN>" -H 'Content-Type: application/json' \
+     -d '{"key":"whispers","value":"[]"}'
+   ```
+
+   Clean up the deploy-check item afterwards: referee opens ⋯ More →
+   Whispers and resolves it (or `delete from aurelia_state where
+   key='whispers';` to reset the thread entirely).
+
+   Then run the acceptance pass from the plan §8 on two real devices, and
+   `get_advisors` (security) — expect no new findings (the carve-out narrows
+   an existing public policy; it grants nothing).
