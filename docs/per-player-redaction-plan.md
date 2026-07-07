@@ -14,7 +14,7 @@
 > | **1. Edge Function** | ✅ Deployed (`get-content` v4, active, JWT gate off). |
 > | **2. Referee cutover** | ✅ Shipped — secure client in `js/55-auth-gating.js` (`hydrateSecureContent`). |
 > | **3. Player cutover + strip** | ✅ Shipped — bundle carries no referee literals (`node tools/strip-secrets.mjs --check` exits 0). |
-> | **4. Harden** | 🟡 **Built, verified, ready to arm.** The client now routes every shared-state write through `put-state` whenever a token is stored (`js/50-supabase.js`, build v42), and `put-state` v2 (deployed 2026-07-07) enforces a 46-key referee-only list compiled from a full write-site audit. The last step — migration `0010_lock_aurelia_state_writes.sql`, dropping the public INSERT/UPDATE policies — is committed but **deliberately not applied**: it is the go-live switch, to be run only when every table device runs build v42 with a token stored. Its effect was proven against production in a rolled-back transaction (anon INSERT → RLS denial 42501). See §8. |
+> | **4. Harden** | ✅ **Complete (2026-07-07, lock applied on the owner's go-ahead).** Client routes every shared-state write through `put-state` when a token is stored (`js/50-supabase.js`, build v42); `put-state` v2 enforces a 46-key referee-only list from a full write-site audit; migration 0010 dropped the public INSERT/UPDATE policies on `aurelia_state` (SELECT kept). Post-apply advisors: **both `rls_policy_always_true` WARNs cleared** — no `aurelia_state` write findings remain. The honour system is retired for writes; Phase 5 (whisper notes) and open-sourcing are unblocked. ⚠ Until the v42 client is published, live v41 devices queue their writes locally; they flush automatically (via `put-state`) once the device reloads v42 with a token. See §8. |
 >
 > Line anchors below were refreshed 2026-07-07 for the 22-module `js/` split
 > (the original `index.html:NNNN` anchors predated it). This doc remains the
@@ -214,16 +214,20 @@ writes through `put-state`, then drop the public INSERT/UPDATE policies on
   refused with RLS violation `42501`; the abort restored the policies, so live
   behavior is unchanged.
 
-**The go-live switch (apply when ready)**
+**The go-live switch — APPLIED 2026-07-07 (owner's decision, same session)**
 
-Run `supabase/migrations/0010_lock_aurelia_state_writes.sql` when **every
-device at the table** (a) runs build v42+ and (b) has a token stored
-(Settings → Secure Content). After it runs, the two `rls_policy_always_true`
-advisor WARNs clear and the honour system is retired for writes. A stale or
-tokenless device degrades gracefully — its writes queue locally and flush
-through `put-state` after a reload with a token — but mid-session that is
-disruptive, so flip it between sessions. Instant rollback: re-create the two
-policies (SQL in the migration header).
+Migration 0010 is live: `aurelia_state` keeps only `Allow public read`;
+anonymous INSERT/UPDATE are gone. Post-apply advisor run: both
+`rls_policy_always_true` WARNs cleared — zero write-path findings remain (the
+4 INFO `rls_enabled_no_policy` notices are the intentional deny-by-default
+design; the 4 bucket-listing WARNs are the deliberate migration-0008 restores,
+out of this plan's scope). The honour system is retired for writes.
+
+Until the v42 client is published to the live site, v41 devices' writes fail
+against the locked table and queue locally (the offline-resilience queue);
+they flush automatically through `put-state` once the device reloads v42 with
+a token stored. **Publish v42 promptly after merging.** Instant rollback if
+the table stalls: re-create the two policies (SQL in the migration header).
 
 **New finding — read-side leak (follow-up, deliberately out of scope)**
 
