@@ -2,11 +2,13 @@
 // TABLE PRESENTATION SUITE — display window, scene push, ambience beats
 // ═══════════════════════════════════════════════════════════════════════════
 // The referee's laptop drives the table TV over HDMI: "Open table display"
-// spawns index.html?display=1 (a chromeless, player-safe, read-only window the
-// referee drags to the TV) and the two windows talk over a BroadcastChannel —
+// spawns index.html?display=1 (a chromeless, player-safe window the referee
+// drags to the TV) and the two windows talk over a BroadcastChannel —
 // same-origin, same-machine, zero latency, works fully offline. The TV is
-// NEVER a referee (isReferee() hard-returns false under DISPLAY_MODE, js/55)
-// and never writes shared state (supaStorage guards, js/50).
+// also locally navigable at the table — pan, zoom, select systems and drill
+// into the system view exactly like the player view — but it is NEVER a
+// referee (isReferee() hard-returns false under DISPLAY_MODE, js/55) and
+// never writes shared state (supaStorage guards, js/50).
 // See docs/table-presentation-plan.md.
 //
 // Message protocol — channel 'aurelia-table-display', every message {v:1, t}:
@@ -283,6 +285,27 @@ function initTableDisplayWindow(){
   wait.id = 'display-wait'; wait.className = 'hidden';
   wait.textContent = 'Waiting for the referee window…';
   document.body.appendChild(wait);
+
+  // The TV is locally navigable (pan/zoom/select, player-gated), so it needs
+  // the one piece of chrome the hidden header used to provide: a Back button
+  // for climbing out of system/body/station views. Wrapping the nav globals
+  // (same late-bind trick as the referee half's Follow mode) keeps its
+  // visibility current whether a nav came from a local tap or a referee
+  // 'view'/'scene' message — applyViewSpec routes through these globals too.
+  const back = document.createElement('button');
+  back.id = 'display-back'; back.className = 'hidden';
+  back.textContent = '← Back';
+  back.addEventListener('click', () => { if(typeof navBack === 'function') navBack(); });
+  document.body.appendChild(back);
+  const refreshBackBtn = () => back.classList.toggle('hidden', typeof currentView === 'undefined' || currentView === 'galaxy');
+  DISPLAY_WRAPPED_FNS.forEach(name => {
+    const orig = window[name];
+    if(typeof orig !== 'function'){
+      console.error('[table-display] expected global is missing, Back button will not track it: ' + name);
+      return;
+    }
+    window[name] = function(...a){ const r = orig.apply(this, a); refreshBackBtn(); return r; };
+  });
 
   // Fullscreen needs a user gesture — a one-click overlay, gone once used.
   const fs = document.createElement('div');
