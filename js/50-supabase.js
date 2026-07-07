@@ -258,7 +258,37 @@ const supaStorage = {
     }
   },
   // Raw upsert — throws on any failure. Used by both set() and the queue flush.
+  // Stage 4 (per-player redaction plan): when this device holds an access token,
+  // the write goes through the put-state Edge Function, which validates the
+  // token and rejects referee-only keys from a player token. The direct anon
+  // REST path remains only for tokenless devices, and dies the day migration
+  // 0010 drops the public write policies on aurelia_state.
+  // A 401/403 from put-state is an AUTH verdict, not an outage: the server was
+  // reached and said no. Throwing it as `permanent` stops set()/flushQueue()
+  // from parking it in the retry queue, where it would loop forever.
   async _post(key, value){
+    const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+    if(token){
+      const res = await fetch(SUPABASE_URL + '/functions/v1/put-state', {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ key, value: String(value) })
+      });
+      if(res.status === 401 || res.status === 403){
+        const err = new Error('put-state ' + res.status);
+        err.permanent = true;
+        err.userMessage = (res.status === 403)
+          ? 'Referee-only change rejected by the server.'
+          : 'Access token rejected — re-enter it in Settings → Secure Content.';
+        throw err;
+      }
+      if(!res.ok) throw new Error('put-state HTTP ' + res.status);
+      return true;
+    }
     const res = await fetch(SUPABASE_REST, {
       method: 'POST',
       headers: {
@@ -283,6 +313,13 @@ const supaStorage = {
       flushQueue();                        // we're online — drain any backlog behind this write
       return { ok: true };
     } catch(e){
+      if(e && e.permanent){
+        // The server answered and REFUSED (bad token / referee-only key).
+        // Retrying can never succeed, so don't queue — surface it instead.
+        markOnline();
+        if(typeof showToast === 'function') showToast(e.userMessage || 'Change rejected by the server.', 'error');
+        return { ok: false, rejected: true };
+      }
       markOffline();
       queueWrite(key, str);                // park it; reconnect (or the heartbeat) retries
       return { ok: false };
@@ -317,6 +354,15 @@ async function flushQueue(){
         if(cur[key] && cur[key].ts === entry.ts){ delete cur[key]; saveQueue(cur); }
         markOnline();
       } catch(e){
+        if(e && e.permanent){
+          // Auth refusal, not an outage: drop the entry (it can never land) and
+          // keep draining the rest of the queue.
+          const cur = loadQueue();
+          if(cur[key] && cur[key].ts === entry.ts){ delete cur[key]; saveQueue(cur); }
+          if(typeof showToast === 'function') showToast(e.userMessage || 'A queued change was rejected by the server.', 'error');
+          markOnline();
+          continue;
+        }
         markOffline();
         break;                             // still down — stop; the next trigger retries
       }
