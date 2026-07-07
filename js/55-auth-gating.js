@@ -201,7 +201,10 @@ let networkLockMessage = '';    // TASK 6: 403 lock-out message to surface to a 
 
 // With a secure token, the SERVER's role is authoritative for the whole UI
 // (chrome + content). Without one, fall back to the local player-mode checkbox.
-function isReferee(){ return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+// The table display window (js/93) is NEVER a referee, whatever the shared
+// localStorage says — this one line at the choke point keeps every
+// referee-only surface (overlays, design mode, records) off the table TV.
+function isReferee(){ if(DISPLAY_MODE) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
 
 // ── Permission model (V1) ────────────────────────────────────────────────
 // Per-viewer information gating. This is spoiler/visibility control, NOT
@@ -503,6 +506,7 @@ const POLL_MAX_MS = 30000;     // ceiling once we back off during an outage
 let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps back on markOnline()
 
 async function pollRevealState(){
+  if(DISPLAY_MODE) return; // the table TV's only input is the BroadcastChannel (js/93)
   if(isReferee()) return; // referee never polls — would be pointless and noisy
   // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
   // state intact), never an overwrite-with-empty-defaults that wipes the screen.
@@ -955,6 +959,7 @@ function applyViewSpec(spec){
 // hammered every 4s.
 function startPolling(){
   stopPolling();
+  if(DISPLAY_MODE) return; // table TV: no polling, ever (js/93 drives it)
   if(isReferee()) return;
   pollBackoff = POLL_MS;
   const tick = async () => {
@@ -1188,6 +1193,7 @@ function updateStationLocks(){
 const KNOWN_CHARACTERS = ['Rhett Calder','Cassia Velen','Dr Curculion','Riley','Riven Dahl'];
 
 function checkIdentity(){
+  if(DISPLAY_MODE) return; // table TV never prompts for (or shows) an identity
   try {
     myIdentity = localStorage.getItem('aurelia_identity');
   } catch(e){}

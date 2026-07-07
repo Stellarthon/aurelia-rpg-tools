@@ -1,4 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
+// BOOT FLAGS
+// ═══════════════════════════════════════════════════════════════════════════
+// Table Display Mode — the chromeless, player-safe second window the referee
+// drags onto the table TV (js/93-display.js). Declared here in the first
+// module so every later module can branch on it. This is the app's ONLY boot
+// query param — keep it that way (see docs/table-presentation-plan.md §2.2).
+const DISPLAY_MODE = new URLSearchParams(location.search).has('display');
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM DATA
 // ═══════════════════════════════════════════════════════════════════════════
 const BASE_BODIES_AUROS = [

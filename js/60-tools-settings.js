@@ -597,6 +597,10 @@ function renderSettingsMenu(showArchon){
   // Defined in js/92 (loads later); menus render at open time, so guard only.
   if(typeof rulebookLibraryHTML === 'function') html += rulebookLibraryHTML();
 
+  // ── Table Display control cluster (referee) — defined in js/93 (loads later);
+  // renders '' for players, in display mode, and on file:// builds.
+  if(typeof tableDisplaySettingsHTML === 'function') html += tableDisplaySettingsHTML();
+
   html += kbdSettingsHTML();
   card.innerHTML = html;
 }

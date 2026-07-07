@@ -911,6 +911,81 @@ textarea{font-family:var(--font)}
 #handout-lightbox.hidden{display:none}
 #handout-lightbox img{max-width:96vw;max-height:92vh;object-fit:contain;border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.6)}
 #handout-lightbox-close{position:fixed;top:14px;right:16px;background:rgba(0,0,0,.5);border:1px solid var(--bd0);color:var(--tx0);font-size:18px;line-height:1;border-radius:6px;padding:6px 11px;cursor:pointer}
+#handout-lightbox-send{position:fixed;top:14px;left:16px;background:rgba(0,0,0,.5);border:1px solid var(--accentGold);color:var(--accentGold);font-size:12px;line-height:1;border-radius:6px;padding:8px 11px;cursor:pointer}
+#handout-lightbox-send:hover{background:var(--accentGoldBg)}
+#handout-lightbox-send.hidden{display:none}
+.handout-send{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.55);border:none;color:var(--accentGold);cursor:pointer;font-size:11px;line-height:1;border-radius:4px;padding:2px 5px}
+
+/* ── Scenes strip — ambience beats panel (cloned from #handouts-wrap chrome; js/93) ── */
+#scenes-wrap{
+  position:fixed;top:54px;left:0;width:340px;height:auto;z-index:53;
+  background:var(--bg1);border:.5px solid var(--bd0);
+  border-radius:8px;display:flex;flex-direction:column;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);
+  min-width:260px;min-height:120px;max-width:90vw;max-height:85vh
+}
+#scenes-wrap.hidden{display:none}
+#scenes-wrap.panel-collapsed{height:auto!important;min-height:0}
+#scenes-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px;cursor:pointer;flex-shrink:0;user-select:none;
+  border-bottom:.5px solid var(--bd0)
+}
+#scenes-toggle{font-size:10px;color:var(--tx1)}
+#scenes-body{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+#scenes-body.collapsed{display:none}
+.beat-strip{display:flex;flex-wrap:wrap;gap:6px}
+.beat-btn{background:var(--bg0);border:.5px solid var(--bd0);border-radius:14px;color:var(--tx0);font-size:11px;padding:6px 11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.beat-btn:hover{border-color:var(--accentGold);color:var(--accentGold)}
+.beat-btn.playing{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold);font-weight:700}
+.beat-btn.beat-stop[disabled]{opacity:.4;cursor:default}
+.beat-edit-list{display:flex;flex-direction:column;gap:4px;border-top:.5px dashed var(--bd0);padding-top:8px}
+.beat-edit-row{display:flex;align-items:center;gap:6px}
+.beat-edit-name{flex:1;font-size:11px;color:var(--tx0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.beat-mini{background:transparent;border:.5px solid var(--bd0);border-radius:4px;color:var(--tx1);font-size:10px;line-height:1;padding:3px 6px;cursor:pointer}
+.beat-mini:hover{color:var(--accentGold);border-color:var(--accentGold)}
+.beat-mini-del:hover{color:#ff9b9b;border-color:#ff9b9b}
+.beat-add{display:flex;flex-direction:column;gap:6px;border-top:.5px dashed var(--bd0);padding-top:8px}
+.beat-add input:not([type=checkbox]):not([type=range]){background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);padding:6px 8px;font-size:11px}
+.beat-form-row{display:flex;align-items:center;gap:12px;font-size:10.5px;color:var(--tx1)}
+.beat-form-row label{display:flex;align-items:center;gap:5px}
+.beat-form-row input[type=range]{flex:1;min-width:0}
+
+/* ── Table Display Mode (js/93) — the chromeless, player-safe window on the TV ──
+   All app chrome disappears; #root goes pointer-inert (read-only surface); the
+   js/93-built overlays (fullscreen affordance, blank, handout figure, pings,
+   wait pill) are appended to <body> so they stay interactive.
+   Stacking: figure 380 < ping 385 < blank 390 < wait 396 < fullscreen 400. */
+body.display-mode #hdr,
+body.display-mode #float-panels,
+body.display-mode #toast-container,
+body.display-mode #galaxy-detail,
+body.display-mode #hx-lane-toggle,
+body.display-mode #hx-terr-toggle,
+body.display-mode #hx-range-toggle,
+body.display-mode #hx-fuel-toggle,
+body.display-mode #hx-trade-toggle,
+body.display-mode #hx-paint-tools,
+body.display-mode #hx-zoom,
+body.display-mode #forced-view-banner,
+body.display-mode #identity-modal,
+body.display-mode .panel-resize-handle{display:none!important}
+body.display-mode #root{pointer-events:none}
+#display-fig{position:fixed;inset:0;z-index:380;margin:0;background:#000;display:flex;align-items:center;justify-content:center}
+#display-fig.hidden{display:none}
+#display-fig img{max-width:100vw;max-height:100vh;object-fit:contain}
+#display-blank{position:fixed;inset:0;z-index:390;background:#000}
+#display-blank.hidden{display:none}
+#display-wait{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:396;background:rgba(0,0,0,.65);border:1px solid var(--bd0);border-radius:16px;color:var(--tx1);font-size:12px;font-family:monospace;padding:7px 14px}
+#display-wait.hidden{display:none}
+#display-fs{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,.35)}
+#display-fs span{background:rgba(0,0,0,.7);border:1px solid var(--accentGold);border-radius:20px;color:var(--accentGold);font-size:14px;font-family:monospace;letter-spacing:1px;padding:12px 22px}
+.table-ping{position:fixed;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:3px solid var(--accentGold);z-index:385;pointer-events:none;animation:tablePing 2s ease-out forwards}
+@keyframes tablePing{
+  0%{transform:scale(.4);opacity:1;box-shadow:0 0 0 0 rgba(244,211,94,.75)}
+  70%{opacity:.85}
+  100%{transform:scale(2.6);opacity:0;box-shadow:0 0 0 26px rgba(244,211,94,0)}
+}
 
 /* ── Downtime panel (cloned from #journal-wrap chrome) ── */
 #downtime-wrap{
@@ -3607,7 +3682,7 @@ body.light-mode-body #starfield{display:none}
    dragged panel writes an inline top and still overrides this. */
 #quest-wrap,#journal-wrap,#turnorder-wrap,#ship-wrap,#combat-wrap,#cal-wrap,
 #disc-wrap,#npc-wrap,#rep-wrap,#funds-wrap,#gen-wrap,#econ-wrap,
-#cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap,#clocks-wrap{
+#cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap,#clocks-wrap,#scenes-wrap{
   top:calc(var(--hdr-h,82px) + 6px)
 }
 
