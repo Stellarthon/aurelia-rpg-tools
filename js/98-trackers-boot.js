@@ -310,6 +310,10 @@ const KBD_DEFAULTS = [
   { id:'system',    label:'Go to System view',            defaultKey:'s' },
   { id:'station',   label:'Go to Station view',           defaultKey:'a' },
   { id:'lightmode', label:'Toggle light/dark mode',       defaultKey:'m' },
+  { id:'tdisplay',  label:'Open table display',           defaultKey:'d' },
+  { id:'tfollow',   label:'Table display: Follow / Hold', defaultKey:'f' },
+  { id:'tsend',     label:'Send current view to table',   defaultKey:'t' },
+  { id:'tblank',    label:'Table display: blank toggle',  defaultKey:'b' },
 ];
 
 let kbdBindings = [];
@@ -384,6 +388,7 @@ function kbdOnKeyForRebind(e){
 }
 
 function kbdDispatch(e){
+  if(DISPLAY_MODE) return; // the table TV is a read-only surface — no shortcuts
   // Don't fire shortcuts when typing in an input/textarea
   const tag = document.activeElement?.tagName;
   if(tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -420,6 +425,12 @@ function kbdDispatch(e){
     case 'system':     if(currentView !== 'system') goSystem(); break;
     case 'station':    if(currentView !== 'station') enterStation(); break;
     case 'lightmode':  toggleLightMode(); break;
+    // Table display cluster (js/93) — referee-only inside; keypress counts as
+    // the user gesture window.open needs.
+    case 'tdisplay':   if(typeof displayOpenWindow === 'function' && isReferee()) displayOpenWindow(); break;
+    case 'tfollow':    if(typeof displayToggleFollow === 'function' && isReferee()) displayToggleFollow(); break;
+    case 'tsend':      if(typeof displaySendView === 'function' && isReferee()) displaySendView(); break;
+    case 'tblank':     if(typeof displayToggleBlank === 'function' && isReferee()) displayToggleBlank(); break;
   }
 }
 
@@ -461,6 +472,7 @@ kbdLoad();
 // forcing the user to open Settings. Shows a single toast on first load.
 (function showShortcutHintOnce(){
   try {
+    if(DISPLAY_MODE) return; // don't burn the one-time hint (or write the flag) from the table TV
     if(localStorage.getItem('aurelia_kbd_hint_seen') === '1') return;
     // Delay so it doesn't collide with load
     setTimeout(() => {

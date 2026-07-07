@@ -69,7 +69,8 @@ Tier-3 progress:
 | Downtime / between-jump actions log (§5.10) | ✅ shipped (PR #42) — players declare a downtime action per jump, referee resolves; `downtime` key, honour-gated to own entries |
 | Referee-curated wiki / lore pages (§5.9) | ✅ shipped (PR #43) — ref-only markdown-lite articles with `visibleTo` gating; `wiki` key |
 | Contact / faction dossier with secret layers (§6) | ✅ shipped (PR #44) — per-PC known-layers + referee-only note; each player sees only their own layer (`contacts` key) |
-| Scene ambience presets (§7 Tier-3.15) | ⏳ not started — needs an audio-approach decision (no bundled copyrighted audio; likely referee-supplied URLs played on the referee's device, players stay quiet). Low priority per Q6 |
+| Scene ambience presets (§7 Tier-3.15) | ✅ shipped (MVP) — Scenes strip (More ▸ 🎵 Scenes): named beats fire referee-supplied audio URLs in a single hidden `<audio>` with ~1.5 s fades, or open an external deep link; `scene-beats` key (labels + URLs only). Planner links / per-beat display cut remain Full-scope. See `docs/table-presentation-plan.md` §5 |
+| Table Display Mode + scene push (table-presentation plan Phases 1–2) | ✅ shipped — `?display=1` chromeless player-safe TV window driven over `BroadcastChannel` (Follow/Hold, blank, resync); handout "📺 → Table" push with private-handout confirm + referee ping. `js/93-display.js`, `orion-shell-v13`. See `docs/table-presentation-plan.md` §§3–4 |
 | Complete per-player secrecy (§7 Tier-3.16) | ⏳ not started — deploy/verify the flag-gated `get-content` edge path so redaction is enforced, not honour-system. Security-critical, multi-day; **plan-first before touching production**, and best landed before/with open-sourcing |
 
 Space-combat §7.1 reconsiderations (the deferred containment pass):
