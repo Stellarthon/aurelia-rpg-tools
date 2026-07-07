@@ -952,25 +952,22 @@ textarea{font-family:var(--font)}
 .beat-form-row input[type=range]{flex:1;min-width:0}
 
 /* ── Table Display Mode (js/93) — the chromeless, player-safe window on the TV ──
-   All app chrome disappears; #root goes pointer-inert (read-only surface); the
-   js/93-built overlays (fullscreen affordance, blank, handout figure, pings,
-   wait pill) are appended to <body> so they stay interactive.
-   Stacking: figure 380 < ping 385 < blank 390 < wait 396 < fullscreen 400. */
+   App chrome (header, panels, toasts) disappears, but the map itself stays live:
+   the TV can be panned, zoomed and navigated at the table exactly like the
+   player view (pm-active gates all referee content). The js/93-built overlays
+   (fullscreen affordance, blank, handout figure, pings, wait pill, back button)
+   are appended to <body>.
+   Stacking: back 375 < figure 380 < ping 385 < blank 390 < wait 396 < fullscreen 400. */
 body.display-mode #hdr,
 body.display-mode #float-panels,
 body.display-mode #toast-container,
-body.display-mode #galaxy-detail,
-body.display-mode #hx-lane-toggle,
-body.display-mode #hx-terr-toggle,
-body.display-mode #hx-range-toggle,
-body.display-mode #hx-fuel-toggle,
-body.display-mode #hx-trade-toggle,
 body.display-mode #hx-paint-tools,
-body.display-mode #hx-zoom,
 body.display-mode #forced-view-banner,
 body.display-mode #identity-modal,
 body.display-mode .panel-resize-handle{display:none!important}
-body.display-mode #root{pointer-events:none}
+#display-back{position:fixed;top:14px;left:14px;z-index:375;background:rgba(0,0,0,.65);border:1px solid var(--bd0);border-radius:16px;color:var(--tx0);font-size:13px;font-family:monospace;padding:7px 14px;cursor:pointer}
+#display-back:hover{border-color:var(--accentGold);color:var(--accentGold)}
+#display-back.hidden{display:none}
 #display-fig{position:fixed;inset:0;z-index:380;margin:0;background:#000;display:flex;align-items:center;justify-content:center}
 #display-fig.hidden{display:none}
 #display-fig img{max-width:100vw;max-height:100vh;object-fit:contain}

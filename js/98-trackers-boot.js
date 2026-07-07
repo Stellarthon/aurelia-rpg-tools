@@ -388,7 +388,7 @@ function kbdOnKeyForRebind(e){
 }
 
 function kbdDispatch(e){
-  if(DISPLAY_MODE) return; // the table TV is a read-only surface — no shortcuts
+  if(DISPLAY_MODE) return; // the table TV is pointer-driven — panel/referee shortcuts stay off
   // Don't fire shortcuts when typing in an input/textarea
   const tag = document.activeElement?.tagName;
   if(tag === 'INPUT' || tag === 'TEXTAREA') return;
