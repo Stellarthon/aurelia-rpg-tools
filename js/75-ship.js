@@ -472,7 +472,7 @@ function renderAlertCtl(){
 
 function muteAlertLocal(){ document.body.classList.add('alert-local-muted'); }
 
-function startAlertPolling(){ stopAlertPolling(); if(isReferee()) return; alertPollId = setInterval(pollAlertState, ALERT_POLL_MS); }
+function startAlertPolling(){ stopAlertPolling(); if(DISPLAY_MODE || isReferee()) return; alertPollId = setInterval(pollAlertState, ALERT_POLL_MS); }
 function stopAlertPolling(){ if(alertPollId){ clearInterval(alertPollId); alertPollId = null; } }
 async function pollAlertState(){
   try {

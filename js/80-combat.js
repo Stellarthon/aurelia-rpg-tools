@@ -182,7 +182,7 @@ function endEncounter(){
 }
 
 // ── Player poll (referee never polls — they are the source of truth) ────────
-function startCombatPolling(){ stopCombatPolling(); if(isReferee()) return; combatPollId = setInterval(pollCombatEncounter, COMBAT_POLL_MS); }
+function startCombatPolling(){ stopCombatPolling(); if(DISPLAY_MODE || isReferee()) return; combatPollId = setInterval(pollCombatEncounter, COMBAT_POLL_MS); }
 function stopCombatPolling(){ if(combatPollId){ clearInterval(combatPollId); combatPollId = null; } }
 async function pollCombatEncounter(){
   if(isReferee()) return;

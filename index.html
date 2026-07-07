@@ -114,7 +114,7 @@
     <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div id="hdr-locus">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v40</span>
+      <span id="build-version" title="Build version">v41</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -760,6 +760,7 @@
       <button id="econ-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleEconPanel()" title="Living economy — stockpiles, shocks & price cascades (referee)">📈 Economy</button>
       <button id="trade-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleTradePanel()" title="Station Trade — local market reference & deal recorder (referee)">🛒 Station Trade</button>
       <button id="session-btn" class="more-item ref-only" onclick="closeMoreMenu();openSessionTools()" title="Session export & recap">🎬 Session</button>
+      <button id="scenes-btn" class="more-item ref-only" onclick="closeMoreMenu();toggleScenesPanel()" title="Scenes — ambience beats: one-click audio for the table (referee)">🎵 Scenes</button>
       <button id="present-view-btn" class="more-item ref-only" onclick="closeMoreMenu();plannerSendCurrentView()" title="Show players the view you're on now — their devices offer to follow you there (referee)">📡 Send players to this view</button>
       <button id="release-view-btn" class="more-item ref-only" onclick="closeMoreMenu();forcedViewRelease()" title="Stop presenting — players navigate freely again (referee)">🔓 Release players</button>
     </div>
@@ -839,7 +840,21 @@
   <!-- Handout lightbox — full-screen view of a shared image -->
   <div id="handout-lightbox" class="hidden" onclick="if(event.target===this)closeHandout()">
     <button id="handout-lightbox-close" onclick="closeHandout()" aria-label="Close">✕</button>
+    <button id="handout-lightbox-send" class="ref-only hidden" onclick="sendLightboxHandoutToTable()" title="Show this image on the table display (js/93)">📺 Show on table</button>
     <img id="handout-lightbox-img" src="" alt="Handout">
+  </div>
+
+  <!-- Scenes strip — ambience beats (referee; body rendered by renderScenesPanel in js/93) -->
+  <div id="scenes-wrap" class="hidden ref-only">
+    <div id="scenes-header" onclick="toggleScenesCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:var(--accentGold);letter-spacing:1px">🎵 SCENES</span>
+        <span id="scenes-count" style="font-size:10px;background:var(--accentGoldBg);color:var(--accentGold);border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="scenes-toggle">▼</span>
+    </div>
+    <div id="scenes-body"></div>
+    <div class="panel-resize-handle" id="scenes-resize"></div>
   </div>
 
   <div id="downtime-wrap" class="hidden">
@@ -1109,6 +1124,7 @@
 <script src="js/90-economy.js"></script>
 <script src="js/91-trade.js"></script>
 <script src="js/92-tools-misc.js"></script>
+<script src="js/93-display.js"></script>
 <script src="js/96-creators.js"></script>
 <script src="js/97-session-planner.js"></script>
 <script src="js/98-trackers-boot.js"></script>
