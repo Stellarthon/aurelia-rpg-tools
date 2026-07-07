@@ -2299,6 +2299,166 @@ try {
 // returning, already-unlocked player).
 setTimeout(() => { try { showSinceLastSessionDigest(); } catch(e){} }, 5000);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WHISPER NOTES — panel UI (table-presentation plan §8)
+// ───────────────────────────────────────────────────────────────────────────
+// The one in-person use for "chat": a player passes the referee a secret note
+// without the table seeing, and the referee replies privately. NOT a chat
+// system — no player↔player messages, no group channel, no history browser.
+// Data flow lives in js/50 (supaStorage.sendWhisper → put-state append) and
+// js/55 (pollWhispers → get-content {whispersOnly:true}, whisperItems,
+// whisperUnreadCount). Redaction is SERVER-side: this code never receives
+// another player's items, so there is no canSee() filtering to forget here —
+// only the mine/reply split for layout. Never rendered in display mode.
+let whispersPanelOpen = false, whispersCollapsed = false, whispersShowResolved = false;
+
+function toggleWhispersPanel(){
+  if(typeof DISPLAY_MODE !== 'undefined' && DISPLAY_MODE) return;  // never on the table TV
+  whispersPanelOpen = !whispersPanelOpen;
+  const w = document.getElementById('whispers-wrap'), b = document.getElementById('whisper-btn');
+  if(w) w.classList.toggle('hidden', !whispersPanelOpen);
+  if(b) b.classList.toggle('panel-open', whispersPanelOpen);
+  if(whispersPanelOpen){
+    renderWhispersPanel();                        // instant, from the last poll
+    if(typeof pollWhispers === 'function') pollWhispers();  // then refresh from the server
+  }
+}
+function toggleWhispersCollapse(){
+  const h = document.getElementById('whispers-header'); if(h && h.dataset.suppressClick === '1') return;
+  whispersCollapsed = !whispersCollapsed;
+  document.getElementById('whispers-toggle').textContent = whispersCollapsed ? '▲' : '▼';
+  document.getElementById('whispers-body').classList.toggle('collapsed', whispersCollapsed);
+  document.getElementById('whispers-wrap').classList.toggle('panel-collapsed', whispersCollapsed);
+}
+
+function wspTime(ts){
+  const d = new Date(ts); if(isNaN(d)) return '';
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return (d.toDateString() === new Date().toDateString()) ? hm : (d.getDate() + '/' + (d.getMonth()+1) + ' ' + hm);
+}
+// Whispers queued offline (unique 'whisper#…' keys in the js/50 outbound
+// queue) — rendered as "sending…" rows so a composed-offline note is visibly
+// not lost. They disappear from the queue (and appear in the thread) on flush.
+function whisperPendingItems(){
+  try {
+    const q = (typeof loadQueue === 'function') ? loadQueue() : {};
+    return Object.keys(q).filter(k => k.startsWith('whisper#'))
+      .map(k => { try { return JSON.parse(q[k].value); } catch(e){ return null; } })
+      .filter(Boolean);
+  } catch(e){ return []; }
+}
+
+function updateWhisperBadge(){
+  const n = (typeof whisperUnreadCount === 'function') ? whisperUnreadCount() : 0;
+  const inPanel = document.getElementById('whispers-count');
+  if(inPanel){ inPanel.textContent = n; inPanel.classList.toggle('hidden', !n); }
+  const inMenu = document.getElementById('whisper-badge');
+  if(inMenu){ inMenu.textContent = n; inMenu.classList.toggle('hidden', !n); }
+  const more = document.getElementById('more-btn');
+  if(more) more.classList.toggle('wsp-unread', n > 0);
+}
+
+function renderWhispersPanel(){
+  const body = document.getElementById('whispers-body'); if(!body) return;
+  const esc = (typeof escQH === 'function') ? escQH : (x => String(x == null ? '' : x));
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(!token){
+    body.innerHTML = '<div class="cal-empty">Whispers need an access token — apply yours in Settings → Secure Content.</div>';
+    return;
+  }
+  // A poll-driven re-render (4s player / 8s referee) must never eat a
+  // half-typed note or reply: capture every composer's text + focus before
+  // replacing the DOM, restore straight after.
+  const keep = {}; let focusId = null;
+  body.querySelectorAll('input').forEach(i => {
+    if(i.value) keep[i.id] = i.value;
+    if(i === document.activeElement) focusId = i.id;
+  });
+  const items = Array.isArray(whisperItems) ? whisperItems : [];
+  const repliesTo = id => items.filter(r => r && r.ref && r.re === id);
+  const replyHTML = r => `<div class="wsp-reply">${esc(r.text)}<span class="wsp-meta"> · ${wspTime(r.ts)}</span></div>`;
+  let html = '';
+
+  if(isReferee()){
+    // Referee: every player note, newest first; inline private reply; resolve
+    // collapses the item out of the default list (kept, not deleted).
+    const notes = items.filter(it => it && !it.ref).slice().reverse();
+    const open = notes.filter(n => !n.resolved), done = notes.filter(n => n.resolved);
+    const card = n => `<div class="wsp-card${n.resolved ? ' wsp-done' : ''}">
+      <div class="wsp-hd"><span class="wsp-from">${esc(n.from || '?')}</span><span class="wsp-meta">${wspTime(n.ts)}</span>
+        <button class="disc-mini" onclick="whisperSetResolved('${esc(n.id)}', ${n.resolved ? 'false' : 'true'})" title="${n.resolved ? 'Reopen' : 'Resolved — collapse it'}">${n.resolved ? '↺' : '✓'}</button>
+      </div>
+      ${n.resolved ? '' : `<div class="wsp-txt">${esc(n.text)}</div>${repliesTo(n.id).map(replyHTML).join('')}
+      <div class="wsp-compose"><input id="wsp-re-${esc(n.id)}" maxlength="2000" placeholder="Reply privately to ${esc(n.from || 'them')}…" onkeydown="if(event.key==='Enter')whisperReplySend('${esc(n.id)}')"><button onclick="whisperReplySend('${esc(n.id)}')">Send</button></div>`}
+    </div>`;
+    html += open.length ? open.map(card).join('') : '<div class="cal-empty">No open whispers. Players send them from ⋯ More → Whispers.</div>';
+    if(done.length){
+      html += `<button class="wsp-show-done" onclick="whispersShowResolved=!whispersShowResolved;renderWhispersPanel()">${whispersShowResolved ? 'Hide' : 'Show'} resolved (${done.length})</button>`;
+      if(whispersShowResolved) html += done.map(card).join('');
+    }
+  } else {
+    // Player: their own thread only (the server sent nothing else) + composer.
+    const mine = items.filter(it => it && !it.ref);
+    const orphanReplies = items.filter(it => it && it.ref && !mine.some(n => n.id === it.re));
+    html += mine.map(n => `<div class="wsp-card">
+        <div class="wsp-hd"><span class="wsp-from">You</span><span class="wsp-meta">${wspTime(n.ts)}</span></div>
+        <div class="wsp-txt">${esc(n.text)}</div>
+        ${repliesTo(n.id).map(replyHTML).join('')}
+      </div>`).join('');
+    if(orphanReplies.length) html += orphanReplies.map(r => `<div class="wsp-card">${replyHTML(r)}</div>`).join('');
+    html += whisperPendingItems().map(p => `<div class="wsp-card"><div class="wsp-pending">📨 ${esc(p.text)} — sending when back online…</div></div>`).join('');
+    if(!html) html = '<div class="cal-empty">Pass the referee a note no one else sees — "I pocket the data crystal".</div>';
+    html += `<div class="wsp-compose"><input id="wsp-compose-input" maxlength="2000" placeholder="Whisper to the referee…" onkeydown="if(event.key==='Enter')whisperComposerSend()"><button onclick="whisperComposerSend()">Send</button></div>`;
+  }
+
+  body.innerHTML = html;
+  Object.keys(keep).forEach(id => { const i = document.getElementById(id); if(i && !i.value) i.value = keep[id]; });
+  if(focusId){ const i = document.getElementById(focusId); if(i){ i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch(e){} } }
+  if(typeof whisperMarkSeen === 'function') whisperMarkSeen();  // rendering = reading
+}
+
+async function whisperComposerSend(){
+  const el = document.getElementById('wsp-compose-input'); if(!el) return;
+  const text = (el.value || '').trim(); if(!text) return;
+  el.value = '';
+  const r = await supaStorage.sendWhisper({ text });
+  if(r.ok && typeof pollWhispers === 'function') await pollWhispers();
+  else if(!r.ok && !r.rejected && typeof showToast === 'function') showToast('📨 Whisper queued — it sends when the connection returns.');
+  renderWhispersPanel();
+}
+async function whisperReplySend(id){
+  if(!isReferee()) return;
+  const el = document.getElementById('wsp-re-' + id); if(!el) return;
+  const text = (el.value || '').trim(); if(!text) return;
+  const note = (Array.isArray(whisperItems) ? whisperItems : []).find(it => it && it.id === id);
+  if(!note || !note.from) return;
+  el.value = '';
+  const r = await supaStorage.sendWhisper({ text, to: note.from, re: id });
+  if(r.ok && typeof pollWhispers === 'function') await pollWhispers();
+  else if(!r.ok && !r.rejected && typeof showToast === 'function') showToast('📨 Reply queued — it sends when the connection returns.');
+  renderWhispersPanel();
+}
+// Resolve is a put-state op, not a value write — a tiny direct call. It is
+// deliberately NOT queued offline: a missed toggle is a one-tap retry, not
+// lost table state.
+async function whisperSetResolved(id, resolved){
+  if(!isReferee()) return;
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(!token) return;
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/put-state', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'whispers', resolve: { id, resolved } })
+    });
+    if(!res.ok) throw new Error('put-state ' + res.status);
+    if(typeof pollWhispers === 'function') await pollWhispers();
+  } catch(e){
+    if(typeof showToast === 'function') showToast('Could not update the whisper — try again.', 'error');
+  }
+  renderWhispersPanel();
+}
+
 // ── Player polling extension ──────────────────────────────────────────────
 // Wired into the existing pollRevealState() call chain — see that function
 
@@ -2338,6 +2498,8 @@ makePanelDraggable('rep-wrap', 'rep-header');
 makePanelResizable('rep-wrap');
 makePanelDraggable('clocks-wrap', 'clocks-header');
 makePanelResizable('clocks-wrap');
+makePanelDraggable('whispers-wrap', 'whispers-header');
+makePanelResizable('whispers-wrap');
 makePanelDraggable('funds-wrap', 'funds-header');
 makePanelResizable('funds-wrap');
 makePanelDraggable('gen-wrap', 'gen-header');

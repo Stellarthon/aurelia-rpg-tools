@@ -269,6 +269,13 @@ const supaStorage = {
   async _post(key, value){
     const token = (typeof getContentToken === 'function') ? getContentToken() : '';
     if(token){
+      // Whisper appends ride the SAME queue/flush machinery but need their own
+      // wire shape: each queued whisper is parked under a unique synthetic key
+      // 'whisper#<id>' (so two offline whispers never last-write-wins each
+      // other away) and is sent as a put-state `append`, not a value upsert.
+      const wire = key.startsWith('whisper#')
+        ? { key: 'whispers', append: JSON.parse(value) }
+        : { key, value: String(value) };
       const res = await fetch(SUPABASE_URL + '/functions/v1/put-state', {
         method: 'POST',
         headers: {
@@ -276,7 +283,7 @@ const supaStorage = {
           'Authorization': 'Bearer ' + token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ key, value: String(value) })
+        body: JSON.stringify(wire)
       });
       if(res.status === 401 || res.status === 403){
         const err = new Error('put-state ' + res.status);
@@ -288,6 +295,14 @@ const supaStorage = {
       }
       if(!res.ok) throw new Error('put-state HTTP ' + res.status);
       return true;
+    }
+    if(key.startsWith('whisper#')){
+      // No token → no whisper. put-state is the only path that can stamp the
+      // sender identity, so this can never legitimately succeed anonymously.
+      const err = new Error('whisper without token');
+      err.permanent = true;
+      err.userMessage = 'Whispers need an access token — set one in Settings → Secure Content.';
+      throw err;
     }
     const res = await fetch(SUPABASE_REST, {
       method: 'POST',
@@ -301,6 +316,33 @@ const supaStorage = {
     });
     if(!res.ok) throw new Error(await res.text());
     return true;
+  },
+  // Whisper note send (table-presentation plan §8). payload: {text} from a
+  // player, {text, to, re?} from the referee. Success semantics mirror set():
+  // {ok:true} landed · {ok:false} parked in the outbound queue (sends on
+  // reconnect) · {ok:false, rejected:true} the server refused (bad token).
+  // No cacheSet: whisper threads are never mirrored to localStorage — the
+  // device only ever holds its own outbound text (in the queue) plus whatever
+  // get-content returned in memory.
+  async sendWhisper(payload){
+    if(DISPLAY_MODE) return { ok: false, rejected: true }; // the table TV never composes
+    const str = JSON.stringify(payload || {});
+    const qkey = 'whisper#' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    try {
+      await this._post(qkey, str);
+      markOnline();
+      flushQueue();
+      return { ok: true };
+    } catch(e){
+      if(e && e.permanent){
+        markOnline();
+        if(typeof showToast === 'function') showToast(e.userMessage || 'Whisper rejected by the server.', 'error');
+        return { ok: false, rejected: true };
+      }
+      markOffline();
+      queueWrite(qkey, str);               // unique key per whisper — nothing supersedes it
+      return { ok: false };
+    }
   },
   async set(key, value, shared){
     if(DISPLAY_MODE) return { ok: true };  // table TV is strictly read-only — a write here would corrupt the referee's own session
