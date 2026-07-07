@@ -427,6 +427,10 @@ function applyHydratedData(data){
   // the token's identity) instead of keeping the pre-hydration text.
   if(typeof renderWhoAmI === 'function') renderWhoAmI();
   refreshSecureViews();
+  // Whisper notes ride the same response on boot (absent from CACHED data —
+  // cacheSecureContent deliberately doesn't persist them — so offline boots
+  // simply start with no thread until the first live poll).
+  if(Array.isArray(data.whispers)) applyWhispers(data.whispers);
 }
 async function hydrateSecureContent(){
   const token = getContentToken();
@@ -912,6 +916,72 @@ async function pollRevealState(){
       handleForcedView(fv);
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Whisper notes — referee replies land without a manual refresh. Token
+  // holders only; goes to get-content (whispersOnly), not the public KV.
+  await pollWhispers();
+}
+
+// ── Whisper notes (table-presentation plan §8) ──────────────────────────────
+// Secret player↔referee notes. The text lives under the aurelia_state key
+// 'whispers' but is NEVER readable anonymously: migration 0011 excludes that
+// row from the public SELECT policy, so the only read path is get-content's
+// token-checked {whispersOnly:true} mode, which returns each identity exactly
+// their own thread (referee: all threads) — redaction happens server-side,
+// not in CSS. Writes go through put-state append/resolve (supaStorage.
+// sendWhisper, js/50). No new timers: players piggyback the 4s pollRevealState
+// cycle, the referee piggybacks the existing 8s heartbeat below — and the
+// table TV (DISPLAY_MODE) never fetches, renders, or composes whispers.
+let whisperItems = null;          // null = never loaded (suppresses arrival toasts on the first fill)
+let whisperKnownIds = null;       // ids already seen in-memory, for arrival detection
+
+function whisperSeenTs(){ try { return parseInt(localStorage.getItem('whisper-seen') || '0', 10) || 0; } catch(e){ return 0; } }
+function whisperMarkSeen(){
+  try { localStorage.setItem('whisper-seen', String(Date.now())); } catch(e){}
+  if(typeof updateWhisperBadge === 'function') updateWhisperBadge();
+}
+// An item is "incoming" if the other side wrote it: referee replies carry
+// ref:true (stamped by put-state — never client-supplied), player notes don't.
+function whisperIncoming(it){ return isReferee() ? !it.ref : !!it.ref; }
+function whisperUnreadCount(){
+  if(!Array.isArray(whisperItems)) return 0;
+  const seen = whisperSeenTs();
+  return whisperItems.filter(it => it && whisperIncoming(it) && !it.resolved && (Date.parse(it.ts) || 0) > seen).length;
+}
+
+async function pollWhispers(){
+  if(DISPLAY_MODE) return;                     // the TV shares the referee's localStorage token — never let it fetch threads
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(!token) return;                           // whispers exist only for token holders
+  try {
+    const res = await fetch(CONTENT_API, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ whispersOnly: true }),
+    });
+    if(!res.ok) return;                        // incl. a 403 network lock — silent; the next tick retries
+    const data = await res.json();
+    applyWhispers(Array.isArray(data.whispers) ? data.whispers : []);
+  } catch(e){ /* silent — next tick retries */ }
+}
+
+function applyWhispers(fresh){
+  if(DISPLAY_MODE) return;  // boot hydrate also carries whispers — the TV keeps NO whisper state, not even in memory
+  const first = (whisperItems === null);
+  const known = whisperKnownIds || new Set();
+  const news = first ? [] : fresh.filter(it => it && it.id && !known.has(it.id) && whisperIncoming(it));
+  whisperItems = fresh;
+  whisperKnownIds = new Set(fresh.map(it => it && it.id).filter(Boolean));
+  if(news.length && typeof showToast === 'function'){
+    // The toast is the WHOLE notification — deliberately no sound (a chime at
+    // a quiet table defeats the point of a silently passed note).
+    const msg = isReferee()
+      ? '🤫 Whisper from ' + (news[news.length - 1].from || 'a player') + (news.length > 1 ? ' (+' + (news.length - 1) + ' more)' : '')
+      : '🤫 The referee answered your whisper.';
+    showToast(msg);
+  }
+  if(typeof updateWhisperBadge === 'function') updateWhisperBadge();
+  if(typeof whispersPanelOpen !== 'undefined' && whispersPanelOpen && typeof renderWhispersPanel === 'function') renderWhispersPanel();
 }
 
 // ── Forced view (player side) ────────────────────────────────────────────────
@@ -980,17 +1050,21 @@ window.addEventListener('focus', () => {
   if(!isReferee()) pollRevealState();
 });
 
-// Reconnect plumbing (referee included — the referee never polls, so this is
-// their only path back). The browser 'online' event and an 8s heartbeat both
-// drain the outbound queue; the heartbeat also keeps the pill's clock honest.
+// Reconnect plumbing (referee included — the referee never runs the 4s player
+// poll, so this is their only path back). The browser 'online' event and an 8s
+// heartbeat both drain the outbound queue; the heartbeat also keeps the pill's
+// clock honest — and carries the referee's ONE poll-like need: incoming
+// whisper notes (players get theirs on the faster pollRevealState cycle, so
+// pollWhispers no-ops the heartbeat copy for them via the isReferee() gate).
 window.addEventListener('online', () => {
   markOnline();
   flushQueue();
-  if(!isReferee()) pollRevealState();
+  if(!isReferee()) pollRevealState(); else pollWhispers();
 });
 window.addEventListener('offline', () => { markOffline(); });
 setInterval(() => {
   if(queueLength()) flushQueue();
+  if(isReferee()) pollWhispers();  // no-op on the TV (DISPLAY_MODE guard) and without a token
   updateConnPill(); // refresh the "last synced … ago" label
 }, 8000);
 

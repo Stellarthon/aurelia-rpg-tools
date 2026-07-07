@@ -139,6 +139,7 @@ is tagged with its question number.
 | Audio / ambience | **Missing** | Combat WebAudio synth only; no ambient music/soundboard. |
 | Scheduling / attendance / downtime | **Missing** | None. |
 | Player personal journal | **Missing** | `note-private-*` exists as generic notes, but no journal UI. |
+| Whisper notes (player→referee) | **Present** (2026-07-07) | Secret notes with private referee replies: server-redacted reads (`get-content {whispersOnly}`), token-stamped `put-state` append/resolve, SELECT carve-out migration 0011; ⋯ More → 🤫 Whispers (`js/85`). Deliberately NOT chat — see `docs/table-presentation-plan.md` §8. |
 
 **Maintenance flag (verified):** `node tools/strip-secrets.mjs --check` currently
 **aborts (exit 2)** — its fail-closed coverage guard trips on `PACK_DEFAULTS`
