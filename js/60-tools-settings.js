@@ -520,6 +520,18 @@ function renderSettingsMenu(showArchon){
       </div>
     </div>`;
 
+  // Phone-only: re-enable referee mode on this handset. Phones default to the
+  // player view (the map lives on the table display, referee chrome is hidden).
+  if(document.documentElement.classList.contains('is-phone')){
+    const phoneRefOn = phoneRefereeEnabled();
+    html += `
+    <div class="settings-row">
+      <span class="settings-row-label">🎲 Referee mode on this phone</span>
+      <div class="theme-toggle${phoneRefOn ? ' on' : ''}" onclick="togglePhoneReferee()"><div class="theme-toggle-knob"></div></div>
+    </div>
+    <div class="settings-row" style="font-size:11px;color:var(--tx1)">Off by default — phones show the player view and the galaxy map is on the table display. Turn on to use the full referee tools on this device.</div>`;
+  }
+
   // Settings is configuration-only now: Display + keyboard shortcuts for
   // everyone. Referee tools (design mode), morality, and the animation /
   // orbital-ring toggles live in the Referee menu; campaign-editing tools
@@ -1248,6 +1260,18 @@ function toggleLightMode(){
     else localStorage.removeItem('aurelia_theme');
   } catch(e){}
   openSettingsMenu(); // re-render so the toggle's label/icon updates immediately
+}
+
+// Toggle referee mode on this phone (per-device, stored in aurelia_phone_ref).
+// Reloads so role gating — isReferee(), the pm-active CSS lock, and the baked
+// referee views — re-applies cleanly at boot (same pattern as token apply/clear).
+function togglePhoneReferee(){
+  const on = !phoneRefereeEnabled();
+  try {
+    if(on) localStorage.setItem('aurelia_phone_ref', '1');
+    else localStorage.removeItem('aurelia_phone_ref');
+  } catch(e){}
+  location.reload();
 }
 
 try {

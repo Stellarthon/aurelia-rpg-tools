@@ -40,6 +40,10 @@ pmCheck.addEventListener("change", function(){
 });
 try { if(localStorage.getItem("aurelia_pm")==="1"){ pmCheck.checked=true; rootEl.classList.add("pm-active")
     const fp2 = document.getElementById('float-panels'); if(fp2) fp2.classList.add('pm-active');; } } catch(e){}
+// Phone player-lock: force the player-view CSS on (hides every .ref-only surface)
+// so a handset matches isReferee()===false without needing the header toggle.
+try { if(typeof phonePlayerLock==='function' && phonePlayerLock()){ rootEl.classList.add('pm-active');
+    const fp3 = document.getElementById('float-panels'); if(fp3) fp3.classList.add('pm-active'); } } catch(e){}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM MAP
