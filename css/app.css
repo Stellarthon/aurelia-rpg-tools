@@ -496,11 +496,17 @@ textarea{font-family:var(--font)}
    Canvas pinned dark in both themes (a star field on white reads wrong),
    exactly like the orrery/station panels. Mirrors orion_arm_map_v4 styling.
 ═══════════════════════════════════════════ */
-#galaxy-wrap{display:flex;width:100%;height:100%;overflow:hidden;min-height:0}
+#galaxy-wrap{display:flex;width:100%;height:100%;overflow:hidden;min-height:0;position:relative}
 #galaxy-canvas{flex:1;min-width:0;background:#04060e;overflow:hidden;position:relative;cursor:grab;user-select:none;-webkit-user-select:none}
 #galaxy-canvas.panning{cursor:grabbing}
 #gx-svg{position:absolute;top:0;left:0;width:1800px;height:1060px;transform-origin:0 0}
 #galaxy-detail{width:360px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);display:flex;flex-direction:column;overflow:hidden}
+/* Phone-only system picker — replaces tap-to-select while the map is hidden on
+   handsets (see the html.is-phone galaxy rules). Off-phone it never shows.
+   16px font: anything smaller makes iOS zoom the page on focus. */
+#hx-phone-picker{display:none}
+#hx-sys-picker{width:100%;box-sizing:border-box;background:var(--bg1,#181c27);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx0);font-family:var(--mono,monospace);font-size:16px;padding:9px 8px;margin-bottom:4px}
+#hx-phone-picker-note{color:var(--tx1);margin-bottom:12px}
 #galaxy-dh{padding:10px 14px 8px;border-bottom:.5px solid var(--bd2);flex-shrink:0}
 #galaxy-dname{font-size:15px;font-weight:700;color:var(--accentGold)}
 #galaxy-dtype{font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:1px;margin-top:2px;text-transform:uppercase}
@@ -3816,10 +3822,18 @@ html.is-phone #hdr.nav-open #search-input,
 html.is-phone #hdr.nav-open #search-input:focus{width:100%;box-sizing:border-box;font-size:15px}
 html.is-phone #hdr.nav-open > #impdate-wrap{order:4;flex:1 1 100%;justify-content:center}
 
-/* ── Galaxy "Jump Plotter": give the detail panel real height + full scroll ──
-   With the header now compact, the map + detail split has room to breathe. */
-html.is-phone #galaxy-canvas{height:40vh}
-html.is-phone #galaxy-detail{flex:1 1 auto;min-height:0}
+/* ── Galaxy "Jump Plotter": no map on phones — players read it on the table
+   display instead (player feedback: the 40vh map squeezed the info too hard).
+   The detail panel takes the full height and #hx-phone-picker replaces
+   tap-to-select. Tablets/desktops keep the map + panel split. ── */
+html.is-phone #galaxy-canvas{display:none}
+html.is-phone #hx-phone-picker{display:block}
+html.is-phone #galaxy-detail{flex:1 1 auto;min-height:0;width:100%;border-left:none}
+/* The ship-stat inputs aren't needed on the phone plotter (read-only lookup). */
+html.is-phone #hx-ship-block{display:none}
+/* Phones lock to the player view — hide the header Traveller-View toggle unless
+   referee mode is re-enabled for this device (Settings ▸ Display adds .phone-ref). */
+html.is-phone:not(.phone-ref) .pm-row{display:none}
 html.is-phone #hx-pbody{
   overscroll-behavior:contain;
   padding-bottom:calc(18px + env(safe-area-inset-bottom));

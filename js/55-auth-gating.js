@@ -204,7 +204,7 @@ let networkLockMessage = '';    // TASK 6: 403 lock-out message to surface to a 
 // The table display window (js/93) is NEVER a referee, whatever the shared
 // localStorage says — this one line at the choke point keeps every
 // referee-only surface (overlays, design mode, records) off the table TV.
-function isReferee(){ if(DISPLAY_MODE) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+function isReferee(){ if(DISPLAY_MODE) return false; if(phonePlayerLock()) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
 
 // ── Permission model (V1) ────────────────────────────────────────────────
 // Per-viewer information gating. This is spoiler/visibility control, NOT
@@ -417,7 +417,8 @@ function applyHydratedData(data){
   secureRole = (data.role === 'referee') ? 'referee' : 'player';
   if(data.identity) myIdentity = data.identity;
   const fp = document.getElementById('float-panels');
-  const playerMode = secureRole !== 'referee';
+  // A referee token on a player-locked phone still shows the player view.
+  const playerMode = secureRole !== 'referee' || phonePlayerLock();
   if(pmCheck) pmCheck.checked = playerMode;
   if(rootEl) rootEl.classList.toggle('pm-active', playerMode);
   if(fp) fp.classList.toggle('pm-active', playerMode);
