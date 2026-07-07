@@ -154,3 +154,25 @@ intentionally kept in the bundle as non-secret.
    default and fail-closed then come for free (no secrets remain to fall back to).
 
 Publish the stripped `index.html` only after steps 1–2 pass.
+
+## Step 8 — Stage 4: lock `aurelia_state` writes (the last switch)
+
+State as of 2026-07-07: the v42 client routes writes through `put-state`
+whenever a token is stored; `put-state` v2 (deployed) requires a valid token
+for every write and the referee token for the 46 referee-only keys. The table
+itself still accepts anonymous writes until you flip the switch:
+
+1. Confirm **every device at the table** runs build v42+ (badge in the app
+   header) **and** has a token stored (Settings → Secure Content).
+2. Run `migrations/0010_lock_aurelia_state_writes.sql` in the SQL editor.
+3. Re-run the security advisors — the two `aurelia_state`
+   `rls_policy_always_true` WARNs must be gone.
+4. Rollback if needed (instant): re-create the two policies — SQL is in the
+   migration's header comment.
+
+> **Known follow-up (read side):** `aurelia_state` still allows public SELECT,
+> and some referee-only keys hold referee prose (`npc-roster`,
+> `session-plans`, raw `combat-encounter`, unrevealed `clocks`,
+> `campaign-events`). Closing that needs a staged read cutover through
+> `get-content` — see the plan doc §8. Do NOT just drop the SELECT policy;
+> today every device reads shared keys anonymously and would break.

@@ -14,7 +14,7 @@
 > | **1. Edge Function** | ✅ Deployed (`get-content` v4, active, JWT gate off). |
 > | **2. Referee cutover** | ✅ Shipped — secure client in `js/55-auth-gating.js` (`hydrateSecureContent`). |
 > | **3. Player cutover + strip** | ✅ Shipped — bundle carries no referee literals (`node tools/strip-secrets.mjs --check` exits 0). |
-> | **4. Harden** | ⚠️ **In flight, with repo/production drift.** A `put-state` Edge Function (referee-gated `aurelia_state` writes) was deployed 2026-07-06 but the committed client does not call it, and `aurelia_state` still carries public INSERT/UPDATE RLS policies (advisor WARNs). `private-notes` + `upload-object` functions and the `private_notes` table are also live; their sources/migration were back-filled into the repo on 2026-07-07 (`supabase/functions/*`, `migrations/0009`). Stage 4 is **not done** until the client sends state writes through `put-state` and the public write policies on `aurelia_state` are dropped. |
+> | **4. Harden** | 🟡 **Built, verified, ready to arm.** The client now routes every shared-state write through `put-state` whenever a token is stored (`js/50-supabase.js`, build v42), and `put-state` v2 (deployed 2026-07-07) enforces a 46-key referee-only list compiled from a full write-site audit. The last step — migration `0010_lock_aurelia_state_writes.sql`, dropping the public INSERT/UPDATE policies — is committed but **deliberately not applied**: it is the go-live switch, to be run only when every table device runs build v42 with a token stored. Its effect was proven against production in a rolled-back transaction (anon INSERT → RLS denial 42501). See §8. |
 >
 > Line anchors below were refreshed 2026-07-07 for the 22-module `js/` split
 > (the original `index.html:NNNN` anchors predated it). This doc remains the
@@ -183,3 +183,59 @@ back-fills the repo so a redeploy from git cannot regress production:
 **Remaining before Stage 4 can be called done:** wire the client's shared-state
 writes through `put-state`, then drop the public INSERT/UPDATE policies on
 `aurelia_state`, then re-run the advisors (the two WARNs must clear).
+*(Addressed the same day — see §8.)*
+
+## 8. Stage 4 report (2026-07-07) — built and verified; one switch left to flip
+
+**Shipped this session**
+
+- **Client cutover** (`js/50-supabase.js`, build v42, `orion-shell-v14`): when a
+  device holds an access token, every `supaStorage` write goes to
+  `put-state` with that bearer token instead of the anon REST upsert. A 401/403
+  is treated as an *auth verdict*, not an outage — it is never parked in the
+  offline retry queue (which would loop forever); the user sees a toast
+  ("Referee-only change rejected" / "Access token rejected") and queued
+  entries that get refused are dropped, not retried. Tokenless devices keep
+  using the legacy anon path until the lock is applied — so **nothing breaks
+  before the switch is flipped**.
+- **`put-state` v2 deployed** (safe ordering: it must exist before any v42
+  client calls it; nothing calls it until then). Every write now requires a
+  valid token, and a 46-key `REFEREE_ONLY` list requires the referee token.
+  The list was compiled by auditing **every** `supaStorage.set()` call site in
+  `js/` and keeping only keys written exclusively from `isReferee()`-gated
+  code (reveals, forced-view, scene-beats, clocks, design mode, NPC roster,
+  economy desk, session tooling, …). Party records (notes, sheets, inventory,
+  funds, ship state, logs, wiki, contacts, …) stay writable by any *valid*
+  token, so no legitimate player write regresses.
+- **Migration `0010_lock_aurelia_state_writes.sql`** (drops `Allow public
+  write` INSERT + `Allow public update` UPDATE on `aurelia_state`; keeps
+  public SELECT). **Committed, not applied.** Proven against production in a
+  rolled-back transaction: with the policies dropped, an `anon` INSERT is
+  refused with RLS violation `42501`; the abort restored the policies, so live
+  behavior is unchanged.
+
+**The go-live switch (apply when ready)**
+
+Run `supabase/migrations/0010_lock_aurelia_state_writes.sql` when **every
+device at the table** (a) runs build v42+ and (b) has a token stored
+(Settings → Secure Content). After it runs, the two `rls_policy_always_true`
+advisor WARNs clear and the honour system is retired for writes. A stale or
+tokenless device degrades gracefully — its writes queue locally and flush
+through `put-state` after a reload with a token — but mid-session that is
+disruptive, so flip it between sessions. Instant rollback: re-create the two
+policies (SQL in the migration header).
+
+**New finding — read-side leak (follow-up, deliberately out of scope)**
+
+The plan's §2 assumption that "`aurelia_state` holds flags/overlays only —
+not secret" has drifted: several referee-only keys now store referee *prose*
+in `aurelia_state`, which still allows public SELECT. Anyone with the
+shipped anon key can read, e.g., `npc-roster` (full NPC stat blocks + notes),
+`session-plans`, raw `combat-encounter` (the client redacts it *after*
+download — the honour system again), unrevealed `clocks`, and
+referee-visibility `campaign-events`. Locking writes (this stage) does not
+close reads. The fix is a Stage 4.5-style read cutover — serve referee-only
+keys through `get-content` (which already returns `reveals`) and then drop
+public SELECT — and needs its own staged migration exactly like Stages 2–3:
+client first, verify, then lock. Do **not** simply drop the SELECT policy;
+every device reads shared keys anonymously today and would break.
