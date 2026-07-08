@@ -647,6 +647,17 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // GalNet — players get the living galaxy's news feed live from the shared econ-state
+  // row (the referee writes it as they advance the sim). We pull only the small `news`
+  // array out of the row and hand it to the panel; the heavy sim state is left untouched.
+  try {
+    const resN = await supaStorage.get('econ-state', true);
+    if(resN.ok && resN.value != null){
+      const parsed = JSON.parse(resN.value);
+      if(parsed && Array.isArray(parsed.news) && typeof galnetSyncFeed === 'function') galnetSyncFeed(parsed.news);
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Shared turn order — players get the referee's redacted initiative board live,
   // and the panel auto-opens the moment the referee shares one.
   try {
