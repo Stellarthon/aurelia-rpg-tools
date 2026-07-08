@@ -103,11 +103,14 @@ window.ECON = (function(){
     // mild deficit, fed by the Ag surplus. Producer-generous / consumer-light bias → the
     // derived frontier rests at a small SURPLUS (stable baseline), never a structural deficit.
     const foodDem = sc*0.5;
-    let foodMult = 1.0;                                       // default world → ~self-sufficient
-    if(C('Ag')||C('Ga')) foodMult = 2.3;                     // breadbasket → net exporter
-    else if(C('Na')) foodMult = 0.4;                         // non-agricultural → importer
-    else if(C('Po')) foodMult = 0.6;
-    else if(C('Hi')||C('In')) foodMult = 0.85;               // dense/urban → mild importer
+    // Self-sufficiency skews slightly food-POSITIVE so the ~180-world galaxy stays fed: with far more
+    // importer worlds than the original 53, the aggregate needs a little more local agriculture to keep
+    // the frontier off perpetual famine (kept modest — the galaxy still rests near par, verified).
+    let foodMult = 1.25;                                      // default world → food-surplus
+    if(C('Ag')||C('Ga')) foodMult = 2.6;                     // breadbasket → net exporter
+    else if(C('Na')) foodMult = 0.7;                         // non-agricultural → importer
+    else if(C('Po')) foodMult = 0.85;
+    else if(C('Hi')||C('In')) foodMult = 1.0;                // dense/urban → self-fed (hydroponics/imports balance)
     add(cons,'Common Consumables', foodDem);
     add(prod,'Common Consumables', foodDem*foodMult);
     if(C('Ag')||C('Ga')) add(prod,'Biochemicals', sc*0.28);
@@ -193,6 +196,7 @@ window.ECON = (function(){
 
   function buildTopology(){
     worlds = {}; adj = {}; derivedCache = {}; factsCache = {};   // facts may have changed (UWP/body/faction edits) → re-derive
+    _distMemo = {}; _distMemoBlk = ' ';                          // topology changed → drop the memoised BFS distances
     (typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).forEach(n=>{
       if(!isMarket(n)) return;
       const d = DEF[n.id] || derivedProfile(n.id);   // curated core keeps DEF; everything else derives from UWP/trade-codes/bodies
@@ -223,11 +227,11 @@ window.ECON = (function(){
     }); }); }
     Object.keys(worlds).forEach(id=>{
       const n = nodeOf(id);
-      // Trade graph follows the JUMP-LANE network (n.connections = the live GX_LANES
-      // overlay). Worlds with no jump lane are economically isolated BY DESIGN — see
-      // ECON.disconnected(); draw jump lanes to reconnect them (ECON.syncLanes picks
-      // up edits live). NB the jump-lane net is sparser than the old lore graph.
-      (((n&&n.connections))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
+      // Trade graph = the ECONOMY lane set (_econLinks): the authored jump network + the referee's
+      // lane edits, DECOUPLED from what the map renders (the map shows only referee-drawn lanes, but
+      // trade always has routes). Falls back to n.connections if the galaxy engine hasn't populated
+      // _econLinks (e.g. the headless harness, which loads data-only). ECON.syncLanes picks up edits.
+      (((n && (n._econLinks || n.connections)))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
     });
   }
 
@@ -273,6 +277,16 @@ window.ECON = (function(){
     while(q.length){ const u = q.shift(); for(const v of adj[u]){ if(D[v]==null && !blk[v]){ D[v]=D[u]+1; q.push(v); } } }
     return D;
   }
+  // Memoised dist for the hot per-step paths (replenishment + trader dispatch), where `blk` is
+  // constant within a step. Each source's BFS is computed at most once per (step, blocked-set),
+  // not once per consumer × agent × good — the difference between ~150ms and a few ms/step at
+  // ~180 worlds. Invalidated whenever the topology (adj) rebuilds. See buildTopology().
+  let _distMemo = {}, _distMemoBlk = ' ';
+  function distC(src, blk){
+    const bk = blk ? Object.keys(blk).join(',') : '';
+    if(bk !== _distMemoBlk){ _distMemo = {}; _distMemoBlk = bk; }
+    return _distMemo[src] || (_distMemo[src] = dist(src, blk));
+  }
 
   // Settle the seeded (full) stock forward a few weeks with no shocks to find each
   // world+good's natural resting level — the reference pressure() reads deviation
@@ -317,7 +331,7 @@ window.ECON = (function(){
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{} };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 }, factionsOn:true, factions:freshFactions(), factionEvents:[], news:[], piratesOn:true, pirates:freshPirates(), pirSeq:0 };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -412,6 +426,7 @@ window.ECON = (function(){
   const AGENT_NAMES = ['Vasquez Holdings','The Meridian Run','Okonkwo & Daughters','Calla Drift-Freight','Red Lantern Cartage','Sable Voss Lines'];
   const AGENT_VALUE = { 'Common Consumables':50,'Common Ore':40,'Common Electronics':300,'Common Manufactured':200,'Advanced Electronics':1200,'Refined Fuel':120,'Unrefined Hydrogen':30 }; // notional Cr/kt at par
   const AGENT_START_CAP = 40000, AGENT_CAP_QTY = 12, AGENT_SPREAD_MIN = 4, PUBLIC_SPREAD_MIN = 1;
+  const DISPATCH_CAP = 18;   // per-good cap on the surplus/shortage worlds traders survey (perf at ~180 worlds; the sharpest win anyway)
   // Lifecycle economics (Cr/week). Upkeep, routine milk-run income, and the public subsidy all
   // scale with HULL SIZE (bigger ships cost more to run but haul more): see upkeepOf/milkRunOf.
   // Idle traders mostly cover upkeep on milk-runs so a calm galaxy thins the herd slowly; shocks
@@ -571,6 +586,11 @@ window.ECON = (function(){
         // replenishment, so skimming it just misallocates and starves other worlds.
         if(p>=2 && !worlds[id].prod[g]){ const room=stk(id,g)-refOf(id,g); if(room>0) sur.push({id,p,room}); }
         else if(p<=-2){ const room=refOf(id,g)-stk(id,g); if(room>0) sho.push({id,p,room}); } });
+      // Cap each side to the sharpest DISPATCH_CAP — a trader only ever picks the highest score
+      // (sharp pressure ÷ short distance), so the deepest gluts/shortages are all that can win.
+      // Bounds dispatch to O(agents×goods×cap²) regardless of galaxy size (was O(worlds²) at ~180 worlds).
+      if(sur.length>DISPATCH_CAP) sur.sort((a,b)=>b.p-a.p).length=DISPATCH_CAP;
+      if(sho.length>DISPATCH_CAP) sho.sort((a,b)=>a.p-b.p).length=DISPATCH_CAP;
       pool[g]={sur,sho}; });
     // Arrivals: bank profit, log the trip, reposition (the cargo itself lands via state.transit).
     state.agents.forEach(a=>{ if(a.route && a.route.eta<=week){
@@ -659,7 +679,7 @@ window.ECON = (function(){
     const dispatchPrivate=(a)=>{
       const corp=corpOf(a.backing), spec=corp&&corp.specialty; let best=null;   // corp ships favour hauling their specialty good (identity)
       goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
-        P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
+        P.sur.forEach(b=>{ if(b.room<=0) return; const D=distC(b.id,blk);
           P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
             const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
             let score=spread/Math.max(1,D[s.id]); if(spec&&g===spec) score*=1.5;
@@ -674,7 +694,7 @@ window.ECON = (function(){
         P.sho.forEach(s=>{ if(s.room<=0||aBlk[s.id]||avoidLevel(F,s.id)===2) return;
           P.sur.forEach(b=>{ if(b.room<=0||aBlk[b.id]||b.id===s.id||embargoed(b.id,s.id)) return;
             const spread=b.p-s.p; if(spread<PUBLIC_SPREAD_MIN) return;   // subsidised → runs on thin margins
-            const D=dist(b.id,aBlk); if(D[s.id]==null) return;
+            const D=distC(b.id,aBlk); if(D[s.id]==null) return;
             const depth=-s.p, ownBonus=(factionOf(s.id)===F)?2:0;
             const softPen=(avoidLevel(F,s.id)===1?2:0)+(avoidLevel(F,b.id)===1?1:0);
             const score=(depth+ownBonus-softPen)/Math.max(1,D[s.id]);
@@ -914,6 +934,604 @@ window.ECON = (function(){
       else if(cur && cur.src==='auto') delete cb[id];
     });
   }
+
+  // ── EVENT DIRECTOR — the galaxy makes its own trouble ─────────────────────────
+  // Everything above REACTS — to a referee-fired shock, a price gap, a corp's move; nothing
+  // ORIGINATES a crisis on its own, so an untouched galaxy only ever moves when the referee
+  // clicks a preset. The director closes that loop. Each referee turn it reads the sim's OWN
+  // signals (unrest that's festered long enough to spread, a monopolist's grip on a good, a
+  // boomtown drawing crime, or just a calm week gone too quiet) and FIRES ITS OWN SHOCK —
+  // reusing the exact shock KINDS the rest of the engine already consumes, so a director event
+  // flows through outputFactor / demandFactor / tariffMult, the worldStatus derivation, the
+  // black-market/contraband layer, the Oracle's true-rumour intel() and the console timeline
+  // with ZERO new plumbing. The director only ORIGINATES the shock the referee would have had
+  // to click.
+  //
+  // Bounded to ENRICH, never destabilise:
+  //   • only self-expiring, time-limited output / crackdown / tariff / demand shocks — NEVER a
+  //     route-severing block/embargo (those stay referee-authored story beats);
+  //   • output cuts are floored at DIR_OUT_FLOOR (food-safe, and — being ≥ the 0.4 threshold
+  //     worldStatus reads as unrest-inducing — a director strike can't itself bootstrap a fresh
+  //     unrest→spread→unrest doom-loop);
+  //   • a galaxy-wide cooldown + a cap on concurrently-live director shocks bound cumulative
+  //     pressure well inside the balance the corp/food harness tuned.
+  // REFEREE-ONLY + full-sim-only + settle-skipped (the settle scratch state is active:false, so
+  // this returns immediately and the deterministic baseline is untouched) — exactly like
+  // corpsStep / worldStatusStep. Only the referee's advance persists the fired shocks; every
+  // device inherits the same state.shocks on load, so per-device prices stay identical. It uses
+  // Math.random in the same referee-only way corpsStep/formCorp already do.
+  const DIR_COOLDOWN = 3;        // ≥ this many weeks between director events — a heartbeat, not a barrage
+  const DIR_MAX_ACTIVE = 4;      // never more than this many director shocks live at once (bounds cumulative pressure)
+  const DIR_AMBIENT_PROB = 0.10; // weekly chance of a minor ambient event when nothing reactive fires (so it's never wholly static)
+  const DIR_OUT_FLOOR = 0.4;     // director output cuts never bite harder than this — food-safe & non-unrest-bootstrapping
+  const DIR_SPREAD_WK = 3;       // unrest must have festered this long before it spreads to a neighbour
+
+  function directorActive(){ return (state.shocks||[]).filter(s=> s && s.src==='director'); }
+  function facConsumersOf(good){ const set={}; Object.values(worlds).forEach(w=>{ if((w.cons[good]||0)>0 && w.fac) set[w.fac]=1; }); return Object.keys(set); }
+  function exportsOf(id){ const w=worlds[id]; return w?Object.keys(w.prod).filter(g=>GOODS[g] && !GOODS[g].internal && w.prod[g]>0 && g!==FOOD_GOOD):[]; }
+
+  // Push a director-originated shock: same shape + downstream handling as a referee fire(), tagged
+  // src:'director' for the cooldown/cap accounting and a distinct timeline/log marker. No save() —
+  // the advance loop saves once at the end.
+  function dfire(week, spec){
+    const s = Object.assign({ src:'director' }, spec);
+    if(s.kind==='output' && s.factor!=null) s.factor = Math.max(DIR_OUT_FLOOR, s.factor);   // food-safe / non-unrest-bootstrapping floor
+    s.until = (spec.weeks!=null) ? week + spec.weeks : week + 4;
+    s.fired = week;
+    state.shocks.push(s);
+    if(!state.history) state.history=[];
+    state.history.unshift({ label:s.label||s.kind, kind:s.kind, beganWk:week, endsWk:s.until, src:'director' });   // dated campaign timeline
+    if(state.history.length>40) state.history.length=40;
+    const D = state.director || (state.director = { last:-999, seq:0 });
+    D.last = week; D.seq = (D.seq||0)+1;
+    log(week, `◇ ${s.label || ('Emergent '+s.kind)}`);
+  }
+
+  // Curated ambient minor events — plausible, localized, gentle. Drawn at random on a calm week so
+  // the galaxy is never wholly static. Returns a shock spec for a random market world (or null).
+  function ambientEvent(week){
+    const ids = Object.keys(worlds).filter(id=> worlds[id].fac && isMarket(nodeOf(id)));
+    if(!ids.length) return null;
+    const id = pick(ids), w = worlds[id], label = w.label, exp = exportsOf(id), roll = Math.random();
+    if(roll < 0.4 && exp.length){ const g=pick(exp);
+      return { kind:'output', target:id, good:g, factor:0.6, weeks:2+Math.floor(Math.random()*2), label:`⚑ Wildcat strike — ${label} (${g.replace('Common ','')})` }; }
+    if(roll < 0.7 && exp.length){ const g=pick(exp);
+      return { kind:'output', target:id, good:g, factor:0.55, weeks:2+Math.floor(Math.random()*2), label:`⚔ Raiders skim the lanes — ${label} (${g.replace('Common ','')})` }; }
+    const cons = Object.keys(w.cons).filter(g=>GOODS[g] && !GOODS[g].internal && w.cons[g]>0);
+    if(cons.length){ const g=pick(cons);
+      return { kind:'demand', target:id, good:g, factor:1.6, weeks:2+Math.floor(Math.random()*2), label:`✦ Festival demand — ${label} (${g.replace('Common ','')})` }; }
+    return null;
+  }
+
+  // Weekly director turn. Reads the sim's own signals for a REACTIVE event; failing that, an
+  // occasional ambient one. Fires at most ONE shock per turn, gated by cooldown + the live cap.
+  function directorStep(week){
+    if(!state.active) return;                                     // full sim only (settle scratch state is active:false → skipped → baseline untouched)
+    if(state.directorOn===false) return;                          // referee opt-out
+    if(typeof isReferee==='function' && !isReferee()) return;     // referee-advanced (only the ref's advance persists; players inherit)
+    const D = state.director || (state.director = { last:-999, seq:0 });
+    if(week - (D.last||-999) < DIR_COOLDOWN) return;              // heartbeat, not a barrage
+    if(directorActive().length >= DIR_MAX_ACTIVE) return;         // bound cumulative director pressure
+
+    const cand = [], ws = state.worldStatus || {};
+
+    // 1) Unrest spreads — a world restive (sev≥2) long enough infects a calm same-faction neighbour.
+    Object.keys(ws).forEach(id=>{ const s=ws[id];
+      if(!s || s.kind!=='unrest' || (s.sev||1)<2 || s.since==null || week-s.since < DIR_SPREAD_WK || !worlds[id]) return;
+      const fac=worlds[id].fac;
+      const nbrs=Object.keys(worlds).filter(n=> n!==id && worlds[n].fac===fac
+        && !(ws[n] && ws[n].kind==='unrest') && !state.shocks.some(x=>x.target===n));
+      if(nbrs.length){ const n=pick(nbrs), pool=exportsOf(n).concat(['*']), g=pick(pool);
+        cand.push({ kind:'output', target:n, good:g, factor:0.5, weeks:3, label:`⚑ Unrest spreads — ${worlds[n].label}` }); }
+    });
+
+    // 2) Monopoly backlash — a house dominating a good draws a regulatory tariff from a faction that buys it.
+    Object.values(state.corps||{}).forEach(c=>{ if(c.defunct || !c.monopoly || !c.monopoly.good) return;
+      const g=c.monopoly.good, facs=facConsumersOf(g).filter(f=> !state.shocks.some(x=> x.kind==='tariff' && x.faction===f && x.good===g));
+      if(facs.length){ const f=pick(facs);
+        cand.push({ kind:'tariff', faction:f, good:g, factor:0.45, weeks:6, label:`⚖ ${facName(f)} tariff — curbing ${c.name.split(' ')[0]}'s grip on ${g.replace('Common ','')}` }); }
+    });
+
+    // 3) Boomtown crime — a boom draws raiders skimming one of its exports.
+    Object.keys(ws).forEach(id=>{ const s=ws[id];
+      if(!s || s.kind!=='boom' || !worlds[id]) return;
+      const exp=exportsOf(id).filter(g=> !state.shocks.some(x=>x.target===id && x.good===g));
+      if(exp.length){ const g=pick(exp);
+        cand.push({ kind:'output', target:id, good:g, factor:0.6, weeks:3, label:`⚔ Boomtown crime wave — ${worlds[id].label} (${g.replace('Common ','')})` }); }
+    });
+
+    if(cand.length){ dfire(week, pick(cand)); return; }           // reactive beat takes priority
+
+    // 4) Ambient heartbeat — the galaxy is calm; occasionally stir something minor so it's never static.
+    if(Math.random() < DIR_AMBIENT_PROB){ const e=ambientEvent(week); if(e) dfire(week, e); }
+  }
+
+  // ── FACTION AI — the major powers as strategy-game actors ─────────────────────
+  // The corp layer already models pooled-capital HOUSES; this models the STATES they operate in.
+  // Each major faction becomes an autonomous actor with a treasury, weekly income from the worlds it
+  // holds, a diplomatic STANCE toward every other power, and a per-turn BUDGET it allocates — exactly
+  // the loop a 4X/grand-strategy AI runs. Concretely, each referee turn factionsStep():
+  //   • books INCOME (a small tax on its worlds' output) into the treasury, bounded by a reserve cap;
+  //   • drifts RELATIONS toward each rivalry's baseline (seeded from FACTION_AVOID), perturbed by live
+  //     statecraft, so hostility/estrangement is dynamic not fixed;
+  //   • runs STATECRAFT off those relations — a hostile power funds a trade EMBARGO or a protectionist
+  //     TARIFF against a rival (reusing the shock system, tagged src:'faction'), and détente LIFTS an
+  //     old embargo once relations recover;
+  //   • spends its BUDGET on the galaxy: posts CONTRACTS players/traders can take (relief runs into its
+  //     own shortages, lane patrols/escorts, bounties on raiders in its space, development jobs) and
+  //     directly FUNDS relief shipments — treasury actually falls when it acts, like a 4X budget.
+  // Contracts flow through the SAME pipeline corp contracts do (factionContractItem → intel() → the
+  // Oracle's rumours → the console → one-click draft to the Quest Log), so almost no new plumbing.
+  //
+  // Bounded & safe, like every other advanced layer: statecraft is capped (≤ FAC_EMB_MAX live faction
+  // embargoes, self-expiring, cooldown) and food-aware so a trade war can't starve the galaxy (the 11
+  // independent worlds stay outside every faction embargo, so staples still flow); treasuries have a
+  // reserve ceiling; contracts are deduped and capped. REFEREE-ONLY + full-sim-only + settle-skipped
+  // (active:false scratch state → returns immediately, baseline untouched), and only the referee's
+  // advance persists — every device inherits the same state.factions, so prices stay identical. Uses
+  // Math.random the same referee-only way corpsStep / directorStep do.
+  const FAC_AI_IDS = ['hegemony','uhc','sanhedrin','rsc','omnisynth'];   // the major powers that get an AI (the market factions with strategic profiles)
+  const FAC_BASE_INCOME = 1500;          // baseline weekly state revenue (admin/tax floor) before per-world output tax
+  const FAC_TAX_RATE = 0.015;            // fraction of a held world's weekly output VALUE the state books as revenue
+  const FAC_TREASURY_CAP = 2_000_000;    // reserve ceiling — bound the idle war-chest so console treasuries stay readable
+  const FAC_SEED_TREASURY = 300_000;     // opening war-chest (a few weeks from its first big move)
+  const FAC_REL_MIN = -100, FAC_REL_MAX = 100;
+  const FAC_REL_DRIFT = 0.05;            // per-week pull of a relation back toward its rivalry baseline (slow)
+  const FAC_EMB_THRESH = -55;            // stance at/below this → a power may declare a trade embargo on the rival
+  const FAC_TARIFF_THRESH = -30;         // stance at/below this (but above embargo) → a protectionist tariff instead
+  const FAC_THAW_THRESH = -25;           // an active faction embargo LIFTS once stance recovers above this (détente)
+  const FAC_EMB_MAX = 2;                 // never more than this many live faction embargoes at once (galaxy can't seize up)
+  const FAC_EMB_COST = 40_000, FAC_TARIFF_COST = 15_000;   // statecraft is funded from the treasury
+  const FAC_EMB_WK = 10, FAC_TARIFF_WK = 8;
+  const FAC_STATECRAFT_COOLDOWN = 4;     // ≥ this many weeks between a faction's statecraft acts
+  const FAC_CONTRACT_MAX = 8;            // cap on live faction contract offers (deduped) so the list doesn't flood
+  const FAC_CONTRACT_PROB = 0.5;         // weekly chance a faction posts a contract when it has a live need
+  const FAC_RELIEF_COST = 12_000;        // funding a direct relief shipment costs this from the treasury
+  const FAC_RELIEF_QTY = 30;             // kt of staples/short good a funded relief lift moves toward the short world
+  const FAC_DEV_COST = 60_000;           // a development grant (EXPAND agenda) — funded, posts a job
+  const CAB_RESHUFFLE_PROB = 0.02;       // weekly chance a power reshuffles ONE cabinet post (~every 50 wks per seat-set) — occasional, newsworthy
+
+  function facName2(id){ return (typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[id] && GALAXY_FACTIONS[id].name) || facName(id); }
+  function facColorOf(id){ return (typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[id] && GALAXY_FACTIONS[id].color) || '#9fb0c8'; }
+  function facWorlds(id){ return Object.keys(worlds).filter(w=> worlds[w].fac===id); }
+  // Rivalry baseline for a stance A→B, seeded from the established hostilities in FACTION_AVOID.
+  function relBaseline(a, b){ const av=FACTION_AVOID[a];
+    if(av){ if((av.hard||[]).indexOf(b)>=0) return -70; if((av.soft||[]).indexOf(b)>=0) return -30; }
+    const bv=FACTION_AVOID[b]; if(bv){ if((bv.hard||[]).indexOf(a)>=0) return -70; if((bv.soft||[]).indexOf(a)>=0) return -30; }
+    return 10;   // no history → mildly cordial
+  }
+  // ── Government cabinets — each power's ministers, generated, occasionally reshuffled, broadcast on GalNet.
+  //    The INITIAL cabinet is seeded DETERMINISTICALLY (name/trait from a stable hash of faction+post), so
+  //    every device shows the same government before the referee's first advance. Reshuffles thereafter are
+  //    referee-side (Math.random) and persisted, exactly like every other faction mutation. ──
+  const GOV_FIRST = ['Vara','Doran','Mira','Kel','Sana','Orin','Tesh','Yuna','Cassian','Ravi','Lio','Nadia','Bram','Isolde','Garan','Petra','Soren','Aisha','Costa','Wen','Elias','Dara','Faren','Nix','Talia','Rurik'];
+  const GOV_LAST  = ['Okonkwo','Vance','Solari','Marek','Bright','Cole','Ashfield','Reyes','Tamm','Voss','Kessler','Halloran','Drexler','Sable','Orsk','Quill','Anselm','Marlow','Castellan','Greaves','Yuan','Ferro','Lindqvist','Adeyemi','Koh','Novak'];
+  const GOV_TRAITS = ['hawkish','dovish','protectionist','free-trader','reformist','hardliner','technocrat','populist','pragmatist','ideologue'];
+  const GOV_REASONS = { resigned:'has resigned', dismissed:'was dismissed', died:'has died in office', scandal:'steps down amid scandal', promoted:'was promoted', retired:'retires', elected:'takes office after a vote', purged:'was purged', ascended:'has ascended', recalled:'was recalled' };
+  // Per-power flavour: the head-of-state's title + the plausible ways its officials leave office.
+  const FAC_GOV = {
+    hegemony:  { head:'First Consul',        style:['elected','resigned','dismissed','retired','scandal'] },
+    uhc:       { head:'Continuity Director', style:['elected','retired','resigned','recalled'] },
+    sanhedrin: { head:'High Preceptor',      style:['ascended','died','resigned','retired'] },
+    rsc:       { head:'Chairman',            style:['purged','dismissed','died','resigned'] },
+    omnisynth: { head:'Chief Executive',     style:['dismissed','promoted','resigned','retired'] },
+  };
+  const GOV_POSTS = [
+    { key:'trade',    title:'Minister of Commerce' },
+    { key:'defence',  title:'Minister of Defence' },
+    { key:'foreign',  title:'Foreign Secretary' },
+    { key:'interior', title:'Minister of the Interior' },
+  ];
+  function govHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function govNameSeeded(seed){ return GOV_FIRST[govHash('f'+seed)%GOV_FIRST.length]+' '+GOV_LAST[govHash('l'+seed)%GOV_LAST.length]; }
+  function govTraitSeeded(seed){ return GOV_TRAITS[govHash('t'+seed)%GOV_TRAITS.length]; }
+  function govNameRandom(){ return pick(GOV_FIRST)+' '+pick(GOV_LAST); }
+  function freshCabinet(facId){ const gov=FAC_GOV[facId]||{head:'Head of State'};
+    const out=[{ post:'head', title:gov.head, name:govNameSeeded(facId+':head'), trait:govTraitSeeded(facId+':head'), since:0 }];
+    GOV_POSTS.forEach(p=> out.push({ post:p.key, title:p.title, name:govNameSeeded(facId+':'+p.key), trait:govTraitSeeded(facId+':'+p.key), since:0 }));
+    return out;
+  }
+
+  function freshFactions(){ const out={};
+    FAC_AI_IDS.forEach(id=>{ const stance={};
+      FAC_AI_IDS.forEach(o=>{ if(o!==id) stance[o]=relBaseline(id,o); });
+      out[id]={ id, treasury:FAC_SEED_TREASURY, income:0, stance, agenda:'CONSOLIDATE', lastCraft:-999, hist:[], cabinet:freshCabinet(id), prevAgenda:'CONSOLIDATE' };
+    });
+    return out;
+  }
+  // GalNet — the galaxy news feed. A rolling window of headlines the sim broadcasts (cabinet changes,
+  // trade wars, détente). Player-facing via the Oracle (intel() surfaces recent items) and the console.
+  const NEWS_CAP = 40;
+  function broadcastNews(week, facId, kind, text){ if(!state.news) state.news=[];
+    state.news.unshift({ wk:week, fac:facId||null, kind, text }); if(state.news.length>NEWS_CAP) state.news.length=NEWS_CAP; }
+  function factionEmbargoesLive(){ return (state.shocks||[]).filter(s=> s && s.kind==='embargo' && s.src==='faction'); }
+  function relOf(a,b){ const f=state.factions&&state.factions[a]; return (f&&f.stance&&f.stance[b]!=null)?f.stance[b]:relBaseline(a,b); }
+  function setRel(a,b,v){ v=Math.max(FAC_REL_MIN,Math.min(FAC_REL_MAX,Math.round(v)));
+    const fa=state.factions&&state.factions[a]; if(fa){ fa.stance=fa.stance||{}; fa.stance[b]=v; }
+  }
+  function nudgeRel(a,b,d){ setRel(a,b, relOf(a,b)+d); setRel(b,a, relOf(b,a)+d); }   // symmetric perturbation
+
+  // Emit a faction contract opportunity (parallel to emitCorpEvent). Deduped + capped.
+  function emitFactionEvent(type, facId, data){
+    if(!state.factionEvents) state.factionEvents=[];
+    state.factionEvents.push(Object.assign({ type, faction:facId, wk:state.week }, data||{}));
+    while(state.factionEvents.length>FAC_CONTRACT_MAX) state.factionEvents.shift();
+  }
+  function hasFactionEvent(pred){ return (state.factionEvents||[]).some(pred); }
+  // Raw factionEvent → the rich {kind:'contract'} item the console + 85-records draftFactionContract() consume.
+  function factionContractItem(e){
+    if(!e || !e.faction) return null;
+    const wl = id => (id && worlds[id]) ? worlds[id].label : (id||null);
+    return { kind:'contract', contract:e.type, issuer:'faction', faction:e.faction, label:facName2(e.faction), color:facColorOf(e.faction),
+      world:e.world||null, place: wl(e.world), good:e.good||null,
+      from:e.from||null, fromLabel: wl(e.from), to:e.to||null, toLabel: wl(e.to),
+      vessel:e.vessel||null, qty:e.qty||null, reward: factionContractReward(e), wk:e.wk,
+      pirate:e.pirate||null, targetName:e.pirateName||null };   // pirate bounties name the band
+  }
+  function factionContractReward(e){
+    const cargo=(e.qty||0)*(AGENT_VALUE[e.good]||100);
+    switch(e.type){
+      case 'relief':      return Math.max(4000, round100(cargo*0.5 + 6000));
+      case 'patrol':      return Math.max(3000, round100(5000));
+      case 'escort':      return Math.max(2500, round100(cargo*0.18));
+      case 'bounty':      return Math.max(4000, round100(cargo*0.4 + 4000));
+      case 'development':  return Math.max(6000, round100(FAC_DEV_COST*0.12));
+      default:            return 5000;
+    }
+  }
+  // Fund + dispatch a direct relief shipment of `good` toward short world `id` from the nearest producer
+  // with surplus — the faction spending its treasury to physically ease its own shortage. Bounded qty.
+  function fundRelief(facId, id, good){
+    const f=state.factions[facId]; if(!f || f.treasury<FAC_RELIEF_COST) return false;
+    const blk=blocked(), D=dist(id, blk); if(D[id]==null) return false;
+    const prods=Object.values(worlds).filter(p=> p.id!==id && p.prod[good] && D[p.id]!=null && stk(p.id,good)>safety(p,good))
+                  .sort((a,b)=> D[a.id]-D[b.id]);
+    if(!prods.length) return false;
+    const p=prods[0], qty=Math.min(FAC_RELIEF_QTY, Math.max(0, stk(p.id,good)-safety(p,good)));
+    if(qty<=0) return false;
+    setStk(p.id,good, stk(p.id,good)-qty);
+    state.transit.push({ good, qty, from:p.id, to:id, eta: state.week + Math.max(1,D[p.id]), relief:facId });
+    f.treasury -= FAC_RELIEF_COST;
+    return true;
+  }
+
+  // Weekly faction turn: income → relations drift → statecraft → budget/contracts → P&L sample.
+  function factionsStep(week){
+    if(!state.active) return;                                      // full sim only (settle scratch state is active:false → skipped → baseline untouched)
+    if(state.factionsOn===false) return;                          // referee opt-out
+    if(typeof isReferee==='function' && !isReferee()) return;     // referee-advanced (only the ref's advance persists; players inherit)
+    if(!state.factions) state.factions=freshFactions();
+    if(!state.factionEvents) state.factionEvents=[];
+    // expire faction contract offers whose situation has passed (timed) — keep it a live board
+    state.factionEvents = state.factionEvents.filter(e=> e.until==null || e.until>=week);
+
+    Object.values(state.factions).forEach(f=>{
+      const mine=facWorlds(f.id);
+
+      // 1) INCOME — a small tax on the output value of the worlds it holds (bounded reserve ceiling).
+      let rev=FAC_BASE_INCOME;
+      mine.forEach(id=>{ const w=worlds[id]; for(const g in w.prod){ if(GOODS[g]&&!GOODS[g].internal) rev += w.prod[g]*(AGENT_VALUE[g]||100)*FAC_TAX_RATE; } });
+      f.income=Math.round(rev);
+      if(f.treasury < FAC_TREASURY_CAP) f.treasury=Math.min(FAC_TREASURY_CAP, f.treasury+f.income);
+
+      // 2) RELATIONS — pull each stance slowly toward its rivalry baseline; a live embargo/tariff between
+      //    the two keeps eroding it (statecraft has diplomatic cost). The government's POSTURE bends the
+      //    baseline: a hawkish/hardline cabinet drifts toward hostility, a dovish/reformist one toward
+      //    thaw — so a reshuffle visibly reshapes a power's diplomacy over the following weeks.
+      const cab=f.cabinet||[]; const defence=cab.find(s=>s.post==='defence')||{}, foreign=cab.find(s=>s.post==='foreign')||{}, head=cab.find(s=>s.post==='head')||{};
+      const hawk=['hawkish','hardliner','ideologue'], dove=['dovish','reformist','pragmatist'];
+      let posture=0; [defence.trait,foreign.trait,head.trait].forEach(t=>{ if(hawk.indexOf(t)>=0) posture--; else if(dove.indexOf(t)>=0) posture++; });
+      const postureShift=Math.max(-12,Math.min(12, posture*5));   // bounded ±12: cabinet nudges the diplomatic baseline
+      FAC_AI_IDS.forEach(o=>{ if(o===f.id) return;
+        const base=Math.max(FAC_REL_MIN,Math.min(FAC_REL_MAX, relBaseline(f.id,o)+postureShift)); let r=relOf(f.id,o);
+        r += (base-r)*FAC_REL_DRIFT;
+        const hostileAct=(state.shocks||[]).some(s=> s.src==='faction' && ((s.kind==='embargo' && ((s.facA===f.id&&s.facB===o)||(s.facA===o&&s.facB===f.id))) || (s.kind==='tariff' && s.faction===f.id && s.againstFac===o)));
+        if(hostileAct) r-=2;
+        setRel(f.id,o, r);
+      });
+
+      // 3) AGENDA — read its own space and pick a posture (drives the budget below).
+      let short=0, unrest=0;
+      mine.forEach(id=>{ SIM_GOODS.forEach(g=>{ if(!GOODS[g]||GOODS[g].internal) return; const p=pressure(id,g); if(p!=null&&p<=-2) short++; });
+        const ws=state.worldStatus&&state.worldStatus[id]; if(ws&&ws.kind==='unrest') unrest++; });
+      let worstRival=null; FAC_AI_IDS.forEach(o=>{ if(o===f.id) return; if(worstRival==null || relOf(f.id,o)<relOf(f.id,worstRival)) worstRival=o; });
+      const threatened=worstRival && relOf(f.id,worstRival)<=FAC_TARIFF_THRESH;
+      f.agenda = (short+unrest>=2) ? 'STABILISE' : threatened ? 'CONTAIN'
+               : (f.treasury>FAC_SEED_TREASURY*1.5 && short+unrest===0) ? 'EXPAND' : 'CONSOLIDATE';
+
+      // 4) STATECRAFT — funded from the treasury, gated by relations, cooldown and the live-embargo cap.
+      if(week-(f.lastCraft||-999) >= FAC_STATECRAFT_COOLDOWN){
+        // détente first: lift an OWN faction embargo whose relation has recovered.
+        const ownEmb=factionEmbargoesLive().find(s=> s.facA===f.id && relOf(f.id,s.facB)>=FAC_THAW_THRESH);
+        if(ownEmb){ const i=state.shocks.indexOf(ownEmb); if(i>=0){ state.shocks.splice(i,1);
+            nudgeRel(f.id, ownEmb.facB, +8); f.lastCraft=week;
+            log(week, `🕊 ${facName2(f.id)} lifts its embargo on ${facName2(ownEmb.facB)}`);
+            broadcastNews(week, f.id, 'thaw', `🕊 ${facName2(f.id)} lifts its trade embargo on ${facName2(ownEmb.facB)} as relations thaw.`);
+            state.history.unshift({ label:`🕊 ${FAC_SHORT[f.id]||facName2(f.id)} ↔ ${FAC_SHORT[ownEmb.facB]||facName2(ownEmb.facB)} détente`, kind:'thaw', beganWk:week, endsWk:null, src:'faction' }); if(state.history.length>40) state.history.length=40; } }
+        else if(worstRival){ const r=relOf(f.id,worstRival);
+          const alreadyEmb=factionEmbargoesLive().some(s=> (s.facA===f.id&&s.facB===worstRival)||(s.facA===worstRival&&s.facB===f.id));
+          if(r<=FAC_EMB_THRESH && !alreadyEmb && factionEmbargoesLive().length<FAC_EMB_MAX && f.treasury>=FAC_EMB_COST){
+            f.treasury-=FAC_EMB_COST; f.lastCraft=week; nudgeRel(f.id,worstRival,-6);
+            const s={ kind:'embargo', facA:f.id, facB:worstRival, src:'faction', until:week+FAC_EMB_WK, fired:week, label:`⛔ ${FAC_SHORT[f.id]||facName2(f.id)} embargoes ${FAC_SHORT[worstRival]||facName2(worstRival)}` };
+            state.shocks.push(s); state.history.unshift({ label:s.label, kind:'embargo', beganWk:week, endsWk:s.until, src:'faction' }); if(state.history.length>40) state.history.length=40;
+            log(week, `⛔ ${facName2(f.id)} declares a trade embargo on ${facName2(worstRival)}`);
+            broadcastNews(week, f.id, 'embargo', `⛔ ${facName2(f.id)} declares a trade embargo on ${facName2(worstRival)} amid deepening tensions.`);
+          } else if(r<=FAC_TARIFF_THRESH && f.treasury>=FAC_TARIFF_COST
+                    && !(state.shocks||[]).some(s=> s.kind==='tariff' && s.faction===f.id && s.againstFac===worstRival)){
+            // protectionist tariff on a good the rival exports and this faction imports
+            const rivalExp=new Set(); facWorlds(worstRival).forEach(id=>Object.keys(worlds[id].prod).forEach(g=>{ if(GOODS[g]&&!GOODS[g].internal&&worlds[id].prod[g]>0) rivalExp.add(g); }));
+            const wants=[...rivalExp].filter(g=> mine.some(id=>(worlds[id].cons[g]||0)>0));
+            if(wants.length){ const g=pick(wants); f.treasury-=FAC_TARIFF_COST; f.lastCraft=week; nudgeRel(f.id,worstRival,-3);
+              const s={ kind:'tariff', faction:f.id, againstFac:worstRival, good:g, factor:0.5, src:'faction', until:week+FAC_TARIFF_WK, fired:week, label:`⚖ ${FAC_SHORT[f.id]||facName2(f.id)} tariff on ${g.replace('Common ','')} (vs ${FAC_SHORT[worstRival]||facName2(worstRival)})` };
+              state.shocks.push(s); state.history.unshift({ label:s.label, kind:'tariff', beganWk:week, endsWk:s.until, src:'faction' }); if(state.history.length>40) state.history.length=40;
+              log(week, `⚖ ${facName2(f.id)} raises a protective tariff on ${g.replace('Common ','')}`);
+              broadcastNews(week, f.id, 'tariff', `⚖ ${facName2(f.id)} imposes a protective tariff on ${g.replace('Common ','')} imports from ${facName2(worstRival)}.`);
+            }
+          }
+        }
+      }
+
+      // 5) BUDGET / CONTRACTS — one posting per faction per week, on a live need, gated by treasury.
+      if(Math.random()<FAC_CONTRACT_PROB && (state.factionEvents.length<FAC_CONTRACT_MAX)){
+        // a) relief — a short world in its space (STABILISE/CONSOLIDATE)
+        let posted=false;
+        if(f.agenda==='STABILISE' || f.agenda==='CONSOLIDATE'){
+          const needs=[];
+          mine.forEach(id=>{ SIM_GOODS.forEach(g=>{ if(!GOODS[g]||GOODS[g].internal) return; const p=pressure(id,g); if(p!=null&&p<=-2) needs.push({id,g,p}); }); });
+          needs.sort((a,b)=>a.p-b.p);
+          const need=needs.find(n=> !hasFactionEvent(e=>e.type==='relief'&&e.world===n.id&&e.good===n.g));
+          if(need){ emitFactionEvent('relief', f.id, { world:need.id, good:need.g, qty:FAC_RELIEF_QTY, until:week+6 });
+            fundRelief(f.id, need.id, need.g);   // also physically fund part of it
+            posted=true; }
+        }
+        // b) bounty — raiders hit its space (a director/convoy raid landed on a world it holds)
+        if(!posted){
+          const raidHere=(state.shocks||[]).find(s=> (s.kind==='output') && s.target && worlds[s.target] && worlds[s.target].fac===f.id
+                          && /raid|crime|skim/i.test(s.label||'') && !hasFactionEvent(e=>e.type==='bounty'&&e.world===s.target));
+          if(raidHere){ emitFactionEvent('bounty', f.id, { world:raidHere.target, good:raidHere.good, qty:20, until:week+6 }); posted=true; }
+        }
+        // c) patrol — a rich convoy transiting its space wants an escort (CONTAIN/CONSOLIDATE)
+        if(!posted){
+          const conv=(state.agents||[]).find(a=> a.route && worlds[a.route.to] && worlds[a.route.to].fac===f.id
+                        && a.route.qty*(AGENT_VALUE[a.route.good]||100)>=ESCORT_VALUE_MIN && !hasFactionEvent(e=>e.type==='patrol'&&e.to===a.route.to));
+          if(conv){ emitFactionEvent('patrol', f.id, { vessel:conv.name, from:conv.route.from, to:conv.route.to, good:conv.route.good, qty:Math.round(conv.route.qty), until:week+5 }); posted=true; }
+        }
+        // d) development — flush & calm (EXPAND): fund a build-up job at one of its worlds
+        if(!posted && f.agenda==='EXPAND' && f.treasury>=FAC_DEV_COST && mine.length){
+          const w=pick(mine);
+          if(!hasFactionEvent(e=>e.type==='development'&&e.world===w)){ f.treasury-=FAC_DEV_COST;
+            emitFactionEvent('development', f.id, { world:w, good:Object.keys(worlds[w].prod)[0]||null, until:week+8 }); posted=true; }
+        }
+      }
+
+      // 6) GOVERNMENT — occasionally reshuffle a cabinet post (replacement) and broadcast it; and when the
+      //    power's AGENDA shifts, broadcast that too (an "update" without a personnel change). Both are news.
+      if(!f.cabinet || !f.cabinet.length) f.cabinet=freshCabinet(f.id);
+      if(Math.random()<CAB_RESHUFFLE_PROB){
+        const gov=FAC_GOV[f.id]||{}, seat=pick(f.cabinet), outgoing=seat.name;
+        const reason=pick(gov.style||['resigned','dismissed','retired']);
+        let nm=govNameRandom(); for(let k=0;k<6 && f.cabinet.some(s=>s.name===nm);k++) nm=govNameRandom();
+        seat.name=nm; seat.trait=pick(GOV_TRAITS); seat.since=week;
+        broadcastNews(week, f.id, 'cabinet', `🏛 ${facName2(f.id)}: ${seat.title} ${outgoing} ${GOV_REASONS[reason]||'steps down'} — ${nm} ${seat.post==='head'?'assumes office':'is appointed'} (${seat.trait}).`);
+        log(week, `🏛 ${FAC_SHORT[f.id]||facName2(f.id)} — ${seat.title}: ${nm} replaces ${outgoing}`);
+        state.history.unshift({ label:`🏛 ${FAC_SHORT[f.id]||facName2(f.id)} ${seat.title} — ${nm}`, kind:'cabinet', beganWk:week, endsWk:null, src:'faction' }); if(state.history.length>40) state.history.length=40;
+      }
+      if(f.agenda!==f.prevAgenda){ const head=(f.cabinet||[]).find(s=>s.post==='head')||{};
+        const AGD_NEWS={ STABILISE:'moves to stabilise its worlds', CONTAIN:'takes a harder line abroad', EXPAND:'opens an expansionist programme', CONSOLIDATE:'settles into consolidation' };
+        broadcastNews(week, f.id, 'policy', `📜 ${facName2(f.id)} under ${head.title||'its government'} ${head.name?head.name+' ':''}${AGD_NEWS[f.agenda]||'changes course'}.`);
+        f.prevAgenda=f.agenda;
+      }
+
+      // 7) P&L sample for the console sparkline.
+      f.hist=f.hist||[]; f.hist.push({ wk:week, cap:Math.round(f.treasury) }); if(f.hist.length>24) f.hist.shift();
+    });
+  }
+
+  // ── PIRATE BANDS — autonomous raiders, with rules-legal Traveller 2e / High Guard hulls ─────────
+  // The dark mirror of the trader layer. Bands live at a lawless base, prey on convoys near their
+  // turf, grow fat on loot and notorious with it — which draws faction bounties and patrols that wear
+  // them back down, until they fold or are broken in a fight. Everything the referee/players already
+  // have hooks in: raids reuse the convoy-loss mechanic, notoriety feeds the faction bounty pipeline,
+  // activity broadcasts on GalNet, and a band's ship drops straight into the js/80 combat system.
+  //
+  // SHIPS ARE REAL MgT2e DESIGNS. Each hull carries the sim fields the band layer needs AND a `combat`
+  // stat block ready for makeShipStats()/addCombatShip() — a genuine, rules-legal ship, not an ad-hoc
+  // blob. Hull points follow the app's convention (≈0.4×tons, as the player Free Trader + genShipStats
+  // do); weapon damage dice are the 2022 core values (Pulse 2D · Beam 1D · Missile 4D · Particle 4D).
+  // High Guard hulls are flagged (hg:true).
+  const PIRATE_WPN = {
+    pulse:   id=>({ id, name:'Pulse Laser (triple turret)', type:'pulse-laser', mount:'turret', damage:'2D', range:'Medium',    ammo:0,  ammoMax:0,  notes:'Triple turret · TL10' }),
+    beam:    id=>({ id, name:'Beam Laser (triple turret)',  type:'beam-laser',  mount:'turret', damage:'1D', range:'Long',      ammo:0,  ammoMax:0,  notes:'Triple turret · TL10' }),
+    missile: id=>({ id, name:'Missile Rack (triple turret)',type:'missile',     mount:'turret', damage:'4D', range:'Special',   ammo:12, ammoMax:12, notes:'Smart missiles · TL10' }),
+    particle:id=>({ id, name:'Particle Barbette',           type:'particle',    mount:'barbette',damage:'4D',range:'Very Long', ammo:0,  ammoMax:0,  notes:'Radiation crits · TL12 · High Guard' }),
+    sand:    id=>({ id, name:'Sandcaster (triple turret)',  type:'sandcaster',  mount:'turret', damage:'',   range:'Special',   ammo:20, ammoMax:20, notes:'Point defence · TL9' }),
+  };
+  const PIRATE_SHIPS = {
+    wolf: { id:'wolf', name:'Wolf-class Q-ship', t2e:'Modified Free Trader · 200t', hg:false, tons:200, jump:2, thrust:2, fuelMax:80,
+      combat:{ tonnage:200, jumpRating:2, thrust:2, armourRating:1, hullPoints:80, hullPointsMax:80, power:120, powerMax:120, sensorDM:0,
+        crewSkills:{ pilot:1, gunnery:1, engineer:1, sensors:1, tactics:1, leadership:0 },
+        weapons:[ PIRATE_WPN.pulse('w_wolf1'), PIRATE_WPN.missile('w_wolf2') ], notes:'Disguised civilian hull with pop-up turrets — lures and boards lone traders.' } },
+    corsair: { id:'corsair', name:'Corsair (Type-P)', t2e:'Corsair · 400t', hg:false, tons:400, jump:2, thrust:2, fuelMax:160,
+      combat:{ tonnage:400, jumpRating:2, thrust:2, armourRating:2, hullPoints:160, hullPointsMax:160, power:240, powerMax:240, sensorDM:0,
+        crewSkills:{ pilot:2, gunnery:2, engineer:1, sensors:1, tactics:1, leadership:1 },
+        weapons:[ PIRATE_WPN.beam('w_cor1'), PIRATE_WPN.missile('w_cor2'), PIRATE_WPN.pulse('w_cor3') ], notes:'The classic raider — three triple turrets and jump-2 reach.' } },
+    gazelle: { id:'gazelle', name:'Gazelle-class Close Escort', t2e:'High Guard · 300t', hg:true, tons:300, jump:4, thrust:6, fuelMax:180,
+      combat:{ tonnage:300, jumpRating:4, thrust:6, armourRating:4, hullPoints:120, hullPointsMax:120, power:200, powerMax:200, sensorDM:1,
+        crewSkills:{ pilot:2, gunnery:2, engineer:2, sensors:2, tactics:2, leadership:1 },
+        weapons:[ PIRATE_WPN.particle('w_gaz1'), PIRATE_WPN.missile('w_gaz2'), PIRATE_WPN.sand('w_gaz3') ], notes:'A High Guard military hull — thrust-6 and a particle barbette. A pirate lord’s prize.' } },
+    fighter: { id:'fighter', name:'Light Fighter (wolfpack)', t2e:'Small craft · 30t', hg:false, tons:30, jump:0, thrust:6, fuelMax:8,
+      combat:{ tonnage:30, jumpRating:0, thrust:6, armourRating:2, hullPoints:12, hullPointsMax:12, power:20, powerMax:20, sensorDM:0,
+        crewSkills:{ pilot:2, gunnery:2, engineer:0, sensors:0, tactics:0, leadership:0 },
+        weapons:[ PIRATE_WPN.pulse('w_fig1') ], notes:'System-defence fighter flown in packs — no jump drive; needs a tender.' } },
+  };
+  const PIRATE_SHIP_IDS = Object.keys(PIRATE_SHIPS);
+  const PIR_NAME_A = ['Crimson','Black','Iron','Ghost','Void','Ashen','Broken','Red','Silent','Ragged','Hollow','Scarlet','Grey','Jagged','Pale'];
+  const PIR_NAME_B = ['Wake','Tide','Fang','Reavers','Corsairs','Hand','Star','Vultures','Wolves','Shroud','Talon','Compact','Run','Jackals'];
+  const PIR_MAX = 4;                 // never more than this many active bands
+  const PIR_FORM_PROB = 0.02;        // weekly chance a new band forms (from a bust/unrest world)
+  const PIR_RAID_BASE = 0.22;        // per-band weekly raid chance (scaled by strength)
+  const PIR_RAIDS_MAX = 2;           // GLOBAL cap on pirate raids per week — protects the tuned trade balance
+  const PIR_LOOT_FRAC = 0.3;         // fence value of plundered cargo (fraction of notional Cr)
+  const PIR_NOTO_RAID = 14;          // notoriety gained per successful raid
+  const PIR_NOTO_DECAY = 3;          // weekly notoriety decay when lying low
+  const PIR_BOUNTY_NOTO = 40;        // notoriety at/above which a faction posts a bounty
+  const PIR_STR_MAX = 5;
+  const PIR_LOOT_GROW = 60000;       // loot to add a hull (strength +1)
+  const PIR_OP_LOOT = 1200;          // baseline weekly Cr per hull from OFF-SCREEN raiding (ambient traffic the on-screen
+                                     //   sim doesn't model — mirrors CORP_OP_INCOME). Keeps a band's hoard growing even
+                                     //   in a calm galaxy; on-screen convoy/supply raids add stolen GOODS on top.
+  const PIR_LOOT_CAP = 150000;       // hoard ceiling — a maxed band's war-chest is bounded (readable console)
+  const PIR_HEAT_LOSS = 0.12;        // weekly chance a heavily-hunted band loses a hull to patrols
+  // Fences — shady traders who buy a band's stolen cargo cheap and move it to a lax-law port.
+  const FENCE_LAW_MAX = 3;           // Traveller law level ≤ this = "lax" — a fence can move stolen goods here
+  const FENCE_RATE = 0.35;           // the fence pays the band this fraction of notional value (bought hugely cheap)
+  const FENCE_BATCH = 40;            // kt of stolen goods fenced per week
+  const PIR_HOLD_CAP = 240;          // total kt a band can sit on before older loot spoils / is dumped
+
+  function isPirate(id){ return typeof id==='string' && id.indexOf('pir:')===0; }
+  function pirateOf(id){ return (state && state.pirates && state.pirates[id]) || null; }
+  function pirateShipOf(b){ return PIRATE_SHIPS[(b&&b.ship)||'corsair'] || PIRATE_SHIPS.corsair; }
+  function livePirates(){ return Object.values(state.pirates||{}).filter(b=>!b.defunct); }
+  // A lawless berth: frontier / independent / contested space, or a slumped (bust) world.
+  function lawlessWorlds(){ return Object.keys(worlds).filter(id=>{ const f=worlds[id].fac, ws=state&&state.worldStatus&&state.worldStatus[id];
+    return f==='independent'||f==='contested'||f==='vast'||f==='archon' || (ws&&ws.kind==='bust'); }); }
+  function pirateName(){ for(let i=0;i<8;i++){ const nm='The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); if(!Object.values(state.pirates||{}).some(b=>b.name===nm)) return nm; } return 'The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); }
+  function freshPirates(){ const out={};
+    const berths = lawlessWorlds(); if(!berths.length) return out;
+    // two deterministic starter bands at the first lawless berths (stable id order → same on every device)
+    const seed = berths.slice().sort();
+    [['pir:crimson-wake','The Crimson Wake','corsair'],['pir:black-tide','The Black Tide','wolf']].forEach((s,i)=>{
+      const base = seed[i % seed.length];
+      out[s[0]] = { id:s[0], name:s[1], ship:s[2], base, strength:2, noto:20, loot:0, hold:{}, founded:0, hist:[] };
+    });
+    return out;
+  }
+  function pirateSeq(){ state.pirSeq=(state.pirSeq||0)+1; return state.pirSeq; }
+  function formPirateBand(week){
+    const berths = lawlessWorlds(); if(!berths.length) return;
+    const base = pick(berths), id='pir:n'+pirateSeq().toString(36);
+    const ship = pick(['wolf','wolf','corsair','fighter']);   // new bands start small
+    state.pirates[id] = { id, name:pirateName(), ship, base, strength:1, noto:10, loot:0, hold:{}, founded:week, hist:[] };
+    log(week, `☠ A raider band forms — ${state.pirates[id].name} out of ${worlds[base]?worlds[base].label:base}`);
+    broadcastNews(week, null, 'pirate', `☠ A new raider band, ${state.pirates[id].name}, is preying on shipping out of ${worlds[base]?worlds[base].label:base}.`);
+  }
+  // Choose a prize to hit near the band's turf: preferentially a NAMED trader convoy (players can escort
+  // those), else an anonymous shipment on the central supply lanes — so a band always has something to
+  // raid even when the independent traders are idle in a calm market.
+  function pickRaidPrize(b){
+    const baseFac = worlds[b.base] && worlds[b.base].fac;
+    const nearFac = id => { const f=worlds[id]&&worlds[id].fac; return f===baseFac; };
+    const convoys = (state.agents||[]).filter(a=> a.route && a.route.qty>0 && a.route.eta>state.week);
+    const nearC = convoys.filter(a=> nearFac(a.route.to)||nearFac(a.route.from));
+    const conv = nearC.length ? nearC : convoys;
+    if(conv.length && Math.random()<0.6) return { kind:'agent', a:pick(conv) };   // prefer escortable convoys
+    const ship = (state.transit||[]).filter(t=> t.qty>0 && t.eta>state.week && !t.relief && !t.agent);
+    const nearT = ship.filter(t=> nearFac(t.to)||nearFac(t.from));
+    const pool = nearT.length ? nearT : ship;
+    if(pool.length) return { kind:'transit', t:pick(pool) };
+    if(conv.length) return { kind:'agent', a:pick(conv) };
+    return null;
+  }
+  // Plunder a convoy: its cargo never LANDS (destination stays short) — instead it goes into the band's
+  // HOLD as stolen goods, to be fenced later (or seized if the players storm the base). Same convoy-loss
+  // model as the referee raid button; the merchant limps home.
+  function pirateHoldTotal(b){ return Object.keys(b.hold||{}).reduce((s,g)=>s+(b.hold[g]||0),0); }
+  function piratePlunder(b, prize, week){
+    if(!prize) return false;
+    let good, qty, fromId, toId, victim=null;
+    if(prize.kind==='agent'){ const a=prize.a; if(!a || !a.route) return false; const r=a.route;
+      const i=state.transit.findIndex(t=> t.agent===a.id && t.good===r.good && t.to===r.to); if(i>=0) state.transit.splice(i,1);
+      good=r.good; qty=r.qty; fromId=r.from; toId=r.to;
+      a.profit=(a.profit||0)-Math.round(r.qty*(r.buyUnit||0)); a.raided=(a.raided||0)+1; a.pos=r.from; a.route=null; victim=a.name;
+    } else { const t=prize.t, i=state.transit.indexOf(t); if(i<0) return false; state.transit.splice(i,1);
+      good=t.good; qty=t.qty; fromId=t.from; toId=t.to; }
+    b.hold=b.hold||{};
+    b.hold[good]=(b.hold[good]||0)+qty;                          // stolen cargo → the band's hold
+    // spoilage: a band can only sit on so much before older loot rots / is dumped
+    let over=pirateHoldTotal(b)-PIR_HOLD_CAP;
+    if(over>0){ Object.keys(b.hold).forEach(g=>{ if(over<=0) return; const cut=Math.min(b.hold[g],over); b.hold[g]-=cut; over-=cut; if(b.hold[g]<=0.5) delete b.hold[g]; }); }
+    b.noto=Math.min(100,(b.noto||0)+PIR_NOTO_RAID);
+    const lane=`${worlds[fromId]?worlds[fromId].label:fromId}→${worlds[toId]?worlds[toId].label:toId}`, who=victim||'a supply convoy';
+    log(week, `☠ ${b.name} plunders ${who} — ${Math.round(qty)}kt ${good.replace('Common ','')} taken on ${lane}`);
+    broadcastNews(week, null, 'pirate', `☠ Raiders of ${b.name} struck ${who} on the ${lane} lane — ${Math.round(qty)}kt ${good.replace('Common ','')} taken.`);
+    maybePirateBounty(b, week, toId);
+    return true;
+  }
+  // Lax-law markets (Traveller law level ≤ FENCE_LAW_MAX) a fence can quietly move stolen goods through.
+  function laxPorts(){ return Object.keys(worlds).filter(id=>{ const f=factsOf(id);
+    return f && f.port && f.port!=='X' && (f.law|0)<=FENCE_LAW_MAX && isMarket(nodeOf(id)); }); }
+  // A shady trader buys a batch of the band's hold cheap and dumps it on the nearest lax-law port —
+  // stolen goods hit that black market cheap (a glut + a smuggling market), the band banks discounted Cr.
+  function fenceBand(b, week){
+    const goods=Object.keys(b.hold||{}).filter(g=>b.hold[g]>0.5); if(!goods.length) return;
+    const g=goods.sort((x,y)=>b.hold[y]-b.hold[x])[0], qty=Math.min(FENCE_BATCH, b.hold[g]);
+    const val=Math.round(qty*(AGENT_VALUE[g]||100));
+    const D=dist(b.base, blocked());
+    const ports=laxPorts().filter(id=>id!==b.base && D[id]!=null).sort((a,c)=>D[a]-D[c]);
+    if(ports.length){
+      const port=ports[0];
+      setStk(port,g, stk(port,g)+qty);                            // stolen cargo floods the lax-law market
+      state.contraband=state.contraband||{}; state.contraband[port]={ good:g, since:week, until:week+6, premium:SMUGGLE_PREMIUM, src:'pirate' };
+      b.loot=(b.loot||0)+Math.round(val*FENCE_RATE);
+      broadcastNews(week, null, 'pirate', `☠ Stolen ${g.replace('Common ','')} is flooding the ${worlds[port].label} market — a fence is quietly moving ${b.name}'s haul below cost.`);
+    } else {
+      b.loot=(b.loot||0)+Math.round(val*FENCE_RATE*0.65);         // no lawless port in reach → dumped to a passing trader at a worse cut
+    }
+    b.hold[g]-=qty; if(b.hold[g]<=0.5) delete b.hold[g];
+  }
+  function maybePirateBounty(b, week, nearWorld){
+    if(!state.factions) return;
+    const fac = (nearWorld && worlds[nearWorld] && worlds[nearWorld].fac) || (worlds[b.base] && worlds[b.base].fac);
+    const f = (fac && state.factions[fac]) ? state.factions[fac] : livePirates().length ? Object.values(state.factions)[0] : null;
+    if(!f) return;
+    if(hasFactionEvent(e=>e.type==='bounty' && e.pirate===b.id)) return;   // one live bounty per band
+    emitFactionEvent('bounty', f.id, { pirate:b.id, pirateName:b.name, world:nearWorld||b.base, good:pirateShipOf(b).name, qty:Math.round((b.strength||1)*10), until:week+8 });
+  }
+  function piratesStep(week){
+    if(!state.active) return;
+    if(state.piratesOn===false) return;
+    if(typeof isReferee==='function' && !isReferee()) return;
+    if(!state.pirates) state.pirates=freshPirates();
+    let raids=0;
+    if(livePirates().length<PIR_MAX && Math.random()<PIR_FORM_PROB) formPirateBand(week);
+    livePirates().forEach(b=>{
+      b.noto=Math.max(0,(b.noto||0)-PIR_NOTO_DECAY);
+      b.loot=Math.min(PIR_LOOT_CAP,(b.loot||0)+PIR_OP_LOOT*(b.strength||1));   // off-screen raiding keeps the hoard growing
+      if(raids<PIR_RAIDS_MAX && Math.random() < PIR_RAID_BASE*(0.6+0.18*(b.strength||1))){
+        const v=pickRaidPrize(b); if(v && piratePlunder(b,v,week)) raids++;
+      }
+      fenceBand(b, week);   // shady traders move last week's haul to a lax-law port
+      if((b.noto||0)>=PIR_BOUNTY_NOTO) maybePirateBounty(b, week, b.base);
+      // growth on loot
+      if((b.loot||0)>=PIR_LOOT_GROW && (b.strength||1)<PIR_STR_MAX){ b.loot-=PIR_LOOT_GROW; b.strength=(b.strength||1)+1;
+        broadcastNews(week, null, 'pirate', `☠ ${b.name} grows bolder — another hull joins the pack (now ${b.strength} strong).`); }
+      // heat: a notorious band with a live bounty gets worn down by patrols
+      if((b.noto||0)>=PIR_BOUNTY_NOTO && hasFactionEvent(e=>e.type==='bounty'&&e.pirate===b.id) && Math.random()<PIR_HEAT_LOSS){
+        b.strength=(b.strength||1)-1;
+        if(b.strength<1){ b.defunct=true; log(week, `⚓ ${b.name} — broken up by patrols`); broadcastNews(week, null, 'pirate', `⚓ Patrols have broken the ${b.name}; the lanes near ${worlds[b.base]?worlds[b.base].label:b.base} are quieter.`); }
+        else { b.noto=Math.max(0,(b.noto||0)-15); log(week, `⚔ ${b.name} loses a hull to patrols (now ${b.strength})`); }
+      }
+      b.hist=b.hist||[]; b.hist.push({wk:week, cap:Math.round((b.loot||0)+(b.strength||1)*50000)}); if(b.hist.length>24) b.hist.shift();
+    });
+  }
+  // Referee: build a combat-ready MgT2e stat block for a band's ship (name stamped with the band).
+  function pirateCombatStats(b){
+    const sh=pirateShipOf(b);
+    return Object.assign({ name:`${b.name} — ${sh.name}` }, JSON.parse(JSON.stringify(sh.combat)));
+  }
+  // Players storm the band's base: they seize its Cr hoard AND its stolen-goods hold, and the band is
+  // wiped out. Returns the haul so the referee can bank the credits + hand the players the cargo.
+  function raidPirateBase(id){
+    const b=pirateOf(id); if(!b) return null;
+    const loot=Math.round(b.loot||0), hold=Object.assign({}, b.hold||{});
+    const holdValue=Math.round(Object.keys(hold).reduce((s,g)=>s+hold[g]*(AGENT_VALUE[g]||100),0));
+    b.loot=0; b.hold={}; b.strength=0; b.defunct=true;
+    log(state.week, `🏴 ${b.name} — base stormed; its hoard is seized`);
+    broadcastNews(state.week, null, 'pirate', `🏴 The ${b.name} has been broken — its base stormed and its hoard carried off.`);
+    save();
+    return { ok:true, name:b.name, base:b.base, baseLabel:(worlds[b.base]?worlds[b.base].label:b.base), loot, hold, holdValue };
+  }
+
   // ── Referee overrides — force / pin / clear any world condition or black market, and bend the corps
   //    to the story (collapse, refloat, set the war-chest, plant or pull an expansion). All persisted;
   //    the ones that move state.base re-settle it immediately, exactly like setProfile / a corp invest. ──
@@ -975,15 +1593,21 @@ window.ECON = (function(){
     // replenishment — order-up-to, multi-source (nearest first), in-transit aware
     const incoming = {};
     state.transit.forEach(t=>{ if(!incoming[t.to]) incoming[t.to]={}; incoming[t.to][t.good]=(incoming[t.to][t.good]||0)+t.qty; });
+    // Index producers by good ONCE per step (prod rates are static within a step) — turns the inner
+    // producer scan from O(worlds) into O(producers-of-g), so the whole pass is O(worlds×producers)
+    // not O(worlds²×goods). Behaviour is identical: same candidate set, same distance sort. Critical
+    // now the galaxy is ~180 worlds (was O(n²) → tens of ms/step; see gen-galaxy.mjs).
+    const prodByGood = {};
+    Object.values(worlds).forEach(p=>{ for(const g in p.prod){ if(p.prod[g]) (prodByGood[g]=prodByGood[g]||[]).push(p); } });
     Object.values(worlds).sort((a,b)=> stress(a)-stress(b)).forEach(w=>{   // neediest worlds get first claim on producer surplus
       if(blk[w.id]) return;
-      const D = dist(w.id, blk);
+      const D = distC(w.id, blk);
       SIM_GOODS.forEach(g=>{
         const d = demandFor(w,g); if(d<=0) return;
         const have = stk(w.id,g) + ((incoming[w.id]||{})[g]||0);
         let need = Math.min(orderUpTo(w,g) - have, d*3);          // cap per-tick pull so no world hoards / drains a producer in one tick
         if(need < d*0.5) return;                                  // hysteresis — skip trivial top-ups
-        const prods = Object.values(worlds).filter(p=> p.id!==w.id && !blk[p.id] && p.prod[g] && D[p.id]!=null && !embargoed(w.id,p.id))
+        const prods = (prodByGood[g]||[]).filter(p=> p.id!==w.id && !blk[p.id] && D[p.id]!=null && !embargoed(w.id,p.id))
                         .sort((a,b)=> D[a.id]-D[b.id]);
         for(const p of prods){
           if(need<=0) break;
@@ -1002,6 +1626,9 @@ window.ECON = (function(){
     corpsStep(week);             // corporations: treasury sweep/bail, fleet growth, infrastructure investment (referee-only)
     worldStatusStep(week);       // per-world socio-economic status (boom/bust/unrest/rationing) — referee-only, persisted (unrest dampens output next step)
     contrabandStep(week);        // trade restrictions → black markets + smuggling jobs — referee-only
+    directorStep(week);          // the galaxy makes its own trouble — reads this week's signals, fires its own bounded shock (referee-only)
+    factionsStep(week);          // major powers as strategy-game actors — income, relations/diplomacy, statecraft, budget & contracts (referee-only)
+    piratesStep(week);           // autonomous raider bands — prey on convoys, grow notorious, draw bounties, get broken up (referee-only)
     inflationStep(week);         // shortages ratchet the price level up (sticky); calm decays it back
     priceHistStep(week);         // sample per-world prices for the price-history charts
     state.week = week;
@@ -1150,7 +1777,7 @@ window.ECON = (function(){
       worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
     } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director, factionsOn:state.factionsOn, factions:state.factions, factionEvents:state.factionEvents, news:state.news, piratesOn:state.piratesOn, pirates:state.pirates, pirSeq:state.pirSeq }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
     reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
     save(); }   // reseed stock; keep the current Simple/Full mode
@@ -1202,18 +1829,21 @@ window.ECON = (function(){
     // (the console's "Corporate contracts" section is the primary, targeted path). Ranked LAST so they
     // never crowd out true market intel in the "Market whisper" pick.
     (state.corpEvents||[]).forEach(e=>{ const it=corpContractItem(e); if(it) out.push(it); });
+    (state.factionEvents||[]).forEach(e=>{ const it=factionContractItem(e); if(it) out.push(it); });   // faction (state) jobs — same rumour pipeline
     // World-status conditions + black markets — the Oracle can whisper these as ambient news/rumour.
     if(state.worldStatus) Object.keys(state.worldStatus).forEach(id=>{ const s=state.worldStatus[id];
       if(s && s.kind && worlds[id] && (s.until==null||s.until>=state.week)) out.push({ kind:'status', status:s.kind, sev:s.sev||1, world:id, label:worlds[id].label }); });
     if(state.contraband) Object.keys(state.contraband).forEach(id=>{ const s=state.contraband[id];
       if(s && s.good && worlds[id] && (s.until==null||s.until>=state.week)) out.push({ kind:'blackmarket', world:id, label:worlds[id].label, good:s.good }); });
+    // GalNet headlines — the Oracle can broadcast the latest government / diplomacy news as a true rumour.
+    (state.news||[]).slice(0,6).forEach(n=>{ if(n && n.text) out.push({ kind:'news', text:n.text, faction:n.fac||null, label:n.fac?facName2(n.fac):'GalNet', newsKind:n.kind }); });
     const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
     Object.keys(worlds).forEach(id=>{ goods.forEach(g=>{
       const p = pressure(id,g); if(p==null) return;
       if(p<=-2) out.push({ kind:'shortage', world:id, label:worlds[id].label, good:g, pressure:p });
       else if(p>=3) out.push({ kind:'glut', world:id, label:worlds[id].label, good:g, pressure:p });
     }); });
-    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:((x.kind==='contract'||x.kind==='blackmarket')?2:1);
+    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:(x.kind==='news'?3:((x.kind==='contract'||x.kind==='blackmarket')?2:1));
       if(r(a)!==r(b)) return r(a)-r(b); return Math.abs(b.pressure||4)-Math.abs(a.pressure||4); });
     return out;
   }
@@ -1385,6 +2015,39 @@ window.ECON = (function(){
     agentById(id){ ensure(); return (state.agents||[]).find(a=>a.id===id)||null; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
+    directorOn(){ ensure(); return state.directorOn!==false; },              // the event director — galaxy fires its own emergent shocks (full-sim only)
+    setDirector(v){ ensure(); state.directorOn=!!v; save(); },
+    // ── Faction AI — major powers as strategy-game actors (treasury, relations, statecraft, contracts) ──
+    factionsOn(){ ensure(); return state.factionsOn!==false; },
+    setFactions(v){ ensure(); state.factionsOn=!!v; save(); },
+    factions(){ ensure(); if(!state.factions) state.factions=freshFactions(); return state.factions; },
+    factionIds:()=>FAC_AI_IDS.slice(),
+    cabinetOf(id){ ensure(); const f=state.factions&&state.factions[id]; if(f&&(!f.cabinet||!f.cabinet.length)) f.cabinet=freshCabinet(id); return (f&&f.cabinet)||[]; },
+    news(){ ensure(); return state.news||[]; },                               // GalNet feed — rolling headlines (cabinet changes, trade wars, détente, policy)
+    relOf:(a,b)=>{ ensure(); return relOf(a,b); },                            // A→B stance (−100..+100)
+    facName:(id)=>facName2(id), facColor:(id)=>facColorOf(id),
+    factionEvents(){ ensure(); return state.factionEvents||[]; },             // raw faction contract opportunities
+    factionContractItem:(e)=>{ ensure(); return factionContractItem(e); },    // raw event → rich, labelled contract item
+    clearFactionEvent(i){ ensure(); if(state.factionEvents){ state.factionEvents.splice(i,1); save(); } },
+    // referee overrides
+    setFactionTreasury(id,amt){ ensure(); const f=state.factions&&state.factions[id]; if(!f) return false; f.treasury=Math.max(0,Math.round(+amt)||0); save(); return true; },
+    setRelation(a,b,v){ ensure(); if(!state.factions||!state.factions[a]) return false; setRel(a,b,+v); setRel(b,a,+v); save(); return true; },
+    liftFactionShock(a,b){ ensure(); const before=(state.shocks||[]).length;   // referee lifts a faction embargo/tariff between two powers
+      state.shocks=(state.shocks||[]).filter(s=> !(s.src==='faction' && ((s.facA===a&&s.facB===b)||(s.facA===b&&s.facB===a) || (s.faction===a&&s.againstFac===b))));
+      if(state.shocks.length!==before){ save(); return true; } return false; },
+    // ── Pirate bands — autonomous raiders with rules-legal MgT2e / High Guard hulls ──
+    piratesOn(){ ensure(); return state.piratesOn!==false; },
+    setPirates(v){ ensure(); state.piratesOn=!!v; save(); },
+    pirates(){ ensure(); if(!state.pirates) state.pirates=freshPirates(); return state.pirates; },
+    pirateShips:()=>PIRATE_SHIPS, isPirate, goodValue:(g)=>(AGENT_VALUE[g]||100),
+    pirateCombatStats:(id)=>{ ensure(); const b=pirateOf(id); return b?pirateCombatStats(b):null; },   // combat-ready MgT2e stat block
+    // referee controls
+    pirateRaidNow(id){ ensure(); const b=pirateOf(id); if(!b||b.defunct) return false; const v=pickRaidPrize(b); if(!v) return false; const ok=piratePlunder(b,v,state.week); save(); return ok; },
+    raidPirateBase(id){ ensure(); return raidPirateBase(id); },   // players storm the base → seize loot + stolen-goods hold; band wiped out
+    setPirateStrength(id,n){ ensure(); const b=pirateOf(id); if(!b) return false; b.strength=Math.max(0,Math.min(PIR_STR_MAX,Math.round(+n)||0)); if(b.strength<1){ b.defunct=true; } else b.defunct=false; save(); return true; },
+    setPirateShip(id,ship){ ensure(); const b=pirateOf(id); if(!b||!PIRATE_SHIPS[ship]) return false; b.ship=ship; save(); return true; },
+    disbandPirate(id){ ensure(); const b=pirateOf(id); if(!b) return false; b.defunct=true; log(state.week,`⚓ ${b.name} — disbanded (referee)`); save(); return true; },
+    spawnPirate(){ ensure(); if(!state.pirates) state.pirates=freshPirates(); formPirateBand(state.week); save(); return true; },
     traderCap(){ ensure(); return traderCapOf(); },
     setTraderCap(v){ ensure(); state.traderCap=Math.max(3,Math.min(TRADER_CAP_MAX,Math.round(+v)||DEFAULT_TRADER_CAP)); save(); },
     priceOverlay, inflationLevel, inflationOf:(id,g)=>{ ensure(); return inflOf(id,g); },
@@ -1582,7 +2245,7 @@ function econFireById(id){
   ECON.fire(s);
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
-function econStep(n){ window.econViewFrac=0; ECON.advance(n); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econStep(n){ window.econViewFrac=0; ECON.advance(n); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 // +1 day: a sub-week render clock so convoys crawl hop-by-hop along their jump-lane path
 // (lets you watch ships actually follow lanes). Rolls into a real weekly step every 7 days.
 window.econViewFrac = 0;
@@ -1609,6 +2272,9 @@ function econApplyRun(){
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
 function econToggleTraders(){ ECON.setTraders(!ECON.tradersOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// The event director: when ON, an untouched galaxy fires its OWN emergent shocks (spreading unrest,
+// monopoly backlash, boomtown crime, ambient strikes/raids/festivals) — bounded & referee-advanced.
+function econToggleDirector(){ ECON.setDirector(!ECON.directorOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 // Opt-in monopoly pricing: lets a house dominating its specialty good raise that good's price galaxy-wide
 // (bounded, full-sim only). OFF by default so it never silently shifts a tuned economy.
 function econToggleMonopoly(){ ECON.setMonopoly(!ECON.monopolyOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
@@ -1621,28 +2287,78 @@ function econRaidConvoy(id){
   }
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
-// ── Corporate contracts: draft a flagged opportunity, then post it to the Quest Log / Library Data ──
+// ── Contracts (corp + faction): draft a flagged opportunity, then post it to the Quest Log / Library ──
+function econClearDraftedEvent(){ if(!econDraftSel) return;   // remove the source event once posted (routes corp vs faction)
+  if(econDraftSel.src==='faction') ECON.clearFactionEvent(econDraftSel.i); else ECON.clearCorpEvent(econDraftSel.i); }
 function econDraftContract(i){
   const ev = ECON.corpEvents()[i]; if(!ev) return;
   const item = ECON.contractItem(ev); if(!item || typeof draftCorpContract!=='function') return;
-  econDraftSel = { i, item, contract: draftCorpContract(item) };
+  econDraftSel = { i, src:'corp', item, contract: draftCorpContract(item) };
+  renderEconPanel();
+}
+function econDraftFactionContract(i){
+  const ev = ECON.factionEvents()[i]; if(!ev) return;
+  const item = ECON.factionContractItem(ev); if(!item || typeof draftCorpContract!=='function') return;
+  econDraftSel = { i, src:'faction', item, contract: draftCorpContract(item) };
   renderEconPanel();
 }
 function econRerollContract(){ if(econDraftSel && typeof draftCorpContract==='function'){ econDraftSel.contract = draftCorpContract(econDraftSel.item); renderEconPanel(); } }
 function econContractNote(msg){ const n=document.getElementById('econ-contract-note'); if(n){ n.textContent=msg; } }
+// Close the loop: note the issuer of the drafted contract as a patron in a player's private Standing.
+function econNoteContractPatron(){
+  if(!econDraftSel || typeof standingBeginNote!=='function') return;
+  const it=econDraftSel.item||{}, org=it.faction||it.corp||it.label, label=it.label||org;
+  const title=(econDraftSel.contract&&econDraftSel.contract.title)||(it.contract+' contract');
+  standingBeginNote(org, label, 'Patron — hired the crew: '+title);
+}
 function econContractToQuest(){
   if(!econDraftSel) return;
   const ok = (typeof spawnContractQuest==='function') && spawnContractQuest(econDraftSel.contract);
-  if(ok){ if(typeof showToast==='function') showToast('📋 Contract posted to the Quest Log','success'); ECON.clearCorpEvent(econDraftSel.i); econDraftSel=null; renderEconPanel(); }
+  if(ok){ if(typeof showToast==='function') showToast('📋 Contract posted to the Quest Log','success'); econClearDraftedEvent(); econDraftSel=null; renderEconPanel(); }
   else econContractNote('Quest Log unavailable');
 }
 function econContractToLibrary(){
   if(!econDraftSel) return;
   const ok = (typeof pushContractToLibrary==='function') && pushContractToLibrary(econDraftSel.contract);
-  if(ok){ if(typeof showToast==='function') showToast('📋 Contract leaked to Library Data','success'); ECON.clearCorpEvent(econDraftSel.i); econDraftSel=null; renderEconPanel(); }
+  if(ok){ if(typeof showToast==='function') showToast('📋 Contract leaked to Library Data','success'); econClearDraftedEvent(); econDraftSel=null; renderEconPanel(); }
   else econContractNote('Library Data unavailable');
 }
-function econDismissContract(i){ ECON.clearCorpEvent(i); if(econDraftSel && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
+function econDismissContract(i){ ECON.clearCorpEvent(i); if(econDraftSel && econDraftSel.src==='corp' && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
+function econDismissFactionContract(i){ ECON.clearFactionEvent(i); if(econDraftSel && econDraftSel.src==='faction' && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
+function econToggleFactions(){ ECON.setFactions(!ECON.factionsOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// ── Pirate band controls (referee) ──
+function econTogglePirates(){ ECON.setPirates(!ECON.piratesOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econSpawnPirate(){ ECON.spawnPirate(); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econDisbandPirate(id){ ECON.disbandPirate(id); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econPirateHull(id,d){ const b=ECON.pirates()[id]; if(!b) return; ECON.setPirateStrength(id,(b.strength||0)+d); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econPirateRaid(id){ const ok=ECON.pirateRaidNow(id);
+  if(typeof showToast==='function') showToast(ok?'☠ Raid resolved — a convoy was plundered':'No convoy in reach to raid', ok?'success':'info');
+  renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// Players stormed a band's base: seize the hoard. Credits go to party funds; the stolen goods are
+// reported for the referee to hand out as cargo. The band is wiped out.
+function econPirateBaseRaid(id){
+  const r = ECON.raidPirateBase(id); if(!r || !r.ok){ if(typeof showToast==='function') showToast('No such band','error'); return; }
+  if(typeof funds!=='undefined' && r.loot>0){
+    if(typeof normalizeFunds==='function') normalizeFunds();
+    funds.party = (funds.party||0) + r.loot;
+    if(typeof fundsLog==='function') fundsLog('party', r.loot, 'Pirate hoard seized — '+r.name);
+    if(typeof saveFunds==='function') saveFunds();
+    if(typeof fundsPanelOpen!=='undefined' && fundsPanelOpen && typeof renderFundsPanel==='function') renderFundsPanel();
+  }
+  const gs=Object.keys(r.hold||{}).filter(g=>r.hold[g]>0.5);
+  const goods=gs.map(g=>`${Math.round(r.hold[g])}kt ${g.replace('Common ','')}`).join(', ');
+  if(typeof showToast==='function') showToast(`🏴 ${r.name} wiped out — ${econMoney(r.loot)} to party funds${goods?' · seized cargo: '+goods:''}`,'success');
+  renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
+// Drop a band's rules-legal MgT2e/High Guard hull into the current combat encounter.
+function econDeployPirate(id){
+  if(typeof combatEncounter==='undefined' || !combatEncounter){ if(typeof showToast==='function') showToast('Start a ⚔ Combat encounter first, then deploy','info'); return; }
+  if(typeof addCombatShip!=='function' || typeof makeShipStats!=='function'){ if(typeof showToast==='function') showToast('Combat system unavailable','error'); return; }
+  const stats=ECON.pirateCombatStats(id); if(!stats){ if(typeof showToast==='function') showToast('No such band','error'); return; }
+  const sid=addCombatShip(makeShipStats(stats), { name:stats.name, side:'hostile', revealed:false });
+  if(sid){ if(typeof showToast==='function') showToast('☠ '+stats.name+' entered the engagement'); if(typeof renderCombat==='function') renderCombat(); }
+}
+function econBumpFactionTreasury(id,d){ const f=ECON.factions()[id]; if(!f) return; ECON.setFactionTreasury(id, Math.max(0,(f.treasury||0)+d)); renderEconPanel(); }
 
 // ── Economy editor (Design Mode · Production & Consumption) ─────────────────
 // Edits a world's prod/cons via ECON's profile-override layer, with recipe-aware
@@ -1998,6 +2714,126 @@ function econEditRevert(){
 // ── World status & black markets — referee panel. Lists the live conditions the sim derives (boom/
 //    bust/unrest/rationing) plus any black markets, each with clear/pin, and two "force" mini-forms so
 //    the referee can plant or suppress any condition at will. ──
+// ── GalNet — the galaxy news feed (cabinet reshuffles, trade wars, détente, policy shifts) ──
+function econGalNetSectionHTML(){
+  if(typeof ECON==='undefined' || !ECON.active() || typeof ECON.news!=='function') return '';
+  const news=ECON.news(); if(!news.length) return '';
+  const NICON={ cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜', pirate:'☠' };
+  let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">📡 GalNet — galaxy news <span style="color:var(--tx1);font-size:9px">— broadcast from the living galaxy</span></div>`;
+  const stdHolders = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
+  news.slice(0,10).forEach(n=>{ const col=n.fac?ECON.facColor(n.fac):'#9fb0c8';
+    const holders = (n.fac && stdHolders) ? stdHolders(n.fac) : [];
+    h+=`<div style="display:flex;gap:6px;align-items:baseline;font-size:10px;color:#cdd6e0;padding:2px 0;border-top:1px solid var(--bd0)">`;
+    h+=`<span style="color:var(--tx1);white-space:nowrap;font-size:9px">wk ${n.wk}</span>`;
+    h+=`<span style="border-left:2px solid ${col};padding-left:6px;flex:1">${NICON[n.kind]||'•'} ${escQH(n.text)}`;
+    if(n.fac && typeof standingBeginNote==='function'){
+      const note=(''+n.text).replace(/'/g,'’').replace(/"/g,'”');
+      const who = holders.length ? ` title="Affects: ${holders.map(x=>escQH(x.who)+' ('+escQH(x.label)+')').join(', ')}"` : '';
+      h+=` <button onclick="standingBeginNote('${escQH(n.fac)}','${escQH(ECON.facName?ECON.facName(n.fac):n.fac)}','${escQH(note)}')"${who} style="background:none;border:1px solid ${holders.length?'#7a5f2f':'var(--bd0)'};color:${holders.length?'#e0b978':'var(--tx1)'};border-radius:4px;padding:0 5px;font-size:9px;cursor:pointer;white-space:nowrap">🎖${holders.length?' '+holders.length:''}</button>`;
+    }
+    h+=`</span></div>`; });
+  h+=`<div style="font-size:9px;color:var(--tx1);margin-top:4px">Headlines the galaxy generates on its own — governments reshuffle, powers embargo &amp; reconcile, agendas shift. Players overhear these via the Oracle (📡 GalNet rumours). <b style="color:#e0b978">🎖</b> notes a headline into a player's private Standing (a number = players already tied to that power).</div>`;
+  h+=`</div>`;
+  return h;
+}
+// ── Factions — the major powers as strategy-game actors (treasury · income · agenda · diplomacy · statecraft) ──
+function econRelWord(v){ return v>=40?['warm','#7ec98f']:v>=0?['cordial','#9fd0b0']:v>=-30?['wary','#e0c87a']:v>=-55?['tense','#e0a24a']:['hostile','#e8776a']; }
+function econFactionsSectionHTML(){
+  if(typeof ECON==='undefined' || !ECON.active()) return '';
+  const on=ECON.factionsOn(), F=ECON.factions(), ids=ECON.factionIds().filter(id=>F[id]);
+  const AGD={ STABILISE:['🛟 Stabilise','#5fb0e0'], CONTAIN:['🛡 Contain','#e0a24a'], EXPAND:['✦ Expand','#7ec98f'], CONSOLIDATE:['◉ Consolidate','#9fb0c8'] };
+  const shocks=(ECON.state.shocks||[]).filter(s=>s && s.src==='faction');
+  const wl=ECON.worlds();
+  let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:11px;color:var(--tx1)">Factions — powers of the galaxy</span>`;
+  h+=`<button onclick="econToggleFactions()" title="Faction AI — when ON, the major powers act like a strategy-game AI: book income from their worlds, post contracts (relief / patrol / bounty / development), fund relief into their own shortages, and run diplomacy — trade embargoes &amp; tariffs against rivals, and détente when relations recover. Bounded, referee-advanced, full-sim only." style="background:${on?'#26324a':'var(--bg0)'};border:1px solid ${on?'#5f7f9d':'var(--bd0)'};color:${on?'#cfe0f2':'var(--tx1)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">◈ Faction AI · ${on?'ON':'OFF'}</button>`;
+  h+=`</div>`;
+  if(!ids.length){ h+=`<div style="font-size:10px;color:var(--tx1)">No faction state yet — step the sim.</div></div>`; return h; }
+  const CB='background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:0 5px;font-size:9px;cursor:pointer;white-space:nowrap';
+  ids.slice().sort((a,b)=>(F[b].treasury||0)-(F[a].treasury||0)).forEach(id=>{
+    const f=F[id], col=ECON.facColor(id), nm=ECON.facName(id);
+    // best & worst standing
+    let best=null,worst=null; ids.forEach(o=>{ if(o===id) return; const r=ECON.relOf(id,o);
+      if(best==null||r>ECON.relOf(id,best)) best=o; if(worst==null||r<ECON.relOf(id,worst)) worst=o; });
+    const owned=Object.keys(wl).filter(w=>wl[w].fac===id).length;
+    const agd=AGD[f.agenda]||AGD.CONSOLIDATE;
+    const myShocks=shocks.filter(s=> s.facA===id || s.faction===id);
+    h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
+    h+=`<span><span class="hx-tag" style="border-color:${col};color:${col};font-size:9px;padding:0 4px">${escQH(nm.split(' ')[0])}</span> ${escQH(nm)} <span style="color:${agd[1]};font-size:9px">${agd[0]}</span></span>`;
+    h+=`<span style="color:${(f.treasury||0)>=0?'#7ec98f':'#e8a0a0'};white-space:nowrap" title="State treasury">${econMoney(f.treasury||0)}</span></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1)">`;
+    h+=`<span>${owned} world${owned===1?'':'s'} · <span style="color:#7ec98f">+${econMoney(f.income||0)}/wk</span></span>`;
+    if(best!=null&&worst!=null){ const rb=ECON.relOf(id,best), rw=ECON.relOf(id,worst), wb=econRelWord(rb), ww=econRelWord(rw);
+      h+=`<span style="white-space:nowrap">↑<span style="color:${wb[1]}" title="Best standing (${rb})">${escQH(ECON.facName(best).split(' ')[0])}</span> · ↓<span style="color:${ww[1]}" title="Worst standing (${rw})">${escQH(ECON.facName(worst).split(' ')[0])}</span></span>`; }
+    h+=`</div>`;
+    if(myShocks.length){ h+=`<div style="font-size:9px;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">`;
+      myShocks.forEach(s=>{ const other=s.facB||s.againstFac; const lab=s.kind==='embargo'?`⛔ embargo ${ECON.facName(other).split(' ')[0]}`:`⚖ tariff ${(''+(s.good||'')).replace('Common ','')}`;
+        h+=`<span style="background:#3a1d1d;border:1px solid #7a3f3f;color:#e8b0a0;border-radius:4px;padding:0 5px" title="ends wk ${s.until}">${escQH(lab)} <button onclick="ECON.liftFactionShock('${id}','${other}');renderEconPanel()" title="Referee: lift this" style="background:none;border:none;color:#e8b0a0;cursor:pointer;padding:0">✕</button></span>`; });
+      h+=`</div>`; }
+    // Cabinet — the power's government: head of state + ministers (name · trait). Reshuffled over time; broadcast on GalNet.
+    { const cab=ECON.cabinetOf(id), head=cab.find(s=>s.post==='head');
+      if(head){ h+=`<div style="font-size:9px;color:var(--tx1);margin-top:2px">🏛 <span style="color:#cdd6e0">${escQH(head.title)}</span> <b style="color:${col}">${escQH(head.name)}</b> <span style="color:var(--tx1)">· ${escQH(head.trait)}</span></div>`;
+        h+=`<div style="font-size:9px;color:var(--tx1);margin-top:1px;display:flex;gap:4px;flex-wrap:wrap">`;
+        cab.filter(s=>s.post!=='head').forEach(s=>{ h+=`<span title="${escQH(s.title)} · ${escQH(s.trait)}${s.since?' · since wk '+s.since:''}" style="background:var(--bg0);border:1px solid var(--bd0);border-radius:4px;padding:0 4px"><span style="color:var(--tx1)">${escQH(s.title.replace('Minister of the ','').replace('Minister of ','').replace('Foreign Secretary','Foreign'))}:</span> ${escQH(s.name)}</span>`; });
+        h+=`</div>`; }
+    }
+    h+=econSparkline(f.hist,280,34);
+    h+=`<div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">`;
+    h+=`<button onclick="econBumpFactionTreasury('${id}',100000)" title="Fund the treasury (+100k)" style="${CB}">＋100k</button>`;
+    h+=`<button onclick="econBumpFactionTreasury('${id}',-100000)" title="Drain the treasury (−100k)" style="${CB}">－100k</button>`;
+    h+=`</div></div>`;
+  });
+  h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Powers book income from the worlds they hold, then spend it: posting contracts (below), funding relief into their own shortages, and running statecraft. <b style="color:#e8776a">⛔/⚖</b> = a live trade embargo or tariff a power has raised against a rival (relations-driven; self-expiring; ✕ to lift). Standing drifts toward each rivalry's baseline and tips into embargoes when it sours, détente when it recovers. Turn <b>Faction AI</b> off for static borders.</div>`;
+  h+=`</div>`;
+  return h;
+}
+// ── Pirate bands — autonomous raiders with rules-legal Traveller 2e / High Guard hulls ──
+function econPiratesSectionHTML(){
+  if(typeof ECON==='undefined' || !ECON.active() || typeof ECON.pirates!=='function') return '';
+  const on=ECON.piratesOn(), P=ECON.pirates(), wl=ECON.worlds(), SHIPS=ECON.pirateShips();
+  const bands=Object.values(P);
+  const CB='background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:0 5px;font-size:9px;cursor:pointer;white-space:nowrap';
+  const pips=(n,max,col)=>{ let s='<span style="display:inline-flex;gap:2px;vertical-align:middle">'; for(let i=0;i<max;i++) s+=`<span style="width:9px;height:6px;border-radius:1px;background:${i<n?col:'var(--bd0)'}"></span>`; return s+'</span>'; };
+  let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:11px;color:var(--tx1)">☠ Pirate bands</span>`;
+  h+=`<button onclick="econTogglePirates()" title="Pirate AI — when ON, raider bands autonomously prey on convoys near their turf, grow notorious, draw faction bounties, and get broken up by patrols. Bounded (≤2 raids/week) &amp; referee-advanced. Their ships are rules-legal MgT2e/High Guard hulls you can deploy straight into combat." style="background:${on?'#3a1d1d':'var(--bg0)'};border:1px solid ${on?'#7a3f3f':'var(--bd0)'};color:${on?'#e8b0a0':'var(--tx1)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">☠ Pirate AI · ${on?'ON':'OFF'}</button>`;
+  h+=`<button onclick="econSpawnPirate()" title="Spawn a new raider band at a lawless world" style="${CB};padding:4px 8px;font-size:10px">＋ Band</button>`;
+  h+=`</div>`;
+  const hasEnc = (typeof combatEncounter!=='undefined' && combatEncounter);
+  bands.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || ((b.noto||0)-(a.noto||0))).forEach(b=>{
+    const sh=SHIPS[b.ship]||SHIPS.corsair, base=wl[b.base]?wl[b.base].label:(b.base||'—');
+    h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)${b.defunct?';opacity:.5':''}">`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
+    h+=`<span><span class="hx-tag" style="border-color:#e8776a;color:#e8776a;font-size:9px;padding:0 4px">☠</span> ${escQH(b.name)}${b.defunct?' <span style="color:var(--tx1);font-size:9px">(broken up)</span>':''}</span>`;
+    h+=`<span style="color:#e0b978;white-space:nowrap" title="Fenced loot">${econMoney(b.loot||0)}</span></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1);margin-top:1px">`;
+    h+=`<span title="Home berth">⚓ ${escQH(base)}</span>`;
+    h+=`<span title="Strength (hulls)">${pips(b.strength||0,5,'#e8776a')} <span style="color:var(--tx1)">×${b.strength||0}</span></span></div>`;
+    h+=`<div style="font-size:9px;color:var(--tx1);margin-top:2px"><span style="color:#9fd0ff">${escQH(sh.name)}</span> — ${escQH(sh.t2e)}${sh.hg?' <span style="color:#e0b978" title="High Guard hull">◆ HG</span>':''}`;
+    h+=` · notoriety <b style="color:${(b.noto||0)>=40?'#e8776a':'#e0c87a'}">${Math.round(b.noto||0)}</b></div>`;
+    { const hold=b.hold||{}, gs=Object.keys(hold).filter(g=>hold[g]>0.5);
+      if(gs.length){ const hv=Math.round(gs.reduce((s,g)=>s+hold[g]*ECON.goodValue(g),0));
+        h+=`<div style="font-size:9px;color:#e0b978;margin-top:1px" title="Stolen cargo in the band's hold — fenced to lax-law ports over time, or seized if the players storm the base">📦 hold: ${gs.map(g=>Math.round(hold[g])+'kt '+g.replace('Common ','')).join(', ')} <span style="color:var(--tx1)">(~${econMoney(hv)})</span></div>`; }
+    }
+    if(!b.defunct){
+      h+=`<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">`;
+      h+=`<button onclick="econPirateRaid('${b.id}')" title="Resolve a raid now — plunder a convoy in reach" style="${CB}">☠ Raid now</button>`;
+      h+=`<button onclick="econDeployPirate('${b.id}')" title="${hasEnc?'Deploy this hull into the current combat encounter (a rules-legal MgT2e stat block)':'Start a ⚔ Combat encounter first, then deploy'}" style="${CB};${hasEnc?'border-color:#7a3f3f;color:#e8b0a0':''}">⚔ To combat</button>`;
+      h+=`<button onclick="econPirateBaseRaid('${b.id}')" title="Players stormed the base — seize its Cr hoard (→ party funds) + its stolen-goods hold; the band is wiped out" style="${CB};border-color:#7a5f2f;color:#e0b978">🏴 Raid base</button>`;
+      h+=`<button onclick="econPirateHull('${b.id}',1)" title="Add a hull" style="${CB}">＋hull</button>`;
+      h+=`<button onclick="econPirateHull('${b.id}',-1)" title="Lose a hull (0 = broken up)" style="${CB}">－hull</button>`;
+      h+=`<button onclick="econDisbandPirate('${b.id}')" title="Break up this band" style="${CB}">⚓ Disband</button>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  });
+  if(!bands.length) h+=`<div style="font-size:10px;color:var(--tx1)">No bands yet — the frontier is quiet. Spawn one, or let the sim form them.</div>`;
+  h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Raiders prey on convoys near their turf (≤2/week — the tuned trade balance holds), banking fenced loot and notoriety. Notoriety draws <b>faction bounties</b> (in the contracts below) and patrols that wear a band down until it's broken. <b style="color:#9fd0ff">Ships are real MgT2e / High Guard designs</b> — <b>⚔ To combat</b> drops the band's hull into a live encounter as a rules-legal stat block.</div>`;
+  h+=`</div>`;
+  return h;
+}
 function econWorldStatusSectionHTML(){
   if(typeof ECON==='undefined' || !ECON.active()) return '';
   const META=ECON.WS_META||{}, wl=ECON.worlds(), wk=ECON.state.week;
@@ -2091,7 +2927,12 @@ function renderEconPanel(){
       h+=`<div style="font-size:11px;color:#e8a0a0;margin-bottom:3px">⚠ ${disc.length} world${disc.length>1?'s':''} off the jump-lane network — economically isolated</div>`;
       h+=`<div style="font-size:10px;color:#cdd6e0;line-height:1.5">${disc.map(d=>escQH(d.label)).join(' · ')}</div>`;
       h+=`<div style="font-size:10px;color:var(--tx1);margin-top:3px">Draw jump lanes to these worlds (Design Mode) to fold them back into the economy.</div></div>`; } }
-  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Fire a disruption</div>`;
+  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  { const dOn=ECON.directorOn();
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap">`;
+    h+=`<span style="font-size:11px;color:var(--tx1)">Fire a disruption</span>`;
+    h+=`<button onclick="econToggleDirector()" title="Auto-fire events — when ON, the galaxy fires its OWN emergent disruptions between the ones you fire here: spreading unrest, monopoly backlash, boomtown crime, and occasional ambient strikes / raids / festivals. Bounded &amp; self-expiring; referee-advanced, full-sim only. Turn OFF for a galaxy that only moves when you fire a preset." style="background:${dOn?'#3a2d4a':'var(--bg0)'};border:1px solid ${dOn?'#7a5f9d':'var(--bd0)'};color:${dOn?'#e5d6f2':'var(--tx1)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;white-space:nowrap">◇ Auto-fire events · ${dOn?'ON':'OFF'}</button>`;
+    h+=`</div>`; }
   { const si='background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:5px;padding:3px 4px;font-size:11px';
     h+=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap">`;
     h+=`<span style="font-size:10px;color:var(--tx1)">Duration</span><input id="econ-shock-weeks" type="number" min="1" max="104" value="${econShockCfg.weeks}" style="${si};width:46px"><span style="font-size:10px;color:var(--tx1)">wks</span>`;
@@ -2102,7 +2943,8 @@ function renderEconPanel(){
   ECON.PRESETS.forEach(p=> h+=btn('⚡ '+p.label, `econFireById('${p.id}')`) );
   if(st.shocks.length){ h+=`<div style="font-size:11px;color:var(--tx1);margin:6px 0 3px">Active shocks</div>`;
     st.shocks.forEach((s,i)=>{ const ttl=(s.until!=null)?` · ends wk ${s.until}`:'';
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
+      const auto=(s.src==='director')?` <span style="color:#c9a9e0;font-size:9px" title="Auto-fired by the event director — cancel it like any shock">◇ auto</span>`:'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${auto}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
   h+=`</div>`;
   // Cargo run — players move the marginal price by hauling goods world→world
   { const wopts = Object.values(ECON.worlds()).sort((a,b)=>a.label.localeCompare(b.label));
@@ -2186,6 +3028,9 @@ function renderEconPanel(){
       h+=`</div>`;
     }
   }
+  h+=econGalNetSectionHTML();        // GalNet news feed — cabinet reshuffles, trade wars, détente, policy shifts
+  h+=econFactionsSectionHTML();      // major powers — treasury, income, agenda, diplomacy & statecraft, with referee overrides
+  h+=econPiratesSectionHTML();       // pirate bands — bases, strength, notoriety, T2e hulls, raid/deploy-to-combat controls
   h+=econWorldStatusSectionHTML();   // world conditions (boom/bust/unrest/rationing) + black markets, with referee force/pin/clear
   // Corporate contracts — jobs the houses would pay players for. The referee DRAFTS one into a
   // concrete contract, then posts it to the Quest Log (players track it) or leaks it to Library Data.
@@ -2194,11 +3039,14 @@ function renderEconPanel(){
       const CICON={ escort:'🛡', haul:'📦', bounty:'🎯', sabotage:'⚔', espionage:'🕵', smuggle:'🕯' };
       h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
       h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Corporate contracts <span style="color:var(--tx1);font-size:9px">— ${evs.length} on offer</span></div>`;
+      const stdH = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
       evs.slice().reverse().forEach((ev)=>{ const i=evs.indexOf(ev); const it=ECON.contractItem(ev); if(!it) return;
-        const col=it.color||'#9fd0ff', drafted=econDraftSel&&econDraftSel.i===i;
-        const summ = it.contract==='sabotage'||it.contract==='espionage' ? `vs ${escQH(it.targetName||'a rival')}`
+        const col=it.color||'#9fd0ff', drafted=econDraftSel&&econDraftSel.src==='corp'&&econDraftSel.i===i;
+        const held = (stdH && it.corp) ? stdH(it.corp) : [];
+        const summ = (it.contract==='sabotage'||it.contract==='espionage' ? `vs ${escQH(it.targetName||'a rival')}`
                    : it.contract==='haul' ? `→ ${escQH(it.place||'?')}`
-                   : (it.vessel?`${escQH(it.vessel)}`:'') ;
+                   : (it.vessel?`${escQH(it.vessel)}`:'') )
+                   + (held.length?` <span title="Players with standing here" style="color:#e0b978">🎖 ${held.map(x=>escQH(x.who.split(' ')[0])).join(', ')}</span>`:'');
         h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
         h+=`<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#cdd6e0">`;
         h+=`<span>${CICON[it.contract]||'•'} <span style="color:${col}">${escQH(it.label)}</span> <span style="color:var(--tx1);font-size:10px">${it.contract}${summ?' · '+summ:''}</span></span>`;
@@ -2212,12 +3060,49 @@ function renderEconPanel(){
           h+=`<button onclick="econContractToQuest()" style="background:#1d3a4a;border:1px solid #3a6f9d;color:#bfe3ea;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Quest Log</button>`;
           h+=`<button onclick="econContractToLibrary()" style="background:none;border:1px solid #6a5a2a;color:#e0c87a;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Library Data</button>`;
           h+=`<button onclick="econRerollContract()" title="Re-roll the wording" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">⟳ Re-roll</button>`;
+          h+=`<button onclick="econNoteContractPatron()" title="Note this patron in a player's private Standing" style="background:none;border:1px solid #7a5f2f;color:#e0b978;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">🎖 Patron</button>`;
           h+=`<span id="econ-contract-note" style="font-size:9px;color:#7ec98f;align-self:center"></span></div>`;
           h+=`</div>`;
         }
         h+=`</div>`;
       });
       h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Flagged from live corp activity — valuable convoys want escorts, raided houses post bounties, rivals pay for sabotage &amp; espionage (often against OmniSynth). Sabotage/bounty resolve with the ⚔ raid button on the target convoy.</div>`;
+      h+=`</div>`;
+    }
+  }
+  // Faction contracts — jobs the STATES post (relief / patrol / bounty / development). Same draft pipeline.
+  { const evs=(typeof ECON.factionEvents==='function')?ECON.factionEvents():[];
+    if(evs.length){
+      const FICON={ relief:'🌾', patrol:'🛰', bounty:'🎯', development:'🏗', escort:'🛡' };
+      h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+      h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Faction contracts <span style="color:var(--tx1);font-size:9px">— ${evs.length} on offer · posted by the powers</span></div>`;
+      const stdHF = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
+      evs.slice().reverse().forEach((ev)=>{ const i=evs.indexOf(ev); const it=ECON.factionContractItem(ev); if(!it) return;
+        const col=it.color||'#9fb0c8', drafted=econDraftSel&&econDraftSel.src==='faction'&&econDraftSel.i===i;
+        const held = (stdHF && it.faction) ? stdHF(it.faction) : [];
+        const summ = (it.contract==='relief'||it.contract==='bounty'||it.contract==='development' ? `${escQH(it.place||'?')}${it.good?' · '+(''+it.good).replace('Common ',''):''}`
+                   : it.contract==='patrol' ? `${escQH(it.toLabel||'?')}` : '')
+                   + (held.length?` <span title="Players with standing here" style="color:#e0b978">🎖 ${held.map(x=>escQH(x.who.split(' ')[0])).join(', ')}</span>`:'');
+        h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
+        h+=`<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#cdd6e0">`;
+        h+=`<span>${FICON[it.contract]||'•'} <span style="color:${col}">${escQH(it.label)}</span> <span style="color:var(--tx1);font-size:10px">${it.contract}${summ?' · '+summ:''}</span></span>`;
+        h+=`<span style="white-space:nowrap"><span style="color:#f4d35e">${econMoney(it.reward)}</span> <button onclick="econDraftFactionContract(${i})" style="background:none;border:1px solid #3a5f8a;color:#9fd0ff;border-radius:5px;padding:0 6px;font-size:10px;cursor:pointer">✍ Draft</button> <button onclick="econDismissFactionContract(${i})" title="Dismiss" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:0 5px;font-size:10px;cursor:pointer">✕</button></span></div>`;
+        if(drafted){ const d=econDraftSel.contract;
+          h+=`<div style="background:var(--bg0);border:1px solid var(--bd0);border-radius:6px;padding:7px 8px;margin:4px 0 6px">`;
+          h+=`<div style="font-size:11px;color:var(--tx0);font-weight:600;margin-bottom:3px">${escQH(d.title)}</div>`;
+          h+=`<div style="font-size:11px;color:#cdd6e0;line-height:1.45;margin-bottom:4px">${escQH(d.brief)}</div>`;
+          h+=`<div style="font-size:10px;color:var(--tx1);margin-bottom:5px">Reward ${econMoney(d.reward)} · ${escQH(d.refNote)}</div>`;
+          h+=`<div style="display:flex;gap:5px;flex-wrap:wrap">`;
+          h+=`<button onclick="econContractToQuest()" style="background:#1d3a4a;border:1px solid #3a6f9d;color:#bfe3ea;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Quest Log</button>`;
+          h+=`<button onclick="econContractToLibrary()" style="background:none;border:1px solid #6a5a2a;color:#e0c87a;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Library Data</button>`;
+          h+=`<button onclick="econRerollContract()" title="Re-roll the wording" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">⟳ Re-roll</button>`;
+          h+=`<button onclick="econNoteContractPatron()" title="Note this patron in a player's private Standing" style="background:none;border:1px solid #7a5f2f;color:#e0b978;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">🎖 Patron</button>`;
+          h+=`<span id="econ-contract-note" style="font-size:9px;color:#7ec98f;align-self:center"></span></div>`;
+          h+=`</div>`;
+        }
+        h+=`</div>`;
+      });
+      h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Posted by the faction AI from live conditions in each power's space — relief runs into shortages, lane patrols for inbound convoys, bounties on raiders, and development charters when a power is flush. Draft one to the Quest Log exactly like a corp job.</div>`;
       h+=`</div>`;
     }
   }
