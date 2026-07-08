@@ -227,11 +227,11 @@ window.ECON = (function(){
     }); }); }
     Object.keys(worlds).forEach(id=>{
       const n = nodeOf(id);
-      // Trade graph follows the JUMP-LANE network (n.connections = the live GX_LANES
-      // overlay). Worlds with no jump lane are economically isolated BY DESIGN — see
-      // ECON.disconnected(); draw jump lanes to reconnect them (ECON.syncLanes picks
-      // up edits live). NB the jump-lane net is sparser than the old lore graph.
-      (((n&&n.connections))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
+      // Trade graph = the ECONOMY lane set (_econLinks): the authored jump network + the referee's
+      // lane edits, DECOUPLED from what the map renders (the map shows only referee-drawn lanes, but
+      // trade always has routes). Falls back to n.connections if the galaxy engine hasn't populated
+      // _econLinks (e.g. the headless harness, which loads data-only). ECON.syncLanes picks up edits.
+      (((n && (n._econLinks || n.connections)))||[]).forEach(c=>{ if(worlds[c] && adj[id].indexOf(c)<0){ adj[id].push(c); if(adj[c]&&adj[c].indexOf(id)<0) adj[c].push(id); } });
     });
   }
 

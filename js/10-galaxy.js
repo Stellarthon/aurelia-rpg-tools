@@ -254,15 +254,15 @@ const GX_LANES = new Set();
 function gxLaneKey(a,b){ return a < b ? a+'|'+b : b+'|'+a; }
 let gxLaneAdditions = [];   // canonical lane keys added beyond the base data
 let gxLaneDeletions = [];   // canonical lane keys removed from the base data
-// DEFAULT LANE NETWORK ON. The expanded galaxy (~180 systems) is far too large to
-// hand-wire, so each node's authored `connections` seed the base jump-lane network;
-// the referee's Design-Mode additions/deletions (persisted in Supabase) still layer
-// on top (GX_LANES = base ∪ additions − deletions). Captured from _loreLinks (the
-// authored-connections snapshot) before gxRebuildLanes overwrites `connections`.
-GALAXY_NODES.forEach(s => { s._baseConnections = Array.isArray(s._loreLinks) ? s._loreLinks.slice() : (Array.isArray(s.connections) ? s.connections.slice() : []); });
+// RENDERED lanes = REFEREE-drawn only. The map shows exactly the jump lanes the referee draws in
+// Design Mode (gxLaneAdditions, persisted); the authored `connections` are NOT rendered (the base
+// network is off). The ECONOMY trade graph is DECOUPLED from the rendered lanes (see _econLinks
+// below): it always routes on the full authored network + the referee's edits, so a ~180-system
+// galaxy trades out of the box even with a clean, referee-authored lane map.
+GALAXY_NODES.forEach(s => { s._baseConnections = []; });
 function gxRebuildLanes(){
   GX_LANES.clear();
-  GALAXY_NODES.forEach(s => (s._baseConnections||[]).forEach(cid => {
+  GALAXY_NODES.forEach(s => (s._baseConnections||[]).forEach(cid => {   // empty by default → rendered lanes are referee-only
     if(GX_MAP[cid] && cid !== s.id) GX_LANES.add(gxLaneKey(s.id, cid));
   }));
   gxLaneDeletions.forEach(k => GX_LANES.delete(k));
@@ -270,8 +270,8 @@ function gxRebuildLanes(){
     const [a,b] = k.split('|');
     if(GX_MAP[a] && GX_MAP[b] && a !== b) GX_LANES.add(k);
   });
-  // Rebuild every node's connections array from the effective set so the detail
-  // panel's count + connection list stay in sync with the drawn lanes.
+  // Rebuild every node's connections array from the RENDERED set so the detail panel's connection
+  // list matches the drawn lanes.
   const adj = {};
   GALAXY_NODES.forEach(s => adj[s.id] = []);
   GX_LANES.forEach(k => {
@@ -280,6 +280,16 @@ function gxRebuildLanes(){
     if(adj[b] && !adj[b].includes(a)) adj[b].push(a);
   });
   GALAXY_NODES.forEach(s => s.connections = adj[s.id]);
+  // ECONOMY graph — authored network (_loreLinks) + referee lane edits, INVISIBLE on the map. Trade
+  // always has routes regardless of which lanes the referee chose to draw; a referee lane deletion
+  // reroutes trade, an addition opens a new trade route. Read by ECON.buildTopology (js/90).
+  const eset = new Set();
+  GALAXY_NODES.forEach(s => (s._loreLinks||[]).forEach(cid => { if(GX_MAP[cid] && cid!==s.id) eset.add(gxLaneKey(s.id, cid)); }));
+  gxLaneDeletions.forEach(k => eset.delete(k));
+  gxLaneAdditions.forEach(k => { const [a,b]=k.split('|'); if(GX_MAP[a]&&GX_MAP[b]&&a!==b) eset.add(k); });
+  const eadj = {}; GALAXY_NODES.forEach(s => eadj[s.id] = []);
+  eset.forEach(k => { const [a,b]=k.split('|'); if(eadj[a]&&!eadj[a].includes(b)) eadj[a].push(b); if(eadj[b]&&!eadj[b].includes(a)) eadj[b].push(a); });
+  GALAXY_NODES.forEach(s => s._econLinks = eadj[s.id]);
 }
 gxRebuildLanes();
 
@@ -412,7 +422,7 @@ function rebuildSystemsFromOverlay(){
   GALAXY_NODES.forEach(n => { n._loreLinks = Array.isArray(n.connections) ? n.connections.slice() : []; });
   Object.keys(GX_MAP).forEach(k => delete GX_MAP[k]);
   GALAXY_NODES.forEach(s => GX_MAP[s.id] = s);
-  GALAXY_NODES.forEach(s => { s._baseConnections = Array.isArray(s._loreLinks) ? s._loreLinks.slice() : (Array.isArray(s.connections) ? s.connections.slice() : []); });   // default lane network on (see init path)
+  GALAXY_NODES.forEach(s => { s._baseConnections = []; });   // rendered lanes = referee-drawn only (economy uses _econLinks; see init path)
   // 3. Register any newly-added system as a drillable (empty) system
   GALAXY_NODES.forEach(n => {
     const sid = n.systemId || n.id;
@@ -907,15 +917,27 @@ const HX = (function(){
     star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[],
     pc:pcOf(n.name), deep:isDeep(n), campaign:true, q:null, r:null }));
   const occupied=new Set();
-  function clusterFaction(fac){ const a=FACTION_ANCHOR[fac]||[0,0], sp=spiral(a[0],a[1],9);
-    const members=SYS.filter(x=>x.fac===fac).sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc));
-    let i=0; members.forEach(m=>{ while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
-      const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; i++; }); }
+  // Spread placement: stars in a territory sit ≥ HEX_SPACING hexes apart, so a faction reads as a
+  // scattered REGION of systems with space between them — not a solid blob of adjacent stars.
+  const HEX_SPACING=2;
+  const hDist=(x,y)=>(Math.abs(x.q-y.q)+Math.abs(x.q+x.r-y.q-y.r)+Math.abs(x.r-y.r))/2;
+  function placeSpread(members, anchor, maxR){
+    const sp=spiral(anchor[0],anchor[1],maxR), placed=[];
+    members.forEach(m=>{
+      let h=null;
+      for(let i=0;i<sp.length;i++){ const c=sp[i]; if(occupied.has(c.q+','+c.r)) continue;   // pass 1: honour spacing
+        if(placed.some(p=>hDist(p,c)<HEX_SPACING)) continue; h=c; break; }
+      if(!h) for(let i=0;i<sp.length;i++){ const c=sp[i]; if(!occupied.has(c.q+','+c.r)){ h=c; break; } }  // pass 2: any free cell
+      h=h||{q:anchor[0],r:anchor[1]};
+      occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; placed.push(h);
+    });
+  }
+  function clusterFaction(fac){ placeSpread(SYS.filter(x=>x.fac===fac).sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc)), FACTION_ANCHOR[fac]||[0,0], 18); }
   FAC_ORDER.forEach(clusterFaction);
-  SYS.filter(x=>x.fac==='independent').sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc)).forEach((m,idx)=>{
-    const a=IND_POCKETS[idx%IND_POCKETS.length], sp=spiral(a[0],a[1],3);
-    let i=0; while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
-    const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; });
+  // Independents scatter across their pockets (round-robin), spread within each pocket.
+  { const inds=SYS.filter(x=>x.fac==='independent').sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc));
+    const pockets={}; inds.forEach((m,idx)=>{ (pockets[idx%IND_POCKETS.length]=pockets[idx%IND_POCKETS.length]||[]).push(m); });
+    Object.keys(pockets).forEach(k=> placeSpread(pockets[k], IND_POCKETS[k], 7)); }
   const sp0=spiral(0,0,42); let _j=0;
   SYS.filter(x=>x.q==null).forEach(m=>{ while(_j<sp0.length&&occupied.has(sp0[_j].q+','+sp0[_j].r))_j++;
     const h=sp0[_j]||{q:0,r:0}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; _j++; });
@@ -1166,7 +1188,7 @@ const HX = (function(){
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
   let paintMode=false, paintColor='#4aa3ff'; // referee territory brush: armed while tapping hexes to paint/erase them
-  const RPX=26, LABEL_ZOOM_F=1.3;
+  const RPX=26, LABEL_ZOOM_F=1.3, LOD_DETAIL_Z=1.25;   // below LOD_DETAIL_Z (× fit) = overview LOD: cull backdrop grid + labels
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
     fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
@@ -1265,6 +1287,14 @@ const HX = (function(){
     svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible());
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
+    // ── Level-of-detail + viewport culling (keeps the ~180-system map smooth) ──
+    // z = zoom relative to fit (1 = whole galaxy on screen). At overview zoom we skip the empty
+    // backdrop grid and per-star labels; at any zoom we draw only stars/lanes inside the viewport.
+    const z = view.scale/(fitScale||view.scale||1);
+    const lodOverview = z < LOD_DETAIL_Z;                 // zoomed out enough that the whole arm shows
+    const showLbl = labelsVisible();
+    const _vw = visibleHexRange(3);                       // visible q,r window (null pre-fit → draw all)
+    const inView = s => !_vw || (s.q>=_vw.minQ && s.q<=_vw.maxQ && s.r>=_vw.minR && s.r<=_vw.maxR);
     if(showTerr){ const tg=NS('g',{'pointer-events':'none'}); g.appendChild(tg);
       const painted=(typeof hexPaint!=='undefined'&&hexPaint)?hexPaint:{};
       const byFac={};
@@ -1297,9 +1327,11 @@ const HX = (function(){
     const gr=gridRange(1,{minQ,maxQ,minR,maxR});   // tile the visible viewport (infinite/pannable), not a fixed box
     const hexLayer=NS('g',{}); g.appendChild(hexLayer);
     for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
-      const cell={q,r}, dist=hexDist(cell,origin), p=axialPx(q,r); let cls='hx-hex';
-      if(range){ if(range.reach.has(q+','+r)) cls+=' fuelreach'; }
-      else if(dist>=1&&dist<=jumpRating) cls+= dist===1?' reach reach1':' reach';
+      const cell={q,r}, dist=hexDist(cell,origin); let cls='hx-hex', hl=false;
+      if(range){ if(range.reach.has(q+','+r)){ cls+=' fuelreach'; hl=true; } }
+      else if(dist>=1&&dist<=jumpRating){ cls+= dist===1?' reach reach1':' reach'; hl=true; }
+      if(lodOverview && !hl) continue;   // overview: drop the empty backdrop grid; keep only the reach/fuel highlights
+      const p=axialPx(q,r);
       hexLayer.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),class:cls})); }
     const op=axialPx(origin.q,origin.r);
     [5,10,15].forEach(h=>{ g.appendChild(NS('circle',{cx:op.x,cy:op.y,r:h*Math.sqrt(3)*RPX,class:'hx-ring'}));
@@ -1311,7 +1343,8 @@ const HX = (function(){
     if(showTrade && tradeGoods.size===1){ try{ drawPriceHeat(g); }catch(e){} }
     if(showLanes){ const editing=(typeof designModeOn!=='undefined'&&designModeOn&&ref());
       const laneLayer=NS('g',{}); g.appendChild(laneLayer);
-      laneEdges().forEach(L=>{ const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
+      laneEdges().forEach(L=>{ if(!inView(L.a)&&!inView(L.b)) return;   // cull lanes fully off-screen
+        const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
         const flyable=L.len<=jumpRating||onLane(L.a,L.b), touches=(L.a===origin||L.b===origin);
         const line=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-lane'});
         if(flyable){ line.setAttribute('stroke-dasharray','none'); line.setAttribute('opacity',touches?'0.95':'0.5'); }
@@ -1370,7 +1403,8 @@ const HX = (function(){
         const lbl=NS('text',{x:dp.x,y:dp.y-13,'text-anchor':'middle',class:'hx-bestrun-lbl'});
         lbl.textContent=`★ ${gShort(br.good)} +${kCr(br.perTon)}/t`; bl.appendChild(lbl); }
     }catch(e){} }
-    SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
+    SYS.forEach(s=>{ if(!inView(s) && s!==origin && s!==selected) return;   // cull off-screen stars (keep origin + selection)
+      const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
         if(fa==='none') ring.setAttribute('stroke-dasharray','2,2'); g.appendChild(ring); }
@@ -1388,8 +1422,9 @@ const HX = (function(){
       if(isSel&&!isOrigin){ marker.setAttribute('stroke','#fff'); marker.setAttribute('stroke-width','1.5'); }
       if(!inRange) marker.setAttribute('opacity','0.3'); marker.style.cursor='pointer';
       g.appendChild(marker);
-      const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
-      if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
+      if(showLbl || isOrigin || isSel){                                  // overview LOD: only pinned/selected labels (was CSS-hidden anyway)
+        const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
+        if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl); }
       // Finger-friendly tap target: the visible star is only ~8px across — far below a
       // usable touch target — so overlay a larger transparent hit circle that carries the
       // tap (and the hover-label). Sits on top so a tap near a star still selects it.
