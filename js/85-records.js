@@ -2494,7 +2494,7 @@ async function whisperSetResolved(id, resolved){
 // get-content returns each identity only their own; the row is excluded from public
 // reads) with no new backend. Latest entry per (player, org) wins; a {removed:true}
 // entry is a tombstone. Never shown on the table TV.
-let standingPanelOpen = false, standingCollapsed = false, standingRefSel = null;
+let standingPanelOpen = false, standingCollapsed = false, standingRefSel = null, standingPrefill = null;
 const STD_LEVELS = [ ['Hostile','#e8776a'], ['Wary','#e0a24a'], ['Neutral','#c9b98a'], ['Friendly','#9fd0b0'], ['Allied','#7ec98f'] ];
 function stdClampLevel(l){ l = l|0; return l<0?0:(l>4?4:l); }
 function stdOrgColor(org){
@@ -2542,7 +2542,7 @@ function toggleStandingPanel(){
   if(w) w.classList.toggle('hidden', !standingPanelOpen);
   if(b) b.classList.toggle('panel-open', standingPanelOpen);
   if(standingPanelOpen){ renderStandingPanel(); if(typeof pollWhispers === 'function') pollWhispers(); }
-  else updateStandingBadge();
+  else { standingPrefill = null; updateStandingBadge(); }
 }
 function toggleStandingCollapse(){
   const h = document.getElementById('standing-header'); if(h && h.dataset.suppressClick === '1') return;
@@ -2618,20 +2618,43 @@ function standingRefForm(who){
   const skip = { uncharted:1, contested:1 };
   const facs = (typeof GALAXY_FACTIONS !== 'undefined') ? Object.keys(GALAXY_FACTIONS).filter(k => !skip[k]) : [];
   let corps = []; try { if(window.ECON && ECON.corps) corps = Object.values(ECON.corps()).filter(c => !c.defunct).map(c => ({ id:c.id, name:c.name })); } catch(e){}
-  const opts = facs.map(k => `<option value="${escQH(k)}">${escQH(GALAXY_FACTIONS[k].name)}</option>`).join('')
-    + corps.map(c => `<option value="${escQH(c.id)}">${escQH(c.name)} (corp)</option>`).join('')
-    + `<option value="__custom">Other (type below)…</option>`;
-  const lvls = STD_LEVELS.map((l,i) => `<option value="${i}"${i===2?' selected':''}>${l[0]}</option>`).join('');
+  // A prefill (from a GalNet headline / a drafted contract) seeds the org + note.
+  const pf = standingPrefill || {};
+  const knownOrg = pf.org && (facs.indexOf(pf.org) >= 0 || corps.some(c => c.id === pf.org));
+  const sel = v => (pf.org === v && knownOrg) ? ' selected' : '';
+  const opts = facs.map(k => `<option value="${escQH(k)}"${sel(k)}>${escQH(GALAXY_FACTIONS[k].name)}</option>`).join('')
+    + corps.map(c => `<option value="${escQH(c.id)}"${sel(c.id)}>${escQH(c.name)} (corp)</option>`).join('')
+    + `<option value="__custom"${pf.org && !knownOrg ? ' selected' : ''}>Other (type below)…</option>`;
+  const lvls = STD_LEVELS.map((l,i) => `<option value="${i}"${i===(pf.level!=null?stdClampLevel(pf.level):2)?' selected':''}>${l[0]}</option>`).join('');
+  const customVal = (pf.org && !knownOrg) ? escQH(pf.org) : '';
   return `<div class="std-ref-form" style="margin-top:6px;border-top:.5px dashed var(--bd0);padding-top:6px;display:flex;flex-direction:column;gap:4px">`
+    + (pf.org ? `<div style="font-size:9px;color:#e0b978">Noting from the galaxy — review &amp; set the level, then Set.</div>` : '')
     + `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center"><select id="std-org" onchange="standingOrgCustomToggle()">${opts}</select>`
-    + `<input id="std-org-custom" placeholder="Custom org" style="display:none;flex:1">`
+    + `<input id="std-org-custom" placeholder="Custom org" value="${customVal}" style="display:${pf.org && !knownOrg ? '' : 'none'};flex:1">`
     + `<select id="std-level">${lvls}</select></div>`
-    + `<input id="std-label" placeholder="Custom label (optional, e.g. “Wanted”, “Sympathizer”)">`
-    + `<textarea id="std-note" placeholder="Backstory hook — why they stand this way (private to the player)"></textarea>`
+    + `<input id="std-label" value="${pf.label ? escQH(pf.label) : ''}" placeholder="Custom label (optional, e.g. “Wanted”, “Sympathizer”)">`
+    + `<textarea id="std-note" placeholder="Backstory hook — why they stand this way (private to the player)">${pf.note ? escQH(pf.note) : ''}</textarea>`
     + `<button onclick="standingSave('${escQH(who)}')" style="align-self:flex-start;background:#3a3020;border:1px solid #7a5f2f;color:#e0c890;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">🎖 Set standing</button>`
     + `</div>`;
 }
 function standingRefPick(who){ standingRefSel = (standingRefSel === who) ? null : who; renderStandingPanel(); }
+// Referee-side: which players currently hold a standing with `org` → [{who,label,level,note}].
+function standingHoldersFor(org){
+  return parseStandings().filter(e => e.org === org && !e.removed)
+    .map(e => ({ who:e._who, level:e.level|0, label:e.label || STD_LEVELS[stdClampLevel(e.level)][0], note:e.note||'' }));
+}
+// Begin noting a standing from a living-galaxy event (a GalNet headline, a drafted contract).
+// Opens the Standing panel with the org + note pre-filled; the referee picks the player & level.
+function standingBeginNote(org, orgLabel, note, label){
+  if(!isReferee()) return;
+  standingPrefill = { org: org||'', orgLabel: orgLabel || stdOrgLabel(org), note: note||'', label: label||'' };
+  const holders = [...new Set(standingHoldersFor(org).map(h => h.who))];
+  const roster = (typeof securePlayers !== 'undefined' && Array.isArray(securePlayers)) ? securePlayers.filter(p => p && p.role !== 'referee') : [];
+  if(holders.length === 1) standingRefSel = holders[0];                 // exactly one prior holder → jump to them
+  else if(!standingRefSel && roster.length === 1) standingRefSel = roster[0].identity;
+  if(!standingPanelOpen){ toggleStandingPanel(); } else renderStandingPanel();
+  if(typeof showToast === 'function') showToast(standingRefSel ? '🎖 Review & set the standing.' : '🎖 Pick a player to note this for.');
+}
 function standingOrgCustomToggle(){ const s = document.getElementById('std-org'), c = document.getElementById('std-org-custom'); if(s && c) c.style.display = (s.value === '__custom') ? '' : 'none'; }
 async function standingSave(who){
   const s = document.getElementById('std-org'), custom = document.getElementById('std-org-custom');
@@ -2643,7 +2666,7 @@ async function standingSave(who){
   const note = ((document.getElementById('std-note')||{}).value||'').trim();
   const entry = { org, orgLabel, level, label, note };
   const r = await supaStorage.sendWhisper({ text: STANDING_TAG + JSON.stringify(entry), to: who });
-  if(r && r.ok){ if(typeof showToast==='function') showToast('🎖 Standing set for ' + who); standingRefSel = who;
+  if(r && r.ok){ if(typeof showToast==='function') showToast('🎖 Standing set for ' + who); standingRefSel = who; standingPrefill = null;
     if(typeof pollWhispers === 'function') await pollWhispers(); renderStandingPanel();
   } else if(typeof showToast==='function') showToast('Could not set standing — check the connection.', 'error');
 }
