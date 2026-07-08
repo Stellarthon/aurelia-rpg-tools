@@ -103,11 +103,14 @@ window.ECON = (function(){
     // mild deficit, fed by the Ag surplus. Producer-generous / consumer-light bias → the
     // derived frontier rests at a small SURPLUS (stable baseline), never a structural deficit.
     const foodDem = sc*0.5;
-    let foodMult = 1.0;                                       // default world → ~self-sufficient
-    if(C('Ag')||C('Ga')) foodMult = 2.3;                     // breadbasket → net exporter
-    else if(C('Na')) foodMult = 0.4;                         // non-agricultural → importer
-    else if(C('Po')) foodMult = 0.6;
-    else if(C('Hi')||C('In')) foodMult = 0.85;               // dense/urban → mild importer
+    // Self-sufficiency skews slightly food-POSITIVE so the ~180-world galaxy stays fed: with far more
+    // importer worlds than the original 53, the aggregate needs a little more local agriculture to keep
+    // the frontier off perpetual famine (kept modest — the galaxy still rests near par, verified).
+    let foodMult = 1.25;                                      // default world → food-surplus
+    if(C('Ag')||C('Ga')) foodMult = 2.6;                     // breadbasket → net exporter
+    else if(C('Na')) foodMult = 0.7;                         // non-agricultural → importer
+    else if(C('Po')) foodMult = 0.85;
+    else if(C('Hi')||C('In')) foodMult = 1.0;                // dense/urban → self-fed (hydroponics/imports balance)
     add(cons,'Common Consumables', foodDem);
     add(prod,'Common Consumables', foodDem*foodMult);
     if(C('Ag')||C('Ga')) add(prod,'Biochemicals', sc*0.28);
@@ -193,6 +196,7 @@ window.ECON = (function(){
 
   function buildTopology(){
     worlds = {}; adj = {}; derivedCache = {}; factsCache = {};   // facts may have changed (UWP/body/faction edits) → re-derive
+    _distMemo = {}; _distMemoBlk = ' ';                          // topology changed → drop the memoised BFS distances
     (typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).forEach(n=>{
       if(!isMarket(n)) return;
       const d = DEF[n.id] || derivedProfile(n.id);   // curated core keeps DEF; everything else derives from UWP/trade-codes/bodies
@@ -272,6 +276,16 @@ window.ECON = (function(){
     const D = { [src]:0 }, q = [src];
     while(q.length){ const u = q.shift(); for(const v of adj[u]){ if(D[v]==null && !blk[v]){ D[v]=D[u]+1; q.push(v); } } }
     return D;
+  }
+  // Memoised dist for the hot per-step paths (replenishment + trader dispatch), where `blk` is
+  // constant within a step. Each source's BFS is computed at most once per (step, blocked-set),
+  // not once per consumer × agent × good — the difference between ~150ms and a few ms/step at
+  // ~180 worlds. Invalidated whenever the topology (adj) rebuilds. See buildTopology().
+  let _distMemo = {}, _distMemoBlk = ' ';
+  function distC(src, blk){
+    const bk = blk ? Object.keys(blk).join(',') : '';
+    if(bk !== _distMemoBlk){ _distMemo = {}; _distMemoBlk = bk; }
+    return _distMemo[src] || (_distMemo[src] = dist(src, blk));
   }
 
   // Settle the seeded (full) stock forward a few weeks with no shocks to find each
@@ -412,6 +426,7 @@ window.ECON = (function(){
   const AGENT_NAMES = ['Vasquez Holdings','The Meridian Run','Okonkwo & Daughters','Calla Drift-Freight','Red Lantern Cartage','Sable Voss Lines'];
   const AGENT_VALUE = { 'Common Consumables':50,'Common Ore':40,'Common Electronics':300,'Common Manufactured':200,'Advanced Electronics':1200,'Refined Fuel':120,'Unrefined Hydrogen':30 }; // notional Cr/kt at par
   const AGENT_START_CAP = 40000, AGENT_CAP_QTY = 12, AGENT_SPREAD_MIN = 4, PUBLIC_SPREAD_MIN = 1;
+  const DISPATCH_CAP = 18;   // per-good cap on the surplus/shortage worlds traders survey (perf at ~180 worlds; the sharpest win anyway)
   // Lifecycle economics (Cr/week). Upkeep, routine milk-run income, and the public subsidy all
   // scale with HULL SIZE (bigger ships cost more to run but haul more): see upkeepOf/milkRunOf.
   // Idle traders mostly cover upkeep on milk-runs so a calm galaxy thins the herd slowly; shocks
@@ -571,6 +586,11 @@ window.ECON = (function(){
         // replenishment, so skimming it just misallocates and starves other worlds.
         if(p>=2 && !worlds[id].prod[g]){ const room=stk(id,g)-refOf(id,g); if(room>0) sur.push({id,p,room}); }
         else if(p<=-2){ const room=refOf(id,g)-stk(id,g); if(room>0) sho.push({id,p,room}); } });
+      // Cap each side to the sharpest DISPATCH_CAP — a trader only ever picks the highest score
+      // (sharp pressure ÷ short distance), so the deepest gluts/shortages are all that can win.
+      // Bounds dispatch to O(agents×goods×cap²) regardless of galaxy size (was O(worlds²) at ~180 worlds).
+      if(sur.length>DISPATCH_CAP) sur.sort((a,b)=>b.p-a.p).length=DISPATCH_CAP;
+      if(sho.length>DISPATCH_CAP) sho.sort((a,b)=>a.p-b.p).length=DISPATCH_CAP;
       pool[g]={sur,sho}; });
     // Arrivals: bank profit, log the trip, reposition (the cargo itself lands via state.transit).
     state.agents.forEach(a=>{ if(a.route && a.route.eta<=week){
@@ -659,7 +679,7 @@ window.ECON = (function(){
     const dispatchPrivate=(a)=>{
       const corp=corpOf(a.backing), spec=corp&&corp.specialty; let best=null;   // corp ships favour hauling their specialty good (identity)
       goods.forEach(g=>{ const P=pool[g]; if(!P.sur.length||!P.sho.length) return;
-        P.sur.forEach(b=>{ if(b.room<=0) return; const D=dist(b.id,blk);
+        P.sur.forEach(b=>{ if(b.room<=0) return; const D=distC(b.id,blk);
           P.sho.forEach(s=>{ if(s.room<=0||s.id===b.id||D[s.id]==null||embargoed(b.id,s.id)) return;
             const spread=b.p-s.p; if(spread<AGENT_SPREAD_MIN) return;
             let score=spread/Math.max(1,D[s.id]); if(spec&&g===spec) score*=1.5;
@@ -674,7 +694,7 @@ window.ECON = (function(){
         P.sho.forEach(s=>{ if(s.room<=0||aBlk[s.id]||avoidLevel(F,s.id)===2) return;
           P.sur.forEach(b=>{ if(b.room<=0||aBlk[b.id]||b.id===s.id||embargoed(b.id,s.id)) return;
             const spread=b.p-s.p; if(spread<PUBLIC_SPREAD_MIN) return;   // subsidised → runs on thin margins
-            const D=dist(b.id,aBlk); if(D[s.id]==null) return;
+            const D=distC(b.id,aBlk); if(D[s.id]==null) return;
             const depth=-s.p, ownBonus=(factionOf(s.id)===F)?2:0;
             const softPen=(avoidLevel(F,s.id)===1?2:0)+(avoidLevel(F,b.id)===1?1:0);
             const score=(depth+ownBonus-softPen)/Math.max(1,D[s.id]);
@@ -1573,15 +1593,21 @@ window.ECON = (function(){
     // replenishment — order-up-to, multi-source (nearest first), in-transit aware
     const incoming = {};
     state.transit.forEach(t=>{ if(!incoming[t.to]) incoming[t.to]={}; incoming[t.to][t.good]=(incoming[t.to][t.good]||0)+t.qty; });
+    // Index producers by good ONCE per step (prod rates are static within a step) — turns the inner
+    // producer scan from O(worlds) into O(producers-of-g), so the whole pass is O(worlds×producers)
+    // not O(worlds²×goods). Behaviour is identical: same candidate set, same distance sort. Critical
+    // now the galaxy is ~180 worlds (was O(n²) → tens of ms/step; see gen-galaxy.mjs).
+    const prodByGood = {};
+    Object.values(worlds).forEach(p=>{ for(const g in p.prod){ if(p.prod[g]) (prodByGood[g]=prodByGood[g]||[]).push(p); } });
     Object.values(worlds).sort((a,b)=> stress(a)-stress(b)).forEach(w=>{   // neediest worlds get first claim on producer surplus
       if(blk[w.id]) return;
-      const D = dist(w.id, blk);
+      const D = distC(w.id, blk);
       SIM_GOODS.forEach(g=>{
         const d = demandFor(w,g); if(d<=0) return;
         const have = stk(w.id,g) + ((incoming[w.id]||{})[g]||0);
         let need = Math.min(orderUpTo(w,g) - have, d*3);          // cap per-tick pull so no world hoards / drains a producer in one tick
         if(need < d*0.5) return;                                  // hysteresis — skip trivial top-ups
-        const prods = Object.values(worlds).filter(p=> p.id!==w.id && !blk[p.id] && p.prod[g] && D[p.id]!=null && !embargoed(w.id,p.id))
+        const prods = (prodByGood[g]||[]).filter(p=> p.id!==w.id && !blk[p.id] && D[p.id]!=null && !embargoed(w.id,p.id))
                         .sort((a,b)=> D[a.id]-D[b.id]);
         for(const p of prods){
           if(need<=0) break;

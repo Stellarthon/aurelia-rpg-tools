@@ -124,7 +124,9 @@ const NON_SECRET = new Set([
   //  · CORP_CONTRACT   — parameterised corp-job templates ({corp}/{target}/{reward}
   //    placeholders, same class as the ORACLE_*/RUMOUR_* generators above)
   //    (js/85-records.js) — no campaign-specific content.
-  'PACK_DEFAULTS', 'CORP_CONTRACT',
+  //  · FACTION_CONTRACT — parameterised faction-job templates ({faction}/{place}/{reward}
+  //    placeholders); identical class to CORP_CONTRACT (js/85-records.js) — flavour, not secrets.
+  'PACK_DEFAULTS', 'CORP_CONTRACT', 'FACTION_CONTRACT',
 ]);
 const REF_FIELD_RE = /\b(npcs|checks|refnotes|refNote|rsr|events|hook):/;
 {
