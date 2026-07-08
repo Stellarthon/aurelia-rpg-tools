@@ -647,6 +647,17 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // GalNet — players get the living galaxy's news feed live from the shared econ-state
+  // row (the referee writes it as they advance the sim). We pull only the small `news`
+  // array out of the row and hand it to the panel; the heavy sim state is left untouched.
+  try {
+    const resN = await supaStorage.get('econ-state', true);
+    if(resN.ok && resN.value != null){
+      const parsed = JSON.parse(resN.value);
+      if(parsed && Array.isArray(parsed.news) && typeof galnetSyncFeed === 'function') galnetSyncFeed(parsed.news);
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Shared turn order — players get the referee's redacted initiative board live,
   // and the panel auto-opens the moment the referee shares one.
   try {
@@ -941,13 +952,22 @@ function whisperMarkSeen(){
   try { localStorage.setItem('whisper-seen', String(Date.now())); } catch(e){}
   if(typeof updateWhisperBadge === 'function') updateWhisperBadge();
 }
+// ── Player standing rides the whisper channel ────────────────────────────────
+// A "standing" is a referee-authored, per-player-PRIVATE reputation entry, delivered
+// as a whisper whose text is tagged with STANDING_TAG + JSON. It reuses the whisper
+// plumbing wholesale (put-state stamps visibleTo:[player]+ref:true; get-content returns
+// each identity only their own), so it inherits the same real privacy with no new
+// backend. These tagged items are NOT chat, so they're kept OUT of the whisper/notes
+// panel, its unread count, and its arrival toasts — the Standing panel owns them.
+const STANDING_TAG = '§STANDING§';
+function isStandingNote(it){ return !!(it && it.ref && typeof it.text === 'string' && it.text.indexOf(STANDING_TAG) === 0); }
 // An item is "incoming" if the other side wrote it: referee replies carry
 // ref:true (stamped by put-state — never client-supplied), player notes don't.
 function whisperIncoming(it){ return isReferee() ? !it.ref : !!it.ref; }
 function whisperUnreadCount(){
   if(!Array.isArray(whisperItems)) return 0;
   const seen = whisperSeenTs();
-  return whisperItems.filter(it => it && whisperIncoming(it) && !it.resolved && (Date.parse(it.ts) || 0) > seen).length;
+  return whisperItems.filter(it => it && !isStandingNote(it) && whisperIncoming(it) && !it.resolved && (Date.parse(it.ts) || 0) > seen).length;
 }
 
 async function pollWhispers(){
@@ -970,7 +990,9 @@ function applyWhispers(fresh){
   if(DISPLAY_MODE) return;  // boot hydrate also carries whispers — the TV keeps NO whisper state, not even in memory
   const first = (whisperItems === null);
   const known = whisperKnownIds || new Set();
-  const news = first ? [] : fresh.filter(it => it && it.id && !known.has(it.id) && whisperIncoming(it));
+  const freshNew = first ? [] : fresh.filter(it => it && it.id && !known.has(it.id) && whisperIncoming(it));
+  const news = freshNew.filter(it => !isStandingNote(it));            // real whispers only (standing has its own channel)
+  const standingNew = freshNew.filter(isStandingNote);                // a player's standing was set/changed
   whisperItems = fresh;
   whisperKnownIds = new Set(fresh.map(it => it && it.id).filter(Boolean));
   if(news.length && typeof showToast === 'function'){
@@ -981,8 +1003,11 @@ function applyWhispers(fresh){
       : '🤫 The referee answered your whisper.';
     showToast(msg);
   }
+  if(standingNew.length && !isReferee() && typeof showToast === 'function') showToast('🎖 Your standing has changed — check the Standing panel.');
   if(typeof updateWhisperBadge === 'function') updateWhisperBadge();
   if(typeof whispersPanelOpen !== 'undefined' && whispersPanelOpen && typeof renderWhispersPanel === 'function') renderWhispersPanel();
+  if(typeof updateStandingBadge === 'function') updateStandingBadge();
+  if(typeof standingPanelOpen !== 'undefined' && standingPanelOpen && typeof renderStandingPanel === 'function') renderStandingPanel();
 }
 
 // ── Forced view (player side) ────────────────────────────────────────────────

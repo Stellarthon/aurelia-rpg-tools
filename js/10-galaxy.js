@@ -22,740 +22,189 @@ const GALAXY_FACTIONS_BASE = JSON.parse(JSON.stringify(GALAXY_FACTIONS));
 const NODE_COLOR = '#00e5ff';
 
 const GALAXY_NODES = [
-  {
-    "id": "silent-witness",
-    "name": "Gliese 526",
-    "x": 90,
-    "y": 350,
-    "faction": "archon",
-    "label": "Silent Night",
-    "connections": [
-      "whisper"
-    ],
-    "desc": "Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains."
-  },
-  {
-    "id": "whisper",
-    "name": "Gliese 667 Cc",
-    "x": 112,
-    "y": 462,
-    "faction": "vast",
-    "label": "Whisper",
-    "connections": [
-      "silent-witness",
-      "the-mausoleum",
-      "threshold"
-    ],
-    "desc": "Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all."
-  },
-  {
-    "id": "the-mausoleum",
-    "name": "Hyades Cluster",
-    "x": 172,
-    "y": 490,
-    "faction": "archon",
-    "label": "The Mausoleum",
-    "connections": [
-      "whisper",
-      "threshold",
-      "the-fade"
-    ],
-    "desc": "The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active."
-  },
-  {
-    "id": "threshold",
-    "name": "Gliese 229",
-    "x": 88,
-    "y": 562,
-    "faction": "vast",
-    "label": "Threshold",
-    "connections": [
-      "whisper",
-      "the-mausoleum",
-      "the-fade",
-      "echo"
-    ],
-    "desc": "Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through."
-  },
-  {
-    "id": "the-fade",
-    "name": "Gliese 581 D",
-    "x": 162,
-    "y": 548,
-    "faction": "vast",
-    "label": "The Fade",
-    "connections": [
-      "the-mausoleum",
-      "threshold"
-    ],
-    "desc": "The Fade — A region of space slowly \"unmaking.\" Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back."
-  },
-  {
-    "id": "echo",
-    "name": "Uncharted Nebula",
-    "x": 85,
-    "y": 648,
-    "faction": "vast",
-    "label": "Echo",
-    "connections": [
-      "threshold"
-    ],
-    "desc": "Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within."
-  },
-  {
-    "id": "the-reach",
-    "name": "Kapteyn's Star",
-    "x": 218,
-    "y": 745,
-    "faction": "independent",
-    "label": "The Reach",
-    "connections": [
-      "meridian"
-    ],
-    "desc": "The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight."
-  },
-  {
-    "id": "ironhold",
-    "name": "Gliese 806",
-    "x": 295,
-    "y": 108,
-    "faction": "sanhedrin",
-    "label": "Redemption",
-    "connections": [
-      "penitence",
-      "redemption"
-    ],
-    "desc": "Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer."
-  },
-  {
-    "id": "penitence",
-    "name": "Gliese 563",
-    "x": 298,
-    "y": 200,
-    "faction": "sanhedrin",
-    "label": "Penitence",
-    "connections": [
-      "ironhold",
-      "the-garden",
-      "sanhedrin-prime"
-    ],
-    "desc": "Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet."
-  },
-  {
-    "id": "the-garden",
-    "name": "Gliese 706",
-    "x": 290,
-    "y": 318,
-    "faction": "sanhedrin",
-    "label": "The Garden",
-    "connections": [
-      "penitence",
-      "sanhedrin-prime",
-      "the-hammer"
-    ],
-    "desc": "The Garden — An agricultural commune run by the Congregation, producing \"faithfully grown\" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent."
-  },
-  {
-    "id": "redemption",
-    "name": "Gliese 505",
-    "x": 540,
-    "y": 145,
-    "faction": "sanhedrin",
-    "label": "New Jerusalem",
-    "connections": [
-      "ironhold",
-      "new-jerusalem",
-      "new-canaan"
-    ],
-    "desc": "New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work."
-  },
-  {
-    "id": "new-jerusalem",
-    "name": "Beta Comae",
-    "x": 570,
-    "y": 185,
-    "faction": "sanhedrin",
-    "label": "New Canaan",
-    "connections": [
-      "redemption",
-      "new-canaan"
-    ],
-    "desc": "New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit."
-  },
-  {
-    "id": "new-canaan",
-    "name": "Ursae Majoris",
-    "x": 428,
-    "y": 175,
-    "faction": "sanhedrin",
-    "label": "Sanhedrin Prime",
-    "connections": [
-      "redemption",
-      "new-jerusalem",
-      "sanhedrin-prime"
-    ],
-    "desc": "Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades."
-  },
-  {
-    "id": "sanhedrin-prime",
-    "name": "Gliese 710",
-    "x": 428,
-    "y": 248,
-    "faction": "archon",
-    "label": "The Echo",
-    "connections": [
-      "new-canaan",
-      "the-garden",
-      "graveyard"
-    ],
-    "desc": "The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols."
-  },
-  {
-    "id": "graveyard",
-    "name": "61 Cygni",
-    "x": 518,
-    "y": 248,
-    "faction": "contested",
-    "label": "Graveyard",
-    "connections": [
-      "sanhedrin-prime",
-      "watchtower"
-    ],
-    "desc": "Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly."
-  },
-  {
-    "id": "the-hammer",
-    "name": "Deep Space (Mobile)",
-    "x": 418,
-    "y": 485,
-    "faction": "rsc",
-    "label": "The Hammer",
-    "connections": [
-      "the-forge",
-      "october-yards",
-      "aurelia",
-      "watchtower",
-      "the-garden"
-    ],
-    "desc": "The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years."
-  },
-  {
-    "id": "the-forge",
-    "name": "Deep Space (Mobile)",
-    "x": 388,
-    "y": 558,
-    "faction": "rsc",
-    "label": "The Forge",
-    "connections": [
-      "the-hammer",
-      "october-yards"
-    ],
-    "desc": "The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective."
-  },
-  {
-    "id": "october-yards",
-    "name": "Gliese 406",
-    "x": 478,
-    "y": 592,
-    "faction": "rsc",
-    "label": "Red Sunrise",
-    "connections": [
-      "the-forge",
-      "the-hammer",
-      "red-sunrise",
-      "aurelia"
-    ],
-    "desc": "Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning."
-  },
-  {
-    "id": "red-sunrise",
-    "name": "Gliese 445",
-    "x": 463,
-    "y": 645,
-    "faction": "rsc",
-    "label": "New Hope",
-    "connections": [
-      "october-yards",
-      "meridian"
-    ],
-    "desc": "New Hope — A secret Vanguard training world, home to \"Liberation University.\" A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed."
-  },
-  {
-    "id": "watchtower",
-    "name": "Procyon",
-    "x": 602,
-    "y": 378,
-    "faction": "hegemony",
-    "label": "Watchtower",
-    "connections": [
-      "graveyard",
-      "vega",
-      "aurelia",
-      "the-hammer"
-    ],
-    "desc": "Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told."
-  },
-  {
-    "id": "vega",
-    "name": "Vega",
-    "x": 700,
-    "y": 360,
-    "faction": "hegemony",
-    "label": "Vega",
-    "connections": [
-      "watchtower",
-      "castor"
-    ],
-    "desc": "Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command."
-  },
-  {
-    "id": "aurelia",
-    "systemId": "auros",
-    "name": "Epsilon Indi",
-    "x": 602,
-    "y": 478,
-    "faction": "hegemony",
-    "label": "Aurelia ★",
-    "connections": [
-      "watchtower",
-      "the-hammer",
-      "october-yards",
-      "sol"
-    ],
-    "desc": "Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C."
-  },
-  {
-    "id": "sol",
-    "name": "Sol",
-    "x": 660,
-    "y": 445,
-    "faction": "hegemony",
-    "label": "Sol",
-    "connections": [
-      "castor",
-      "pollux",
-      "new-horizon"
-    ],
-    "desc": "Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age."
-  },
-  {
-    "id": "castor",
-    "name": "Castor",
-    "x": 748,
-    "y": 385,
-    "faction": "hegemony",
-    "label": "Castor",
-    "connections": [
-      "vega",
-      "sol",
-      "pollux",
-      "warehouse"
-    ],
-    "desc": "Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm."
-  },
-  {
-    "id": "pollux",
-    "name": "Alpha Centauri",
-    "x": 700,
-    "y": 448,
-    "faction": "hegemony",
-    "label": "Alpha Centauri",
-    "connections": [
-      "castor",
-      "sol",
-      "new-horizon",
-      "the-archive",
-      "kronos"
-    ],
-    "desc": "Alpha Centauri — Home to New Horizon, the \"First Colony\" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim."
-  },
-  {
-    "id": "new-horizon",
-    "name": "Groombridge 34",
-    "x": 655,
-    "y": 525,
-    "faction": "hegemony",
-    "label": "Ironhold",
-    "connections": [
-      "aurelia",
-      "sol",
-      "pollux",
-      "ophion-prime",
-      "the-archive"
-    ],
-    "desc": "Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense."
-  },
-  {
-    "id": "warehouse",
-    "name": "Gliese 693",
-    "x": 938,
-    "y": 255,
-    "faction": "omnisynth",
-    "label": "Warehouse",
-    "connections": [
-      "castor",
-      "profit-margin",
-      "kronos"
-    ],
-    "desc": "Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias."
-  },
-  {
-    "id": "profit-margin",
-    "name": "Gliese 777",
-    "x": 1028,
-    "y": 205,
-    "faction": "omnisynth",
-    "label": "Profit Margin",
-    "connections": [
-      "warehouse",
-      "the-anvil",
-      "kronos"
-    ],
-    "desc": "Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service."
-  },
-  {
-    "id": "the-anvil",
-    "name": "Gliese 674",
-    "x": 1168,
-    "y": 252,
-    "faction": "omnisynth",
-    "label": "The Anvil",
-    "connections": [
-      "profit-margin",
-      "terminus"
-    ],
-    "desc": "The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer."
-  },
-  {
-    "id": "kronos",
-    "name": "Gliese 667",
-    "x": 1042,
-    "y": 305,
-    "faction": "omnisynth",
-    "label": "Kronos Prime",
-    "connections": [
-      "warehouse",
-      "profit-margin",
-      "terminus",
-      "pollux"
-    ],
-    "desc": "Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security."
-  },
-  {
-    "id": "terminus",
-    "name": "Wolf 359",
-    "x": 1118,
-    "y": 342,
-    "faction": "independent",
-    "label": "Terminus",
-    "connections": [
-      "the-anvil",
-      "kronos",
-      "erebus"
-    ],
-    "desc": "Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through."
-  },
-  {
-    "id": "erebus",
-    "name": "TRAPPIST-1",
-    "x": 1188,
-    "y": 408,
-    "faction": "independent",
-    "label": "Erebus",
-    "connections": [
-      "terminus",
-      "the-museum"
-    ],
-    "desc": "Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation."
-  },
-  {
-    "id": "the-archive",
-    "name": "Gliese 555",
-    "x": 928,
-    "y": 548,
-    "faction": "uhc",
-    "label": "The Archive",
-    "connections": [
-      "pollux",
-      "new-horizon",
-      "the-museum",
-      "vesta",
-      "old-earth"
-    ],
-    "desc": "The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose."
-  },
-  {
-    "id": "the-museum",
-    "name": "Gliese 754",
-    "x": 1028,
-    "y": 535,
-    "faction": "uhc",
-    "label": "The Museum",
-    "connections": [
-      "the-archive",
-      "pollux",
-      "cypress",
-      "erebus"
-    ],
-    "desc": "The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution."
-  },
-  {
-    "id": "vesta",
-    "name": "Eta Cassiopeiae",
-    "x": 918,
-    "y": 618,
-    "faction": "uhc",
-    "label": "Vestalia",
-    "connections": [
-      "the-archive",
-      "memory",
-      "avalon"
-    ],
-    "desc": "Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space."
-  },
-  {
-    "id": "old-earth",
-    "name": "Gliese 667 C",
-    "x": 918,
-    "y": 642,
-    "faction": "uhc",
-    "label": "Old Earth",
-    "connections": [
-      "the-archive",
-      "memory"
-    ],
-    "desc": "Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how."
-  },
-  {
-    "id": "memory",
-    "name": "Gliese 682",
-    "x": 948,
-    "y": 655,
-    "faction": "uhc",
-    "label": "Memory",
-    "connections": [
-      "vesta",
-      "old-earth",
-      "avalon",
-      "zephyria-prime"
-    ],
-    "desc": "Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world."
-  },
-  {
-    "id": "avalon",
-    "name": "Tau Ceti",
-    "x": 938,
-    "y": 715,
-    "faction": "contested",
-    "label": "Avalon",
-    "connections": [
-      "vesta",
-      "memory",
-      "solidarity",
-      "zephyria-prime"
-    ],
-    "desc": "Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly."
-  },
-  {
-    "id": "zephyria-prime",
-    "name": "Gliese 581",
-    "x": 1015,
-    "y": 732,
-    "faction": "contested",
-    "label": "Zephyria Prime",
-    "connections": [
-      "memory",
-      "avalon"
-    ],
-    "desc": "Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything."
-  },
-  {
-    "id": "solidarity",
-    "name": "Gliese 293",
-    "x": 878,
-    "y": 760,
-    "faction": "rsc",
-    "label": "Solidarity",
-    "connections": [
-      "avalon",
-      "dust"
-    ],
-    "desc": "Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition."
-  },
-  {
-    "id": "dust",
-    "name": "Ross 154",
-    "x": 888,
-    "y": 820,
-    "faction": "independent",
-    "label": "Dust",
-    "connections": [
-      "solidarity"
-    ],
-    "desc": "Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered."
-  },
-  {
-    "id": "cypress",
-    "name": "36 Ophiuchi A",
-    "x": 1108,
-    "y": 580,
-    "faction": "hegemony",
-    "label": "Cypress",
-    "connections": [
-      "the-museum",
-      "bastion"
-    ],
-    "desc": "Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails."
-  },
-  {
-    "id": "bastion",
-    "name": "Epsilon Eridani",
-    "x": 1238,
-    "y": 595,
-    "faction": "contested",
-    "label": "Elysium Prime / Elysium Secundus",
-    "connections": [
-      "cypress",
-      "vanguards-end",
-      "elysium-prime"
-    ],
-    "desc": "Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law."
-  },
-  {
-    "id": "vanguards-end",
-    "name": "Wolf 294",
-    "x": 1315,
-    "y": 595,
-    "faction": "hegemony",
-    "label": "Bastion",
-    "connections": [
-      "bastion"
-    ],
-    "desc": "Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence."
-  },
-  {
-    "id": "elysium-prime",
-    "name": "Luyten 726-8",
-    "x": 1205,
-    "y": 665,
-    "faction": "hegemony",
-    "label": "Vanguard's End",
-    "connections": [
-      "bastion",
-      "elysium-secundus"
-    ],
-    "desc": "Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point."
-  },
-  {
-    "id": "elysium-secundus",
-    "name": "Gliese 892",
-    "x": 1270,
-    "y": 678,
-    "faction": "archon",
-    "label": "The Watch",
-    "connections": [
-      "elysium-prime"
-    ],
-    "desc": "The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed."
-  },
-  {
-    "id": "meridian",
-    "name": "82 Eridani",
-    "x": 488,
-    "y": 698,
-    "faction": "independent",
-    "label": "Meridian / Meridian Prime",
-    "connections": [
-      "the-reach",
-      "solitude",
-      "red-sunrise",
-      "haven"
-    ],
-    "desc": "Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate."
-  },
-  {
-    "id": "solitude",
-    "name": "Luyten's Star",
-    "x": 568,
-    "y": 748,
-    "faction": "independent",
-    "label": "Solitude",
-    "connections": [
-      "meridian",
-      "haven",
-      "ophion-prime"
-    ],
-    "desc": "Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this."
-  },
-  {
-    "id": "haven",
-    "name": "Lacaille 9352",
-    "x": 542,
-    "y": 805,
-    "faction": "independent",
-    "label": "Haven",
-    "connections": [
-      "meridian",
-      "solitude",
-      "meridian-secundus"
-    ],
-    "desc": "Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous."
-  },
-  {
-    "id": "ophion-prime",
-    "name": "HD 219134",
-    "x": 708,
-    "y": 698,
-    "faction": "independent",
-    "label": "Ophion Prime",
-    "connections": [
-      "solitude",
-      "new-horizon",
-      "freeside"
-    ],
-    "desc": "Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly."
-  },
-  {
-    "id": "freeside",
-    "name": "Barnard's Star",
-    "x": 645,
-    "y": 758,
-    "faction": "independent",
-    "label": "Freeside",
-    "connections": [
-      "ophion-prime",
-      "meridian-secundus",
-      "havens-gate"
-    ],
-    "desc": "Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort."
-  },
-  {
-    "id": "meridian-secundus",
-    "name": "Gliese 876",
-    "x": 645,
-    "y": 828,
-    "faction": "independent",
-    "label": "Freeport Omega",
-    "connections": [
-      "haven",
-      "freeside",
-      "havens-gate"
-    ],
-    "desc": "Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people."
-  },
-  {
-    "id": "havens-gate",
-    "name": "Gliese 832",
-    "x": 708,
-    "y": 868,
-    "faction": "independent",
-    "label": "Haven's Gate",
-    "connections": [
-      "freeside",
-      "meridian-secundus"
-    ],
-    "desc": "Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from."
-  }
+  {"id":"silent-witness","name":"Gliese 526","x":90,"y":350,"faction":"archon","label":"Silent Night","connections":["whisper"],"desc":"Silent Night — A former Archon Collective node now dormant and unexplored. A place of silence and waiting. Whatever was here has gone quiet, but the infrastructure remains."},
+  {"id":"whisper","name":"Gliese 667 Cc","x":112,"y":462,"faction":"vast","label":"Whisper","connections":["silent-witness","the-mausoleum","threshold"],"desc":"Whisper — A planet where time flows differently. A Vast research site, perhaps. Or a mistake. Clocks run wrong here. Logs show journeys that took days arriving in hours, or never arriving at all."},
+  {"id":"the-mausoleum","name":"Hyades Cluster","x":172,"y":490,"faction":"archon","label":"The Mausoleum","connections":["whisper","threshold","the-fade"],"desc":"The Mausoleum — The Silent Core and heart of Archon Collective territory. A forbidden zone of megastructures and silence. No human vessel has returned from its interior. The structures are vast, ancient, and clearly still active."},
+  {"id":"threshold","name":"Gliese 229","x":88,"y":562,"faction":"vast","label":"Threshold","connections":["whisper","the-mausoleum","the-fade","echo"],"desc":"Threshold — The first confirmed Vast contact point. A region of space where reality itself seems distorted. Sensor readings are unreliable. Navigation is approximate at best. Something here is very interested in ships that pass through."},
+  {"id":"the-fade","name":"Gliese 581 D","x":162,"y":548,"faction":"vast","label":"The Fade","connections":["the-mausoleum","threshold"],"desc":"The Fade — A region of space slowly \"unmaking.\" Reality is coming apart here. Avoid at all costs. The light is wrong. Physics is negotiable. Ships that linger too long come back changed, or do not come back."},
+  {"id":"echo","name":"Uncharted Nebula","x":85,"y":648,"faction":"vast","label":"Echo","connections":["threshold"],"desc":"Echo — A rogue planet drifting through the Ghost Reef, detected only by its faint thermal signature. It has an atmosphere, which is impossible. It has no star. Something is keeping it warm from within."},
+  {"id":"the-reach","name":"Kapteyn's Star","x":218,"y":745,"faction":"independent","label":"The Reach","connections":["meridian"],"desc":"The Reach — A failed pre-Collapse colony, abandoned and never resettled. A ghost town in space, perfectly preserved and utterly empty. The lights still work. The food processors still cycle. No one knows why it was abandoned overnight."},
+  {"id":"ironhold","name":"Gliese 806","x":295,"y":108,"faction":"sanhedrin","label":"Redemption","connections":["penitence","redemption"],"desc":"Redemption — A penal colony for techno-heretics. Those who worship machines or trust AI too much are sent here to labor and repent. The Congregation considers suffering to be a form of prayer."},
+  {"id":"penitence","name":"Gliese 563","x":298,"y":200,"faction":"sanhedrin","label":"Penitence","connections":["ironhold","the-garden","sanhedrin-prime"],"desc":"Penitence — A monastery world of silent contemplation. No visitors are allowed. No one speaks. The silence is the point. The Congregation's most devout spend their lives here in total quiet."},
+  {"id":"the-garden","name":"Gliese 706","x":290,"y":318,"faction":"sanhedrin","label":"The Garden","connections":["penitence","sanhedrin-prime","the-hammer"],"desc":"The Garden — An agricultural commune run by the Congregation, producing \"faithfully grown\" exports for the Hegemony market. Every crop is blessed. Every harvest is a sacrament. The profit margins are excellent."},
+  {"id":"redemption","name":"Gliese 505","x":540,"y":145,"faction":"sanhedrin","label":"New Jerusalem","connections":["ironhold","new-jerusalem","new-canaan"],"desc":"New Jerusalem — A major pilgrimage site containing relics of Old Earth faiths. A place of quiet devotion and political intrigue. The Congregation's cardinals argue theology while their security apparatus does the real work."},
+  {"id":"new-jerusalem","name":"Beta Comae","x":570,"y":185,"faction":"sanhedrin","label":"New Canaan","connections":["redemption","new-canaan"],"desc":"New Canaan — A pilgrimage world of austere devotion, aligned with the Hegemony. A place where faith and politics meet. The Congregation provides spiritual legitimacy; the Hegemony provides security. Both benefit."},
+  {"id":"new-canaan","name":"Ursae Majoris","x":428,"y":175,"faction":"sanhedrin","label":"Sanhedrin Prime","connections":["redemption","new-jerusalem","sanhedrin-prime"],"desc":"Sanhedrin Prime — Theocratic headquarters of the Congregation, a world of temples and councils. The seat of the High Patriarch's power. Every decision made here ripples across Congregation space for decades."},
+  {"id":"sanhedrin-prime","name":"Gliese 710","x":428,"y":248,"faction":"archon","label":"The Echo","connections":["new-canaan","the-garden","graveyard"],"desc":"The Echo — Where active Archon Collective signals have been detected but no response to hails. Something is listening. Something is waiting. The signals are complex, structured, and entirely unlike known communication protocols."},
+  {"id":"graveyard","name":"61 Cygni","x":518,"y":248,"faction":"contested","label":"Graveyard","connections":["sanhedrin-prime","watchtower"],"desc":"Graveyard — A shattered world that witnessed one of the final, brutal battles of the Uprising. A wasteland of wrecked warships and silent tombs, haunted by the ghosts of Captain Cutter's last stand. Salvagers come. Most leave quickly."},
+  {"id":"the-hammer","name":"Deep Space (Mobile)","x":418,"y":485,"faction":"rsc","label":"The Hammer","connections":["the-forge","october-yards","aurelia","watchtower","the-garden"],"desc":"The Hammer — A Vanguard raiding base: a converted mining vessel that serves as a mobile headquarters for hit-and-run attacks. It has no fixed location. Hegemony intelligence has been trying to find it for years."},
+  {"id":"the-forge","name":"Deep Space (Mobile)","x":388,"y":558,"faction":"rsc","label":"The Forge","connections":["the-hammer","october-yards"],"desc":"The Forge — A secret Vanguard shipyard hidden in deep space. Where the Collective builds its fleet, one ship at a time. Its coordinates are the most closely guarded secret in the Red Star Collective."},
+  {"id":"october-yards","name":"Gliese 406","x":478,"y":592,"faction":"rsc","label":"Red Sunrise","connections":["the-forge","the-hammer","red-sunrise","aurelia"],"desc":"Red Sunrise — A failed collective farm, now a cautionary tale. A reminder that good intentions are not enough. The original settlers starved. The Collective uses it as a lesson about the need for discipline and central planning."},
+  {"id":"red-sunrise","name":"Gliese 445","x":463,"y":645,"faction":"rsc","label":"New Hope","connections":["october-yards","meridian"],"desc":"New Hope — A secret Vanguard training world, home to \"Liberation University.\" A place where revolutionaries are forged in secrecy. The curriculum covers tactics, ideology, and why this revolution will succeed where all others failed."},
+  {"id":"watchtower","name":"Procyon","x":602,"y":378,"faction":"hegemony","label":"Watchtower","connections":["graveyard","vega","aurelia","the-hammer"],"desc":"Watchtower — Home to a heavily fortified Hegemony naval station on the edge of the Silent Core. A lonely, paranoid posting for those who watch for threats that never come — or so they are told."},
+  {"id":"vega","name":"Vega","x":700,"y":360,"faction":"hegemony","label":"Vega","connections":["watchtower","castor"],"desc":"Vega — An old, stable system housing the Hegemony's premier military academies and strategic resupply depots. The fortified bulwark on the Coreward border. To graduate from Vega's academies is to be marked for command."},
+  {"id":"aurelia","systemId":"auros","name":"Epsilon Indi","x":602,"y":478,"faction":"hegemony","label":"Aurelia ★","connections":["watchtower","the-hammer","october-yards","sol"],"desc":"Aurelia — The Hegemony's showcase world and administrative heart. A gleaming paradise for the loyal, built on exploitation and maintained by repression. Almost too perfect. Current campaign location. Population 800 million. UWP: A767978-C."},
+  {"id":"sol","name":"Sol","x":660,"y":445,"faction":"hegemony","label":"Sol","connections":["castor","pollux","new-horizon"],"desc":"Sol — The cradle of humanity and capital of the Hegemony. A heavily fortified ecumenopolis, its skies thick with military traffic. Earth is a world of grey towers, propaganda broadcasts, and constant surveillance. The Assembly Hall still stands, but it is now a museum to a lost age."},
+  {"id":"castor","name":"Castor","x":748,"y":385,"faction":"hegemony","label":"Castor","connections":["vega","sol","pollux","warehouse"],"desc":"Castor — A binary star system and the Hegemony's primary forge-world. Pollux is a polluted hive of industry, its skies permanently stained orange and grey. Produces the warships that project Hegemony power across the Orion Arm."},
+  {"id":"pollux","name":"Alpha Centauri","x":700,"y":448,"faction":"hegemony","label":"Alpha Centauri","connections":["castor","sol","new-horizon","the-archive","kronos"],"desc":"Alpha Centauri — Home to New Horizon, the \"First Colony\" and a gleaming model of Hegemony propaganda. A prosperous, heavily controlled world that serves as the primary gateway between Hegemony space and the Contested Rim."},
+  {"id":"new-horizon","name":"Groombridge 34","x":655,"y":525,"faction":"hegemony","label":"Ironhold","connections":["aurelia","sol","pollux","ophion-prime","the-archive"],"desc":"Ironhold — The Hegemony's primary reserve fleet anchorage. A system filled with mothballed warships, waiting for a war that may never come. The scale of the reserve fleet is a state secret. The scale is immense."},
+  {"id":"warehouse","name":"Gliese 693","x":938,"y":255,"faction":"omnisynth","label":"Warehouse","connections":["castor","profit-margin","kronos"],"desc":"Warehouse — A massive automated storage depot. No one knows what's inside. No one asks. The shipping manifests are classified. The security detail is larger than most planetary militias."},
+  {"id":"profit-margin","name":"Gliese 777","x":1028,"y":205,"faction":"omnisynth","label":"Profit Margin","connections":["warehouse","the-anvil","kronos"],"desc":"Profit Margin — A corporate resource extraction world staffed by indentured laborers. Efficiency is the only god. Workers are contracted for seven-year terms. The contracts auto-renew for debt accrued during service."},
+  {"id":"the-anvil","name":"Gliese 674","x":1168,"y":252,"faction":"omnisynth","label":"The Anvil","connections":["profit-margin","terminus"],"desc":"The Anvil — Orbital shipyards belonging to OmniSynth Industries, producing civilian and military vessels for any buyer. A place of constant construction and corporate secrecy. The Hegemony is OmniSynth's best customer."},
+  {"id":"kronos","name":"Gliese 667","x":1042,"y":305,"faction":"omnisynth","label":"Kronos Prime","connections":["warehouse","profit-margin","terminus","pollux"],"desc":"Kronos Prime — The industrial heart of OmniSynth Industries. A company-owned world of factories, barracks, and hidden labs. The most secure corporate world in the Orion Arm. The hidden labs are the reason for the security."},
+  {"id":"terminus","name":"Wolf 359","x":1118,"y":342,"faction":"independent","label":"Terminus","connections":["the-anvil","kronos","erebus"],"desc":"Terminus — A major trade nexus where Spinward traffic converges. A planet-wide warehouse district with a massive transient population. OmniSynth runs the fuel infrastructure. Everyone else just passes through."},
+  {"id":"erebus","name":"TRAPPIST-1","x":1188,"y":408,"faction":"independent","label":"Erebus","connections":["terminus","the-museum"],"desc":"Erebus — A remote mining colony on the fringe. A company-run world where workers are little more than slaves. The ore is valuable enough to justify the distance. The workers were not consulted on this calculation."},
+  {"id":"the-archive","name":"Gliese 555","x":928,"y":548,"faction":"uhc","label":"The Archive","connections":["pollux","new-horizon","the-museum","vesta","old-earth"],"desc":"The Archive — A secret backup of the Vestalian Great Library, hidden in an obscure system to preserve knowledge from those who would exploit it. Only a handful of people know this system's true purpose."},
+  {"id":"the-museum","name":"Gliese 754","x":1028,"y":535,"faction":"uhc","label":"The Museum","connections":["the-archive","pollux","cypress","erebus"],"desc":"The Museum — An orbital museum containing original UHC artifacts, ships, and records. A treasure trove for historians and a target for everyone else. The security is surprisingly robust for a cultural institution."},
+  {"id":"vesta","name":"Eta Cassiopeiae","x":918,"y":618,"faction":"uhc","label":"Vestalia","connections":["the-archive","memory","avalon"],"desc":"Vestalia — The first successful extrasolar colony and a living museum of the United Human Colonies. Beautiful, ancient, and slowly dying. The Great Library holds the most complete pre-Collapse archives in human space."},
+  {"id":"old-earth","name":"Gliese 667 C","x":918,"y":642,"faction":"uhc","label":"Old Earth","connections":["the-archive","memory"],"desc":"Old Earth — A failed colony preserved as a ruin of pre-Collapse life. A pilgrimage site for historians and those who mourn what was lost. The ruins are perfectly preserved. No one is sure how."},
+  {"id":"memory","name":"Gliese 682","x":948,"y":655,"faction":"uhc","label":"Memory","connections":["vesta","old-earth","avalon","zephyria-prime"],"desc":"Memory — A historical preservation world where enthusiasts reenact UHC-era life. A living museum of a time before the fall. The residents do not consider it reenactment. To them, this is the real world."},
+  {"id":"avalon","name":"Tau Ceti","x":938,"y":715,"faction":"contested","label":"Avalon","connections":["vesta","memory","solidarity","zephyria-prime"],"desc":"Avalon — A prosperous, technologically advanced independent colony ruled by a technocratic oligarchy. A hub for research, diplomacy, and quiet deals. Everyone wants Avalon's cooperation. Avalon charges accordingly."},
+  {"id":"zephyria-prime","name":"Gliese 581","x":1015,"y":732,"faction":"contested","label":"Zephyria Prime","connections":["memory","avalon"],"desc":"Zephyria Prime — The site of the first Eidolon Ruin discovery and the catalyst for the Collapse. A haunted, semi-quarantined graveyard crawling with scavengers and patrolled by Archon Collective drones. Whatever was found here started everything."},
+  {"id":"solidarity","name":"Gliese 293","x":878,"y":760,"faction":"rsc","label":"Solidarity","connections":["avalon","dust"],"desc":"Solidarity — An underground railway hub moving refugees and dissidents across the Orion Arm. A network of safe houses and secret routes. The Collective calls it humanitarian aid. The Hegemony calls it sedition."},
+  {"id":"dust","name":"Ross 154","x":888,"y":820,"faction":"independent","label":"Dust","connections":["solidarity"],"desc":"Dust — A desert world where water is rationed and survival is a daily struggle. A culture of hard people living a hard life. They have never asked for help and would not accept it if offered."},
+  {"id":"cypress","name":"36 Ophiuchi A","x":1108,"y":580,"faction":"hegemony","label":"Cypress","connections":["the-museum","bastion"],"desc":"Cypress — An agricultural breadbasket world entirely automated and run by a skeleton crew of overseers. Food for the Hegemony, grown in perfect silence. The automation never fails. No one asks why it never fails."},
+  {"id":"bastion","name":"Epsilon Eridani","x":1238,"y":595,"faction":"contested","label":"Elysium Prime / Elysium Secundus","connections":["cypress","vanguards-end","elysium-prime"],"desc":"Epsilon Eridani — Home to Elysium Prime and Elysium Secundus. Elysium Prime is a lush, democratic agricultural hub, fiercely independent and constantly pressured by the Hegemony. Elysium Secundus is a jungle world, wild and untamed, home to pirate bases, uncharted ruins, and those who prefer to live outside the law."},
+  {"id":"vanguards-end","name":"Wolf 294","x":1315,"y":595,"faction":"hegemony","label":"Bastion","connections":["bastion"],"desc":"Bastion — A maximum security prison world for political dissidents, inconvenient truth-tellers, and those who simply disappeared. A cold, grey rock with an atmosphere that requires constant filtration. The Hegemony does not officially acknowledge its existence."},
+  {"id":"elysium-prime","name":"Luyten 726-8","x":1205,"y":665,"faction":"hegemony","label":"Vanguard's End","connections":["bastion","elysium-secundus"],"desc":"Vanguard's End — A barren mining colony that serves as a prison for exiled Red Star Collective prisoners. A place of hard labor and broken spirits. The ore it produces is barely worth the cost. The isolation is the point."},
+  {"id":"elysium-secundus","name":"Gliese 892","x":1270,"y":678,"faction":"archon","label":"The Watch","connections":["elysium-prime"],"desc":"The Watch — A Collective observation post monitoring human space. They watch. They wait. They do not interfere. The post has been active for longer than human spaceflight has existed."},
+  {"id":"meridian","name":"82 Eridani","x":488,"y":698,"faction":"independent","label":"Meridian / Meridian Prime","connections":["the-reach","solitude","red-sunrise","haven"],"desc":"Meridian / Meridian Prime — Meridian is a stable, prosperous neutral world and diplomatic hub. Meridian Prime is a banking and finance hub, planetary neutrality enforced by economic interdependence. Everyone owes Meridian money. This is deliberate."},
+  {"id":"solitude","name":"Luyten's Star","x":568,"y":748,"faction":"independent","label":"Solitude","connections":["meridian","haven","ophion-prime"],"desc":"Solitude — A tiny, barely habitable world settled by a pre-Collapse religious sect that rejected technology. They live as their ancestors did, untouched by the wider galaxy. They know what is out there. They chose this."},
+  {"id":"haven","name":"Lacaille 9352","x":542,"y":805,"faction":"independent","label":"Haven","connections":["meridian","solitude","meridian-secundus"],"desc":"Haven — A refugee colony founded by survivors of Hegemony pacification campaigns. Overcrowded, under-resourced, and fiercely defiant. They have survived things that should have destroyed them. This has made them dangerous."},
+  {"id":"ophion-prime","name":"HD 219134","x":708,"y":698,"faction":"independent","label":"Ophion Prime","connections":["solitude","new-horizon","freeside"],"desc":"Ophion Prime — A notorious pirate haven and lawless world. The Crimson Bazaar, its main station, is where anything can be bought or sold. The only law is enforced by whoever is currently strongest. This changes regularly."},
+  {"id":"freeside","name":"Barnard's Star","x":645,"y":758,"faction":"independent","label":"Freeside","connections":["ophion-prime","meridian-secundus","havens-gate"],"desc":"Freeside — A failed agricultural colony turned anarchist experiment. Poor, chaotic, and fiercely free. The original colonists starved. The current residents celebrate this as proof that freedom matters more than comfort."},
+  {"id":"meridian-secundus","name":"Gliese 876","x":645,"y":828,"faction":"independent","label":"Freeport Omega","connections":["haven","freeside","havens-gate"],"desc":"Freeport Omega — A libertarian paradise with no taxes and no extradition. A haven for the wealthy, the criminal, and those who just want to be left alone. The wealthy and the criminal often turn out to be the same people."},
+  {"id":"havens-gate","name":"Gliese 832","x":708,"y":868,"faction":"independent","label":"Haven's Gate","connections":["freeside","meridian-secundus"],"desc":"Haven's Gate — A major refueling station orbiting a gas giant. A vital stop for ships traveling the Rimward routes. The station master knows everyone's name, their ship registry, and approximately what they are running from."},
+  {"id":"verdance-fields","name":"Tycho 3946","x":777,"y":389,"faction":"independent","label":"Verdance Fields","connections":["corvus-mires","aleph","port-lachlan"],"desc":"Verdance Fields — a free-trader waystation.","_gen":true,"uninhabited":true},
+  {"id":"neo-pallas","name":"Ross 1184","x":610,"y":964,"faction":"independent","label":"Neo Pallas","connections":["nadir","oxley-landing","groombridge-5337"],"desc":"Neo Pallas — a frontier prospecting claim.","_gen":true},
+  {"id":"tallow-claim","name":"Kapteyn 6255","x":694,"y":508,"faction":"independent","label":"Tallow Claim","connections":["new-horizon","pollux","lachlan-anchorage"],"desc":"Tallow Claim — an independent shipbreaking yard.","_gen":true,"uninhabited":true},
+  {"id":"nadir-depot","name":"Wolf 9414","x":839,"y":891,"faction":"independent","label":"Nadir Depot","connections":["ilium","hip-3578","dust"],"desc":"Nadir Depot — a frontier prospecting claim.","_gen":true},
+  {"id":"oxley-landing","name":"Kepler 3950","x":639,"y":881,"faction":"independent","label":"Oxley Landing","connections":["nadir","meridian-secundus","havens-gate"],"desc":"Oxley Landing — an independent shipbreaking yard.","_gen":true,"uninhabited":true},
+  {"id":"haven-emberly","name":"Kepler 3935","x":851,"y":647,"faction":"independent","label":"Haven Emberly","connections":["zenobia","ferrum","hd-7374"],"desc":"Haven Emberly — an independent shipbreaking yard.","_gen":true},
+  {"id":"gliese-9700","name":"Gliese 9700","x":415,"y":492,"faction":"independent","label":"Gliese 9700","connections":["the-hammer","fort-jubilee","hd-5772"],"desc":"Gliese 9700 — a belter refinery outpost.","_gen":true,"uninhabited":true},
+  {"id":"kapteyn-4857","name":"Kapteyn 4857","x":514,"y":361,"faction":"independent","label":"Kapteyn 4857","connections":["ostrava-verge","port-zenobia","hd-5772"],"desc":"Kapteyn 4857 — an independent shipbreaking yard.","_gen":true},
+  {"id":"nadir","name":"Kepler 1955","x":619,"y":906,"faction":"independent","label":"Nadir","connections":["oxley-landing","neo-pallas","meridian-secundus"],"desc":"Nadir — an independent shipbreaking yard.","_gen":true},
+  {"id":"torrent-watch","name":"Kepler 1473","x":521,"y":1053,"faction":"independent","label":"Torrent Watch","connections":["groombridge-5337","neo-pallas","nadir"],"desc":"Torrent Watch — an independent shipbreaking yard.","_gen":true,"uninhabited":true},
+  {"id":"lalande-2829","name":"Lalande 2829","x":270,"y":721,"faction":"independent","label":"Lalande 2829","connections":["cape-umbra","the-reach","wolf-3500"],"desc":"Lalande 2829 — a frontier prospecting claim.","_gen":true,"uninhabited":true},
+  {"id":"novo-warden","name":"Kepler 9074","x":801,"y":522,"faction":"independent","label":"Novo Warden","connections":["hd-5592","struve-4314","tallow-claim"],"desc":"Novo Warden — a homesteader colony.","_gen":true},
+  {"id":"morrow","name":"HD 8467","x":899,"y":954,"faction":"independent","label":"Morrow","connections":["nadir-depot","halcyon-reach","ilium"],"desc":"Morrow — a homesteader colony.","_gen":true,"uninhabited":true},
+  {"id":"groombridge-5337","name":"Groombridge 5337","x":538,"y":1048,"faction":"independent","label":"Groombridge 5337","connections":["torrent-watch","neo-pallas","nadir"],"desc":"Groombridge 5337 — a belter refinery outpost.","_gen":true},
+  {"id":"kalinga","name":"Lalande 591","x":976,"y":564,"faction":"independent","label":"Kalinga","connections":["nova-anvil","fort-grendel"],"desc":"Kalinga — an independent free port.","_gen":true},
+  {"id":"hd-7374","name":"HD 7374","x":891,"y":730,"faction":"independent","label":"HD 7374","connections":["halcyon-hold","solidarity","dust"],"desc":"HD 7374 — a smugglers’ haven.","_gen":true,"uninhabited":true},
+  {"id":"lachlan-anchorage","name":"LHS 8665","x":605,"y":478,"faction":"independent","label":"Lachlan Anchorage","connections":["aurelia","kapteyn-6027","hd-5772"],"desc":"Lachlan Anchorage — an independent free port.","_gen":true},
+  {"id":"neo-tsvetov","name":"Groombridge 9487","x":1119,"y":638,"faction":"independent","label":"Neo Tsvetov","connections":["sundara","cypress","quillon"],"desc":"Neo Tsvetov — an independent shipbreaking yard.","_gen":true,"uninhabited":true},
+  {"id":"tantalus","name":"Ross 4962","x":624,"y":290,"faction":"independent","label":"Tantalus","connections":["marrow-hold","watchtower","kapteyn-4857"],"desc":"Tantalus — a belter refinery outpost.","_gen":true,"uninhabited":true},
+  {"id":"groombridge-3861","name":"Groombridge 3861","x":606,"y":546,"faction":"independent","label":"Groombridge 3861","connections":["tycho-2081","new-horizon","ross-2012"],"desc":"Groombridge 3861 — a smugglers’ haven.","_gen":true,"uninhabited":true},
+  {"id":"halcyon-reach","name":"Gliese 7348","x":990,"y":983,"faction":"independent","label":"Halcyon Reach","connections":["morrow","nova-kiln","nadir-depot"],"desc":"Halcyon Reach — an independent free port.","_gen":true,"uninhabited":true},
+  {"id":"marrow-hold","name":"Groombridge 496","x":633,"y":309,"faction":"independent","label":"Marrow Hold","connections":["tantalus","lalande-777","kapteyn-4857"],"desc":"Marrow Hold — a free-trader waystation.","_gen":true},
+  {"id":"hip-3578","name":"HIP 3578","x":769,"y":914,"faction":"independent","label":"HIP 3578","connections":["ilium","nadir-depot","havens-gate"],"desc":"HIP 3578 — an independent free port.","_gen":true},
+  {"id":"hip-8511","name":"HIP 8511","x":527,"y":741,"faction":"independent","label":"HIP 8511","connections":["solitude","wolf-3500","meridian"],"desc":"HIP 8511 — an independent agricultural colony.","_gen":true,"uninhabited":true},
+  {"id":"halcyon-hold","name":"GJ 8318","x":875,"y":754,"faction":"independent","label":"Halcyon Hold","connections":["solidarity","hd-7374","dust"],"desc":"Halcyon Hold — a belter refinery outpost.","_gen":true,"uninhabited":true},
+  {"id":"aleph","name":"Groombridge 5034","x":793,"y":373,"faction":"independent","label":"Aleph","connections":["verdance-fields","corvus-mires","port-lachlan"],"desc":"Aleph — a belter refinery outpost.","_gen":true},
+  {"id":"ross-2012","name":"Ross 2012","x":579,"y":601,"faction":"independent","label":"Ross 2012","connections":["grendel","tycho-2081","groombridge-3861"],"desc":"Ross 2012 — a free-trader waystation.","_gen":true,"uninhabited":true},
+  {"id":"quillon","name":"Kapteyn 8016","x":1081,"y":705,"faction":"independent","label":"Quillon","connections":["haven-pallas","neo-concord","neo-tsvetov"],"desc":"Quillon — an independent shipbreaking yard.","_gen":true},
+  {"id":"ilium","name":"Gliese 1697","x":790,"y":916,"faction":"independent","label":"Ilium","connections":["hip-3578","nadir-depot","havens-gate"],"desc":"Ilium — a homesteader colony.","_gen":true},
+  {"id":"wolf-3500","name":"Wolf 3500","x":478,"y":755,"faction":"independent","label":"Wolf 3500","connections":["tsvetov-mires","hip-8511","meridian"],"desc":"Wolf 3500 — an independent free port.","_gen":true,"uninhabited":true},
+  {"id":"kruger-6077","name":"Kruger 6077","x":559,"y":811,"faction":"independent","label":"Kruger 6077","connections":["haven","solitude","hip-8511"],"desc":"Kruger 6077 — a free-trader waystation.","_gen":true},
+  {"id":"cape-umbra","name":"Tycho 2801","x":281,"y":701,"faction":"independent","label":"Cape Umbra","connections":["lalande-2829","perdido-verge","the-reach"],"desc":"Cape Umbra — a free-trader waystation.","_gen":true},
+  {"id":"port-lachlan","name":"HD 465","x":754,"y":388,"faction":"independent","label":"Port Lachlan","connections":["castor","verdance-fields","aleph"],"desc":"Port Lachlan — an independent agricultural colony.","_gen":true,"uninhabited":true},
+  {"id":"hd-5772","name":"HD 5772","x":548,"y":476,"faction":"independent","label":"HD 5772","connections":["tycho-2743","kapteyn-6027","lachlan-anchorage"],"desc":"HD 5772 — a homesteader colony.","_gen":true},
+  {"id":"ardent-verge","name":"Luyten 5594","x":831,"y":441,"faction":"hegemony","label":"Ardent Verge","connections":["verdance","corvus-mires","castor"],"desc":"Ardent Verge — a Hegemony agricultural world feeding the core.","_gen":true},
+  {"id":"verdance","name":"Wolf 2569","x":781,"y":430,"faction":"hegemony","label":"Verdance","connections":["corvus-mires","verdance-fields","ardent-verge"],"desc":"Verdance — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"corvus-mires","name":"Gliese 1170","x":771,"y":407,"faction":"hegemony","label":"Corvus Mires","connections":["verdance-fields","verdance","castor"],"desc":"Corvus Mires — a fortified Hegemony core world.","_gen":true},
+  {"id":"nova-anvil","name":"Ross 3123","x":941,"y":562,"faction":"hegemony","label":"Nova Anvil","connections":["the-archive","kalinga","gliese-2053"],"desc":"Nova Anvil — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"kruger-2035","name":"Kruger 2035","x":695,"y":369,"faction":"hegemony","label":"Kruger 2035","connections":["vega","lalande-777","castor"],"desc":"Kruger 2035 — a Hegemony agricultural world feeding the core.","_gen":true},
+  {"id":"grendel-watch","name":"Kapteyn 4331","x":983,"y":444,"faction":"hegemony","label":"Grendel Watch","connections":["morrow-watch","marrow-verge","gliese-2053"],"desc":"Grendel Watch — a Terran administrative colony.","_gen":true},
+  {"id":"perdido","name":"Luyten 5792","x":689,"y":588,"faction":"hegemony","label":"Perdido","connections":["nova-foxglove","ross-802","new-horizon"],"desc":"Perdido — a Hegemony naval anchorage.","_gen":true},
+  {"id":"haven-ashford","name":"Ross 4669","x":971,"y":282,"faction":"hegemony","label":"Haven Ashford","connections":["gliese-8791","warehouse","wolf-9518"],"desc":"Haven Ashford — a Hegemony naval anchorage.","_gen":true},
+  {"id":"okoro-station","name":"Struve 7122","x":586,"y":431,"faction":"hegemony","label":"Okoro Station","connections":["kapteyn-6027","tycho-2743","aurelia"],"desc":"Okoro Station — a fortified Hegemony core world.","_gen":true},
+  {"id":"groombridge-8520","name":"Groombridge 8520","x":828,"y":613,"faction":"hegemony","label":"Groombridge 8520","connections":["haven-emberly","zenobia","hd-354"],"desc":"Groombridge 8520 — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"tycho-2743","name":"Tycho 2743","x":572,"y":474,"faction":"hegemony","label":"Tycho 2743","connections":["kapteyn-6027","hd-5772","aurelia"],"desc":"Tycho 2743 — a Terran administrative colony.","_gen":true},
+  {"id":"gliese-8791","name":"Gliese 8791","x":971,"y":288,"faction":"hegemony","label":"Gliese 8791","connections":["haven-ashford","warehouse","wolf-9518"],"desc":"Gliese 8791 — a fortified Hegemony core world.","_gen":true},
+  {"id":"nova-foxglove","name":"Kruger 7420","x":724,"y":582,"faction":"hegemony","label":"Nova Foxglove","connections":["perdido","ross-802","tycho-2104"],"desc":"Nova Foxglove — a Terran administrative colony.","_gen":true},
+  {"id":"gliese-2053","name":"Gliese 2053","x":983,"y":503,"faction":"hegemony","label":"Gliese 2053","connections":["fort-grendel","morrow-watch","grendel-watch"],"desc":"Gliese 2053 — a fortified Hegemony core world.","_gen":true},
+  {"id":"hd-3111","name":"HD 3111","x":1082,"y":427,"faction":"hegemony","label":"HD 3111","connections":["gliese-4547","aleph-fields","tycho-7982"],"desc":"HD 3111 — a Hegemony agricultural world feeding the core.","_gen":true},
+  {"id":"harrow-yards","name":"Kapteyn 7282","x":861,"y":570,"faction":"hegemony","label":"Harrow Yards","connections":["struve-4314","zenobia","groombridge-8520"],"desc":"Harrow Yards — a Hegemony agricultural world feeding the core.","_gen":true,"uninhabited":true},
+  {"id":"wolf-9518","name":"Wolf 9518","x":968,"y":223,"faction":"hegemony","label":"Wolf 9518","connections":["bishop-mires","warehouse","haven-ashford"],"desc":"Wolf 9518 — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"grendel","name":"HD 3092","x":531,"y":586,"faction":"hegemony","label":"Grendel","connections":["ross-2012","october-yards","tycho-2743"],"desc":"Grendel — a Terran administrative colony.","_gen":true},
+  {"id":"tycho-7982","name":"Tycho 7982","x":1105,"y":507,"faction":"hegemony","label":"Tycho 7982","connections":["wolf-3572","lalande-1385","cypress"],"desc":"Tycho 7982 — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"hd-354","name":"HD 354","x":782,"y":638,"faction":"hegemony","label":"HD 354","connections":["groombridge-8520","tycho-2104","vantage"],"desc":"HD 354 — a Hegemony naval anchorage.","_gen":true,"uninhabited":true},
+  {"id":"kepler-1285","name":"Kepler 1285","x":931,"y":666,"faction":"hegemony","label":"Kepler 1285","connections":["memory","old-earth","nova-anvil"],"desc":"Kepler 1285 — a Hegemony agricultural world feeding the core.","_gen":true},
+  {"id":"vantage","name":"LHS 6409","x":739,"y":688,"faction":"hegemony","label":"Vantage","connections":["selk-anchorage","tycho-2104","hd-354"],"desc":"Vantage — a fortified Hegemony core world.","_gen":true},
+  {"id":"kapteyn-527","name":"Kapteyn 527","x":725,"y":174,"faction":"hegemony","label":"Kapteyn 527","connections":["tantalus","new-jerusalem","vega"],"desc":"Kapteyn 527 — a Hegemony naval anchorage.","_gen":true},
+  {"id":"tycho-2104","name":"Tycho 2104","x":733,"y":657,"faction":"hegemony","label":"Tycho 2104","connections":["ross-802","vantage","hd-354"],"desc":"Tycho 2104 — a fortified Hegemony core world.","_gen":true},
+  {"id":"thornwell","name":"Struve 223","x":535,"y":129,"faction":"sanhedrin","label":"Thornwell","connections":["redemption","kruger-9271","oxley"],"desc":"Thornwell — a temple-world of the Second Fall.","_gen":true,"uninhabited":true},
+  {"id":"gj-3295","name":"GJ 3295","x":453,"y":155,"faction":"sanhedrin","label":"GJ 3295","connections":["ardent-mires","oxley","new-canaan"],"desc":"GJ 3295 — a devout frontier parish.","_gen":true},
+  {"id":"calder-watch","name":"Wolf 6100","x":254,"y":260,"faction":"sanhedrin","label":"Calder Watch","connections":["landing-at-kavan","the-garden","penitence"],"desc":"Calder Watch — a devout frontier parish.","_gen":true,"uninhabited":true},
+  {"id":"lalande-2735","name":"Lalande 2735","x":365,"y":273,"faction":"sanhedrin","label":"Lalande 2735","connections":["sanhedrin-prime","gj-9779","the-garden"],"desc":"Lalande 2735 — a Congregation pilgrim colony.","_gen":true},
+  {"id":"landing-at-kavan","name":"Ross 8519","x":242,"y":194,"faction":"sanhedrin","label":"Landing at Kavan","connections":["penitence","calder-watch","gj-6798"],"desc":"Landing at Kavan — a Sanhedrin cloister-world.","_gen":true},
+  {"id":"ardent-mires","name":"Ross 2376","x":478,"y":148,"faction":"sanhedrin","label":"Ardent Mires","connections":["oxley","gj-3295","kruger-9271"],"desc":"Ardent Mires — a Sanhedrin cloister-world.","_gen":true,"uninhabited":true},
+  {"id":"kiln","name":"Wolf 2279","x":265,"y":40,"faction":"sanhedrin","label":"Kiln","connections":["gliese-1265","ironhold","gj-6798"],"desc":"Kiln — a devout frontier parish.","_gen":true},
+  {"id":"gj-6798","name":"GJ 6798","x":248,"y":119,"faction":"sanhedrin","label":"GJ 6798","connections":["ironhold","landing-at-kavan","kiln"],"desc":"GJ 6798 — a devout frontier parish.","_gen":true},
+  {"id":"oxley","name":"Ross 1431","x":478,"y":138,"faction":"sanhedrin","label":"Oxley","connections":["ardent-mires","gj-3295","kruger-9271"],"desc":"Oxley — a Sanhedrin cloister-world.","_gen":true,"uninhabited":true},
+  {"id":"novo-kalinga","name":"Lalande 5066","x":462,"y":84,"faction":"sanhedrin","label":"Novo Kalinga","connections":["gliese-9630","oxley","ardent-mires"],"desc":"Novo Kalinga — a Congregation pilgrim colony.","_gen":true},
+  {"id":"gliese-9630","name":"Gliese 9630","x":454,"y":40,"faction":"sanhedrin","label":"Gliese 9630","connections":["novo-kalinga","oxley","kruger-9271"],"desc":"Gliese 9630 — a Congregation pilgrim colony.","_gen":true},
+  {"id":"ostrava-verge","name":"Gliese 170","x":511,"y":385,"faction":"sanhedrin","label":"Ostrava Verge","connections":["port-zenobia","lhs-3145"],"desc":"Ostrava Verge — a Congregation pilgrim colony.","_gen":true,"uninhabited":true},
+  {"id":"gliese-1265","name":"Gliese 1265","x":314,"y":40,"faction":"sanhedrin","label":"Gliese 1265","connections":["kiln","ironhold","gj-6798"],"desc":"Gliese 1265 — a Congregation pilgrim colony.","_gen":true},
+  {"id":"kruger-9271","name":"Kruger 9271","x":513,"y":132,"faction":"sanhedrin","label":"Kruger 9271","connections":["thornwell","redemption","oxley"],"desc":"Kruger 9271 — a Congregation pilgrim colony.","_gen":true},
+  {"id":"port-zenobia","name":"Gliese 264","x":496,"y":389,"faction":"sanhedrin","label":"Port Zenobia","connections":["lhs-3145","ostrava-verge"],"desc":"Port Zenobia — a devout frontier parish.","_gen":true,"uninhabited":true},
+  {"id":"ferrum","name":"Kruger 666","x":834,"y":679,"faction":"uhc","label":"Ferrum","connections":["haven-emberly","hd-354","old-earth"],"desc":"Ferrum — a UHC terraforming project.","_gen":true,"uninhabited":true},
+  {"id":"neo-concord","name":"Groombridge 9134","x":1047,"y":717,"faction":"uhc","label":"Neo Concord","connections":["haven-pallas","wolf-8073","lalande-4989"],"desc":"Neo Concord — a UHC industrial world.","_gen":true,"uninhabited":true},
+  {"id":"hd-5592","name":"HD 5592","x":813,"y":540,"faction":"uhc","label":"HD 5592","connections":["struve-4314","novo-warden","hd-9823"],"desc":"HD 5592 — a UHC terraforming project.","_gen":true},
+  {"id":"lalande-1385","name":"Lalande 1385","x":1049,"y":511,"faction":"uhc","label":"Lalande 1385","connections":["the-museum","gliese-4547","morrow-watch"],"desc":"Lalande 1385 — a Continuity records-vault world.","_gen":true,"uninhabited":true},
+  {"id":"haven-pallas","name":"LHS 4767","x":1055,"y":700,"faction":"uhc","label":"Haven Pallas","connections":["neo-concord","quillon","wolf-8073"],"desc":"Haven Pallas — a UHC terraforming project.","_gen":true,"uninhabited":true},
+  {"id":"hd-9823","name":"HD 9823","x":904,"y":513,"faction":"uhc","label":"HD 9823","connections":["the-archive","nova-anvil","struve-4314"],"desc":"HD 9823 — a Continuity records-vault world.","_gen":true},
+  {"id":"harrow-verge","name":"Tycho 1899","x":958,"y":365,"faction":"uhc","label":"Harrow Verge","connections":["lalande-2449","marrow-verge","morrow-watch"],"desc":"Harrow Verge — a Continuity records-vault world.","_gen":true,"uninhabited":true},
+  {"id":"wolf-8073","name":"Wolf 8073","x":1014,"y":728,"faction":"uhc","label":"Wolf 8073","connections":["zephyria-prime","neo-concord","haven-pallas"],"desc":"Wolf 8073 — a UHC industrial world.","_gen":true,"uninhabited":true},
+  {"id":"morrow-watch","name":"Wolf 1167","x":1005,"y":458,"faction":"uhc","label":"Morrow Watch","connections":["grendel-watch","aleph-fields","lalande-1385"],"desc":"Morrow Watch — a UHC industrial world.","_gen":true,"uninhabited":true},
+  {"id":"marrow-verge","name":"Ross 6101","x":957,"y":402,"faction":"uhc","label":"Marrow Verge","connections":["lalande-2449","harrow-verge","morrow-watch"],"desc":"Marrow Verge — a UHC industrial world.","_gen":true},
+  {"id":"nova-kiln","name":"Luyten 4329","x":945,"y":824,"faction":"uhc","label":"Nova Kiln","connections":["dust","solidarity","lalande-4989"],"desc":"Nova Kiln — a UHC terraforming project.","_gen":true,"uninhabited":true},
+  {"id":"ross-802","name":"Ross 802","x":721,"y":639,"faction":"uhc","label":"Ross 802","connections":["tycho-2104","vantage","ferrum"],"desc":"Ross 802 — a UHC terraforming project.","_gen":true,"uninhabited":true},
+  {"id":"lalande-4989","name":"Lalande 4989","x":938,"y":730,"faction":"uhc","label":"Lalande 4989","connections":["avalon","hd-7374","memory"],"desc":"Lalande 4989 — a UHC industrial world.","_gen":true},
+  {"id":"struve-4314","name":"Struve 4314","x":829,"y":535,"faction":"uhc","label":"Struve 4314","connections":["hd-5592","novo-warden","hd-9823"],"desc":"Struve 4314 — a UHC terraforming project.","_gen":true,"uninhabited":true},
+  {"id":"gj-2668","name":"GJ 2668","x":524,"y":533,"faction":"rsc","label":"GJ 2668","connections":["haven-tsvetov","lalande-7400","october-yards"],"desc":"GJ 2668 — a Red Star frontier soviet.","_gen":true},
+  {"id":"providence-terminus","name":"Luyten 3698","x":423,"y":736,"faction":"rsc","label":"Providence Terminus","connections":["tsvetov-mires","wolf-3500","kruger-5735"],"desc":"Providence Terminus — a Red Star frontier soviet.","_gen":true},
+  {"id":"anvil-rest","name":"LHS 9105","x":545,"y":673,"faction":"rsc","label":"Anvil Rest","connections":["meridian","hip-8511","red-sunrise"],"desc":"Anvil Rest — a collectivised mining world.","_gen":true,"uninhabited":true},
+  {"id":"aleph-station","name":"Kepler 8886","x":646,"y":737,"faction":"rsc","label":"Aleph Station","connections":["freeside","ophion-prime","anvil-rest"],"desc":"Aleph Station — a collectivised mining world.","_gen":true,"uninhabited":true},
+  {"id":"tsvetov-mires","name":"HD 6509","x":433,"y":741,"faction":"rsc","label":"Tsvetov Mires","connections":["providence-terminus","wolf-3500","kruger-5735"],"desc":"Tsvetov Mires — a collectivised mining world.","_gen":true,"uninhabited":true},
+  {"id":"struve-6886","name":"Struve 6886","x":317,"y":518,"faction":"rsc","label":"Struve 6886","connections":["selk-verge","the-forge","the-hammer"],"desc":"Struve 6886 — a Red Star collective commune.","_gen":true,"uninhabited":true},
+  {"id":"haven-tsvetov","name":"Ross 8450","x":508,"y":523,"faction":"rsc","label":"Haven Tsvetov","connections":["gj-2668","lalande-7400","october-yards"],"desc":"Haven Tsvetov — an RSC labour world.","_gen":true,"uninhabited":true},
+  {"id":"selk-verge","name":"LHS 7618","x":354,"y":491,"faction":"rsc","label":"Selk Verge","connections":["struve-6886","fort-jubilee","the-hammer"],"desc":"Selk Verge — a Red Star collective commune.","_gen":true},
+  {"id":"hd-6306","name":"HD 6306","x":353,"y":680,"faction":"rsc","label":"HD 6306","connections":["perdido-verge","cape-umbra","kruger-5735"],"desc":"HD 6306 — a Red Star collective commune.","_gen":true},
+  {"id":"perdido-verge","name":"Kapteyn 6554","x":351,"y":724,"faction":"rsc","label":"Perdido Verge","connections":["hd-6306","kruger-5735","providence-terminus"],"desc":"Perdido Verge — a collectivised mining world.","_gen":true},
+  {"id":"kruger-5735","name":"Kruger 5735","x":367,"y":766,"faction":"rsc","label":"Kruger 5735","connections":["perdido-verge","providence-terminus","tsvetov-mires"],"desc":"Kruger 5735 — a collectivised mining world.","_gen":true},
+  {"id":"port-thornwell","name":"Gliese 7116","x":441,"y":572,"faction":"rsc","label":"Port Thornwell","connections":["october-yards","the-forge","red-sunrise"],"desc":"Port Thornwell — a Red Star collective commune.","_gen":true},
+  {"id":"lalande-777","name":"Lalande 777","x":661,"y":375,"faction":"rsc","label":"Lalande 777","connections":["kruger-2035","vega"],"desc":"Lalande 777 — a collectivised mining world.","_gen":true,"uninhabited":true},
+  {"id":"lalande-7400","name":"Lalande 7400","x":503,"y":502,"faction":"rsc","label":"Lalande 7400","connections":["haven-tsvetov","gj-2668","the-hammer"],"desc":"Lalande 7400 — a Red Star frontier soviet.","_gen":true},
+  {"id":"verdance-reach","name":"HIP 9228","x":1113,"y":380,"faction":"omnisynth","label":"Verdance Reach","connections":["grendel-terminus","terminus","saint-grendel"],"desc":"Verdance Reach — an OmniSynth research station.","_gen":true},
+  {"id":"bishop-mires","name":"Gliese 4244","x":939,"y":246,"faction":"omnisynth","label":"Bishop Mires","connections":["warehouse","wolf-9518","profit-margin"],"desc":"Bishop Mires — an OmniSynth automated foundry-world.","_gen":true,"uninhabited":true},
+  {"id":"kruger-9706","name":"Kruger 9706","x":1030,"y":316,"faction":"omnisynth","label":"Kruger 9706","connections":["kronos","gliese-8791","saint-grendel"],"desc":"Kruger 9706 — an OmniSynth research station.","_gen":true},
+  {"id":"rhodes","name":"Gliese 1040","x":1216,"y":203,"faction":"omnisynth","label":"Rhodes","connections":["jubilee","the-anvil","bishop-depot"],"desc":"Rhodes — an OmniSynth automated foundry-world.","_gen":true},
+  {"id":"grendel-terminus","name":"Kepler 9311","x":1120,"y":386,"faction":"omnisynth","label":"Grendel Terminus","connections":["verdance-reach","terminus","saint-grendel"],"desc":"Grendel Terminus — an OmniSynth automated foundry-world.","_gen":true,"uninhabited":true},
+  {"id":"bishop-depot","name":"Luyten 8025","x":1142,"y":286,"faction":"omnisynth","label":"Bishop Depot","connections":["the-anvil","terminus","verdance-reach"],"desc":"Bishop Depot — an OmniSynth company world.","_gen":true,"uninhabited":true},
+  {"id":"luyten-7412","name":"Luyten 7412","x":1215,"y":372,"faction":"omnisynth","label":"Luyten 7412","connections":["erebus","grendel-terminus","verdance-reach"],"desc":"Luyten 7412 — an OmniSynth company world.","_gen":true,"uninhabited":true},
+  {"id":"aleph-fields","name":"Ross 7682","x":1046,"y":434,"faction":"omnisynth","label":"Aleph Fields","connections":["saint-grendel","gliese-4547","verdance-reach"],"desc":"Aleph Fields — an OmniSynth automated foundry-world.","_gen":true},
+  {"id":"jubilee","name":"HD 3809","x":1214,"y":176,"faction":"omnisynth","label":"Jubilee","connections":["rhodes","the-anvil","bishop-depot"],"desc":"Jubilee — an OmniSynth research station.","_gen":true,"uninhabited":true},
+  {"id":"saint-grendel","name":"Ross 8436","x":1045,"y":402,"faction":"omnisynth","label":"Saint Grendel","connections":["aleph-fields","hd-3111","verdance-reach"],"desc":"Saint Grendel — a corporate mining concession.","_gen":true},
+  {"id":"hd-3738","name":"HD 3738","x":785,"y":577,"faction":"contested","label":"HD 3738","connections":["hd-5592","groombridge-8520","zenobia"],"desc":"HD 3738 — a world under disputed claim.","_gen":true},
+  {"id":"wolf-6713","name":"Wolf 6713","x":908,"y":644,"faction":"contested","label":"Wolf 6713","connections":["old-earth","vesta","zenobia"],"desc":"Wolf 6713 — a world under disputed claim.","_gen":true},
+  {"id":"sundara","name":"Wolf 6256","x":1101,"y":618,"faction":"contested","label":"Sundara","connections":["neo-tsvetov","cypress","wolf-3572"],"desc":"Sundara — a contested border world.","_gen":true,"uninhabited":true},
+  {"id":"lalande-2449","name":"Lalande 2449","x":937,"y":388,"faction":"contested","label":"Lalande 2449","connections":["marrow-verge","harrow-verge"],"desc":"Lalande 2449 — a contested border world.","_gen":true,"uninhabited":true},
+  {"id":"wolf-3572","name":"Wolf 3572","x":1128,"y":553,"faction":"contested","label":"Wolf 3572","connections":["cypress","tycho-7982","sundara"],"desc":"Wolf 3572 — a world under disputed claim.","_gen":true},
+  {"id":"zenobia","name":"LHS 439","x":873,"y":619,"faction":"contested","label":"Zenobia","connections":["haven-emberly","wolf-6713","hd-3738"],"desc":"Zenobia — a lawless marches settlement.","_gen":true},
+  {"id":"selk-anchorage","name":"Lalande 4015","x":740,"y":697,"faction":"contested","label":"Selk Anchorage","connections":["vantage","ophion-prime","hd-3738"],"desc":"Selk Anchorage — a lawless marches settlement.","_gen":true,"uninhabited":true},
+  {"id":"fort-grendel","name":"Groombridge 9500","x":994,"y":531,"faction":"contested","label":"Fort Grendel","connections":["gliese-2053","the-museum","gliese-4547"],"desc":"Fort Grendel — a world under disputed claim.","_gen":true},
+  {"id":"gliese-4547","name":"Gliese 4547","x":1067,"y":460,"faction":"contested","label":"Gliese 4547","connections":["aleph-fields","hd-3111","fort-grendel"],"desc":"Gliese 4547 — a shifting-allegiance frontier port.","_gen":true,"uninhabited":true},
+  {"id":"lhs-3145","name":"LHS 3145","x":489,"y":391,"faction":"archon","label":"LHS 3145","connections":["port-zenobia","ostrava-verge","gj-9779"],"desc":"LHS 3145 — a silent Archon node.","_gen":true},
+  {"id":"gj-9779","name":"GJ 9779","x":412,"y":342,"faction":"archon","label":"GJ 9779","connections":["lalande-2735","lhs-3145","sanhedrin-prime"],"desc":"GJ 9779 — a silent Archon node.","_gen":true},
+  {"id":"fort-jubilee","name":"Ross 6681","x":398,"y":473,"faction":"archon","label":"Fort Jubilee","connections":["the-hammer","gliese-9700","lhs-3145"],"desc":"Fort Jubilee — a silent Archon node.","_gen":true},
+  {"id":"kapteyn-6027","name":"Kapteyn 6027","x":588,"y":476,"faction":"archon","label":"Kapteyn 6027","connections":["aurelia","tycho-2743","tycho-2081"],"desc":"Kapteyn 6027 — a half-lit Archon waystation.","_gen":true},
+  {"id":"tycho-2081","name":"Tycho 2081","x":622,"y":563,"faction":"archon","label":"Tycho 2081","connections":["groombridge-3861","new-horizon","kapteyn-6027"],"desc":"Tycho 2081 — a silent Archon node.","_gen":true},
+  {"id":"lhs-6342","name":"LHS 6342","x":162,"y":582,"faction":"vast","label":"LHS 6342","connections":["the-fade","threshold","calder"],"desc":"LHS 6342 — a quiet Vast enclave.","_gen":true},
+  {"id":"calder","name":"Ross 4202","x":138,"y":494,"faction":"vast","label":"Calder","connections":["the-mausoleum","whisper","the-fade"],"desc":"Calder — a quiet Vast enclave.","_gen":true},
+  {"id":"groombridge-7477","name":"Groombridge 7477","x":205,"y":448,"faction":"vast","label":"Groombridge 7477","connections":["hip-6329","the-mausoleum","calder"],"desc":"Groombridge 7477 — a quiet Vast enclave.","_gen":true},
+  {"id":"meridian-landing","name":"Tycho 2885","x":83,"y":395,"faction":"vast","label":"Meridian Landing","connections":["silent-witness","whisper","calder"],"desc":"Meridian Landing — a strange Vast research outpost.","_gen":true},
+  {"id":"hip-6329","name":"HIP 6329","x":216,"y":485,"faction":"vast","label":"HIP 6329","connections":["groombridge-7477","the-mausoleum","calder","struve-6886"],"desc":"HIP 6329 — a quiet Vast enclave.","_gen":true}
 ];
 
 // Pristine snapshot of the AUTHORED galaxy, taken before any derived fields
@@ -805,15 +254,15 @@ const GX_LANES = new Set();
 function gxLaneKey(a,b){ return a < b ? a+'|'+b : b+'|'+a; }
 let gxLaneAdditions = [];   // canonical lane keys added beyond the base data
 let gxLaneDeletions = [];   // canonical lane keys removed from the base data
-// The galaxy ships with NO jump lanes — the referee draws them by hand in
-// Design Mode (gxArmLink → gxAddLane), and those additions persist in Supabase
-// (gxLaneAdditions). We deliberately ignore each node's authored `connections`
-// here so the starting map is a blank lane network. (The original connections
-// are still in the GALAXY_NODES data if a base network is ever wanted again.)
+// RENDERED lanes = REFEREE-drawn only. The map shows exactly the jump lanes the referee draws in
+// Design Mode (gxLaneAdditions, persisted); the authored `connections` are NOT rendered (the base
+// network is off). The ECONOMY trade graph is DECOUPLED from the rendered lanes (see _econLinks
+// below): it always routes on the full authored network + the referee's edits, so a ~180-system
+// galaxy trades out of the box even with a clean, referee-authored lane map.
 GALAXY_NODES.forEach(s => { s._baseConnections = []; });
 function gxRebuildLanes(){
   GX_LANES.clear();
-  GALAXY_NODES.forEach(s => (s._baseConnections||[]).forEach(cid => {
+  GALAXY_NODES.forEach(s => (s._baseConnections||[]).forEach(cid => {   // empty by default → rendered lanes are referee-only
     if(GX_MAP[cid] && cid !== s.id) GX_LANES.add(gxLaneKey(s.id, cid));
   }));
   gxLaneDeletions.forEach(k => GX_LANES.delete(k));
@@ -821,8 +270,8 @@ function gxRebuildLanes(){
     const [a,b] = k.split('|');
     if(GX_MAP[a] && GX_MAP[b] && a !== b) GX_LANES.add(k);
   });
-  // Rebuild every node's connections array from the effective set so the detail
-  // panel's count + connection list stay in sync with the drawn lanes.
+  // Rebuild every node's connections array from the RENDERED set so the detail panel's connection
+  // list matches the drawn lanes.
   const adj = {};
   GALAXY_NODES.forEach(s => adj[s.id] = []);
   GX_LANES.forEach(k => {
@@ -831,6 +280,16 @@ function gxRebuildLanes(){
     if(adj[b] && !adj[b].includes(a)) adj[b].push(a);
   });
   GALAXY_NODES.forEach(s => s.connections = adj[s.id]);
+  // ECONOMY graph — authored network (_loreLinks) + referee lane edits, INVISIBLE on the map. Trade
+  // always has routes regardless of which lanes the referee chose to draw; a referee lane deletion
+  // reroutes trade, an addition opens a new trade route. Read by ECON.buildTopology (js/90).
+  const eset = new Set();
+  GALAXY_NODES.forEach(s => (s._loreLinks||[]).forEach(cid => { if(GX_MAP[cid] && cid!==s.id) eset.add(gxLaneKey(s.id, cid)); }));
+  gxLaneDeletions.forEach(k => eset.delete(k));
+  gxLaneAdditions.forEach(k => { const [a,b]=k.split('|'); if(GX_MAP[a]&&GX_MAP[b]&&a!==b) eset.add(k); });
+  const eadj = {}; GALAXY_NODES.forEach(s => eadj[s.id] = []);
+  eset.forEach(k => { const [a,b]=k.split('|'); if(eadj[a]&&!eadj[a].includes(b)) eadj[a].push(b); if(eadj[b]&&!eadj[b].includes(a)) eadj[b].push(a); });
+  GALAXY_NODES.forEach(s => s._econLinks = eadj[s.id]);
 }
 gxRebuildLanes();
 
@@ -963,7 +422,7 @@ function rebuildSystemsFromOverlay(){
   GALAXY_NODES.forEach(n => { n._loreLinks = Array.isArray(n.connections) ? n.connections.slice() : []; });
   Object.keys(GX_MAP).forEach(k => delete GX_MAP[k]);
   GALAXY_NODES.forEach(s => GX_MAP[s.id] = s);
-  GALAXY_NODES.forEach(s => { s._baseConnections = []; });
+  GALAXY_NODES.forEach(s => { s._baseConnections = []; });   // rendered lanes = referee-drawn only (economy uses _econLinks; see init path)
   // 3. Register any newly-added system as a drillable (empty) system
   GALAXY_NODES.forEach(n => {
     const sid = n.systemId || n.id;
@@ -1446,25 +905,40 @@ const HX = (function(){
     return out; }
 
   // ── Build hex systems from GALAXY_NODES, hand-clustered by faction ──
-  const FACTION_ANCHOR={ hegemony:[0,0], contested:[4,-2], sanhedrin:[7,-4], omnisynth:[4,-6],
-    uhc:[4,4], archon:[9,3], vast:[1,7], rsc:[-6,0] };
-  const IND_POCKETS=[[-8,3],[-5,6],[-2,9],[6,5],[10,-1],[-3,-4]];
+  // Faction anchors spread ~2.2× wider than the original 53-world map so the far larger
+  // (~180-world) clusters sit apart with real interstellar gaps between regions — more
+  // parsecs (hexes) to cross between powers, without crowding the hex grid.
+  const FACTION_ANCHOR={ hegemony:[0,0], contested:[9,-4], sanhedrin:[15,-9], omnisynth:[9,-13],
+    uhc:[9,9], archon:[20,7], vast:[2,15], rsc:[-13,0] };
+  const IND_POCKETS=[[-18,7],[-11,14],[-4,20],[13,11],[22,-3],[-7,-9],[16,-16],[-20,-6],[6,22],[24,4]];
   const FAC_ORDER=['hegemony','sanhedrin','omnisynth','uhc','contested','rsc','archon','vast'];
   function isDeep(n){ return /deep space|mobile|uncharted nebula/i.test(n.name||''); }
   const SYS=(typeof GALAXY_NODES!=='undefined'?GALAXY_NODES:[]).map(n=>({ id:n.id, systemId:n.systemId||n.id,
     star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[],
-    pc:pcOf(n.name), deep:isDeep(n), campaign:true, q:null, r:null }));
+    pc:pcOf(n.name), deep:isDeep(n), uninhabited:!!n.uninhabited, campaign:true, q:null, r:null }));
   const occupied=new Set();
-  function clusterFaction(fac){ const a=FACTION_ANCHOR[fac]||[0,0], sp=spiral(a[0],a[1],9);
-    const members=SYS.filter(x=>x.fac===fac).sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc));
-    let i=0; members.forEach(m=>{ while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
-      const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; i++; }); }
+  // Spread placement: stars in a territory sit ≥ HEX_SPACING hexes apart, so a faction reads as a
+  // scattered REGION of systems with space between them — not a solid blob of adjacent stars.
+  const HEX_SPACING=2;
+  const hDist=(x,y)=>(Math.abs(x.q-y.q)+Math.abs(x.q+x.r-y.q-y.r)+Math.abs(x.r-y.r))/2;
+  function placeSpread(members, anchor, maxR){
+    const sp=spiral(anchor[0],anchor[1],maxR), placed=[];
+    members.forEach(m=>{
+      let h=null;
+      for(let i=0;i<sp.length;i++){ const c=sp[i]; if(occupied.has(c.q+','+c.r)) continue;   // pass 1: honour spacing
+        if(placed.some(p=>hDist(p,c)<HEX_SPACING)) continue; h=c; break; }
+      if(!h) for(let i=0;i<sp.length;i++){ const c=sp[i]; if(!occupied.has(c.q+','+c.r)){ h=c; break; } }  // pass 2: any free cell
+      h=h||{q:anchor[0],r:anchor[1]};
+      occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; placed.push(h);
+    });
+  }
+  function clusterFaction(fac){ placeSpread(SYS.filter(x=>x.fac===fac).sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc)), FACTION_ANCHOR[fac]||[0,0], 18); }
   FAC_ORDER.forEach(clusterFaction);
-  SYS.filter(x=>x.fac==='independent').sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc)).forEach((m,idx)=>{
-    const a=IND_POCKETS[idx%IND_POCKETS.length], sp=spiral(a[0],a[1],3);
-    let i=0; while(i<sp.length && occupied.has(sp[i].q+','+sp[i].r)) i++;
-    const h=sp[i]||{q:a[0],r:a[1]}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; });
-  const sp0=spiral(0,0,28); let _j=0;
+  // Independents scatter across their pockets (round-robin), spread within each pocket.
+  { const inds=SYS.filter(x=>x.fac==='independent').sort((x,y)=>(x.pc==null?9999:x.pc)-(y.pc==null?9999:y.pc));
+    const pockets={}; inds.forEach((m,idx)=>{ (pockets[idx%IND_POCKETS.length]=pockets[idx%IND_POCKETS.length]||[]).push(m); });
+    Object.keys(pockets).forEach(k=> placeSpread(pockets[k], IND_POCKETS[k], 7)); }
+  const sp0=spiral(0,0,42); let _j=0;
   SYS.filter(x=>x.q==null).forEach(m=>{ while(_j<sp0.length&&occupied.has(sp0[_j].q+','+sp0[_j].r))_j++;
     const h=sp0[_j]||{q:0,r:0}; occupied.add(h.q+','+h.r); m.q=h.q; m.r=h.r; _j++; });
 
@@ -1578,6 +1052,13 @@ const HX = (function(){
   // (realMainWorld) keep their authored UWP. Faction core worlds run high-tech; the
   // starport implies a tech floor.
   function uwpOf(s){ if(s._uwp) return s._uwp;
+    // Uninhabited worlds: keep a physically-plausible planet (size/atmo/hydro from the
+    // seeded generator) but zero the human profile — no starport, no population, no
+    // government or law, no tech. Reads as a genuinely empty, surveyed-but-unsettled
+    // world (trade codes → Barren) while staying a jump pass-through on the map.
+    if(s.uninhabited){ const w=WGEN.genUWP({ rng:WGEN.seededRng(s.star||s.label), deep:s.deep });
+      const u={ port:'X', size:w.size, atmo:w.atmo, hydro:w.hydro, pop:0, gov:0, law:0, tl:0, temp:w.temp };
+      s._uwp=u; return u; }
     const real=realMainWorld(s.systemId); if(real){ s._uwp=real.uwp; return real.uwp; }
     const core=['hegemony','omnisynth','uhc','sanhedrin'].includes(s.fac), port=portOf(s);
     const tlFloor={A:10,B:8,C:5,D:0,E:0,X:0}[port]||0;
@@ -1715,7 +1196,7 @@ const HX = (function(){
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
   let paintMode=false, paintColor='#4aa3ff'; // referee territory brush: armed while tapping hexes to paint/erase them
   let sysDrag=null;                  // Design Mode: {id,moved,lastKey} while dragging a star to a new hex
-  const RPX=26, LABEL_ZOOM_F=1.3, FAC_LABEL_PX=17;
+  const RPX=26, LABEL_ZOOM_F=1.3, FAC_LABEL_PX=17, LOD_DETAIL_Z=1.25;   // below LOD_DETAIL_Z (× fit) = overview LOD: cull backdrop grid + labels
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
     fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
@@ -1836,6 +1317,14 @@ const HX = (function(){
     svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible()); facFont();
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
+    // ── Level-of-detail + viewport culling (keeps the ~180-system map smooth) ──
+    // z = zoom relative to fit (1 = whole galaxy on screen). At overview zoom we skip the empty
+    // backdrop grid and per-star labels; at any zoom we draw only stars/lanes inside the viewport.
+    const z = view.scale/(fitScale||view.scale||1);
+    const lodOverview = z < LOD_DETAIL_Z;                 // zoomed out enough that the whole arm shows
+    const showLbl = labelsVisible();
+    const _vw = visibleHexRange(3);                       // visible q,r window (null pre-fit → draw all)
+    const inView = s => !_vw || (s.q>=_vw.minQ && s.q<=_vw.maxQ && s.r>=_vw.minR && s.r<=_vw.maxR);
     if(showTerr){ const tg=NS('g',{'pointer-events':'none'}); g.appendChild(tg);
       const painted=(typeof hexPaint!=='undefined'&&hexPaint)?hexPaint:{};
       const byFac={};
@@ -1871,9 +1360,11 @@ const HX = (function(){
     const gr=gridRange(1,{minQ,maxQ,minR,maxR});   // tile the visible viewport (infinite/pannable), not a fixed box
     const hexLayer=NS('g',{}); g.appendChild(hexLayer);
     for(let q=gr.minQ;q<=gr.maxQ;q++) for(let r=gr.minR;r<=gr.maxR;r++){
-      const cell={q,r}, dist=hexDist(cell,origin), p=axialPx(q,r); let cls='hx-hex';
-      if(range){ if(range.reach.has(q+','+r)) cls+=' fuelreach'; }
-      else if(dist>=1&&dist<=jumpRating) cls+= dist===1?' reach reach1':' reach';
+      const cell={q,r}, dist=hexDist(cell,origin); let cls='hx-hex', hl=false;
+      if(range){ if(range.reach.has(q+','+r)){ cls+=' fuelreach'; hl=true; } }
+      else if(dist>=1&&dist<=jumpRating){ cls+= dist===1?' reach reach1':' reach'; hl=true; }
+      if(lodOverview && !hl) continue;   // overview: drop the empty backdrop grid; keep only the reach/fuel highlights
+      const p=axialPx(q,r);
       hexLayer.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),class:cls})); }
     const op=axialPx(origin.q,origin.r);
     [5,10,15].forEach(h=>{ g.appendChild(NS('circle',{cx:op.x,cy:op.y,r:h*Math.sqrt(3)*RPX,class:'hx-ring'}));
@@ -1885,7 +1376,8 @@ const HX = (function(){
     if(showTrade && tradeGoods.size===1){ try{ drawPriceHeat(g); }catch(e){} }
     if(showLanes){ const editing=(typeof designModeOn!=='undefined'&&designModeOn&&ref());
       const laneLayer=NS('g',{}); g.appendChild(laneLayer);
-      laneEdges().forEach(L=>{ const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
+      laneEdges().forEach(L=>{ if(!inView(L.a)&&!inView(L.b)) return;   // cull lanes fully off-screen
+        const pa=axialPx(L.a.q,L.a.r), pb=axialPx(L.b.q,L.b.r);
         const flyable=L.len<=jumpRating||onLane(L.a,L.b), touches=(L.a===origin||L.b===origin);
         const line=NS('line',{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,class:'hx-lane'});
         if(flyable){ line.setAttribute('stroke-dasharray','none'); line.setAttribute('opacity',touches?'0.95':'0.5'); }
@@ -1944,7 +1436,8 @@ const HX = (function(){
         const lbl=NS('text',{x:dp.x,y:dp.y-13,'text-anchor':'middle',class:'hx-bestrun-lbl'});
         lbl.textContent=`★ ${gShort(br.good)} +${kCr(br.perTon)}/t`; bl.appendChild(lbl); }
     }catch(e){} }
-    SYS.forEach(s=>{ const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
+    SYS.forEach(s=>{ if(!inView(s) && s!==origin && s!==selected) return;   // cull off-screen stars (keep origin + selection)
+      const p=axialPx(s.q,s.r), col=effFac(s.fac).color;
       const isOrigin=s===origin, isSel=s===selected, inRange=!range||isOrigin||range.reach.has(s.q+','+s.r);
       if(showFuel){ const fa=fuelAt(s), ring=NS('circle',{cx:p.x,cy:p.y,r:6.5,fill:'none',stroke:FUEL_INFO[fa].c,'stroke-width':1.2,opacity:inRange?0.65:0.25});
         if(fa==='none') ring.setAttribute('stroke-dasharray','2,2'); g.appendChild(ring); }
@@ -1959,11 +1452,17 @@ const HX = (function(){
       if(s.deep){ const z=isOrigin?5:4; marker=NS('polygon',{points:`${p.x},${p.y-z} ${p.x+z},${p.y} ${p.x},${p.y+z} ${p.x-z},${p.y}`,
         fill:isOrigin?'#f4d35e':'#04060e',stroke:isOrigin?'#f4d35e':col,'stroke-width':1.3,class:'hx-star-dot'}); }
       else marker=NS('circle',{cx:p.x,cy:p.y,r:isOrigin?5:4,fill:isOrigin?'#f4d35e':col,class:'hx-star-dot'});
+      // Uninhabited world: hollow it out (dark fill, thin faction-tinted ring) so an
+      // unsettled system reads at a glance as distinct from a populated one, while still
+      // sitting on the map as a jump waypoint. Origin/selected keep their emphasis.
+      if(s.uninhabited && !isOrigin){ marker.setAttribute('fill','#04060e');
+        marker.setAttribute('stroke',col); marker.setAttribute('stroke-width','1'); marker.setAttribute('opacity', inRange?'0.75':'0.3'); }
       if(isSel&&!isOrigin){ marker.setAttribute('stroke','#fff'); marker.setAttribute('stroke-width','1.5'); }
       if(!inRange) marker.setAttribute('opacity','0.3'); marker.style.cursor='pointer';
       g.appendChild(marker);
-      const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
-      if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl);
+      if(showLbl || isOrigin || isSel){                                  // overview LOD: only pinned/selected labels (was CSS-hidden anyway)
+        const lbl=NS('text',{x:p.x+8,y:p.y+3,class:'hx-star-lbl'+((isOrigin||isSel)?' pin':'')});
+        if(!inRange) lbl.setAttribute('opacity','0.3'); lbl.textContent=disp(s); g.appendChild(lbl); }
       // Finger-friendly tap target: the visible star is only ~8px across — far below a
       // usable touch target — so overlay a larger transparent hit circle that carries the
       // tap (and the hover-label). Sits on top so a tap near a star still selects it.
@@ -2708,13 +2207,13 @@ const HX = (function(){
       if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
     // Add new / update existing.
     Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
-      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.systemId=n.systemId||n.id; s.zone=n.zone||''; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.uninhabited=!!n.uninhabited; s.systemId=n.systemId||n.id; s.zone=n.zone||''; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
         if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
           if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
             s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
       else { let q=n.q, r=n.r;
         if(q==null||r==null||occupied.has(q+','+r)){ const a=FACTION_ANCHOR[n.faction]||[0,0]; const f=nearestFreeHex(q!=null?q:a[0], r!=null?r:a[1]); q=f.q; r=f.r; }
-        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), zone:n.zone||'', campaign:true, q, r };
+        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), uninhabited:!!n.uninhabited, zone:n.zone||'', campaign:true, q, r };
         SYS.push(s); BY_ID[id]=s; BY_KEY[q+','+r]=s; occupied.add(q+','+r); } });
     if(selected&&!BY_ID[selected.id]) selected=null;
     if(origin&&!BY_ID[origin.id]) origin=BY_ID['aurelia']||SYS[0]||null;
@@ -2774,7 +2273,7 @@ const HX = (function(){
     let gasGiant=false;
     try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[])||[];
       gasGiant=bodies.some(b=> b.discStyle==='gasgiant' || /gas giant|ice giant/i.test(b.type||'')); }catch(e){}
-    return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
+    return { codes, port:uwp.port, pop:uwp.pop|0, law:uwp.law|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };
