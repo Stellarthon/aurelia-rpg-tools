@@ -3544,11 +3544,11 @@ input#ui-scale-range{
 .hx-star-lbl.dim{fill:#5b6479}
 .hx-star-lbl.pin{display:block}
 #hx-map.hx-lblzoom .hx-star-lbl{display:block}
-/* Region / faction names — the Stellaris-style at-a-glance label washed across each
-   territory. Counter-scaled to a constant on-screen size (--hx-fac-font, set by the
-   engine) so it stays readable when zoomed out, and cross-faded away once you zoom in
-   past the star-label threshold (.hx-lblzoom) — star names take over from there. */
-.hx-fac-lbl{font-family:var(--mono,monospace);font-size:var(--hx-fac-font,17px);font-weight:700;letter-spacing:2px;opacity:.6;pointer-events:none;paint-order:stroke;stroke:#04060e;stroke-width:.16em;stroke-linejoin:round;transition:opacity .2s ease}
+/* Region / faction names — the Stellaris-style at-a-glance label centred on each
+   territory and sized to it (font-size set per-element by the engine, in world space so
+   big empires get big names). Cross-faded away once you zoom in past the star-label
+   threshold (.hx-lblzoom) — star names take over from there. */
+.hx-fac-lbl{font-family:var(--mono,monospace);font-weight:700;letter-spacing:.06em;opacity:.62;pointer-events:none;paint-order:stroke;stroke:#04060e;stroke-width:.12em;stroke-linejoin:round;transition:opacity .2s ease}
 #hx-map.hx-lblzoom .hx-fac-lbl{opacity:0}
 .hx-ring{fill:none;stroke:#1c2740;stroke-width:.6;stroke-dasharray:2,5}
 .hx-ring-lbl{font-family:var(--mono,monospace);font-size:8px;fill:#3a4763}
