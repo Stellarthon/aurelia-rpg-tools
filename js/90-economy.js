@@ -2058,6 +2058,13 @@ function econDraftFactionContract(i){
 }
 function econRerollContract(){ if(econDraftSel && typeof draftCorpContract==='function'){ econDraftSel.contract = draftCorpContract(econDraftSel.item); renderEconPanel(); } }
 function econContractNote(msg){ const n=document.getElementById('econ-contract-note'); if(n){ n.textContent=msg; } }
+// Close the loop: note the issuer of the drafted contract as a patron in a player's private Standing.
+function econNoteContractPatron(){
+  if(!econDraftSel || typeof standingBeginNote!=='function') return;
+  const it=econDraftSel.item||{}, org=it.faction||it.corp||it.label, label=it.label||org;
+  const title=(econDraftSel.contract&&econDraftSel.contract.title)||(it.contract+' contract');
+  standingBeginNote(org, label, 'Patron — hired the crew: '+title);
+}
 function econContractToQuest(){
   if(!econDraftSel) return;
   const ok = (typeof spawnContractQuest==='function') && spawnContractQuest(econDraftSel.contract);
@@ -2436,11 +2443,19 @@ function econGalNetSectionHTML(){
   const NICON={ cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜' };
   let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
   h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">📡 GalNet — galaxy news <span style="color:var(--tx1);font-size:9px">— broadcast from the living galaxy</span></div>`;
+  const stdHolders = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
   news.slice(0,10).forEach(n=>{ const col=n.fac?ECON.facColor(n.fac):'#9fb0c8';
+    const holders = (n.fac && stdHolders) ? stdHolders(n.fac) : [];
     h+=`<div style="display:flex;gap:6px;align-items:baseline;font-size:10px;color:#cdd6e0;padding:2px 0;border-top:1px solid var(--bd0)">`;
     h+=`<span style="color:var(--tx1);white-space:nowrap;font-size:9px">wk ${n.wk}</span>`;
-    h+=`<span style="border-left:2px solid ${col};padding-left:6px">${NICON[n.kind]||'•'} ${escQH(n.text)}</span></div>`; });
-  h+=`<div style="font-size:9px;color:var(--tx1);margin-top:4px">Headlines the galaxy generates on its own — governments reshuffle, powers embargo &amp; reconcile, agendas shift. Players can overhear these through the Oracle (📡 GalNet rumours).</div>`;
+    h+=`<span style="border-left:2px solid ${col};padding-left:6px;flex:1">${NICON[n.kind]||'•'} ${escQH(n.text)}`;
+    if(n.fac && typeof standingBeginNote==='function'){
+      const note=(''+n.text).replace(/'/g,'’').replace(/"/g,'”');
+      const who = holders.length ? ` title="Affects: ${holders.map(x=>escQH(x.who)+' ('+escQH(x.label)+')').join(', ')}"` : '';
+      h+=` <button onclick="standingBeginNote('${escQH(n.fac)}','${escQH(ECON.facName?ECON.facName(n.fac):n.fac)}','${escQH(note)}')"${who} style="background:none;border:1px solid ${holders.length?'#7a5f2f':'var(--bd0)'};color:${holders.length?'#e0b978':'var(--tx1)'};border-radius:4px;padding:0 5px;font-size:9px;cursor:pointer;white-space:nowrap">🎖${holders.length?' '+holders.length:''}</button>`;
+    }
+    h+=`</span></div>`; });
+  h+=`<div style="font-size:9px;color:var(--tx1);margin-top:4px">Headlines the galaxy generates on its own — governments reshuffle, powers embargo &amp; reconcile, agendas shift. Players overhear these via the Oracle (📡 GalNet rumours). <b style="color:#e0b978">🎖</b> notes a headline into a player's private Standing (a number = players already tied to that power).</div>`;
   h+=`</div>`;
   return h;
 }
@@ -2700,11 +2715,14 @@ function renderEconPanel(){
       const CICON={ escort:'🛡', haul:'📦', bounty:'🎯', sabotage:'⚔', espionage:'🕵', smuggle:'🕯' };
       h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
       h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Corporate contracts <span style="color:var(--tx1);font-size:9px">— ${evs.length} on offer</span></div>`;
+      const stdH = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
       evs.slice().reverse().forEach((ev)=>{ const i=evs.indexOf(ev); const it=ECON.contractItem(ev); if(!it) return;
-        const col=it.color||'#9fd0ff', drafted=econDraftSel&&econDraftSel.i===i;
-        const summ = it.contract==='sabotage'||it.contract==='espionage' ? `vs ${escQH(it.targetName||'a rival')}`
+        const col=it.color||'#9fd0ff', drafted=econDraftSel&&econDraftSel.src==='corp'&&econDraftSel.i===i;
+        const held = (stdH && it.corp) ? stdH(it.corp) : [];
+        const summ = (it.contract==='sabotage'||it.contract==='espionage' ? `vs ${escQH(it.targetName||'a rival')}`
                    : it.contract==='haul' ? `→ ${escQH(it.place||'?')}`
-                   : (it.vessel?`${escQH(it.vessel)}`:'') ;
+                   : (it.vessel?`${escQH(it.vessel)}`:'') )
+                   + (held.length?` <span title="Players with standing here" style="color:#e0b978">🎖 ${held.map(x=>escQH(x.who.split(' ')[0])).join(', ')}</span>`:'');
         h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
         h+=`<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#cdd6e0">`;
         h+=`<span>${CICON[it.contract]||'•'} <span style="color:${col}">${escQH(it.label)}</span> <span style="color:var(--tx1);font-size:10px">${it.contract}${summ?' · '+summ:''}</span></span>`;
@@ -2718,6 +2736,7 @@ function renderEconPanel(){
           h+=`<button onclick="econContractToQuest()" style="background:#1d3a4a;border:1px solid #3a6f9d;color:#bfe3ea;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Quest Log</button>`;
           h+=`<button onclick="econContractToLibrary()" style="background:none;border:1px solid #6a5a2a;color:#e0c87a;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Library Data</button>`;
           h+=`<button onclick="econRerollContract()" title="Re-roll the wording" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">⟳ Re-roll</button>`;
+          h+=`<button onclick="econNoteContractPatron()" title="Note this patron in a player's private Standing" style="background:none;border:1px solid #7a5f2f;color:#e0b978;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">🎖 Patron</button>`;
           h+=`<span id="econ-contract-note" style="font-size:9px;color:#7ec98f;align-self:center"></span></div>`;
           h+=`</div>`;
         }
@@ -2733,10 +2752,13 @@ function renderEconPanel(){
       const FICON={ relief:'🌾', patrol:'🛰', bounty:'🎯', development:'🏗', escort:'🛡' };
       h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
       h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">Faction contracts <span style="color:var(--tx1);font-size:9px">— ${evs.length} on offer · posted by the powers</span></div>`;
+      const stdHF = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
       evs.slice().reverse().forEach((ev)=>{ const i=evs.indexOf(ev); const it=ECON.factionContractItem(ev); if(!it) return;
         const col=it.color||'#9fb0c8', drafted=econDraftSel&&econDraftSel.src==='faction'&&econDraftSel.i===i;
-        const summ = it.contract==='relief'||it.contract==='bounty'||it.contract==='development' ? `${escQH(it.place||'?')}${it.good?' · '+(''+it.good).replace('Common ',''):''}`
-                   : it.contract==='patrol' ? `${escQH(it.toLabel||'?')}` : '';
+        const held = (stdHF && it.faction) ? stdHF(it.faction) : [];
+        const summ = (it.contract==='relief'||it.contract==='bounty'||it.contract==='development' ? `${escQH(it.place||'?')}${it.good?' · '+(''+it.good).replace('Common ',''):''}`
+                   : it.contract==='patrol' ? `${escQH(it.toLabel||'?')}` : '')
+                   + (held.length?` <span title="Players with standing here" style="color:#e0b978">🎖 ${held.map(x=>escQH(x.who.split(' ')[0])).join(', ')}</span>`:'');
         h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)">`;
         h+=`<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#cdd6e0">`;
         h+=`<span>${FICON[it.contract]||'•'} <span style="color:${col}">${escQH(it.label)}</span> <span style="color:var(--tx1);font-size:10px">${it.contract}${summ?' · '+summ:''}</span></span>`;
@@ -2750,6 +2772,7 @@ function renderEconPanel(){
           h+=`<button onclick="econContractToQuest()" style="background:#1d3a4a;border:1px solid #3a6f9d;color:#bfe3ea;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Quest Log</button>`;
           h+=`<button onclick="econContractToLibrary()" style="background:none;border:1px solid #6a5a2a;color:#e0c87a;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">→ Library Data</button>`;
           h+=`<button onclick="econRerollContract()" title="Re-roll the wording" style="background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">⟳ Re-roll</button>`;
+          h+=`<button onclick="econNoteContractPatron()" title="Note this patron in a player's private Standing" style="background:none;border:1px solid #7a5f2f;color:#e0b978;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer">🎖 Patron</button>`;
           h+=`<span id="econ-contract-note" style="font-size:9px;color:#7ec98f;align-self:center"></span></div>`;
           h+=`</div>`;
         }
