@@ -1240,6 +1240,7 @@ function pickMarketRumour(){
     return { kind:'rumour', text: pick(tmpl).replace(/{place}/g, item.label), faction:null, reliability:'Reliable', source:'market' }; }
   if(item.kind === 'blackmarket'){ const text = pick(MARKET_RUMOUR.blackmarket).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
     return { kind:'rumour', text, faction:null, reliability:'Whispered', source:'market' }; }   // illicit, so sketchy intel
+  if(item.kind === 'news'){ return { kind:'rumour', text:item.text, faction:null, reliability:'Reliable', source:'news' }; }   // a GalNet broadcast — government reshuffle, trade war, détente
   const key = item.kind === 'shock'
     ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
@@ -1333,7 +1334,8 @@ function renderOraclePanel(){
     if(oracleResult.kind === 'rumour'){
       const fac = oracleResult.faction ? `<span class="gen-tag">${escQH(oracleResult.faction)}</span>` : '';
       const mkt = oracleResult.source === 'market' ? `<span class="gen-tag" style="color:var(--accentGold)" title="Drawn from the living economy — true at the time it was generated">📈 market</span>`
-                : oracleResult.source === 'contract' ? `<span class="gen-tag" style="color:#9fd0ff" title="A corporation's job, drawn from the living economy">📋 contract</span>` : '';
+                : oracleResult.source === 'contract' ? `<span class="gen-tag" style="color:#9fd0ff" title="A corporation's job, drawn from the living economy">📋 contract</span>`
+                : oracleResult.source === 'news' ? `<span class="gen-tag" style="color:#c9a9e0" title="A GalNet broadcast from the living galaxy — government reshuffle, trade war, or détente">📡 GalNet</span>` : '';
       const questBtn = oracleResult.contract ? `<button class="disc-mini" onclick="contractToQuest()" title="Post this contract to the Quest Log for players">→ Quest Log</button>` : '';
       resultHTML = `<div class="gen-result">
         <div class="gen-result-text">“${escQH(oracleResult.text)}”</div>
