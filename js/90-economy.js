@@ -317,7 +317,7 @@ window.ECON = (function(){
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{} };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 } };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -914,6 +914,118 @@ window.ECON = (function(){
       else if(cur && cur.src==='auto') delete cb[id];
     });
   }
+
+  // ── EVENT DIRECTOR — the galaxy makes its own trouble ─────────────────────────
+  // Everything above REACTS — to a referee-fired shock, a price gap, a corp's move; nothing
+  // ORIGINATES a crisis on its own, so an untouched galaxy only ever moves when the referee
+  // clicks a preset. The director closes that loop. Each referee turn it reads the sim's OWN
+  // signals (unrest that's festered long enough to spread, a monopolist's grip on a good, a
+  // boomtown drawing crime, or just a calm week gone too quiet) and FIRES ITS OWN SHOCK —
+  // reusing the exact shock KINDS the rest of the engine already consumes, so a director event
+  // flows through outputFactor / demandFactor / tariffMult, the worldStatus derivation, the
+  // black-market/contraband layer, the Oracle's true-rumour intel() and the console timeline
+  // with ZERO new plumbing. The director only ORIGINATES the shock the referee would have had
+  // to click.
+  //
+  // Bounded to ENRICH, never destabilise:
+  //   • only self-expiring, time-limited output / crackdown / tariff / demand shocks — NEVER a
+  //     route-severing block/embargo (those stay referee-authored story beats);
+  //   • output cuts are floored at DIR_OUT_FLOOR (food-safe, and — being ≥ the 0.4 threshold
+  //     worldStatus reads as unrest-inducing — a director strike can't itself bootstrap a fresh
+  //     unrest→spread→unrest doom-loop);
+  //   • a galaxy-wide cooldown + a cap on concurrently-live director shocks bound cumulative
+  //     pressure well inside the balance the corp/food harness tuned.
+  // REFEREE-ONLY + full-sim-only + settle-skipped (the settle scratch state is active:false, so
+  // this returns immediately and the deterministic baseline is untouched) — exactly like
+  // corpsStep / worldStatusStep. Only the referee's advance persists the fired shocks; every
+  // device inherits the same state.shocks on load, so per-device prices stay identical. It uses
+  // Math.random in the same referee-only way corpsStep/formCorp already do.
+  const DIR_COOLDOWN = 3;        // ≥ this many weeks between director events — a heartbeat, not a barrage
+  const DIR_MAX_ACTIVE = 4;      // never more than this many director shocks live at once (bounds cumulative pressure)
+  const DIR_AMBIENT_PROB = 0.10; // weekly chance of a minor ambient event when nothing reactive fires (so it's never wholly static)
+  const DIR_OUT_FLOOR = 0.4;     // director output cuts never bite harder than this — food-safe & non-unrest-bootstrapping
+  const DIR_SPREAD_WK = 3;       // unrest must have festered this long before it spreads to a neighbour
+
+  function directorActive(){ return (state.shocks||[]).filter(s=> s && s.src==='director'); }
+  function facConsumersOf(good){ const set={}; Object.values(worlds).forEach(w=>{ if((w.cons[good]||0)>0 && w.fac) set[w.fac]=1; }); return Object.keys(set); }
+  function exportsOf(id){ const w=worlds[id]; return w?Object.keys(w.prod).filter(g=>GOODS[g] && !GOODS[g].internal && w.prod[g]>0 && g!==FOOD_GOOD):[]; }
+
+  // Push a director-originated shock: same shape + downstream handling as a referee fire(), tagged
+  // src:'director' for the cooldown/cap accounting and a distinct timeline/log marker. No save() —
+  // the advance loop saves once at the end.
+  function dfire(week, spec){
+    const s = Object.assign({ src:'director' }, spec);
+    if(s.kind==='output' && s.factor!=null) s.factor = Math.max(DIR_OUT_FLOOR, s.factor);   // food-safe / non-unrest-bootstrapping floor
+    s.until = (spec.weeks!=null) ? week + spec.weeks : week + 4;
+    s.fired = week;
+    state.shocks.push(s);
+    if(!state.history) state.history=[];
+    state.history.unshift({ label:s.label||s.kind, kind:s.kind, beganWk:week, endsWk:s.until, src:'director' });   // dated campaign timeline
+    if(state.history.length>40) state.history.length=40;
+    const D = state.director || (state.director = { last:-999, seq:0 });
+    D.last = week; D.seq = (D.seq||0)+1;
+    log(week, `◇ ${s.label || ('Emergent '+s.kind)}`);
+  }
+
+  // Curated ambient minor events — plausible, localized, gentle. Drawn at random on a calm week so
+  // the galaxy is never wholly static. Returns a shock spec for a random market world (or null).
+  function ambientEvent(week){
+    const ids = Object.keys(worlds).filter(id=> worlds[id].fac && isMarket(nodeOf(id)));
+    if(!ids.length) return null;
+    const id = pick(ids), w = worlds[id], label = w.label, exp = exportsOf(id), roll = Math.random();
+    if(roll < 0.4 && exp.length){ const g=pick(exp);
+      return { kind:'output', target:id, good:g, factor:0.6, weeks:2+Math.floor(Math.random()*2), label:`⚑ Wildcat strike — ${label} (${g.replace('Common ','')})` }; }
+    if(roll < 0.7 && exp.length){ const g=pick(exp);
+      return { kind:'output', target:id, good:g, factor:0.55, weeks:2+Math.floor(Math.random()*2), label:`⚔ Raiders skim the lanes — ${label} (${g.replace('Common ','')})` }; }
+    const cons = Object.keys(w.cons).filter(g=>GOODS[g] && !GOODS[g].internal && w.cons[g]>0);
+    if(cons.length){ const g=pick(cons);
+      return { kind:'demand', target:id, good:g, factor:1.6, weeks:2+Math.floor(Math.random()*2), label:`✦ Festival demand — ${label} (${g.replace('Common ','')})` }; }
+    return null;
+  }
+
+  // Weekly director turn. Reads the sim's own signals for a REACTIVE event; failing that, an
+  // occasional ambient one. Fires at most ONE shock per turn, gated by cooldown + the live cap.
+  function directorStep(week){
+    if(!state.active) return;                                     // full sim only (settle scratch state is active:false → skipped → baseline untouched)
+    if(state.directorOn===false) return;                          // referee opt-out
+    if(typeof isReferee==='function' && !isReferee()) return;     // referee-advanced (only the ref's advance persists; players inherit)
+    const D = state.director || (state.director = { last:-999, seq:0 });
+    if(week - (D.last||-999) < DIR_COOLDOWN) return;              // heartbeat, not a barrage
+    if(directorActive().length >= DIR_MAX_ACTIVE) return;         // bound cumulative director pressure
+
+    const cand = [], ws = state.worldStatus || {};
+
+    // 1) Unrest spreads — a world restive (sev≥2) long enough infects a calm same-faction neighbour.
+    Object.keys(ws).forEach(id=>{ const s=ws[id];
+      if(!s || s.kind!=='unrest' || (s.sev||1)<2 || s.since==null || week-s.since < DIR_SPREAD_WK || !worlds[id]) return;
+      const fac=worlds[id].fac;
+      const nbrs=Object.keys(worlds).filter(n=> n!==id && worlds[n].fac===fac
+        && !(ws[n] && ws[n].kind==='unrest') && !state.shocks.some(x=>x.target===n));
+      if(nbrs.length){ const n=pick(nbrs), pool=exportsOf(n).concat(['*']), g=pick(pool);
+        cand.push({ kind:'output', target:n, good:g, factor:0.5, weeks:3, label:`⚑ Unrest spreads — ${worlds[n].label}` }); }
+    });
+
+    // 2) Monopoly backlash — a house dominating a good draws a regulatory tariff from a faction that buys it.
+    Object.values(state.corps||{}).forEach(c=>{ if(c.defunct || !c.monopoly || !c.monopoly.good) return;
+      const g=c.monopoly.good, facs=facConsumersOf(g).filter(f=> !state.shocks.some(x=> x.kind==='tariff' && x.faction===f && x.good===g));
+      if(facs.length){ const f=pick(facs);
+        cand.push({ kind:'tariff', faction:f, good:g, factor:0.45, weeks:6, label:`⚖ ${facName(f)} tariff — curbing ${c.name.split(' ')[0]}'s grip on ${g.replace('Common ','')}` }); }
+    });
+
+    // 3) Boomtown crime — a boom draws raiders skimming one of its exports.
+    Object.keys(ws).forEach(id=>{ const s=ws[id];
+      if(!s || s.kind!=='boom' || !worlds[id]) return;
+      const exp=exportsOf(id).filter(g=> !state.shocks.some(x=>x.target===id && x.good===g));
+      if(exp.length){ const g=pick(exp);
+        cand.push({ kind:'output', target:id, good:g, factor:0.6, weeks:3, label:`⚔ Boomtown crime wave — ${worlds[id].label} (${g.replace('Common ','')})` }); }
+    });
+
+    if(cand.length){ dfire(week, pick(cand)); return; }           // reactive beat takes priority
+
+    // 4) Ambient heartbeat — the galaxy is calm; occasionally stir something minor so it's never static.
+    if(Math.random() < DIR_AMBIENT_PROB){ const e=ambientEvent(week); if(e) dfire(week, e); }
+  }
+
   // ── Referee overrides — force / pin / clear any world condition or black market, and bend the corps
   //    to the story (collapse, refloat, set the war-chest, plant or pull an expansion). All persisted;
   //    the ones that move state.base re-settle it immediately, exactly like setProfile / a corp invest. ──
@@ -1002,6 +1114,7 @@ window.ECON = (function(){
     corpsStep(week);             // corporations: treasury sweep/bail, fleet growth, infrastructure investment (referee-only)
     worldStatusStep(week);       // per-world socio-economic status (boom/bust/unrest/rationing) — referee-only, persisted (unrest dampens output next step)
     contrabandStep(week);        // trade restrictions → black markets + smuggling jobs — referee-only
+    directorStep(week);          // the galaxy makes its own trouble — reads this week's signals, fires its own bounded shock (referee-only)
     inflationStep(week);         // shortages ratchet the price level up (sticky); calm decays it back
     priceHistStep(week);         // sample per-world prices for the price-history charts
     state.week = week;
@@ -1150,7 +1263,7 @@ window.ECON = (function(){
       worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
     } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
     reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
     save(); }   // reseed stock; keep the current Simple/Full mode
@@ -1385,6 +1498,8 @@ window.ECON = (function(){
     agentById(id){ ensure(); return (state.agents||[]).find(a=>a.id===id)||null; },
     tradersOn(){ ensure(); return state.tradersOn!==false; },
     setTraders(v){ ensure(); state.tradersOn=!!v; save(); },
+    directorOn(){ ensure(); return state.directorOn!==false; },              // the event director — galaxy fires its own emergent shocks (full-sim only)
+    setDirector(v){ ensure(); state.directorOn=!!v; save(); },
     traderCap(){ ensure(); return traderCapOf(); },
     setTraderCap(v){ ensure(); state.traderCap=Math.max(3,Math.min(TRADER_CAP_MAX,Math.round(+v)||DEFAULT_TRADER_CAP)); save(); },
     priceOverlay, inflationLevel, inflationOf:(id,g)=>{ ensure(); return inflOf(id,g); },
@@ -1609,6 +1724,9 @@ function econApplyRun(){
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
 function econToggleTraders(){ ECON.setTraders(!ECON.tradersOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// The event director: when ON, an untouched galaxy fires its OWN emergent shocks (spreading unrest,
+// monopoly backlash, boomtown crime, ambient strikes/raids/festivals) — bounded & referee-advanced.
+function econToggleDirector(){ ECON.setDirector(!ECON.directorOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 // Opt-in monopoly pricing: lets a house dominating its specialty good raise that good's price galaxy-wide
 // (bounded, full-sim only). OFF by default so it never silently shifts a tuned economy.
 function econToggleMonopoly(){ ECON.setMonopoly(!ECON.monopolyOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
@@ -2229,9 +2347,12 @@ function renderEconPanel(){
       const f=FAC[b]; return {nm:(f&&f.name?f.name.split(' ')[0]:b), col:(f&&f.color)||'#9fb0c8'}; };
     const cap=ECON.traderCap(), ags=ECON.agents();
     h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
     h+=btn(on?'● ON':'○ OFF','econToggleTraders()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
+    { const dOn=ECON.directorOn();
+      h+=`<button onclick="econToggleDirector()" title="Event director — when ON, the galaxy fires its own emergent shocks (spreading unrest, monopoly backlash, boomtown crime, and occasional ambient strikes/raids/festivals). Bounded & self-expiring; referee-advanced, full-sim only." style="background:${dOn?'#3a2d4a':'var(--bg0)'};border:1px solid ${dOn?'#7a5f9d':'var(--bd0)'};color:${dOn?'#e5d6f2':'var(--tx0)'};border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;margin:2px">◇ Events ${dOn?'ON':'OFF'}</button>`; }
     h+=`</div>`;
+    h+=`<div style="font-size:10px;color:var(--tx1);margin:-2px 0 6px"><b style="color:#c9a9e0">◇ Events</b> — the galaxy makes its own trouble: emergent strikes, raids, unrest that spreads, tariffs against monopolists. They flow into world conditions, black markets and the Oracle's rumours just like a preset you fire.</div>`;
     h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
     h+=`<span style="font-size:10px;color:var(--tx1);white-space:nowrap">Fleet cap <b style="color:#f4d35e">${cap}</b> · ${ags.length} active</span>`;
     h+=`<input type="range" min="3" max="150" value="${cap}" oninput="econSetTraderCap(this.value)" style="flex:1;accent-color:#3f9d5a;cursor:pointer" title="Max simultaneous traders — performance lever; smooth to ~150, lowering it stands the weakest down">`;
