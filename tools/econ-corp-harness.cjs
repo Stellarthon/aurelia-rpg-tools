@@ -30,8 +30,11 @@ const ROOT = path.resolve(__dirname, '..');
 const galaxySrc = fs.readFileSync(path.join(ROOT, 'js/10-galaxy.js'), 'utf8').split('\n');
 const econSrc   = fs.readFileSync(path.join(ROOT, 'js/90-economy.js'), 'utf8').split('\n');
 
-// GALAXY_FACTIONS (line 4) .. end of GALAXY_NODES (line 765) — pure data literals.
-const galaxyData = galaxySrc.slice(3, 765).join('\n');
+// GALAXY_FACTIONS .. end of GALAXY_NODES — pure data literals (bounds found
+// dynamically so the slice survives galaxy-size changes: gen-galaxy.mjs).
+const _gStart = galaxySrc.findIndex(l => l.includes('const GALAXY_FACTIONS'));
+const _gEnd   = galaxySrc.findIndex(l => l.startsWith('const GALAXY_NODES_BASE'));
+const galaxyData = galaxySrc.slice(_gStart, _gEnd).join('\n');
 // The window.ECON IIFE: lines 1 .. its close at `})();` (line 1219). Everything
 // after is referee-console UI (DOM), which we don't load.
 const iifeClose = econSrc.findIndex((l, i) => i > 0 && l === '})();');
