@@ -1999,7 +1999,7 @@ function econFireById(id){
   ECON.fire(s);
   renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
 }
-function econStep(n){ window.econViewFrac=0; ECON.advance(n); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econStep(n){ window.econViewFrac=0; ECON.advance(n); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
 // +1 day: a sub-week render clock so convoys crawl hop-by-hop along their jump-lane path
 // (lets you watch ships actually follow lanes). Rolls into a real weekly step every 7 days.
 window.econViewFrac = 0;

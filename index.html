@@ -150,6 +150,7 @@
       <div id="search-results"></div>
     </div>
     <button id="quest-btn" onclick="toggleQuestPanel()" title="Mission Log">📜 Missions</button>
+    <button id="galnet-btn" onclick="toggleGalNetPanel()" title="GalNet — galaxy news feed">📡 GalNet</button>
     <button id="journal-btn" onclick="toggleJournalPanel()" title="Session Journal — saved recaps">📓 Journal</button>
     <button id="ship-btn" onclick="toggleShipPanel()" title="Ship Status — fuel, jump, travel time">🚀 Ship</button>
     <button id="combat-btn" onclick="toggleCombatPanel()" title="Space Combat — Traveller 2e ship combat">⚔ Combat</button>
@@ -821,6 +822,18 @@
       <button id="quest-add-btn" onclick="openQuestEditor(null)">+ Add Mission</button>
     </div>
     <div class="panel-resize-handle" id="quest-resize"></div>
+  </div>
+
+  <div id="galnet-wrap" class="hidden">
+    <div id="galnet-header" onclick="toggleGalNetCollapse()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;font-family:monospace;font-weight:700;color:#c9a9e0;letter-spacing:1px">📡 GALNET</span>
+        <span id="galnet-count" style="font-size:10px;background:rgba(201,169,224,.16);color:#c9a9e0;border-radius:10px;padding:1px 7px;font-family:monospace">0</span>
+      </div>
+      <span id="galnet-toggle">▼</span>
+    </div>
+    <div id="galnet-body"></div>
+    <div class="panel-resize-handle" id="galnet-resize"></div>
   </div>
 
   <div id="journal-wrap" class="hidden">

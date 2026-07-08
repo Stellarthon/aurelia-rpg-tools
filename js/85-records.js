@@ -75,6 +75,7 @@ function afterDateChange(){
   if(typeof clocksOnDateChange === 'function') clocksOnDateChange();         // date-linked clocks prompt the referee (never auto-tick)
   if(typeof ECON!=='undefined'){ try { ECON.syncToDate(); } catch(e){}   // economy ticks in lockstep with the Imperial week
     if(typeof econPanelOpen!=='undefined' && econPanelOpen && typeof renderEconPanel==='function') renderEconPanel();
+    if(typeof galnetRefresh==='function') galnetRefresh();               // refresh the live GalNet feed as the week advances
     if(currentView==='galaxy' && typeof HX!=='undefined') HX.refresh(); }
   saveImperialDate();
 }
@@ -2491,6 +2492,8 @@ makePanelDraggable('health-wrap', 'health-header');
 makePanelResizable('health-wrap');
 makePanelDraggable('quest-wrap', 'quest-header');
 makePanelResizable('quest-wrap');
+makePanelDraggable('galnet-wrap', 'galnet-header');
+makePanelResizable('galnet-wrap');
 makePanelDraggable('journal-wrap', 'journal-header');
 makePanelResizable('journal-wrap');
 makePanelDraggable('turnorder-wrap', 'turnorder-header');
