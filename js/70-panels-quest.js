@@ -299,7 +299,7 @@ let galnetCollapsed = false;
 let galnetFeed = [];               // player-side cache of headlines, kept fresh by the poll
 let galnetSeen = 0;                // newest week the player has viewed — drives the unread badge
 
-const GALNET_ICON = { cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜' };
+const GALNET_ICON = { cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜', pirate:'☠' };
 // Single source of truth for what the panel shows: the referee's live feed, else the polled cache.
 function galnetItems(){
   const ref = (typeof isReferee==='function') && isReferee();

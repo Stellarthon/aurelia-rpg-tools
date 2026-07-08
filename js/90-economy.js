@@ -317,7 +317,7 @@ window.ECON = (function(){
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 }, factionsOn:true, factions:freshFactions(), factionEvents:[], news:[] };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 }, factionsOn:true, factions:freshFactions(), factionEvents:[], news:[], piratesOn:true, pirates:freshPirates(), pirSeq:0 };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -1145,7 +1145,8 @@ window.ECON = (function(){
     return { kind:'contract', contract:e.type, issuer:'faction', faction:e.faction, label:facName2(e.faction), color:facColorOf(e.faction),
       world:e.world||null, place: wl(e.world), good:e.good||null,
       from:e.from||null, fromLabel: wl(e.from), to:e.to||null, toLabel: wl(e.to),
-      vessel:e.vessel||null, qty:e.qty||null, reward: factionContractReward(e), wk:e.wk };
+      vessel:e.vessel||null, qty:e.qty||null, reward: factionContractReward(e), wk:e.wk,
+      pirate:e.pirate||null, targetName:e.pirateName||null };   // pirate bounties name the band
   }
   function factionContractReward(e){
     const cargo=(e.qty||0)*(AGENT_VALUE[e.good]||100);
@@ -1306,6 +1307,150 @@ window.ECON = (function(){
     });
   }
 
+  // ── PIRATE BANDS — autonomous raiders, with rules-legal Traveller 2e / High Guard hulls ─────────
+  // The dark mirror of the trader layer. Bands live at a lawless base, prey on convoys near their
+  // turf, grow fat on loot and notorious with it — which draws faction bounties and patrols that wear
+  // them back down, until they fold or are broken in a fight. Everything the referee/players already
+  // have hooks in: raids reuse the convoy-loss mechanic, notoriety feeds the faction bounty pipeline,
+  // activity broadcasts on GalNet, and a band's ship drops straight into the js/80 combat system.
+  //
+  // SHIPS ARE REAL MgT2e DESIGNS. Each hull carries the sim fields the band layer needs AND a `combat`
+  // stat block ready for makeShipStats()/addCombatShip() — a genuine, rules-legal ship, not an ad-hoc
+  // blob. Hull points follow the app's convention (≈0.4×tons, as the player Free Trader + genShipStats
+  // do); weapon damage dice are the 2022 core values (Pulse 2D · Beam 1D · Missile 4D · Particle 4D).
+  // High Guard hulls are flagged (hg:true).
+  const PIRATE_WPN = {
+    pulse:   id=>({ id, name:'Pulse Laser (triple turret)', type:'pulse-laser', mount:'turret', damage:'2D', range:'Medium',    ammo:0,  ammoMax:0,  notes:'Triple turret · TL10' }),
+    beam:    id=>({ id, name:'Beam Laser (triple turret)',  type:'beam-laser',  mount:'turret', damage:'1D', range:'Long',      ammo:0,  ammoMax:0,  notes:'Triple turret · TL10' }),
+    missile: id=>({ id, name:'Missile Rack (triple turret)',type:'missile',     mount:'turret', damage:'4D', range:'Special',   ammo:12, ammoMax:12, notes:'Smart missiles · TL10' }),
+    particle:id=>({ id, name:'Particle Barbette',           type:'particle',    mount:'barbette',damage:'4D',range:'Very Long', ammo:0,  ammoMax:0,  notes:'Radiation crits · TL12 · High Guard' }),
+    sand:    id=>({ id, name:'Sandcaster (triple turret)',  type:'sandcaster',  mount:'turret', damage:'',   range:'Special',   ammo:20, ammoMax:20, notes:'Point defence · TL9' }),
+  };
+  const PIRATE_SHIPS = {
+    wolf: { id:'wolf', name:'Wolf-class Q-ship', t2e:'Modified Free Trader · 200t', hg:false, tons:200, jump:2, thrust:2, fuelMax:80,
+      combat:{ tonnage:200, jumpRating:2, thrust:2, armourRating:1, hullPoints:80, hullPointsMax:80, power:120, powerMax:120, sensorDM:0,
+        crewSkills:{ pilot:1, gunnery:1, engineer:1, sensors:1, tactics:1, leadership:0 },
+        weapons:[ PIRATE_WPN.pulse('w_wolf1'), PIRATE_WPN.missile('w_wolf2') ], notes:'Disguised civilian hull with pop-up turrets — lures and boards lone traders.' } },
+    corsair: { id:'corsair', name:'Corsair (Type-P)', t2e:'Corsair · 400t', hg:false, tons:400, jump:2, thrust:2, fuelMax:160,
+      combat:{ tonnage:400, jumpRating:2, thrust:2, armourRating:2, hullPoints:160, hullPointsMax:160, power:240, powerMax:240, sensorDM:0,
+        crewSkills:{ pilot:2, gunnery:2, engineer:1, sensors:1, tactics:1, leadership:1 },
+        weapons:[ PIRATE_WPN.beam('w_cor1'), PIRATE_WPN.missile('w_cor2'), PIRATE_WPN.pulse('w_cor3') ], notes:'The classic raider — three triple turrets and jump-2 reach.' } },
+    gazelle: { id:'gazelle', name:'Gazelle-class Close Escort', t2e:'High Guard · 300t', hg:true, tons:300, jump:4, thrust:6, fuelMax:180,
+      combat:{ tonnage:300, jumpRating:4, thrust:6, armourRating:4, hullPoints:120, hullPointsMax:120, power:200, powerMax:200, sensorDM:1,
+        crewSkills:{ pilot:2, gunnery:2, engineer:2, sensors:2, tactics:2, leadership:1 },
+        weapons:[ PIRATE_WPN.particle('w_gaz1'), PIRATE_WPN.missile('w_gaz2'), PIRATE_WPN.sand('w_gaz3') ], notes:'A High Guard military hull — thrust-6 and a particle barbette. A pirate lord’s prize.' } },
+    fighter: { id:'fighter', name:'Light Fighter (wolfpack)', t2e:'Small craft · 30t', hg:false, tons:30, jump:0, thrust:6, fuelMax:8,
+      combat:{ tonnage:30, jumpRating:0, thrust:6, armourRating:2, hullPoints:12, hullPointsMax:12, power:20, powerMax:20, sensorDM:0,
+        crewSkills:{ pilot:2, gunnery:2, engineer:0, sensors:0, tactics:0, leadership:0 },
+        weapons:[ PIRATE_WPN.pulse('w_fig1') ], notes:'System-defence fighter flown in packs — no jump drive; needs a tender.' } },
+  };
+  const PIRATE_SHIP_IDS = Object.keys(PIRATE_SHIPS);
+  const PIR_NAME_A = ['Crimson','Black','Iron','Ghost','Void','Ashen','Broken','Red','Silent','Ragged','Hollow','Scarlet','Grey','Jagged','Pale'];
+  const PIR_NAME_B = ['Wake','Tide','Fang','Reavers','Corsairs','Hand','Star','Vultures','Wolves','Shroud','Talon','Compact','Run','Jackals'];
+  const PIR_MAX = 4;                 // never more than this many active bands
+  const PIR_FORM_PROB = 0.02;        // weekly chance a new band forms (from a bust/unrest world)
+  const PIR_RAID_BASE = 0.22;        // per-band weekly raid chance (scaled by strength)
+  const PIR_RAIDS_MAX = 2;           // GLOBAL cap on pirate raids per week — protects the tuned trade balance
+  const PIR_LOOT_FRAC = 0.3;         // fence value of plundered cargo (fraction of notional Cr)
+  const PIR_NOTO_RAID = 14;          // notoriety gained per successful raid
+  const PIR_NOTO_DECAY = 3;          // weekly notoriety decay when lying low
+  const PIR_BOUNTY_NOTO = 40;        // notoriety at/above which a faction posts a bounty
+  const PIR_STR_MAX = 5;
+  const PIR_LOOT_GROW = 60000;       // loot to add a hull (strength +1)
+  const PIR_HEAT_LOSS = 0.12;        // weekly chance a heavily-hunted band loses a hull to patrols
+
+  function isPirate(id){ return typeof id==='string' && id.indexOf('pir:')===0; }
+  function pirateOf(id){ return (state && state.pirates && state.pirates[id]) || null; }
+  function pirateShipOf(b){ return PIRATE_SHIPS[(b&&b.ship)||'corsair'] || PIRATE_SHIPS.corsair; }
+  function livePirates(){ return Object.values(state.pirates||{}).filter(b=>!b.defunct); }
+  // A lawless berth: frontier / independent / contested space, or a slumped (bust) world.
+  function lawlessWorlds(){ return Object.keys(worlds).filter(id=>{ const f=worlds[id].fac, ws=state&&state.worldStatus&&state.worldStatus[id];
+    return f==='independent'||f==='contested'||f==='vast'||f==='archon' || (ws&&ws.kind==='bust'); }); }
+  function pirateName(){ for(let i=0;i<8;i++){ const nm='The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); if(!Object.values(state.pirates||{}).some(b=>b.name===nm)) return nm; } return 'The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); }
+  function freshPirates(){ const out={};
+    const berths = lawlessWorlds(); if(!berths.length) return out;
+    // two deterministic starter bands at the first lawless berths (stable id order → same on every device)
+    const seed = berths.slice().sort();
+    [['pir:crimson-wake','The Crimson Wake','corsair'],['pir:black-tide','The Black Tide','wolf']].forEach((s,i)=>{
+      const base = seed[i % seed.length];
+      out[s[0]] = { id:s[0], name:s[1], ship:s[2], base, strength:2, noto:20, loot:0, founded:0, hist:[] };
+    });
+    return out;
+  }
+  function pirateSeq(){ state.pirSeq=(state.pirSeq||0)+1; return state.pirSeq; }
+  function formPirateBand(week){
+    const berths = lawlessWorlds(); if(!berths.length) return;
+    const base = pick(berths), id='pir:n'+pirateSeq().toString(36);
+    const ship = pick(['wolf','wolf','corsair','fighter']);   // new bands start small
+    state.pirates[id] = { id, name:pirateName(), ship, base, strength:1, noto:10, loot:0, founded:week, hist:[] };
+    log(week, `☠ A raider band forms — ${state.pirates[id].name} out of ${worlds[base]?worlds[base].label:base}`);
+    broadcastNews(week, null, 'pirate', `☠ A new raider band, ${state.pirates[id].name}, is preying on shipping out of ${worlds[base]?worlds[base].label:base}.`);
+  }
+  // Choose a convoy to hit: an agent in transit, weighted toward routes touching the band's turf.
+  function pickRaidTarget(b){
+    const withRoute = (state.agents||[]).filter(a=> a.route && a.route.qty>0 && a.route.eta>state.week);
+    if(!withRoute.length) return null;
+    const baseFac = worlds[b.base] && worlds[b.base].fac;
+    const near = withRoute.filter(a=> { const tf=worlds[a.route.to]&&worlds[a.route.to].fac, ff=worlds[a.route.from]&&worlds[a.route.from].fac; return tf===baseFac||ff===baseFac; });
+    const pool = near.length ? near : withRoute;
+    return pick(pool);
+  }
+  // Plunder a convoy: its cargo never lands (destination stays short), the band banks fenced loot and
+  // notoriety, the merchant limps home. Same cargo-loss model as the referee raid button.
+  function piratePlunder(b, a, week){
+    if(!a || !a.route) return false;
+    const r=a.route;
+    const i=state.transit.findIndex(t=> t.agent===a.id && t.good===r.good && t.to===r.to);
+    if(i>=0) state.transit.splice(i,1);
+    const val=Math.round(r.qty*(AGENT_VALUE[r.good]||100));
+    b.loot=(b.loot||0)+Math.round(val*PIR_LOOT_FRAC); b.noto=Math.min(100,(b.noto||0)+PIR_NOTO_RAID);
+    a.profit=(a.profit||0)-Math.round(r.qty*(r.buyUnit||0)); a.raided=(a.raided||0)+1; a.pos=r.from; a.route=null;
+    const lane=`${worlds[r.from]?worlds[r.from].label:r.from}→${worlds[r.to]?worlds[r.to].label:r.to}`;
+    log(week, `☠ ${b.name} plunders ${a.name} — ${r.qty}kt ${r.good.replace('Common ','')} lost on ${lane}`);
+    broadcastNews(week, null, 'pirate', `☠ Raiders of ${b.name} struck a convoy on the ${lane} lane — ${r.qty}kt ${r.good.replace('Common ','')} taken.`);
+    // the victim's space (or its backing house) wants the raiders dealt with → a bounty naming the band
+    maybePirateBounty(b, week, r.to);
+    return true;
+  }
+  function maybePirateBounty(b, week, nearWorld){
+    if(!state.factions) return;
+    const fac = (nearWorld && worlds[nearWorld] && worlds[nearWorld].fac) || (worlds[b.base] && worlds[b.base].fac);
+    const f = (fac && state.factions[fac]) ? state.factions[fac] : livePirates().length ? Object.values(state.factions)[0] : null;
+    if(!f) return;
+    if(hasFactionEvent(e=>e.type==='bounty' && e.pirate===b.id)) return;   // one live bounty per band
+    emitFactionEvent('bounty', f.id, { pirate:b.id, pirateName:b.name, world:nearWorld||b.base, good:pirateShipOf(b).name, qty:Math.round((b.strength||1)*10), until:week+8 });
+  }
+  function piratesStep(week){
+    if(!state.active) return;
+    if(state.piratesOn===false) return;
+    if(typeof isReferee==='function' && !isReferee()) return;
+    if(!state.pirates) state.pirates=freshPirates();
+    let raids=0;
+    if(livePirates().length<PIR_MAX && Math.random()<PIR_FORM_PROB) formPirateBand(week);
+    livePirates().forEach(b=>{
+      b.noto=Math.max(0,(b.noto||0)-PIR_NOTO_DECAY);
+      if(raids<PIR_RAIDS_MAX && Math.random() < PIR_RAID_BASE*(0.6+0.18*(b.strength||1))){
+        const v=pickRaidTarget(b); if(v && piratePlunder(b,v,week)) raids++;
+      }
+      if((b.noto||0)>=PIR_BOUNTY_NOTO) maybePirateBounty(b, week, b.base);
+      // growth on loot
+      if((b.loot||0)>=PIR_LOOT_GROW && (b.strength||1)<PIR_STR_MAX){ b.loot-=PIR_LOOT_GROW; b.strength=(b.strength||1)+1;
+        broadcastNews(week, null, 'pirate', `☠ ${b.name} grows bolder — another hull joins the pack (now ${b.strength} strong).`); }
+      // heat: a notorious band with a live bounty gets worn down by patrols
+      if((b.noto||0)>=PIR_BOUNTY_NOTO && hasFactionEvent(e=>e.type==='bounty'&&e.pirate===b.id) && Math.random()<PIR_HEAT_LOSS){
+        b.strength=(b.strength||1)-1;
+        if(b.strength<1){ b.defunct=true; log(week, `⚓ ${b.name} — broken up by patrols`); broadcastNews(week, null, 'pirate', `⚓ Patrols have broken the ${b.name}; the lanes near ${worlds[b.base]?worlds[b.base].label:b.base} are quieter.`); }
+        else { b.noto=Math.max(0,(b.noto||0)-15); log(week, `⚔ ${b.name} loses a hull to patrols (now ${b.strength})`); }
+      }
+      b.hist=b.hist||[]; b.hist.push({wk:week, cap:Math.round((b.loot||0)+(b.strength||1)*50000)}); if(b.hist.length>24) b.hist.shift();
+    });
+  }
+  // Referee: build a combat-ready MgT2e stat block for a band's ship (name stamped with the band).
+  function pirateCombatStats(b){
+    const sh=pirateShipOf(b);
+    return Object.assign({ name:`${b.name} — ${sh.name}` }, JSON.parse(JSON.stringify(sh.combat)));
+  }
+
   // ── Referee overrides — force / pin / clear any world condition or black market, and bend the corps
   //    to the story (collapse, refloat, set the war-chest, plant or pull an expansion). All persisted;
   //    the ones that move state.base re-settle it immediately, exactly like setProfile / a corp invest. ──
@@ -1396,6 +1541,7 @@ window.ECON = (function(){
     contrabandStep(week);        // trade restrictions → black markets + smuggling jobs — referee-only
     directorStep(week);          // the galaxy makes its own trouble — reads this week's signals, fires its own bounded shock (referee-only)
     factionsStep(week);          // major powers as strategy-game actors — income, relations/diplomacy, statecraft, budget & contracts (referee-only)
+    piratesStep(week);           // autonomous raider bands — prey on convoys, grow notorious, draw bounties, get broken up (referee-only)
     inflationStep(week);         // shortages ratchet the price level up (sticky); calm decays it back
     priceHistStep(week);         // sample per-world prices for the price-history charts
     state.week = week;
@@ -1544,7 +1690,7 @@ window.ECON = (function(){
       worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
     } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director, factionsOn:state.factionsOn, factions:state.factions, factionEvents:state.factionEvents, news:state.news }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director, factionsOn:state.factionsOn, factions:state.factions, factionEvents:state.factionEvents, news:state.news, piratesOn:state.piratesOn, pirates:state.pirates, pirSeq:state.pirSeq }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
     reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
     save(); }   // reseed stock; keep the current Simple/Full mode
@@ -1802,6 +1948,18 @@ window.ECON = (function(){
     liftFactionShock(a,b){ ensure(); const before=(state.shocks||[]).length;   // referee lifts a faction embargo/tariff between two powers
       state.shocks=(state.shocks||[]).filter(s=> !(s.src==='faction' && ((s.facA===a&&s.facB===b)||(s.facA===b&&s.facB===a) || (s.faction===a&&s.againstFac===b))));
       if(state.shocks.length!==before){ save(); return true; } return false; },
+    // ── Pirate bands — autonomous raiders with rules-legal MgT2e / High Guard hulls ──
+    piratesOn(){ ensure(); return state.piratesOn!==false; },
+    setPirates(v){ ensure(); state.piratesOn=!!v; save(); },
+    pirates(){ ensure(); if(!state.pirates) state.pirates=freshPirates(); return state.pirates; },
+    pirateShips:()=>PIRATE_SHIPS, isPirate,
+    pirateCombatStats:(id)=>{ ensure(); const b=pirateOf(id); return b?pirateCombatStats(b):null; },   // combat-ready MgT2e stat block
+    // referee controls
+    pirateRaidNow(id){ ensure(); const b=pirateOf(id); if(!b||b.defunct) return false; const v=pickRaidTarget(b); if(!v) return false; const ok=piratePlunder(b,v,state.week); save(); return ok; },
+    setPirateStrength(id,n){ ensure(); const b=pirateOf(id); if(!b) return false; b.strength=Math.max(0,Math.min(PIR_STR_MAX,Math.round(+n)||0)); if(b.strength<1){ b.defunct=true; } else b.defunct=false; save(); return true; },
+    setPirateShip(id,ship){ ensure(); const b=pirateOf(id); if(!b||!PIRATE_SHIPS[ship]) return false; b.ship=ship; save(); return true; },
+    disbandPirate(id){ ensure(); const b=pirateOf(id); if(!b) return false; b.defunct=true; log(state.week,`⚓ ${b.name} — disbanded (referee)`); save(); return true; },
+    spawnPirate(){ ensure(); if(!state.pirates) state.pirates=freshPirates(); formPirateBand(state.week); save(); return true; },
     traderCap(){ ensure(); return traderCapOf(); },
     setTraderCap(v){ ensure(); state.traderCap=Math.max(3,Math.min(TRADER_CAP_MAX,Math.round(+v)||DEFAULT_TRADER_CAP)); save(); },
     priceOverlay, inflationLevel, inflationOf:(id,g)=>{ ensure(); return inflOf(id,g); },
@@ -2080,6 +2238,22 @@ function econContractToLibrary(){
 function econDismissContract(i){ ECON.clearCorpEvent(i); if(econDraftSel && econDraftSel.src==='corp' && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
 function econDismissFactionContract(i){ ECON.clearFactionEvent(i); if(econDraftSel && econDraftSel.src==='faction' && econDraftSel.i===i) econDraftSel=null; renderEconPanel(); }
 function econToggleFactions(){ ECON.setFactions(!ECON.factionsOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// ── Pirate band controls (referee) ──
+function econTogglePirates(){ ECON.setPirates(!ECON.piratesOn()); renderEconPanel(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+function econSpawnPirate(){ ECON.spawnPirate(); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econDisbandPirate(id){ ECON.disbandPirate(id); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econPirateHull(id,d){ const b=ECON.pirates()[id]; if(!b) return; ECON.setPirateStrength(id,(b.strength||0)+d); renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); }
+function econPirateRaid(id){ const ok=ECON.pirateRaidNow(id);
+  if(typeof showToast==='function') showToast(ok?'☠ Raid resolved — a convoy was plundered':'No convoy in reach to raid', ok?'success':'info');
+  renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// Drop a band's rules-legal MgT2e/High Guard hull into the current combat encounter.
+function econDeployPirate(id){
+  if(typeof combatEncounter==='undefined' || !combatEncounter){ if(typeof showToast==='function') showToast('Start a ⚔ Combat encounter first, then deploy','info'); return; }
+  if(typeof addCombatShip!=='function' || typeof makeShipStats!=='function'){ if(typeof showToast==='function') showToast('Combat system unavailable','error'); return; }
+  const stats=ECON.pirateCombatStats(id); if(!stats){ if(typeof showToast==='function') showToast('No such band','error'); return; }
+  const sid=addCombatShip(makeShipStats(stats), { name:stats.name, side:'hostile', revealed:false });
+  if(sid){ if(typeof showToast==='function') showToast('☠ '+stats.name+' entered the engagement'); if(typeof renderCombat==='function') renderCombat(); }
+}
 function econBumpFactionTreasury(id,d){ const f=ECON.factions()[id]; if(!f) return; ECON.setFactionTreasury(id, Math.max(0,(f.treasury||0)+d)); renderEconPanel(); }
 
 // ── Economy editor (Design Mode · Production & Consumption) ─────────────────
@@ -2440,7 +2614,7 @@ function econEditRevert(){
 function econGalNetSectionHTML(){
   if(typeof ECON==='undefined' || !ECON.active() || typeof ECON.news!=='function') return '';
   const news=ECON.news(); if(!news.length) return '';
-  const NICON={ cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜' };
+  const NICON={ cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜', pirate:'☠' };
   let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
   h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">📡 GalNet — galaxy news <span style="color:var(--tx1);font-size:9px">— broadcast from the living galaxy</span></div>`;
   const stdHolders = (typeof standingHoldersFor==='function') ? standingHoldersFor : null;
@@ -2508,6 +2682,46 @@ function econFactionsSectionHTML(){
     h+=`</div></div>`;
   });
   h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Powers book income from the worlds they hold, then spend it: posting contracts (below), funding relief into their own shortages, and running statecraft. <b style="color:#e8776a">⛔/⚖</b> = a live trade embargo or tariff a power has raised against a rival (relations-driven; self-expiring; ✕ to lift). Standing drifts toward each rivalry's baseline and tips into embargoes when it sours, détente when it recovers. Turn <b>Faction AI</b> off for static borders.</div>`;
+  h+=`</div>`;
+  return h;
+}
+// ── Pirate bands — autonomous raiders with rules-legal Traveller 2e / High Guard hulls ──
+function econPiratesSectionHTML(){
+  if(typeof ECON==='undefined' || !ECON.active() || typeof ECON.pirates!=='function') return '';
+  const on=ECON.piratesOn(), P=ECON.pirates(), wl=ECON.worlds(), SHIPS=ECON.pirateShips();
+  const bands=Object.values(P);
+  const CB='background:none;border:1px solid var(--bd0);color:var(--tx1);border-radius:5px;padding:0 5px;font-size:9px;cursor:pointer;white-space:nowrap';
+  const pips=(n,max,col)=>{ let s='<span style="display:inline-flex;gap:2px;vertical-align:middle">'; for(let i=0;i<max;i++) s+=`<span style="width:9px;height:6px;border-radius:1px;background:${i<n?col:'var(--bd0)'}"></span>`; return s+'</span>'; };
+  let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:11px;color:var(--tx1)">☠ Pirate bands</span>`;
+  h+=`<button onclick="econTogglePirates()" title="Pirate AI — when ON, raider bands autonomously prey on convoys near their turf, grow notorious, draw faction bounties, and get broken up by patrols. Bounded (≤2 raids/week) &amp; referee-advanced. Their ships are rules-legal MgT2e/High Guard hulls you can deploy straight into combat." style="background:${on?'#3a1d1d':'var(--bg0)'};border:1px solid ${on?'#7a3f3f':'var(--bd0)'};color:${on?'#e8b0a0':'var(--tx1)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">☠ Pirate AI · ${on?'ON':'OFF'}</button>`;
+  h+=`<button onclick="econSpawnPirate()" title="Spawn a new raider band at a lawless world" style="${CB};padding:4px 8px;font-size:10px">＋ Band</button>`;
+  h+=`</div>`;
+  const hasEnc = (typeof combatEncounter!=='undefined' && combatEncounter);
+  bands.sort((a,b)=>((a.defunct?1:0)-(b.defunct?1:0)) || ((b.noto||0)-(a.noto||0))).forEach(b=>{
+    const sh=SHIPS[b.ship]||SHIPS.corsair, base=wl[b.base]?wl[b.base].label:(b.base||'—');
+    h+=`<div style="padding:3px 0;border-top:1px solid var(--bd0)${b.defunct?';opacity:.5':''}">`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#cdd6e0">`;
+    h+=`<span><span class="hx-tag" style="border-color:#e8776a;color:#e8776a;font-size:9px;padding:0 4px">☠</span> ${escQH(b.name)}${b.defunct?' <span style="color:var(--tx1);font-size:9px">(broken up)</span>':''}</span>`;
+    h+=`<span style="color:#e0b978;white-space:nowrap" title="Fenced loot">${econMoney(b.loot||0)}</span></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:var(--tx1);margin-top:1px">`;
+    h+=`<span title="Home berth">⚓ ${escQH(base)}</span>`;
+    h+=`<span title="Strength (hulls)">${pips(b.strength||0,5,'#e8776a')} <span style="color:var(--tx1)">×${b.strength||0}</span></span></div>`;
+    h+=`<div style="font-size:9px;color:var(--tx1);margin-top:2px"><span style="color:#9fd0ff">${escQH(sh.name)}</span> — ${escQH(sh.t2e)}${sh.hg?' <span style="color:#e0b978" title="High Guard hull">◆ HG</span>':''}`;
+    h+=` · notoriety <b style="color:${(b.noto||0)>=40?'#e8776a':'#e0c87a'}">${Math.round(b.noto||0)}</b></div>`;
+    if(!b.defunct){
+      h+=`<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">`;
+      h+=`<button onclick="econPirateRaid('${b.id}')" title="Resolve a raid now — plunder a convoy in reach" style="${CB}">☠ Raid now</button>`;
+      h+=`<button onclick="econDeployPirate('${b.id}')" title="${hasEnc?'Deploy this hull into the current combat encounter (a rules-legal MgT2e stat block)':'Start a ⚔ Combat encounter first, then deploy'}" style="${CB};${hasEnc?'border-color:#7a3f3f;color:#e8b0a0':''}">⚔ To combat</button>`;
+      h+=`<button onclick="econPirateHull('${b.id}',1)" title="Add a hull" style="${CB}">＋hull</button>`;
+      h+=`<button onclick="econPirateHull('${b.id}',-1)" title="Lose a hull (0 = broken up)" style="${CB}">－hull</button>`;
+      h+=`<button onclick="econDisbandPirate('${b.id}')" title="Break up this band" style="${CB}">⚓ Disband</button>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  });
+  if(!bands.length) h+=`<div style="font-size:10px;color:var(--tx1)">No bands yet — the frontier is quiet. Spawn one, or let the sim form them.</div>`;
+  h+=`<div style="font-size:10px;color:var(--tx1);margin-top:5px">Raiders prey on convoys near their turf (≤2/week — the tuned trade balance holds), banking fenced loot and notoriety. Notoriety draws <b>faction bounties</b> (in the contracts below) and patrols that wear a band down until it's broken. <b style="color:#9fd0ff">Ships are real MgT2e / High Guard designs</b> — <b>⚔ To combat</b> drops the band's hull into a live encounter as a rules-legal stat block.</div>`;
   h+=`</div>`;
   return h;
 }
@@ -2707,6 +2921,7 @@ function renderEconPanel(){
   }
   h+=econGalNetSectionHTML();        // GalNet news feed — cabinet reshuffles, trade wars, détente, policy shifts
   h+=econFactionsSectionHTML();      // major powers — treasury, income, agenda, diplomacy & statecraft, with referee overrides
+  h+=econPiratesSectionHTML();       // pirate bands — bases, strength, notoriety, T2e hulls, raid/deploy-to-combat controls
   h+=econWorldStatusSectionHTML();   // world conditions (boom/bust/unrest/rationing) + black markets, with referee force/pin/clear
   // Corporate contracts — jobs the houses would pay players for. The referee DRAFTS one into a
   // concrete contract, then posts it to the Quest Log (players track it) or leaks it to Library Data.
