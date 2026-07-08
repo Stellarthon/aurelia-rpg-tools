@@ -1196,7 +1196,7 @@ const HX = (function(){
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
   let paintMode=false, paintColor='#4aa3ff'; // referee territory brush: armed while tapping hexes to paint/erase them
   let sysDrag=null;                  // Design Mode: {id,moved,lastKey} while dragging a star to a new hex
-  const RPX=26, LABEL_ZOOM_F=1.3, FAC_LABEL_PX=17, LOD_DETAIL_Z=1.25;   // below LOD_DETAIL_Z (× fit) = overview LOD: cull backdrop grid + labels
+  const RPX=26, LABEL_ZOOM_F=1.3, LOD_DETAIL_Z=1.25;   // below LOD_DETAIL_Z (× fit) = overview LOD: cull backdrop grid + labels
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
     fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
@@ -1252,11 +1252,7 @@ const HX = (function(){
     return (typeof isBaseSystem==='function'&&isBaseSystem(s.id))||(typeof isAddedSystem==='function'&&isAddedSystem(s.id));
   }
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
-  // Region labels live inside the zooming scene, so counter-scale their font off the live
-  // map scale to hold a constant on-screen size (FAC_LABEL_PX) at any zoom — one CSS-var
-  // write restyles every region name (they carry font-size:var(--hx-fac-font)).
-  function facFont(){ if(svg) svg.style.setProperty('--hx-fac-font',(FAC_LABEL_PX/(view.scale||1)).toFixed(2)+'px'); }
-  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); facFont(); }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); }
     // Table-display camera mirror (js/93): the referee window sets this hook to
     // broadcast pan/zoom; it is rAF-throttled on the other side. Nothing else
     // in the app assigns it, so this is a no-op outside Follow mode.
@@ -1314,7 +1310,7 @@ const HX = (function(){
   function render(){ if(!svg||!origin) return;
     svg.innerHTML='';
     const g=NS('g',{id:'hx-scene',transform:`translate(${view.x},${view.y}) scale(${view.scale})`});
-    svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible()); facFont();
+    svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible());
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
     // ── Level-of-detail + viewport culling (keeps the ~180-system map smooth) ──
@@ -1341,14 +1337,20 @@ const HX = (function(){
           const occ=BY_KEY[k]; if(occ && occ.fac!==f) return;           // don't tint a different region's star hex
           const c=k.split(','), q=+c[0], r=+c[1], p=axialPx(q,r);
           tg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:fac.color,'fill-opacity':0.11,stroke:fac.color,'stroke-opacity':0.22,'stroke-width':0.75})); });
-        // Region name, drawn across the centre of the territory like a Stellaris /
-        // HOI4 empire label. It's the at-a-glance read: prominent (and counter-scaled
-        // to a constant on-screen size via --hx-fac-font) when zoomed out, and it
-        // cross-fades away as star labels appear on zoom-in (.hx-lblzoom, see CSS).
+        // Region name, drawn across the centre of the territory like a Stellaris / HOI4
+        // empire label — sized to the territory so big empires get big names, in world
+        // space (scales with the map). It's the at-a-glance read, cross-fading away as
+        // star labels appear on zoom-in (.hx-lblzoom, see CSS).
         const pts=byFac[f].map(s=>axialPx(s.q,s.r));
         const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
-        const lab=NS('text',{x:cx,y:cy,'text-anchor':'middle','dominant-baseline':'central',class:'hx-fac-lbl',fill:fac.color});
-        lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); });
+        let rad=RPX; pts.forEach(p=>{ const d=Math.hypot(p.x-cx,p.y-cy); if(d>rad) rad=d; });
+        const nm=fac.name.toUpperCase();
+        // Scale with the territory's radius, but shrink long names so they still fit its
+        // width (≈0.6em per char for bold monospace). Clamped to sane world-space bounds.
+        const byWidth=(rad*2+RPX)*0.92/(0.60*Math.max(nm.length,3));
+        const fs=clamp(Math.min(rad*0.6, byWidth), 12, 260);
+        const lab=NS('text',{x:cx,y:cy,'text-anchor':'middle','dominant-baseline':'central',class:'hx-fac-lbl',fill:fac.color,'font-size':fs.toFixed(1)});
+        lab.textContent=nm; tg.appendChild(lab); });
       // Referee-painted hexes: a manual translucent colour wash over any cell,
       // rendered on top of the region tint. Shared to every viewer.
       Object.keys(painted).forEach(k=>{ const c=k.split(','), q=+c[0], r=+c[1];
