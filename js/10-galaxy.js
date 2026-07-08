@@ -2727,7 +2727,7 @@ const HX = (function(){
     let gasGiant=false;
     try{ const bodies=(typeof effectiveBodies==='function'?effectiveBodies(s.systemId):[])||[];
       gasGiant=bodies.some(b=> b.discStyle==='gasgiant' || /gas giant|ice giant/i.test(b.type||'')); }catch(e){}
-    return { codes, port:uwp.port, pop:uwp.pop|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
+    return { codes, port:uwp.port, pop:uwp.pop|0, law:uwp.law|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };

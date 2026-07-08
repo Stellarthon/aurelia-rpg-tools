@@ -1357,7 +1357,16 @@ window.ECON = (function(){
   const PIR_BOUNTY_NOTO = 40;        // notoriety at/above which a faction posts a bounty
   const PIR_STR_MAX = 5;
   const PIR_LOOT_GROW = 60000;       // loot to add a hull (strength +1)
+  const PIR_OP_LOOT = 1200;          // baseline weekly Cr per hull from OFF-SCREEN raiding (ambient traffic the on-screen
+                                     //   sim doesn't model — mirrors CORP_OP_INCOME). Keeps a band's hoard growing even
+                                     //   in a calm galaxy; on-screen convoy/supply raids add stolen GOODS on top.
+  const PIR_LOOT_CAP = 150000;       // hoard ceiling — a maxed band's war-chest is bounded (readable console)
   const PIR_HEAT_LOSS = 0.12;        // weekly chance a heavily-hunted band loses a hull to patrols
+  // Fences — shady traders who buy a band's stolen cargo cheap and move it to a lax-law port.
+  const FENCE_LAW_MAX = 3;           // Traveller law level ≤ this = "lax" — a fence can move stolen goods here
+  const FENCE_RATE = 0.35;           // the fence pays the band this fraction of notional value (bought hugely cheap)
+  const FENCE_BATCH = 40;            // kt of stolen goods fenced per week
+  const PIR_HOLD_CAP = 240;          // total kt a band can sit on before older loot spoils / is dumped
 
   function isPirate(id){ return typeof id==='string' && id.indexOf('pir:')===0; }
   function pirateOf(id){ return (state && state.pirates && state.pirates[id]) || null; }
@@ -1373,7 +1382,7 @@ window.ECON = (function(){
     const seed = berths.slice().sort();
     [['pir:crimson-wake','The Crimson Wake','corsair'],['pir:black-tide','The Black Tide','wolf']].forEach((s,i)=>{
       const base = seed[i % seed.length];
-      out[s[0]] = { id:s[0], name:s[1], ship:s[2], base, strength:2, noto:20, loot:0, founded:0, hist:[] };
+      out[s[0]] = { id:s[0], name:s[1], ship:s[2], base, strength:2, noto:20, loot:0, hold:{}, founded:0, hist:[] };
     });
     return out;
   }
@@ -1382,35 +1391,73 @@ window.ECON = (function(){
     const berths = lawlessWorlds(); if(!berths.length) return;
     const base = pick(berths), id='pir:n'+pirateSeq().toString(36);
     const ship = pick(['wolf','wolf','corsair','fighter']);   // new bands start small
-    state.pirates[id] = { id, name:pirateName(), ship, base, strength:1, noto:10, loot:0, founded:week, hist:[] };
+    state.pirates[id] = { id, name:pirateName(), ship, base, strength:1, noto:10, loot:0, hold:{}, founded:week, hist:[] };
     log(week, `☠ A raider band forms — ${state.pirates[id].name} out of ${worlds[base]?worlds[base].label:base}`);
     broadcastNews(week, null, 'pirate', `☠ A new raider band, ${state.pirates[id].name}, is preying on shipping out of ${worlds[base]?worlds[base].label:base}.`);
   }
-  // Choose a convoy to hit: an agent in transit, weighted toward routes touching the band's turf.
-  function pickRaidTarget(b){
-    const withRoute = (state.agents||[]).filter(a=> a.route && a.route.qty>0 && a.route.eta>state.week);
-    if(!withRoute.length) return null;
+  // Choose a prize to hit near the band's turf: preferentially a NAMED trader convoy (players can escort
+  // those), else an anonymous shipment on the central supply lanes — so a band always has something to
+  // raid even when the independent traders are idle in a calm market.
+  function pickRaidPrize(b){
     const baseFac = worlds[b.base] && worlds[b.base].fac;
-    const near = withRoute.filter(a=> { const tf=worlds[a.route.to]&&worlds[a.route.to].fac, ff=worlds[a.route.from]&&worlds[a.route.from].fac; return tf===baseFac||ff===baseFac; });
-    const pool = near.length ? near : withRoute;
-    return pick(pool);
+    const nearFac = id => { const f=worlds[id]&&worlds[id].fac; return f===baseFac; };
+    const convoys = (state.agents||[]).filter(a=> a.route && a.route.qty>0 && a.route.eta>state.week);
+    const nearC = convoys.filter(a=> nearFac(a.route.to)||nearFac(a.route.from));
+    const conv = nearC.length ? nearC : convoys;
+    if(conv.length && Math.random()<0.6) return { kind:'agent', a:pick(conv) };   // prefer escortable convoys
+    const ship = (state.transit||[]).filter(t=> t.qty>0 && t.eta>state.week && !t.relief && !t.agent);
+    const nearT = ship.filter(t=> nearFac(t.to)||nearFac(t.from));
+    const pool = nearT.length ? nearT : ship;
+    if(pool.length) return { kind:'transit', t:pick(pool) };
+    if(conv.length) return { kind:'agent', a:pick(conv) };
+    return null;
   }
-  // Plunder a convoy: its cargo never lands (destination stays short), the band banks fenced loot and
-  // notoriety, the merchant limps home. Same cargo-loss model as the referee raid button.
-  function piratePlunder(b, a, week){
-    if(!a || !a.route) return false;
-    const r=a.route;
-    const i=state.transit.findIndex(t=> t.agent===a.id && t.good===r.good && t.to===r.to);
-    if(i>=0) state.transit.splice(i,1);
-    const val=Math.round(r.qty*(AGENT_VALUE[r.good]||100));
-    b.loot=(b.loot||0)+Math.round(val*PIR_LOOT_FRAC); b.noto=Math.min(100,(b.noto||0)+PIR_NOTO_RAID);
-    a.profit=(a.profit||0)-Math.round(r.qty*(r.buyUnit||0)); a.raided=(a.raided||0)+1; a.pos=r.from; a.route=null;
-    const lane=`${worlds[r.from]?worlds[r.from].label:r.from}→${worlds[r.to]?worlds[r.to].label:r.to}`;
-    log(week, `☠ ${b.name} plunders ${a.name} — ${r.qty}kt ${r.good.replace('Common ','')} lost on ${lane}`);
-    broadcastNews(week, null, 'pirate', `☠ Raiders of ${b.name} struck a convoy on the ${lane} lane — ${r.qty}kt ${r.good.replace('Common ','')} taken.`);
-    // the victim's space (or its backing house) wants the raiders dealt with → a bounty naming the band
-    maybePirateBounty(b, week, r.to);
+  // Plunder a convoy: its cargo never LANDS (destination stays short) — instead it goes into the band's
+  // HOLD as stolen goods, to be fenced later (or seized if the players storm the base). Same convoy-loss
+  // model as the referee raid button; the merchant limps home.
+  function pirateHoldTotal(b){ return Object.keys(b.hold||{}).reduce((s,g)=>s+(b.hold[g]||0),0); }
+  function piratePlunder(b, prize, week){
+    if(!prize) return false;
+    let good, qty, fromId, toId, victim=null;
+    if(prize.kind==='agent'){ const a=prize.a; if(!a || !a.route) return false; const r=a.route;
+      const i=state.transit.findIndex(t=> t.agent===a.id && t.good===r.good && t.to===r.to); if(i>=0) state.transit.splice(i,1);
+      good=r.good; qty=r.qty; fromId=r.from; toId=r.to;
+      a.profit=(a.profit||0)-Math.round(r.qty*(r.buyUnit||0)); a.raided=(a.raided||0)+1; a.pos=r.from; a.route=null; victim=a.name;
+    } else { const t=prize.t, i=state.transit.indexOf(t); if(i<0) return false; state.transit.splice(i,1);
+      good=t.good; qty=t.qty; fromId=t.from; toId=t.to; }
+    b.hold=b.hold||{};
+    b.hold[good]=(b.hold[good]||0)+qty;                          // stolen cargo → the band's hold
+    // spoilage: a band can only sit on so much before older loot rots / is dumped
+    let over=pirateHoldTotal(b)-PIR_HOLD_CAP;
+    if(over>0){ Object.keys(b.hold).forEach(g=>{ if(over<=0) return; const cut=Math.min(b.hold[g],over); b.hold[g]-=cut; over-=cut; if(b.hold[g]<=0.5) delete b.hold[g]; }); }
+    b.noto=Math.min(100,(b.noto||0)+PIR_NOTO_RAID);
+    const lane=`${worlds[fromId]?worlds[fromId].label:fromId}→${worlds[toId]?worlds[toId].label:toId}`, who=victim||'a supply convoy';
+    log(week, `☠ ${b.name} plunders ${who} — ${Math.round(qty)}kt ${good.replace('Common ','')} taken on ${lane}`);
+    broadcastNews(week, null, 'pirate', `☠ Raiders of ${b.name} struck ${who} on the ${lane} lane — ${Math.round(qty)}kt ${good.replace('Common ','')} taken.`);
+    maybePirateBounty(b, week, toId);
     return true;
+  }
+  // Lax-law markets (Traveller law level ≤ FENCE_LAW_MAX) a fence can quietly move stolen goods through.
+  function laxPorts(){ return Object.keys(worlds).filter(id=>{ const f=factsOf(id);
+    return f && f.port && f.port!=='X' && (f.law|0)<=FENCE_LAW_MAX && isMarket(nodeOf(id)); }); }
+  // A shady trader buys a batch of the band's hold cheap and dumps it on the nearest lax-law port —
+  // stolen goods hit that black market cheap (a glut + a smuggling market), the band banks discounted Cr.
+  function fenceBand(b, week){
+    const goods=Object.keys(b.hold||{}).filter(g=>b.hold[g]>0.5); if(!goods.length) return;
+    const g=goods.sort((x,y)=>b.hold[y]-b.hold[x])[0], qty=Math.min(FENCE_BATCH, b.hold[g]);
+    const val=Math.round(qty*(AGENT_VALUE[g]||100));
+    const D=dist(b.base, blocked());
+    const ports=laxPorts().filter(id=>id!==b.base && D[id]!=null).sort((a,c)=>D[a]-D[c]);
+    if(ports.length){
+      const port=ports[0];
+      setStk(port,g, stk(port,g)+qty);                            // stolen cargo floods the lax-law market
+      state.contraband=state.contraband||{}; state.contraband[port]={ good:g, since:week, until:week+6, premium:SMUGGLE_PREMIUM, src:'pirate' };
+      b.loot=(b.loot||0)+Math.round(val*FENCE_RATE);
+      broadcastNews(week, null, 'pirate', `☠ Stolen ${g.replace('Common ','')} is flooding the ${worlds[port].label} market — a fence is quietly moving ${b.name}'s haul below cost.`);
+    } else {
+      b.loot=(b.loot||0)+Math.round(val*FENCE_RATE*0.65);         // no lawless port in reach → dumped to a passing trader at a worse cut
+    }
+    b.hold[g]-=qty; if(b.hold[g]<=0.5) delete b.hold[g];
   }
   function maybePirateBounty(b, week, nearWorld){
     if(!state.factions) return;
@@ -1429,9 +1476,11 @@ window.ECON = (function(){
     if(livePirates().length<PIR_MAX && Math.random()<PIR_FORM_PROB) formPirateBand(week);
     livePirates().forEach(b=>{
       b.noto=Math.max(0,(b.noto||0)-PIR_NOTO_DECAY);
+      b.loot=Math.min(PIR_LOOT_CAP,(b.loot||0)+PIR_OP_LOOT*(b.strength||1));   // off-screen raiding keeps the hoard growing
       if(raids<PIR_RAIDS_MAX && Math.random() < PIR_RAID_BASE*(0.6+0.18*(b.strength||1))){
-        const v=pickRaidTarget(b); if(v && piratePlunder(b,v,week)) raids++;
+        const v=pickRaidPrize(b); if(v && piratePlunder(b,v,week)) raids++;
       }
+      fenceBand(b, week);   // shady traders move last week's haul to a lax-law port
       if((b.noto||0)>=PIR_BOUNTY_NOTO) maybePirateBounty(b, week, b.base);
       // growth on loot
       if((b.loot||0)>=PIR_LOOT_GROW && (b.strength||1)<PIR_STR_MAX){ b.loot-=PIR_LOOT_GROW; b.strength=(b.strength||1)+1;
@@ -1449,6 +1498,18 @@ window.ECON = (function(){
   function pirateCombatStats(b){
     const sh=pirateShipOf(b);
     return Object.assign({ name:`${b.name} — ${sh.name}` }, JSON.parse(JSON.stringify(sh.combat)));
+  }
+  // Players storm the band's base: they seize its Cr hoard AND its stolen-goods hold, and the band is
+  // wiped out. Returns the haul so the referee can bank the credits + hand the players the cargo.
+  function raidPirateBase(id){
+    const b=pirateOf(id); if(!b) return null;
+    const loot=Math.round(b.loot||0), hold=Object.assign({}, b.hold||{});
+    const holdValue=Math.round(Object.keys(hold).reduce((s,g)=>s+hold[g]*(AGENT_VALUE[g]||100),0));
+    b.loot=0; b.hold={}; b.strength=0; b.defunct=true;
+    log(state.week, `🏴 ${b.name} — base stormed; its hoard is seized`);
+    broadcastNews(state.week, null, 'pirate', `🏴 The ${b.name} has been broken — its base stormed and its hoard carried off.`);
+    save();
+    return { ok:true, name:b.name, base:b.base, baseLabel:(worlds[b.base]?worlds[b.base].label:b.base), loot, hold, holdValue };
   }
 
   // ── Referee overrides — force / pin / clear any world condition or black market, and bend the corps
@@ -1952,10 +2013,11 @@ window.ECON = (function(){
     piratesOn(){ ensure(); return state.piratesOn!==false; },
     setPirates(v){ ensure(); state.piratesOn=!!v; save(); },
     pirates(){ ensure(); if(!state.pirates) state.pirates=freshPirates(); return state.pirates; },
-    pirateShips:()=>PIRATE_SHIPS, isPirate,
+    pirateShips:()=>PIRATE_SHIPS, isPirate, goodValue:(g)=>(AGENT_VALUE[g]||100),
     pirateCombatStats:(id)=>{ ensure(); const b=pirateOf(id); return b?pirateCombatStats(b):null; },   // combat-ready MgT2e stat block
     // referee controls
-    pirateRaidNow(id){ ensure(); const b=pirateOf(id); if(!b||b.defunct) return false; const v=pickRaidTarget(b); if(!v) return false; const ok=piratePlunder(b,v,state.week); save(); return ok; },
+    pirateRaidNow(id){ ensure(); const b=pirateOf(id); if(!b||b.defunct) return false; const v=pickRaidPrize(b); if(!v) return false; const ok=piratePlunder(b,v,state.week); save(); return ok; },
+    raidPirateBase(id){ ensure(); return raidPirateBase(id); },   // players storm the base → seize loot + stolen-goods hold; band wiped out
     setPirateStrength(id,n){ ensure(); const b=pirateOf(id); if(!b) return false; b.strength=Math.max(0,Math.min(PIR_STR_MAX,Math.round(+n)||0)); if(b.strength<1){ b.defunct=true; } else b.defunct=false; save(); return true; },
     setPirateShip(id,ship){ ensure(); const b=pirateOf(id); if(!b||!PIRATE_SHIPS[ship]) return false; b.ship=ship; save(); return true; },
     disbandPirate(id){ ensure(); const b=pirateOf(id); if(!b) return false; b.defunct=true; log(state.week,`⚓ ${b.name} — disbanded (referee)`); save(); return true; },
@@ -2246,6 +2308,22 @@ function econPirateHull(id,d){ const b=ECON.pirates()[id]; if(!b) return; ECON.s
 function econPirateRaid(id){ const ok=ECON.pirateRaidNow(id);
   if(typeof showToast==='function') showToast(ok?'☠ Raid resolved — a convoy was plundered':'No convoy in reach to raid', ok?'success':'info');
   renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh(); }
+// Players stormed a band's base: seize the hoard. Credits go to party funds; the stolen goods are
+// reported for the referee to hand out as cargo. The band is wiped out.
+function econPirateBaseRaid(id){
+  const r = ECON.raidPirateBase(id); if(!r || !r.ok){ if(typeof showToast==='function') showToast('No such band','error'); return; }
+  if(typeof funds!=='undefined' && r.loot>0){
+    if(typeof normalizeFunds==='function') normalizeFunds();
+    funds.party = (funds.party||0) + r.loot;
+    if(typeof fundsLog==='function') fundsLog('party', r.loot, 'Pirate hoard seized — '+r.name);
+    if(typeof saveFunds==='function') saveFunds();
+    if(typeof fundsPanelOpen!=='undefined' && fundsPanelOpen && typeof renderFundsPanel==='function') renderFundsPanel();
+  }
+  const gs=Object.keys(r.hold||{}).filter(g=>r.hold[g]>0.5);
+  const goods=gs.map(g=>`${Math.round(r.hold[g])}kt ${g.replace('Common ','')}`).join(', ');
+  if(typeof showToast==='function') showToast(`🏴 ${r.name} wiped out — ${econMoney(r.loot)} to party funds${goods?' · seized cargo: '+goods:''}`,'success');
+  renderEconPanel(); if(typeof galnetRefresh==='function') galnetRefresh(); if(currentView==='galaxy'&&typeof HX!=='undefined') HX.refresh();
+}
 // Drop a band's rules-legal MgT2e/High Guard hull into the current combat encounter.
 function econDeployPirate(id){
   if(typeof combatEncounter==='undefined' || !combatEncounter){ if(typeof showToast==='function') showToast('Start a ⚔ Combat encounter first, then deploy','info'); return; }
@@ -2709,10 +2787,15 @@ function econPiratesSectionHTML(){
     h+=`<span title="Strength (hulls)">${pips(b.strength||0,5,'#e8776a')} <span style="color:var(--tx1)">×${b.strength||0}</span></span></div>`;
     h+=`<div style="font-size:9px;color:var(--tx1);margin-top:2px"><span style="color:#9fd0ff">${escQH(sh.name)}</span> — ${escQH(sh.t2e)}${sh.hg?' <span style="color:#e0b978" title="High Guard hull">◆ HG</span>':''}`;
     h+=` · notoriety <b style="color:${(b.noto||0)>=40?'#e8776a':'#e0c87a'}">${Math.round(b.noto||0)}</b></div>`;
+    { const hold=b.hold||{}, gs=Object.keys(hold).filter(g=>hold[g]>0.5);
+      if(gs.length){ const hv=Math.round(gs.reduce((s,g)=>s+hold[g]*ECON.goodValue(g),0));
+        h+=`<div style="font-size:9px;color:#e0b978;margin-top:1px" title="Stolen cargo in the band's hold — fenced to lax-law ports over time, or seized if the players storm the base">📦 hold: ${gs.map(g=>Math.round(hold[g])+'kt '+g.replace('Common ','')).join(', ')} <span style="color:var(--tx1)">(~${econMoney(hv)})</span></div>`; }
+    }
     if(!b.defunct){
       h+=`<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">`;
       h+=`<button onclick="econPirateRaid('${b.id}')" title="Resolve a raid now — plunder a convoy in reach" style="${CB}">☠ Raid now</button>`;
       h+=`<button onclick="econDeployPirate('${b.id}')" title="${hasEnc?'Deploy this hull into the current combat encounter (a rules-legal MgT2e stat block)':'Start a ⚔ Combat encounter first, then deploy'}" style="${CB};${hasEnc?'border-color:#7a3f3f;color:#e8b0a0':''}">⚔ To combat</button>`;
+      h+=`<button onclick="econPirateBaseRaid('${b.id}')" title="Players stormed the base — seize its Cr hoard (→ party funds) + its stolen-goods hold; the band is wiped out" style="${CB};border-color:#7a5f2f;color:#e0b978">🏴 Raid base</button>`;
       h+=`<button onclick="econPirateHull('${b.id}',1)" title="Add a hull" style="${CB}">＋hull</button>`;
       h+=`<button onclick="econPirateHull('${b.id}',-1)" title="Lose a hull (0 = broken up)" style="${CB}">－hull</button>`;
       h+=`<button onclick="econDisbandPirate('${b.id}')" title="Break up this band" style="${CB}">⚓ Disband</button>`;
