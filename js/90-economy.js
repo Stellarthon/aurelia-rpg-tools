@@ -2209,7 +2209,12 @@ function renderEconPanel(){
       h+=`<div style="font-size:11px;color:#e8a0a0;margin-bottom:3px">⚠ ${disc.length} world${disc.length>1?'s':''} off the jump-lane network — economically isolated</div>`;
       h+=`<div style="font-size:10px;color:#cdd6e0;line-height:1.5">${disc.map(d=>escQH(d.label)).join(' · ')}</div>`;
       h+=`<div style="font-size:10px;color:var(--tx1);margin-top:3px">Draw jump lanes to these worlds (Design Mode) to fold them back into the economy.</div></div>`; } }
-  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)"><div style="font-size:11px;color:var(--tx1);margin-bottom:4px">Fire a disruption</div>`;
+  h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  { const dOn=ECON.directorOn();
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap">`;
+    h+=`<span style="font-size:11px;color:var(--tx1)">Fire a disruption</span>`;
+    h+=`<button onclick="econToggleDirector()" title="Auto-fire events — when ON, the galaxy fires its OWN emergent disruptions between the ones you fire here: spreading unrest, monopoly backlash, boomtown crime, and occasional ambient strikes / raids / festivals. Bounded &amp; self-expiring; referee-advanced, full-sim only. Turn OFF for a galaxy that only moves when you fire a preset." style="background:${dOn?'#3a2d4a':'var(--bg0)'};border:1px solid ${dOn?'#7a5f9d':'var(--bd0)'};color:${dOn?'#e5d6f2':'var(--tx1)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;white-space:nowrap">◇ Auto-fire events · ${dOn?'ON':'OFF'}</button>`;
+    h+=`</div>`; }
   { const si='background:var(--bg0);border:1px solid var(--bd0);color:var(--tx0);border-radius:5px;padding:3px 4px;font-size:11px';
     h+=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap">`;
     h+=`<span style="font-size:10px;color:var(--tx1)">Duration</span><input id="econ-shock-weeks" type="number" min="1" max="104" value="${econShockCfg.weeks}" style="${si};width:46px"><span style="font-size:10px;color:var(--tx1)">wks</span>`;
@@ -2220,7 +2225,8 @@ function renderEconPanel(){
   ECON.PRESETS.forEach(p=> h+=btn('⚡ '+p.label, `econFireById('${p.id}')`) );
   if(st.shocks.length){ h+=`<div style="font-size:11px;color:var(--tx1);margin:6px 0 3px">Active shocks</div>`;
     st.shocks.forEach((s,i)=>{ const ttl=(s.until!=null)?` · ends wk ${s.until}`:'';
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
+      const auto=(s.src==='director')?` <span style="color:#c9a9e0;font-size:9px" title="Auto-fired by the event director — cancel it like any shock">◇ auto</span>`:'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#e8a0a0;padding:2px 0"><span>⚡ ${s.label||s.kind}${auto}${ttl}</span><button onclick="econCancelShock(${i})" style="background:none;border:none;color:#e8a0a0;cursor:pointer">✕</button></div>`; }); }
   h+=`</div>`;
   // Cargo run — players move the marginal price by hauling goods world→world
   { const wopts = Object.values(ECON.worlds()).sort((a,b)=>a.label.localeCompare(b.label));
@@ -2347,12 +2353,9 @@ function renderEconPanel(){
       const f=FAC[b]; return {nm:(f&&f.name?f.name.split(' ')[0]:b), col:(f&&f.color)||'#9fb0c8'}; };
     const cap=ECON.traderCap(), ags=ECON.agents();
     h+=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--tx1)">Traders — living market</span>`;
     h+=btn(on?'● ON':'○ OFF','econToggleTraders()', on?'background:#1d4a33;border-color:#3f9d5a;color:#bfeacb':'');
-    { const dOn=ECON.directorOn();
-      h+=`<button onclick="econToggleDirector()" title="Event director — when ON, the galaxy fires its own emergent shocks (spreading unrest, monopoly backlash, boomtown crime, and occasional ambient strikes/raids/festivals). Bounded & self-expiring; referee-advanced, full-sim only." style="background:${dOn?'#3a2d4a':'var(--bg0)'};border:1px solid ${dOn?'#7a5f9d':'var(--bd0)'};color:${dOn?'#e5d6f2':'var(--tx0)'};border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;margin:2px">◇ Events ${dOn?'ON':'OFF'}</button>`; }
     h+=`</div>`;
-    h+=`<div style="font-size:10px;color:var(--tx1);margin:-2px 0 6px"><b style="color:#c9a9e0">◇ Events</b> — the galaxy makes its own trouble: emergent strikes, raids, unrest that spreads, tariffs against monopolists. They flow into world conditions, black markets and the Oracle's rumours just like a preset you fire.</div>`;
     h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
     h+=`<span style="font-size:10px;color:var(--tx1);white-space:nowrap">Fleet cap <b style="color:#f4d35e">${cap}</b> · ${ags.length} active</span>`;
     h+=`<input type="range" min="3" max="150" value="${cap}" oninput="econSetTraderCap(this.value)" style="flex:1;accent-color:#3f9d5a;cursor:pointer" title="Max simultaneous traders — performance lever; smooth to ~150, lowering it stands the weakest down">`;
