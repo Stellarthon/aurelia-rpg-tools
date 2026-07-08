@@ -1714,7 +1714,8 @@ const HX = (function(){
   let secState={}, secBound=false;   // collapsible-section open/closed state for the selected-system panel (persists across re-renders)
   let placeMode=false, placeCb=null; // Design Mode: armed while the referee taps an empty hex to place / move a system
   let paintMode=false, paintColor='#4aa3ff'; // referee territory brush: armed while tapping hexes to paint/erase them
-  const RPX=26, LABEL_ZOOM_F=1.3;
+  let sysDrag=null;                  // Design Mode: {id,moved,lastKey} while dragging a star to a new hex
+  const RPX=26, LABEL_ZOOM_F=1.3, FAC_LABEL_PX=17;
   function readShared(){ const ss=(typeof shipState!=='undefined')?shipState:{};
     jumpRating=clamp(Number(ss.jumpRating)||2,1,6); tonnage=Number(ss.tonnage)||200;
     fuelMax=Number(ss.fuelMax)||80; fuelAboard=Math.max(0,Number(ss.fuel)||0);
@@ -1751,8 +1752,30 @@ const HX = (function(){
   function axialPx(q,r){ return { x:RPX*1.5*q, y:RPX*Math.sqrt(3)*(r+q/2) }; }
   function hexPoly(cx,cy){ let p=[]; for(let i=0;i<6;i++){const a=Math.PI/180*60*i; p.push((cx+RPX*Math.cos(a)).toFixed(1)+','+(cy+RPX*Math.sin(a)).toFixed(1));} return p.join(' '); }
   function NS(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+  // ── Design-Mode drag-to-move: pointer → nearest hex ──
+  // Cube-round a fractional axial coord to the nearest hex centre.
+  function axialRound(q,r){ let x=q,z=r,y=-x-z; let rx=Math.round(x),ry=Math.round(y),rz=Math.round(z);
+    const dx=Math.abs(rx-x),dy=Math.abs(ry-y),dz=Math.abs(rz-z);
+    if(dx>dy&&dx>dz) rx=-ry-rz; else if(dy>dz) ry=-rx-rz; else rz=-rx-ry; return {q:rx,r:rz}; }
+  // Invert axialPx for a screen point (client coords) → snapped hex q,r.
+  function clientToHex(clientX,clientY){ if(!svg) return null; const rect=svg.getBoundingClientRect();
+    const sx=((clientX-rect.left)-view.x)/view.scale, sy=((clientY-rect.top)-view.y)/view.scale;
+    const q=sx/(RPX*1.5), r=sy/(RPX*Math.sqrt(3))-q/2; return axialRound(q,r); }
+  // A star is draggable only for the referee in Design Mode, only for real campaign
+  // systems (base or referee-added — not procedural uncharted stars), and never while
+  // another map tool (link / place / paint / block) owns the pointer.
+  function sysMovable(s){
+    if(!s||s.uncharted) return false;
+    if(typeof designModeOn==='undefined'||!designModeOn||!ref()) return false;
+    if((typeof gxLinkMode!=='undefined'&&gxLinkMode)||placeMode||paintMode||(typeof gxBlockMode!=='undefined'&&gxBlockMode)) return false;
+    return (typeof isBaseSystem==='function'&&isBaseSystem(s.id))||(typeof isAddedSystem==='function'&&isAddedSystem(s.id));
+  }
   function labelsVisible(){ return view.scale>=fitScale*LABEL_ZOOM_F; }
-  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); }
+  // Region labels live inside the zooming scene, so counter-scale their font off the live
+  // map scale to hold a constant on-screen size (FAC_LABEL_PX) at any zoom — one CSS-var
+  // write restyles every region name (they carry font-size:var(--hx-fac-font)).
+  function facFont(){ if(svg) svg.style.setProperty('--hx-fac-font',(FAC_LABEL_PX/(view.scale||1)).toFixed(2)+'px'); }
+  function applyTransform(){ if(scene) scene.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.scale})`); if(svg){ svg.classList.toggle('hx-lblzoom',labelsVisible()); scaleTraderLabels(); facFont(); }
     // Table-display camera mirror (js/93): the referee window sets this hook to
     // broadcast pan/zoom; it is rAF-throttled on the other side. Nothing else
     // in the app assigns it, so this is a no-op outside Follow mode.
@@ -1810,7 +1833,7 @@ const HX = (function(){
   function render(){ if(!svg||!origin) return;
     svg.innerHTML='';
     const g=NS('g',{id:'hx-scene',transform:`translate(${view.x},${view.y}) scale(${view.scale})`});
-    svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible());
+    svg.appendChild(g); scene=g; svg.classList.toggle('hx-lblzoom',labelsVisible()); facFont();
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const range=showRange?fuelReach():null;
     if(showTerr){ const tg=NS('g',{'pointer-events':'none'}); g.appendChild(tg);
@@ -1829,10 +1852,13 @@ const HX = (function(){
           const occ=BY_KEY[k]; if(occ && occ.fac!==f) return;           // don't tint a different region's star hex
           const c=k.split(','), q=+c[0], r=+c[1], p=axialPx(q,r);
           tg.appendChild(NS('polygon',{points:hexPoly(p.x,p.y),fill:fac.color,'fill-opacity':0.11,stroke:fac.color,'stroke-opacity':0.22,'stroke-width':0.75})); });
+        // Region name, drawn across the centre of the territory like a Stellaris /
+        // HOI4 empire label. It's the at-a-glance read: prominent (and counter-scaled
+        // to a constant on-screen size via --hx-fac-font) when zoomed out, and it
+        // cross-fades away as star labels appear on zoom-in (.hx-lblzoom, see CSS).
         const pts=byFac[f].map(s=>axialPx(s.q,s.r));
         const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
-        let rad=0; pts.forEach(p=>rad=Math.max(rad,Math.hypot(p.x-cx,p.y-cy))); rad+=RPX*1.5;
-        const lab=NS('text',{x:cx,y:cy-rad+12,'text-anchor':'middle',fill:fac.color,'fill-opacity':0.55,'font-family':'monospace','font-size':9.5,'font-weight':700,'letter-spacing':1.2});
+        const lab=NS('text',{x:cx,y:cy,'text-anchor':'middle','dominant-baseline':'central',class:'hx-fac-lbl',fill:fac.color});
         lab.textContent=fac.name.toUpperCase(); tg.appendChild(lab); });
       // Referee-painted hexes: a manual translucent colour wash over any cell,
       // rendered on top of the region tint. Shared to every viewer.
@@ -1942,6 +1968,12 @@ const HX = (function(){
       // usable touch target — so overlay a larger transparent hit circle that carries the
       // tap (and the hover-label). Sits on top so a tap near a star still selects it.
       const hit=NS('circle',{cx:p.x,cy:p.y,r:14,fill:'transparent','pointer-events':'all',style:'cursor:pointer'});
+      // Design Mode: drag a star to reposition it. Grabbing the star starts a drag and
+      // swallows the event so the map doesn't pan; the move/commit is driven from the
+      // svg + window pointer handlers in bindPanZoom (they survive the per-move re-render).
+      if(sysMovable(s)){ hit.style.cursor='move';
+        hit.addEventListener('pointerdown',ev=>{ if(ev.button>0||!sysMovable(s)) return;
+          ev.stopPropagation(); sysDrag={ id:s.id, moved:false, lastKey:s.q+','+s.r }; }); }
       // Drive selection off pointerup, not click: iOS Safari does not reliably emit a
       // synthetic click on SVG shapes once we've taken over touch (touch-action:none +
       // custom pointer handlers), which left stars untappable on iPad. tapConsumed tells
@@ -2474,6 +2506,7 @@ const HX = (function(){
         html+=`<div class="hx-small" style="margin:2px 0 6px">Zone rings show on the map for everyone and feed the Starport Board's passenger &amp; freight DMs (amber +1/−2, red −4/−6).</div>`;
         html+=`<label class="hx-edit-row hx-edit-col"><span>Notes</span><textarea class="hx-edit-in" rows="2" onchange="hxEditSystemField('${s.id}','desc',this.value)">${eh(nd.desc||'')}</textarea></label>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> above to add or randomly generate bodies.</div>`;
+        html+=`<div class="hx-small" style="margin:2px 0 6px">Drag the star on the map to reposition it, or use <b>✎ Move on map</b> to place it by tapping an empty hex.</div>`;
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMoveSystem('${s.id}')">✎ Move on map</button> <button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="hxRemoveSystem('${s.id}')">🗑 Remove</button></div>`;
         html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
       }
@@ -2564,8 +2597,22 @@ const HX = (function(){
     // drag and the star's `if(dragMoved) return;` swallows the tap. Use a larger slop for
     // touch so taps register, while keeping mouse panning crisp.
     svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<(drag.touch?12:4)) return; dragMoved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; applyTransform(); });
+    // Design-Mode star drag (bound to window, not the svg): moveSystem re-renders, which
+    // destroys the hit circle holding a touch pointer's implicit capture — window still
+    // receives the bubbled pointermove regardless, so the drag survives each re-tile. Snap
+    // the grabbed star to the hex under the pointer, moving it (live, unpersisted) only when
+    // the target cell changes and is free; the commit (persist) happens on release.
+    window.addEventListener('pointermove',e=>{ if(!sysDrag) return; const h=clientToHex(e.clientX,e.clientY); if(!h) return;
+      const key=h.q+','+h.r; if(key===sysDrag.lastKey) return; const occ=BY_KEY[key]; if(occ&&occ.id!==sysDrag.id) return;
+      if(!sysDrag.moved&&svg) svg.classList.add('hx-dragging'); moveSystem(sysDrag.id,h.q,h.r); sysDrag.lastKey=key; sysDrag.moved=true; });
     // Cleanup on window so a release that drifts off the map still ends the pan.
-    window.addEventListener('pointerup',()=>{ const moved=dragMoved; drag=null; tapConsumed=false; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
+    window.addEventListener('pointerup',()=>{
+      // End a star drag: persist the star's final hex through the overlay (base systems get
+      // a property override, additions are mutated) so the move survives reload and syncs.
+      if(sysDrag){ const sd=sysDrag; sysDrag=null; if(svg) svg.classList.remove('hx-dragging');
+        if(sd.moved){ const s=BY_ID[sd.id]; if(s&&typeof hxPlaceSystem==='function') hxPlaceSystem(sd.id,s.q,s.r); }
+        return; }
+      const moved=dragMoved; drag=null; tapConsumed=false; if(svg) svg.classList.remove('hx-dragging'); if(moved) scheduleViewportRender(); });
     // Tap empty map → deselect (back to the galaxy overview). Scoped to the svg so taps
     // elsewhere in the app never clear the selection. Star / lane / place-cell pointerups
     // fire first (deeper in the tree) and set tapConsumed, so only true background taps
