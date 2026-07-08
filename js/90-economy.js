@@ -317,7 +317,7 @@ window.ECON = (function(){
     // which persists active:true to the shared econ-state row. NB a persisted row's
     // active flag overrides this default on load (Object.assign(freshState(),parsed)),
     // so existing campaigns keep whatever mode they saved until the referee toggles.
-    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 }, factionsOn:true, factions:freshFactions(), factionEvents:[] };
+    return { week: wk, active:false, stock, transit, shocks:[], log:[], history:[], base, agents, tradersOn:true, traderCap: DEFAULT_TRADER_CAP, agentSeq: aseq, infl:{}, priceHist:{ wk:[], goods:{} }, psm:{}, corps, corpEvents:[], worldStatus:{}, contraband:{}, directorOn:true, director:{ last:-999, seq:0 }, factionsOn:true, factions:freshFactions(), factionEvents:[], news:[] };
   }
   function ensure(){ if(!worlds) buildTopology(); if(!state) state = freshState(); }
   function stk(id,g){ return (state.stock[id] && state.stock[id][g]) || 0; }
@@ -1069,6 +1069,7 @@ window.ECON = (function(){
   const FAC_RELIEF_COST = 12_000;        // funding a direct relief shipment costs this from the treasury
   const FAC_RELIEF_QTY = 30;             // kt of staples/short good a funded relief lift moves toward the short world
   const FAC_DEV_COST = 60_000;           // a development grant (EXPAND agenda) — funded, posts a job
+  const CAB_RESHUFFLE_PROB = 0.02;       // weekly chance a power reshuffles ONE cabinet post (~every 50 wks per seat-set) — occasional, newsworthy
 
   function facName2(id){ return (typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[id] && GALAXY_FACTIONS[id].name) || facName(id); }
   function facColorOf(id){ return (typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[id] && GALAXY_FACTIONS[id].color) || '#9fb0c8'; }
@@ -1079,13 +1080,50 @@ window.ECON = (function(){
     const bv=FACTION_AVOID[b]; if(bv){ if((bv.hard||[]).indexOf(a)>=0) return -70; if((bv.soft||[]).indexOf(a)>=0) return -30; }
     return 10;   // no history → mildly cordial
   }
+  // ── Government cabinets — each power's ministers, generated, occasionally reshuffled, broadcast on GalNet.
+  //    The INITIAL cabinet is seeded DETERMINISTICALLY (name/trait from a stable hash of faction+post), so
+  //    every device shows the same government before the referee's first advance. Reshuffles thereafter are
+  //    referee-side (Math.random) and persisted, exactly like every other faction mutation. ──
+  const GOV_FIRST = ['Vara','Doran','Mira','Kel','Sana','Orin','Tesh','Yuna','Cassian','Ravi','Lio','Nadia','Bram','Isolde','Garan','Petra','Soren','Aisha','Costa','Wen','Elias','Dara','Faren','Nix','Talia','Rurik'];
+  const GOV_LAST  = ['Okonkwo','Vance','Solari','Marek','Bright','Cole','Ashfield','Reyes','Tamm','Voss','Kessler','Halloran','Drexler','Sable','Orsk','Quill','Anselm','Marlow','Castellan','Greaves','Yuan','Ferro','Lindqvist','Adeyemi','Koh','Novak'];
+  const GOV_TRAITS = ['hawkish','dovish','protectionist','free-trader','reformist','hardliner','technocrat','populist','pragmatist','ideologue'];
+  const GOV_REASONS = { resigned:'has resigned', dismissed:'was dismissed', died:'has died in office', scandal:'steps down amid scandal', promoted:'was promoted', retired:'retires', elected:'takes office after a vote', purged:'was purged', ascended:'has ascended', recalled:'was recalled' };
+  // Per-power flavour: the head-of-state's title + the plausible ways its officials leave office.
+  const FAC_GOV = {
+    hegemony:  { head:'First Consul',        style:['elected','resigned','dismissed','retired','scandal'] },
+    uhc:       { head:'Continuity Director', style:['elected','retired','resigned','recalled'] },
+    sanhedrin: { head:'High Preceptor',      style:['ascended','died','resigned','retired'] },
+    rsc:       { head:'Chairman',            style:['purged','dismissed','died','resigned'] },
+    omnisynth: { head:'Chief Executive',     style:['dismissed','promoted','resigned','retired'] },
+  };
+  const GOV_POSTS = [
+    { key:'trade',    title:'Minister of Commerce' },
+    { key:'defence',  title:'Minister of Defence' },
+    { key:'foreign',  title:'Foreign Secretary' },
+    { key:'interior', title:'Minister of the Interior' },
+  ];
+  function govHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function govNameSeeded(seed){ return GOV_FIRST[govHash('f'+seed)%GOV_FIRST.length]+' '+GOV_LAST[govHash('l'+seed)%GOV_LAST.length]; }
+  function govTraitSeeded(seed){ return GOV_TRAITS[govHash('t'+seed)%GOV_TRAITS.length]; }
+  function govNameRandom(){ return pick(GOV_FIRST)+' '+pick(GOV_LAST); }
+  function freshCabinet(facId){ const gov=FAC_GOV[facId]||{head:'Head of State'};
+    const out=[{ post:'head', title:gov.head, name:govNameSeeded(facId+':head'), trait:govTraitSeeded(facId+':head'), since:0 }];
+    GOV_POSTS.forEach(p=> out.push({ post:p.key, title:p.title, name:govNameSeeded(facId+':'+p.key), trait:govTraitSeeded(facId+':'+p.key), since:0 }));
+    return out;
+  }
+
   function freshFactions(){ const out={};
     FAC_AI_IDS.forEach(id=>{ const stance={};
       FAC_AI_IDS.forEach(o=>{ if(o!==id) stance[o]=relBaseline(id,o); });
-      out[id]={ id, treasury:FAC_SEED_TREASURY, income:0, stance, agenda:'CONSOLIDATE', lastCraft:-999, hist:[] };
+      out[id]={ id, treasury:FAC_SEED_TREASURY, income:0, stance, agenda:'CONSOLIDATE', lastCraft:-999, hist:[], cabinet:freshCabinet(id), prevAgenda:'CONSOLIDATE' };
     });
     return out;
   }
+  // GalNet — the galaxy news feed. A rolling window of headlines the sim broadcasts (cabinet changes,
+  // trade wars, détente). Player-facing via the Oracle (intel() surfaces recent items) and the console.
+  const NEWS_CAP = 40;
+  function broadcastNews(week, facId, kind, text){ if(!state.news) state.news=[];
+    state.news.unshift({ wk:week, fac:facId||null, kind, text }); if(state.news.length>NEWS_CAP) state.news.length=NEWS_CAP; }
   function factionEmbargoesLive(){ return (state.shocks||[]).filter(s=> s && s.kind==='embargo' && s.src==='faction'); }
   function relOf(a,b){ const f=state.factions&&state.factions[a]; return (f&&f.stance&&f.stance[b]!=null)?f.stance[b]:relBaseline(a,b); }
   function setRel(a,b,v){ v=Math.max(FAC_REL_MIN,Math.min(FAC_REL_MAX,Math.round(v)));
@@ -1156,9 +1194,15 @@ window.ECON = (function(){
       if(f.treasury < FAC_TREASURY_CAP) f.treasury=Math.min(FAC_TREASURY_CAP, f.treasury+f.income);
 
       // 2) RELATIONS — pull each stance slowly toward its rivalry baseline; a live embargo/tariff between
-      //    the two keeps eroding it (statecraft has diplomatic cost).
+      //    the two keeps eroding it (statecraft has diplomatic cost). The government's POSTURE bends the
+      //    baseline: a hawkish/hardline cabinet drifts toward hostility, a dovish/reformist one toward
+      //    thaw — so a reshuffle visibly reshapes a power's diplomacy over the following weeks.
+      const cab=f.cabinet||[]; const defence=cab.find(s=>s.post==='defence')||{}, foreign=cab.find(s=>s.post==='foreign')||{}, head=cab.find(s=>s.post==='head')||{};
+      const hawk=['hawkish','hardliner','ideologue'], dove=['dovish','reformist','pragmatist'];
+      let posture=0; [defence.trait,foreign.trait,head.trait].forEach(t=>{ if(hawk.indexOf(t)>=0) posture--; else if(dove.indexOf(t)>=0) posture++; });
+      const postureShift=Math.max(-12,Math.min(12, posture*5));   // bounded ±12: cabinet nudges the diplomatic baseline
       FAC_AI_IDS.forEach(o=>{ if(o===f.id) return;
-        const base=relBaseline(f.id,o); let r=relOf(f.id,o);
+        const base=Math.max(FAC_REL_MIN,Math.min(FAC_REL_MAX, relBaseline(f.id,o)+postureShift)); let r=relOf(f.id,o);
         r += (base-r)*FAC_REL_DRIFT;
         const hostileAct=(state.shocks||[]).some(s=> s.src==='faction' && ((s.kind==='embargo' && ((s.facA===f.id&&s.facB===o)||(s.facA===o&&s.facB===f.id))) || (s.kind==='tariff' && s.faction===f.id && s.againstFac===o)));
         if(hostileAct) r-=2;
@@ -1181,6 +1225,7 @@ window.ECON = (function(){
         if(ownEmb){ const i=state.shocks.indexOf(ownEmb); if(i>=0){ state.shocks.splice(i,1);
             nudgeRel(f.id, ownEmb.facB, +8); f.lastCraft=week;
             log(week, `🕊 ${facName2(f.id)} lifts its embargo on ${facName2(ownEmb.facB)}`);
+            broadcastNews(week, f.id, 'thaw', `🕊 ${facName2(f.id)} lifts its trade embargo on ${facName2(ownEmb.facB)} as relations thaw.`);
             state.history.unshift({ label:`🕊 ${FAC_SHORT[f.id]||facName2(f.id)} ↔ ${FAC_SHORT[ownEmb.facB]||facName2(ownEmb.facB)} détente`, kind:'thaw', beganWk:week, endsWk:null, src:'faction' }); if(state.history.length>40) state.history.length=40; } }
         else if(worstRival){ const r=relOf(f.id,worstRival);
           const alreadyEmb=factionEmbargoesLive().some(s=> (s.facA===f.id&&s.facB===worstRival)||(s.facA===worstRival&&s.facB===f.id));
@@ -1189,6 +1234,7 @@ window.ECON = (function(){
             const s={ kind:'embargo', facA:f.id, facB:worstRival, src:'faction', until:week+FAC_EMB_WK, fired:week, label:`⛔ ${FAC_SHORT[f.id]||facName2(f.id)} embargoes ${FAC_SHORT[worstRival]||facName2(worstRival)}` };
             state.shocks.push(s); state.history.unshift({ label:s.label, kind:'embargo', beganWk:week, endsWk:s.until, src:'faction' }); if(state.history.length>40) state.history.length=40;
             log(week, `⛔ ${facName2(f.id)} declares a trade embargo on ${facName2(worstRival)}`);
+            broadcastNews(week, f.id, 'embargo', `⛔ ${facName2(f.id)} declares a trade embargo on ${facName2(worstRival)} amid deepening tensions.`);
           } else if(r<=FAC_TARIFF_THRESH && f.treasury>=FAC_TARIFF_COST
                     && !(state.shocks||[]).some(s=> s.kind==='tariff' && s.faction===f.id && s.againstFac===worstRival)){
             // protectionist tariff on a good the rival exports and this faction imports
@@ -1198,6 +1244,7 @@ window.ECON = (function(){
               const s={ kind:'tariff', faction:f.id, againstFac:worstRival, good:g, factor:0.5, src:'faction', until:week+FAC_TARIFF_WK, fired:week, label:`⚖ ${FAC_SHORT[f.id]||facName2(f.id)} tariff on ${g.replace('Common ','')} (vs ${FAC_SHORT[worstRival]||facName2(worstRival)})` };
               state.shocks.push(s); state.history.unshift({ label:s.label, kind:'tariff', beganWk:week, endsWk:s.until, src:'faction' }); if(state.history.length>40) state.history.length=40;
               log(week, `⚖ ${facName2(f.id)} raises a protective tariff on ${g.replace('Common ','')}`);
+              broadcastNews(week, f.id, 'tariff', `⚖ ${facName2(f.id)} imposes a protective tariff on ${g.replace('Common ','')} imports from ${facName2(worstRival)}.`);
             }
           }
         }
@@ -1236,7 +1283,25 @@ window.ECON = (function(){
         }
       }
 
-      // 6) P&L sample for the console sparkline.
+      // 6) GOVERNMENT — occasionally reshuffle a cabinet post (replacement) and broadcast it; and when the
+      //    power's AGENDA shifts, broadcast that too (an "update" without a personnel change). Both are news.
+      if(!f.cabinet || !f.cabinet.length) f.cabinet=freshCabinet(f.id);
+      if(Math.random()<CAB_RESHUFFLE_PROB){
+        const gov=FAC_GOV[f.id]||{}, seat=pick(f.cabinet), outgoing=seat.name;
+        const reason=pick(gov.style||['resigned','dismissed','retired']);
+        let nm=govNameRandom(); for(let k=0;k<6 && f.cabinet.some(s=>s.name===nm);k++) nm=govNameRandom();
+        seat.name=nm; seat.trait=pick(GOV_TRAITS); seat.since=week;
+        broadcastNews(week, f.id, 'cabinet', `🏛 ${facName2(f.id)}: ${seat.title} ${outgoing} ${GOV_REASONS[reason]||'steps down'} — ${nm} ${seat.post==='head'?'assumes office':'is appointed'} (${seat.trait}).`);
+        log(week, `🏛 ${FAC_SHORT[f.id]||facName2(f.id)} — ${seat.title}: ${nm} replaces ${outgoing}`);
+        state.history.unshift({ label:`🏛 ${FAC_SHORT[f.id]||facName2(f.id)} ${seat.title} — ${nm}`, kind:'cabinet', beganWk:week, endsWk:null, src:'faction' }); if(state.history.length>40) state.history.length=40;
+      }
+      if(f.agenda!==f.prevAgenda){ const head=(f.cabinet||[]).find(s=>s.post==='head')||{};
+        const AGD_NEWS={ STABILISE:'moves to stabilise its worlds', CONTAIN:'takes a harder line abroad', EXPAND:'opens an expansionist programme', CONSOLIDATE:'settles into consolidation' };
+        broadcastNews(week, f.id, 'policy', `📜 ${facName2(f.id)} under ${head.title||'its government'} ${head.name?head.name+' ':''}${AGD_NEWS[f.agenda]||'changes course'}.`);
+        f.prevAgenda=f.agenda;
+      }
+
+      // 7) P&L sample for the console sparkline.
       f.hist=f.hist||[]; f.hist.push({ wk:week, cap:Math.round(f.treasury) }); if(f.hist.length>24) f.hist.shift();
     });
   }
@@ -1479,7 +1544,7 @@ window.ECON = (function(){
       worlds=null; adj=null; ensure(); state.base = recomputeBase();   // freshState's base predates the merged state.corps; re-derive so the loaded corp investments are reflected (every device — players inherit base this way)
     } } catch(e){} }
   function save(){ try { if(typeof isReferee==='function' && !isReferee()) return;
-    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director, factionsOn:state.factionsOn, factions:state.factions, factionEvents:state.factionEvents }), true); } catch(e){} }
+    supaStorage.set('econ-state', JSON.stringify({ week:state.week, active:state.active, stock:state.stock, transit:state.transit, shocks:state.shocks, log:state.log, history:state.history, agents:state.agents, tradersOn:state.tradersOn, traderCap:state.traderCap, agentSeq:state.agentSeq, infl:state.infl, psm:state.psm, corps:state.corps, corpEvents:state.corpEvents, monopolyOn:state.monopolyOn, worldStatus:state.worldStatus, contraband:state.contraband, directorOn:state.directorOn, director:state.director, factionsOn:state.factionsOn, factions:state.factions, factionEvents:state.factionEvents, news:state.news }), true); } catch(e){} }
   function reset(){ const wasActive = !!(state && state.active); state = freshState(); state.active = wasActive;
     reseedTo(state.week);   // freshState ran buildTopology against the OLD state.corps; reseedTo rebuilds the topology against the NOW-live fresh (empty-invest) corps AND snaps stock+base+transit together to the resting level (so stock==base, pressures read ~0)
     save(); }   // reseed stock; keep the current Simple/Full mode
@@ -1537,13 +1602,15 @@ window.ECON = (function(){
       if(s && s.kind && worlds[id] && (s.until==null||s.until>=state.week)) out.push({ kind:'status', status:s.kind, sev:s.sev||1, world:id, label:worlds[id].label }); });
     if(state.contraband) Object.keys(state.contraband).forEach(id=>{ const s=state.contraband[id];
       if(s && s.good && worlds[id] && (s.until==null||s.until>=state.week)) out.push({ kind:'blackmarket', world:id, label:worlds[id].label, good:s.good }); });
+    // GalNet headlines — the Oracle can broadcast the latest government / diplomacy news as a true rumour.
+    (state.news||[]).slice(0,6).forEach(n=>{ if(n && n.text) out.push({ kind:'news', text:n.text, faction:n.fac||null, label:n.fac?facName2(n.fac):'GalNet', newsKind:n.kind }); });
     const goods = SIM_GOODS.filter(g=>!GOODS[g].internal);
     Object.keys(worlds).forEach(id=>{ goods.forEach(g=>{
       const p = pressure(id,g); if(p==null) return;
       if(p<=-2) out.push({ kind:'shortage', world:id, label:worlds[id].label, good:g, pressure:p });
       else if(p>=3) out.push({ kind:'glut', world:id, label:worlds[id].label, good:g, pressure:p });
     }); });
-    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:((x.kind==='contract'||x.kind==='blackmarket')?2:1);
+    out.sort((a,b)=>{ const r=x=> x.kind==='shock'?0:(x.kind==='news'?3:((x.kind==='contract'||x.kind==='blackmarket')?2:1));
       if(r(a)!==r(b)) return r(a)-r(b); return Math.abs(b.pressure||4)-Math.abs(a.pressure||4); });
     return out;
   }
@@ -1722,6 +1789,8 @@ window.ECON = (function(){
     setFactions(v){ ensure(); state.factionsOn=!!v; save(); },
     factions(){ ensure(); if(!state.factions) state.factions=freshFactions(); return state.factions; },
     factionIds:()=>FAC_AI_IDS.slice(),
+    cabinetOf(id){ ensure(); const f=state.factions&&state.factions[id]; if(f&&(!f.cabinet||!f.cabinet.length)) f.cabinet=freshCabinet(id); return (f&&f.cabinet)||[]; },
+    news(){ ensure(); return state.news||[]; },                               // GalNet feed — rolling headlines (cabinet changes, trade wars, détente, policy)
     relOf:(a,b)=>{ ensure(); return relOf(a,b); },                            // A→B stance (−100..+100)
     facName:(id)=>facName2(id), facColor:(id)=>facColorOf(id),
     factionEvents(){ ensure(); return state.factionEvents||[]; },             // raw faction contract opportunities
@@ -2360,6 +2429,21 @@ function econEditRevert(){
 // ── World status & black markets — referee panel. Lists the live conditions the sim derives (boom/
 //    bust/unrest/rationing) plus any black markets, each with clear/pin, and two "force" mini-forms so
 //    the referee can plant or suppress any condition at will. ──
+// ── GalNet — the galaxy news feed (cabinet reshuffles, trade wars, détente, policy shifts) ──
+function econGalNetSectionHTML(){
+  if(typeof ECON==='undefined' || !ECON.active() || typeof ECON.news!=='function') return '';
+  const news=ECON.news(); if(!news.length) return '';
+  const NICON={ cabinet:'🏛', embargo:'⛔', tariff:'⚖', thaw:'🕊', policy:'📜' };
+  let h=`<div style="padding:8px 10px;border-bottom:1px solid var(--bd0)">`;
+  h+=`<div style="font-size:11px;color:var(--tx1);margin-bottom:5px">📡 GalNet — galaxy news <span style="color:var(--tx1);font-size:9px">— broadcast from the living galaxy</span></div>`;
+  news.slice(0,10).forEach(n=>{ const col=n.fac?ECON.facColor(n.fac):'#9fb0c8';
+    h+=`<div style="display:flex;gap:6px;align-items:baseline;font-size:10px;color:#cdd6e0;padding:2px 0;border-top:1px solid var(--bd0)">`;
+    h+=`<span style="color:var(--tx1);white-space:nowrap;font-size:9px">wk ${n.wk}</span>`;
+    h+=`<span style="border-left:2px solid ${col};padding-left:6px">${NICON[n.kind]||'•'} ${escQH(n.text)}</span></div>`; });
+  h+=`<div style="font-size:9px;color:var(--tx1);margin-top:4px">Headlines the galaxy generates on its own — governments reshuffle, powers embargo &amp; reconcile, agendas shift. Players can overhear these through the Oracle (📡 GalNet rumours).</div>`;
+  h+=`</div>`;
+  return h;
+}
 // ── Factions — the major powers as strategy-game actors (treasury · income · agenda · diplomacy · statecraft) ──
 function econRelWord(v){ return v>=40?['warm','#7ec98f']:v>=0?['cordial','#9fd0b0']:v>=-30?['wary','#e0c87a']:v>=-55?['tense','#e0a24a']:['hostile','#e8776a']; }
 function econFactionsSectionHTML(){
@@ -2395,6 +2479,13 @@ function econFactionsSectionHTML(){
       myShocks.forEach(s=>{ const other=s.facB||s.againstFac; const lab=s.kind==='embargo'?`⛔ embargo ${ECON.facName(other).split(' ')[0]}`:`⚖ tariff ${(''+(s.good||'')).replace('Common ','')}`;
         h+=`<span style="background:#3a1d1d;border:1px solid #7a3f3f;color:#e8b0a0;border-radius:4px;padding:0 5px" title="ends wk ${s.until}">${escQH(lab)} <button onclick="ECON.liftFactionShock('${id}','${other}');renderEconPanel()" title="Referee: lift this" style="background:none;border:none;color:#e8b0a0;cursor:pointer;padding:0">✕</button></span>`; });
       h+=`</div>`; }
+    // Cabinet — the power's government: head of state + ministers (name · trait). Reshuffled over time; broadcast on GalNet.
+    { const cab=ECON.cabinetOf(id), head=cab.find(s=>s.post==='head');
+      if(head){ h+=`<div style="font-size:9px;color:var(--tx1);margin-top:2px">🏛 <span style="color:#cdd6e0">${escQH(head.title)}</span> <b style="color:${col}">${escQH(head.name)}</b> <span style="color:var(--tx1)">· ${escQH(head.trait)}</span></div>`;
+        h+=`<div style="font-size:9px;color:var(--tx1);margin-top:1px;display:flex;gap:4px;flex-wrap:wrap">`;
+        cab.filter(s=>s.post!=='head').forEach(s=>{ h+=`<span title="${escQH(s.title)} · ${escQH(s.trait)}${s.since?' · since wk '+s.since:''}" style="background:var(--bg0);border:1px solid var(--bd0);border-radius:4px;padding:0 4px"><span style="color:var(--tx1)">${escQH(s.title.replace('Minister of the ','').replace('Minister of ','').replace('Foreign Secretary','Foreign'))}:</span> ${escQH(s.name)}</span>`; });
+        h+=`</div>`; }
+    }
     h+=econSparkline(f.hist,280,34);
     h+=`<div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">`;
     h+=`<button onclick="econBumpFactionTreasury('${id}',100000)" title="Fund the treasury (+100k)" style="${CB}">＋100k</button>`;
@@ -2599,6 +2690,7 @@ function renderEconPanel(){
       h+=`</div>`;
     }
   }
+  h+=econGalNetSectionHTML();        // GalNet news feed — cabinet reshuffles, trade wars, détente, policy shifts
   h+=econFactionsSectionHTML();      // major powers — treasury, income, agenda, diplomacy & statecraft, with referee overrides
   h+=econWorldStatusSectionHTML();   // world conditions (boom/bust/unrest/rationing) + black markets, with referee force/pin/clear
   // Corporate contracts — jobs the houses would pay players for. The referee DRAFTS one into a
