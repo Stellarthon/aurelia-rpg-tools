@@ -1158,22 +1158,41 @@ function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
 
 function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
-// Fill a CORP_CONTRACT template from a rich contract item (ECON.contractItem / an intel 'contract' item).
+// ── FACTION CONTRACTS — jobs the STATES post (parallel to CORP_CONTRACT; {faction} = the power). The
+//    faction AI (ECON.factionEvents) flags relief / patrol / bounty / development needs in its space;
+//    these resolve them into ready-to-run contracts, drafted + posted through the same pipeline. ──
+const FACTION_CONTRACT = {
+  relief: { title:'Relief run — {faction}', refNote:'{faction} is subsidising staples/supply into {place} to head off a shortage. Premium ~{reward}. A straightforward supply-and-deliver job; failure lets the shortage bite (unrest risk).', briefs:[
+    'The {faction} is paying {reward} for a fast relief run of {good} into {place} — stocks there are running dangerously thin.',
+    'Word from a {faction} liaison: {reward} to anyone who can get a hold of {good} into {place} before the larders empty.' ]},
+  patrol: { title:'Lane patrol — {faction}', refNote:'{faction} wants the {from}→{to} approach patrolled; a valuable convoy ({vessel}, {good}) is inbound. Reward ~{reward}. Runs as a picket/escort scene; if declined, resolve any raid with the ⚔ button.', briefs:[
+    'The {faction} navy is stretched thin and is paying {reward} for private guns to patrol the {from}→{to} lane — a fat {good} convoy is due through.',
+    '{faction} customs will pay {reward} to see the {to} approach kept clean this cycle. Raiders have been bold on that run.' ]},
+  bounty: { title:'Bounty — {faction}', refNote:'Raiders struck shipping in {faction} space near {place}. It posts a {reward} bounty on the culprits. Resolve a success against the raiding convoy / a plausible raider.', briefs:[
+    'The {faction} posts a {reward} bounty on the raiders working its space around {place}. Bring a name or a wreck.',
+    'After the latest raid off {place}, the {faction} is done waiting — {reward} to whoever ends the raiders’ run.' ]},
+  development: { title:'Development charter — {faction}', refNote:'{faction} is funding a build-up / survey at {place} and wants contractors. Reward ~{reward}. Open-ended downtime/skill work; good hook for a recurring patron.', briefs:[
+    'The {faction} has opened a {reward} development charter at {place} — surveyors, haulers and fixers all wanted for the build-up.',
+    'A {faction} ministry is hiring for works at {place}: {reward} on the table for crews willing to sign a charter.' ]}
+};
+// Fill a CORP_CONTRACT / FACTION_CONTRACT template from a rich contract item (ECON.contractItem /
+// ECON.factionContractItem / an intel 'contract' item).
 function fillContract(s, item){
   const money = (typeof econMoney==='function') ? econMoney(item.reward) : ('Cr'+(item.reward||0));
   return (''+s)
-    .replace(/{corp}/g,   item.label||'a corporation')
-    .replace(/{target}/g, item.targetName||'a rival house')
-    .replace(/{place}/g,  item.place||item.toLabel||'the frontier')
-    .replace(/{from}/g,   item.fromLabel||'port')
-    .replace(/{to}/g,     item.toLabel||'port')
-    .replace(/{good}/g,   goodFlavor(item.good))
-    .replace(/{vessel}/g, item.vessel||'a hauler')
-    .replace(/{reward}/g, money);
+    .replace(/{corp}/g,    item.label||'a corporation')
+    .replace(/{faction}/g, item.label||'a power')
+    .replace(/{target}/g,  item.targetName||'a rival house')
+    .replace(/{place}/g,   item.place||item.toLabel||'the frontier')
+    .replace(/{from}/g,    item.fromLabel||'port')
+    .replace(/{to}/g,      item.toLabel||'port')
+    .replace(/{good}/g,    goodFlavor(item.good))
+    .replace(/{vessel}/g,  item.vessel||'a hauler')
+    .replace(/{reward}/g,  money);
 }
 // Roll a concrete contract from a flagged opportunity → {type,corp,target,reward,title,brief,refNote}.
 function draftCorpContract(item){
-  const t = (CORP_CONTRACT[item.contract]) || CORP_CONTRACT.escort;
+  const t = (item.issuer==='faction' && FACTION_CONTRACT[item.contract]) || (CORP_CONTRACT[item.contract]) || FACTION_CONTRACT[item.contract] || CORP_CONTRACT.escort;
   return { type:item.contract, corp:item.label, target:item.targetName||null, reward:item.reward, color:item.color||null,
     title: fillContract(t.title, item), brief: fillContract(pick(t.briefs), item), refNote: fillContract(t.refNote, item) };
 }
