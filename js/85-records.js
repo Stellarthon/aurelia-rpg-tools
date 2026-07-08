@@ -2420,8 +2420,10 @@ function renderWhispersPanel(){
     }
   } else {
     // Player: their own thread only (the server sent nothing else) + composer.
+    // Standing entries also ride this channel (ref:true) — keep them out of the note thread.
+    const std = (typeof isStandingNote === 'function') ? isStandingNote : (() => false);
     const mine = items.filter(it => it && !it.ref);
-    const orphanReplies = items.filter(it => it && it.ref && !mine.some(n => n.id === it.re));
+    const orphanReplies = items.filter(it => it && it.ref && !std(it) && !mine.some(n => n.id === it.re));
     html += mine.map(n => `<div class="wsp-card">
         <div class="wsp-hd"><span class="wsp-from">You</span><span class="wsp-meta">${wspTime(n.ts)}</span></div>
         <div class="wsp-txt">${esc(n.text)}</div>
@@ -2481,11 +2483,183 @@ async function whisperSetResolved(id, resolved){
   renderWhispersPanel();
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// PLAYER STANDING — per-player PRIVATE reputation, tied to backstory
+// ───────────────────────────────────────────────────────────────────────────
+// The referee authors each player's standing with the galaxy's powers (a level +
+// a backstory note); each player privately sees only their OWN sheet. It rides the
+// whisper channel wholesale (see isStandingNote / STANDING_TAG in js/55): a standing
+// is a referee whisper to one player, tagged + JSON-encoded, so it inherits the
+// whisper system's REAL per-player privacy (put-state stamps visibleTo:[player];
+// get-content returns each identity only their own; the row is excluded from public
+// reads) with no new backend. Latest entry per (player, org) wins; a {removed:true}
+// entry is a tombstone. Never shown on the table TV.
+let standingPanelOpen = false, standingCollapsed = false, standingRefSel = null;
+const STD_LEVELS = [ ['Hostile','#e8776a'], ['Wary','#e0a24a'], ['Neutral','#c9b98a'], ['Friendly','#9fd0b0'], ['Allied','#7ec98f'] ];
+function stdClampLevel(l){ l = l|0; return l<0?0:(l>4?4:l); }
+function stdOrgColor(org){
+  try { if(typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[org]) return GALAXY_FACTIONS[org].color; } catch(e){}
+  try { if(window.ECON && ECON.corps && ECON.corps()[org]) return ECON.corps()[org].color; } catch(e){}
+  return '#9fb0c8';
+}
+function stdOrgLabel(org, fallback){
+  try { if(typeof GALAXY_FACTIONS!=='undefined' && GALAXY_FACTIONS[org]) return GALAXY_FACTIONS[org].name; } catch(e){}
+  try { if(window.ECON && ECON.corps && ECON.corps()[org]) return ECON.corps()[org].name; } catch(e){}
+  return fallback || org;
+}
+// Reconstruct current standings from the standing-tagged whispers (latest per player+org).
+function parseStandings(){
+  const items = Array.isArray(whisperItems) ? whisperItems : [];
+  const by = {};
+  items.forEach(it => {
+    if(typeof isStandingNote !== 'function' || !isStandingNote(it)) return;
+    let e; try { e = JSON.parse(it.text.slice(STANDING_TAG.length)); } catch(_){ return; }
+    if(!e || !e.org) return;
+    const who = (Array.isArray(it.visibleTo) && it.visibleTo[0]) || '?';
+    const ts = Date.parse(it.ts) || 0, k = who + ' ' + e.org;
+    if(!by[k] || ts > by[k]._ts) by[k] = Object.assign({}, e, { _who: who, _ts: ts, _id: it.id });
+  });
+  return Object.values(by);
+}
+function stdPips(level){ const L = stdClampLevel(level), col = STD_LEVELS[L][1];
+  let s = '<span class="std-level">';
+  for(let i=0;i<5;i++) s += `<span class="std-pip"${i<=L ? ` style="background:${col}"` : ''}></span>`;
+  return s + '</span>';
+}
+// A living-galaxy tie-in: the latest GalNet headline about a power the player has standing with.
+function stdRelatedNews(org){
+  let news = [];
+  try { if(window.ECON && ECON.news) news = ECON.news() || []; } catch(e){}
+  if((!news || !news.length) && typeof galnetFeed !== 'undefined') news = galnetFeed;
+  const rel = (news||[]).filter(n => n && n.fac === org)[0];
+  return rel ? `<div class="std-news">📡 ${escQH(rel.text)}</div>` : '';
+}
+
+function toggleStandingPanel(){
+  if(typeof DISPLAY_MODE !== 'undefined' && DISPLAY_MODE) return;   // never on the table TV
+  standingPanelOpen = !standingPanelOpen;
+  const w = document.getElementById('standing-wrap'), b = document.getElementById('standing-btn');
+  if(w) w.classList.toggle('hidden', !standingPanelOpen);
+  if(b) b.classList.toggle('panel-open', standingPanelOpen);
+  if(standingPanelOpen){ renderStandingPanel(); if(typeof pollWhispers === 'function') pollWhispers(); }
+  else updateStandingBadge();
+}
+function toggleStandingCollapse(){
+  const h = document.getElementById('standing-header'); if(h && h.dataset.suppressClick === '1') return;
+  standingCollapsed = !standingCollapsed;
+  const t = document.getElementById('standing-toggle'); if(t) t.textContent = standingCollapsed ? '▲' : '▼';
+  document.getElementById('standing-body').classList.toggle('collapsed', standingCollapsed);
+  document.getElementById('standing-wrap').classList.toggle('panel-collapsed', standingCollapsed);
+}
+function standingSeenTs(){ try { return parseInt(localStorage.getItem('standing-seen')||'0',10)||0; } catch(e){ return 0; } }
+function standingMarkSeen(){ try { localStorage.setItem('standing-seen', String(Date.now())); } catch(e){} }
+function standingUnread(){ if(isReferee()) return 0; const seen = standingSeenTs();
+  return parseStandings().filter(e => !e.removed && e._ts > seen).length; }
+function updateStandingBadge(){
+  const el = document.getElementById('standing-count'); if(!el) return;
+  const ref = isReferee();
+  if(!ref){ const u = standingUnread();
+    if(u > 0 && !standingPanelOpen){ el.textContent = '+'+u; el.classList.remove('hidden'); return; }
+    const total = parseStandings().filter(e => !e.removed).length;
+    if(total > 0){ el.textContent = String(total); el.classList.remove('hidden'); } else el.classList.add('hidden');
+    return;
+  }
+  const players = new Set(parseStandings().filter(e => !e.removed).map(e => e._who)).size;
+  if(players > 0){ el.textContent = String(players); el.classList.remove('hidden'); } else el.classList.add('hidden');
+}
+function renderStandingPanel(){
+  const body = document.getElementById('standing-body'); if(!body) return;
+  const token = (typeof getContentToken === 'function') ? getContentToken() : '';
+  if(!isReferee() && !token){
+    body.innerHTML = '<div class="std-empty">Standing needs your access token — apply it in Settings → Secure Content. Your reputation is private to you alone.</div>';
+    updateStandingBadge(); return;
+  }
+  if(isReferee()) renderStandingRefereeBody(body); else renderStandingPlayerBody(body);
+  if(!isReferee()) standingMarkSeen();   // rendering = reading
+  updateStandingBadge();
+}
+function renderStandingPlayerBody(body){
+  const list = parseStandings().filter(e => !e.removed).sort((a,b)=> (a.level|0)-(b.level|0));
+  let h = `<div class="std-intro">Your private standing with the powers of the galaxy — <b>only you can see this</b>. It reflects your character's history and how each faction regards you.</div>`;
+  if(!list.length){ body.innerHTML = h + `<div class="std-empty">No standings recorded yet. As your history with the powers takes shape, the referee will note it here.</div>`; return; }
+  h += list.map(e => {
+    const col = stdOrgColor(e.org), L = stdClampLevel(e.level), label = e.label || STD_LEVELS[L][0];
+    return `<div class="std-item"><div class="std-hd">`
+      + `<span style="color:${col};font-weight:600">${escQH(e.orgLabel || stdOrgLabel(e.org))}</span>`
+      + `<span style="display:flex;gap:6px;align-items:center">${stdPips(e.level)} <span style="color:${STD_LEVELS[L][1]};font-size:11px">${escQH(label)}</span></span>`
+      + `</div>${e.note ? `<div class="std-note">“${escQH(e.note)}”</div>` : ''}${stdRelatedNews(e.org)}</div>`;
+  }).join('');
+  body.innerHTML = h;
+}
+function renderStandingRefereeBody(body){
+  const roster = (typeof securePlayers !== 'undefined' && Array.isArray(securePlayers)) ? securePlayers.filter(p => p && p.role !== 'referee') : [];
+  const all = parseStandings();
+  let h = `<div class="std-intro">Author each player's <b>private</b> standing with the powers. Only that player ever sees their own — it's delivered over the secure whisper channel. Tie it to their backstory in the note.</div>`;
+  if(!roster.length){ body.innerHTML = h + `<div class="std-empty">No player roster yet. Issue player tokens in Settings → Secure Content — standing uses the token system so each entry reaches only its player.</div>`; return; }
+  roster.forEach(p => {
+    const who = p.identity, mine = all.filter(e => e._who === who && !e.removed).sort((a,b)=>(a.level|0)-(b.level|0)), open = standingRefSel === who;
+    h += `<div class="std-ref-player"><div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="standingRefPick('${escQH(who)}')">`
+       + `<span style="font-size:12px;color:var(--tx0);font-weight:600">${escQH(who)}</span>`
+       + `<span style="font-size:10px;color:var(--tx1)">${mine.length} standing${mine.length===1?'':'s'} ${open?'▾':'▸'}</span></div>`;
+    if(open){
+      mine.forEach(e => { const col = stdOrgColor(e.org), L = stdClampLevel(e.level), label = e.label || STD_LEVELS[L][0];
+        h += `<div style="margin-top:5px;border-top:.5px solid var(--bd0);padding-top:5px;font-size:11px">`
+          + `<div style="display:flex;justify-content:space-between;align-items:center"><span style="color:${col};font-weight:600">${escQH(e.orgLabel || stdOrgLabel(e.org))}</span>`
+          + `<span style="display:flex;gap:6px;align-items:center">${stdPips(e.level)} <span style="color:${STD_LEVELS[L][1]}">${escQH(label)}</span> <button onclick="standingRemove('${escQH(who)}','${escQH(e.org)}')" title="Remove this standing" style="background:none;border:none;color:#e8776a;cursor:pointer">✕</button></span></div>`
+          + (e.note ? `<div class="std-note">“${escQH(e.note)}”</div>` : '') + `</div>`;
+      });
+      h += standingRefForm(who);
+    }
+    h += `</div>`;
+  });
+  body.innerHTML = h;
+}
+function standingRefForm(who){
+  const skip = { uncharted:1, contested:1 };
+  const facs = (typeof GALAXY_FACTIONS !== 'undefined') ? Object.keys(GALAXY_FACTIONS).filter(k => !skip[k]) : [];
+  let corps = []; try { if(window.ECON && ECON.corps) corps = Object.values(ECON.corps()).filter(c => !c.defunct).map(c => ({ id:c.id, name:c.name })); } catch(e){}
+  const opts = facs.map(k => `<option value="${escQH(k)}">${escQH(GALAXY_FACTIONS[k].name)}</option>`).join('')
+    + corps.map(c => `<option value="${escQH(c.id)}">${escQH(c.name)} (corp)</option>`).join('')
+    + `<option value="__custom">Other (type below)…</option>`;
+  const lvls = STD_LEVELS.map((l,i) => `<option value="${i}"${i===2?' selected':''}>${l[0]}</option>`).join('');
+  return `<div class="std-ref-form" style="margin-top:6px;border-top:.5px dashed var(--bd0);padding-top:6px;display:flex;flex-direction:column;gap:4px">`
+    + `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center"><select id="std-org" onchange="standingOrgCustomToggle()">${opts}</select>`
+    + `<input id="std-org-custom" placeholder="Custom org" style="display:none;flex:1">`
+    + `<select id="std-level">${lvls}</select></div>`
+    + `<input id="std-label" placeholder="Custom label (optional, e.g. “Wanted”, “Sympathizer”)">`
+    + `<textarea id="std-note" placeholder="Backstory hook — why they stand this way (private to the player)"></textarea>`
+    + `<button onclick="standingSave('${escQH(who)}')" style="align-self:flex-start;background:#3a3020;border:1px solid #7a5f2f;color:#e0c890;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">🎖 Set standing</button>`
+    + `</div>`;
+}
+function standingRefPick(who){ standingRefSel = (standingRefSel === who) ? null : who; renderStandingPanel(); }
+function standingOrgCustomToggle(){ const s = document.getElementById('std-org'), c = document.getElementById('std-org-custom'); if(s && c) c.style.display = (s.value === '__custom') ? '' : 'none'; }
+async function standingSave(who){
+  const s = document.getElementById('std-org'), custom = document.getElementById('std-org-custom');
+  let org = s ? s.value : '', orgLabel = '';
+  if(org === '__custom'){ org = (custom && custom.value.trim()) || ''; orgLabel = org; if(!org){ if(typeof showToast==='function') showToast('Enter an organisation','error'); return; } }
+  else orgLabel = stdOrgLabel(org);
+  const level = stdClampLevel(parseInt((document.getElementById('std-level')||{}).value||'2',10));
+  const label = ((document.getElementById('std-label')||{}).value||'').trim();
+  const note = ((document.getElementById('std-note')||{}).value||'').trim();
+  const entry = { org, orgLabel, level, label, note };
+  const r = await supaStorage.sendWhisper({ text: STANDING_TAG + JSON.stringify(entry), to: who });
+  if(r && r.ok){ if(typeof showToast==='function') showToast('🎖 Standing set for ' + who); standingRefSel = who;
+    if(typeof pollWhispers === 'function') await pollWhispers(); renderStandingPanel();
+  } else if(typeof showToast==='function') showToast('Could not set standing — check the connection.', 'error');
+}
+async function standingRemove(who, org){
+  const r = await supaStorage.sendWhisper({ text: STANDING_TAG + JSON.stringify({ org, removed:true }), to: who });
+  if(r && r.ok){ if(typeof pollWhispers === 'function') await pollWhispers(); renderStandingPanel(); }
+  else if(typeof showToast==='function') showToast('Could not update standing.', 'error');
+}
+
 // ── Player polling extension ──────────────────────────────────────────────
 // Wired into the existing pollRevealState() call chain — see that function
 
 makePanelDraggable('event-log-wrap', 'event-log-header');
 makePanelResizable('event-log-wrap');
+makePanelDraggable('standing-wrap', 'standing-header');
+makePanelResizable('standing-wrap');
 makePanelDraggable('init-wrap', 'init-header');
 makePanelResizable('init-wrap');
 makePanelDraggable('health-wrap', 'health-header');
