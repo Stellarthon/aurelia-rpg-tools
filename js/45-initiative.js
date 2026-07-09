@@ -413,6 +413,7 @@ let _lastSharedInit = null;   // last redacted JSON written, to skip redundant w
 let playerInit = { shared:false, turnId:null, rows:[] };
 let turnOrderPanelOpen = false;
 let turnOrderCollapsed = false;
+let _announcedTurnId;         // last turnId weighed for a "your turn" nudge (undefined until first hydration)
 
 // Referee: toggle sharing on/off (called from the init-foot checkbox).
 function toggleInitShare(on){
@@ -441,6 +442,7 @@ async function loadTurnOrder(){
     const r = await supaStorage.get('initiative', true);
     if(r.value != null) playerInit = JSON.parse(r.value) || playerInit;
   } catch(e){}
+  maybeAnnounceMyTurn();   // prime _announcedTurnId silently so a mid-combat reload never spurious-alerts
   updateTurnOrderBtn();
 }
 // The "🎯 Turns" header launcher is hidden until the referee shares a board, so
@@ -483,14 +485,43 @@ function renderTurnOrder(){
   }
   body.innerHTML = rows.map((r, i) => {
     const cur = (playerInit.turnId != null && r.id === playerInit.turnId);
+    const mine = isMyTurnRow(r.name);
     const nm = (typeof escQH === 'function') ? escQH(r.name || '') : (r.name || '');
-    return `<div class="to-row${cur ? ' current' : ''}${r.down ? ' down' : ''}">
+    return `<div class="to-row${cur ? ' current' : ''}${mine ? ' mine' : ''}${cur && mine ? ' your-turn' : ''}${r.down ? ' down' : ''}">
       <span class="to-ord">${i + 1}</span>
-      <span class="to-name">${nm}</span>
-      ${cur ? '<span class="to-turn">◄ turn</span>' : ''}
+      <span class="to-name">${nm}${mine ? ' <span class="to-you">you</span>' : ''}</span>
+      ${cur ? `<span class="to-turn">◄ ${mine ? 'YOUR TURN' : 'turn'}</span>` : ''}
       ${r.down ? '<span class="to-downtag">down</span>' : ''}
     </div>`;
   }).join('');
+}
+
+// Is a shared-board row the viewing player's own character? The redacted board
+// carries only names, so we match a row name (case-insensitively) against this
+// device's chosen identity. Referees and identity-less viewers never match.
+function isMyTurnRow(name){
+  if(typeof isReferee === 'function' && isReferee()) return false;
+  if(typeof myIdentity === 'undefined' || !myIdentity) return false;
+  return String(name || '').trim().toLowerCase() === String(myIdentity).trim().toLowerCase();
+}
+
+// Player-only nudge: when the active turn advances to THIS device's character,
+// pulse the launcher and toast so a player who glanced back at the table still
+// gets told they're up. Fires only on a real turnId CHANGE (never on first
+// hydration or a reconnect that re-sends the same turn), and never for the
+// referee. Order/condition only — no roll or token automation (§5.1 guardrail).
+function maybeAnnounceMyTurn(){
+  const turnId = (playerInit && playerInit.shared) ? playerInit.turnId : null;
+  const first = (_announcedTurnId === undefined);
+  const changed = turnId !== _announcedTurnId;
+  _announcedTurnId = turnId;
+  if(first || !changed || turnId == null) return;   // prime silently first; ignore no-ops
+  const row = (playerInit.rows || []).find(r => r.id === turnId);
+  if(!row || row.down || !isMyTurnRow(row.name)) return;
+  const b = document.getElementById('turnorder-btn');
+  if(b){ b.classList.add('to-alert'); setTimeout(() => { try { b.classList.remove('to-alert'); } catch(e){} }, 6000); }
+  if(typeof showToast === 'function') showToast("You're up — it's your turn.");
+  try { if(navigator.vibrate) navigator.vibrate([40, 60, 40]); } catch(e){}
 }
 
 

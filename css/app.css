@@ -1207,6 +1207,15 @@ body.display-mode .panel-resize-handle{display:none!important}
 .to-row.down .to-name{text-decoration:line-through}
 .to-turn{font-size:10px;font-family:monospace;color:var(--accentGold);font-weight:700}
 .to-downtag{font-size:9px;font-family:monospace;color:var(--txD,#d45050);text-transform:uppercase}
+/* Player's own row on the shared board: a steady blue rail marks "this is you";
+   when it's also the active turn (.your-turn) it takes the gold current-turn
+   treatment plus an inset ring so it reads at a glance on a phone. */
+.to-row.mine{border-left-color:#4A90D9}
+.to-row.your-turn{border-left-color:var(--accentGold);background:var(--accentGoldBg);box-shadow:inset 0 0 0 1px var(--accentGold)}
+.to-you{font-size:9px;font-family:monospace;color:#4A90D9;text-transform:uppercase;font-weight:700;margin-left:6px}
+/* Launcher pulse fired for ~6s when the turn advances to the viewing player. */
+#turnorder-btn.to-alert{animation:toAlertPulse 1s ease-in-out infinite}
+@keyframes toAlertPulse{0%,100%{box-shadow:0 0 0 0 var(--accentGold)}50%{box-shadow:0 0 0 4px var(--accentGoldBg)}}
 
 #quest-header{
   display:flex;align-items:center;justify-content:space-between;
