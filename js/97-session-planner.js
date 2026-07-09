@@ -54,7 +54,7 @@ function sattr(s){ return (typeof escAttr === 'function') ? escAttr(s == null ? 
 
 function emptyScene(){
   return { id: _pid('sc_'), title: '', type: 'scene', readAloud: '', refNotes: '',
-           done: false, npcIds: [], missionIds: [], oracle: [], checks: [] };
+           done: false, npcIds: [], missionIds: [], oracle: [], checks: [], beatId: '' };
 }
 function emptyCheck(){ return { id: _pid('ck_'), label: '', target: '', who: '', roll: '', outcome: 'pending', notes: '' }; }
 function emptyPlan(){
@@ -481,6 +481,29 @@ function renderPlannerDetail(){
   wirePlannerRich();
 }
 
+// Phase 3 Full — link a session scene to a scene-beat (js/93) so prep meets
+// at-table firing: pick a beat here, hit ▶ Fire to play its audio / cut the
+// table display live. Beats are referee-only state and this block only renders
+// in the referee-gated planner. Empty beat list → just the picker.
+function sceneBeatBlockHTML(p, s){
+  const beats = (typeof sceneBeats !== 'undefined' && Array.isArray(sceneBeats)) ? sceneBeats : [];
+  const opts = ['<option value="">— no scene beat —</option>'].concat(
+    beats.map(b => `<option value="${sattr(b.id)}"${s.beatId === b.id ? ' selected' : ''}>${sesc(b.name || 'Beat')}</option>`)
+  ).join('');
+  const linked = s.beatId && beats.find(b => b.id === s.beatId);
+  const cut = linked && typeof beatHasDisplayCut === 'function' && beatHasDisplayCut(linked);
+  const fire = linked
+    ? `<button class="planner-link-add" onclick="fireBeat('${sattr(s.beatId)}')" title="Play this beat / cut the table display now">▶ Fire${cut ? ' 📺' : ''}</button>`
+    : '';
+  return `<div class="planner-link-block">
+      <div class="planner-link-lbl">🎵 Scene beat</div>
+      <div class="planner-chips">
+        <select class="planner-scene-type" style="flex:1" onchange="sceneEditField('${p.id}','${s.id}','beatId',this.value)">${opts}</select>
+        ${fire}
+      </div>
+    </div>`;
+}
+
 function renderSceneCard(p, s, idx, total){
   const typeIcon = (SCENE_TYPES.find(t => t[0] === s.type) || SCENE_TYPES[0])[1];
   const typeOpts = SCENE_TYPES.map(([v, l]) =>
@@ -567,6 +590,7 @@ function renderSceneCard(p, s, idx, total){
       <div class="planner-link-lbl">🎯 Missions</div>
       <div class="planner-chips">${mChips}<button class="planner-link-add" onclick="openLinkPicker('${p.id}','${s.id}','mission')">+ Link mission</button></div>
     </div>
+    ${sceneBeatBlockHTML(p, s)}
     <div class="planner-link-block">
       <div class="planner-link-lbl">⚄ Checks &amp; outcomes</div>
       <div class="planner-check-list">${checks}</div>

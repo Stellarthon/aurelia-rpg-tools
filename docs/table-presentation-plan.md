@@ -287,7 +287,7 @@ the TV, with a referee ping to point at things. Composes with Phase 1's
 
 ---
 
-## 5. Phase 3 — Scene ambience beats  ·  S/M effort  ·  ✅ MVP implemented
+## 5. Phase 3 — Scene ambience beats  ·  S/M effort  ·  ✅ Full implemented
 
 **Deliverable:** named scene presets ("Startown bar", "Ship idle", "Alarm")
 that start referee-supplied audio on the laptop and optionally cut the TV to
@@ -323,7 +323,12 @@ so this is satisfied by construction.
    at-table firing meet.
 
 **MVP (shipped):** panel + URL beats + external deep-link beats + fades +
-stop. **Full (open):** planner links, per-beat display cut.
+stop. **Full (shipped):** per-beat display cut — a beat carries a pinned
+`view` ({spec, camera}) and/or `handoutId`; firing it cuts the TV via the
+existing view/camera/handout messages (explicit push, works in Follow or
+Hold; a view-only beat is legitimate). Session-planner link — each planned
+scene has a 🎵 beat picker + ▶ Fire button (`beatId` on the scene), so prep
+meets at-table firing. Both referee-only; server/logic parity-tested.
 
 ### Acceptance criteria
 

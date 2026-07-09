@@ -1001,6 +1001,7 @@ textarea{font-family:var(--font)}
 .beat-btn:hover{border-color:var(--accentGold);color:var(--accentGold)}
 .beat-btn.playing{background:var(--accentGoldBg);border-color:var(--accentGold);color:var(--accentGold);font-weight:700}
 .beat-btn.beat-stop[disabled]{opacity:.4;cursor:default}
+.beat-tv{font-size:9px;opacity:.7;vertical-align:middle}
 .beat-edit-list{display:flex;flex-direction:column;gap:4px;border-top:.5px dashed var(--bd0);padding-top:8px}
 .beat-edit-row{display:flex;align-items:center;gap:6px}
 .beat-edit-name{flex:1;font-size:11px;color:var(--tx0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

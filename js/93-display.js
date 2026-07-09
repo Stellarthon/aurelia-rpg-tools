@@ -386,12 +386,20 @@ function initTableDisplayWindow(){
 // policies satisfied by construction). No copyrighted audio ships in the
 // repo; the synced 'scene-beats' key holds only labels + URLs, so its
 // world-readability is acceptable pre-redaction-migration.
-//   beat = { id, name, audioUrl?, loop, volume (0–1), externalUrl? }
+//   beat = { id, name, audioUrl?, loop, volume (0–1), externalUrl?,
+//            view?, handoutId? }
+// Phase 3 Full — a beat can also CUT THE TABLE DISPLAY when fired (independent
+// of audio): `view` is a pinned {spec, camera} snapshot (applyViewSpec shape,
+// js/55) pushed to the TV, and `handoutId` pushes a handout image. Both reuse
+// the existing display protocol (view/camera/handout messages) — the cut is an
+// explicit push like "Send this view", so it works in Follow OR Hold. A
+// view-only beat (no audio) is legitimate: it just repositions the TV.
 
 let sceneBeats = [];
 let beatPlayingId = null;
 let scenesPanelOpen = false, scenesCollapsed = false;
 let _beatEditingId = null;   // beat id loaded into the editor form, or null = adding
+let _beatDraftView = null;   // {spec, camera} pinned into the editor before save, or null
 
 async function loadSceneBeats(){
   try { const r = await supaStorage.get('scene-beats', true); if(r.value != null) sceneBeats = JSON.parse(r.value) || []; }
@@ -428,13 +436,41 @@ function ambienceFadeTo(el, target, ms, done){
   }, 50);
 }
 
+// Does this beat drive the table display when fired?
+function beatHasDisplayCut(b){ return !!(b && ((b.view && b.view.spec) || b.handoutId)); }
+
+// Capture the referee's current view (+ galaxy camera) as a pinnable snapshot,
+// mirroring tableSceneSnapshot() — reused by the editor's "Pin current view".
+function captureCurrentView(){
+  const spec = (typeof tableViewSpec === 'function') ? tableViewSpec() : null;
+  if(!spec) return null;
+  let camera = null;
+  try { if(spec.view === 'galaxy' && typeof HX !== 'undefined' && HX.getCamera) camera = HX.getCamera(); } catch(e){}
+  return { spec, camera };
+}
+
+// Phase 3 Full — push a beat's view/handout to the table display. Explicit push
+// (works in Follow or Hold); no-ops when no display can be driven. Never touches
+// audio, so an audio beat with a cut does both and a view-only beat just cuts.
+function fireBeatDisplayCut(b){
+  if(!beatHasDisplayCut(b)) return;
+  if(typeof displayCanSend === 'function' && !displayCanSend()) return;  // unsupported / not referee / display mode
+  if(b.view && b.view.spec){
+    displayCast({ t:'view', spec: b.view.spec });
+    const c = b.view.camera;
+    if(c && b.view.spec.view === 'galaxy') displayCast({ t:'camera', x:c.x, y:c.y, scale:c.scale });
+  }
+  if(b.handoutId && typeof sendHandoutToTable === 'function') sendHandoutToTable(b.handoutId);
+}
+
 function fireBeat(id){
   if(DISPLAY_MODE || (typeof isReferee === 'function' && !isReferee())) return;
   const b = sceneBeats.find(x => x.id === id); if(!b) return;
+  fireBeatDisplayCut(b);                       // Full: cut the TV first, independent of audio
   if(!b.audioUrl){
     // Deep-link beat: hand off to the external app (existing window.open pattern).
     if(b.externalUrl){ try { window.open(b.externalUrl, '_blank', 'noopener'); } catch(e){ location.href = b.externalUrl; } }
-    else if(typeof showToast === 'function') showToast('This beat has no audio URL yet — edit it below', 'info');
+    else if(!beatHasDisplayCut(b) && typeof showToast === 'function') showToast('This beat has no audio URL or display cut yet — edit it below', 'info');
     return;
   }
   const el = ambienceEl(); if(!el) return;
@@ -488,8 +524,11 @@ function renderScenesPanel(){
   } else {
     strip = '<div class="beat-strip">' + sceneBeats.map(b => {
       const playing = b.id === beatPlayingId;
-      const icon = b.audioUrl ? (playing ? '■' : '▶') : '↗';
-      return `<button class="beat-btn${playing ? ' playing' : ''}" onclick="${playing ? 'stopBeat()' : `fireBeat('${b.id}')`}" title="${escTD(b.audioUrl || b.externalUrl || '')}">${icon} ${escTD(b.name || 'Beat')}</button>`;
+      const cut = beatHasDisplayCut(b);
+      const icon = b.audioUrl ? (playing ? '■' : '▶') : b.externalUrl ? '↗' : cut ? '📺' : '▶';
+      const tv = cut ? ' <span class="beat-tv" title="Also cuts the table display">📺</span>' : '';
+      const title = escTD(b.audioUrl || b.externalUrl || '') + (cut ? (b.audioUrl || b.externalUrl ? ' · cuts the table display' : 'cuts the table display') : '');
+      return `<button class="beat-btn${playing ? ' playing' : ''}" onclick="${playing ? 'stopBeat()' : `fireBeat('${b.id}')`}" title="${title}">${icon} ${escTD(b.name || 'Beat')}${tv}</button>`;
     }).join('') + `<button class="beat-btn beat-stop" onclick="stopBeat()" ${beatPlayingId ? '' : 'disabled'}>◼ Stop</button></div>`;
   }
 
@@ -511,6 +550,14 @@ function renderScenesPanel(){
         <label><input type="checkbox" id="beat-f-loop" ${!editing || editing.loop !== false ? 'checked' : ''}> Loop</label>
         <label style="flex:1">Vol <input type="range" id="beat-f-vol" min="0" max="100" value="${editing && editing.volume != null ? Math.round(editing.volume * 100) : 80}"></label>
       </div>
+      <div class="beat-form-row" title="Firing the beat cuts the table display to this view">
+        <button type="button" class="beat-mini" onclick="beatPinCurrentView()">📺 Pin current view</button>
+        <span style="flex:1;font-size:11px;color:var(--tx1)">Cut to <b id="beat-f-viewlbl">${escTD(beatViewLabel())}</b></span>
+        <button type="button" class="beat-mini beat-mini-del" onclick="beatClearView()" title="Clear the view cut">✕</button>
+      </div>
+      <label style="font-size:11px;color:var(--tx1);display:block">Show handout on the table
+        <select id="beat-f-handout" style="width:100%;margin-top:3px">${beatHandoutOptions(editing)}</select>
+      </label>
       <div style="display:flex;gap:6px">
         <button class="cal-add-btn" style="flex:1" onclick="beatSaveFromForm()">${editing ? 'Save beat' : '+ Add beat'}</button>
         ${editing ? '<button class="cal-add-btn" style="flex:0 0 auto" onclick="beatEdit(null)">Cancel</button>' : ''}
@@ -520,7 +567,37 @@ function renderScenesPanel(){
 
   body.innerHTML = strip + (editRows ? `<div class="beat-edit-list">${editRows}</div>` : '') + form;
 }
-function beatEdit(id){ _beatEditingId = id; renderScenesPanel(); }
+// ── Editor helpers for the Phase-3-Full display cut ──────────────────────────
+function beatViewLabel(){
+  if(!_beatDraftView || !_beatDraftView.spec) return 'nothing';
+  const s = _beatDraftView.spec;
+  return [s.view, s.systemId, s.bodyId, s.locId].filter(Boolean).join(' ▸ ');
+}
+function beatHandoutOptions(editing){
+  const list = (typeof handouts !== 'undefined' && Array.isArray(handouts)) ? handouts : [];
+  const opts = ['<option value="">— none —</option>'];
+  list.forEach(h => {
+    const sel = editing && editing.handoutId === h.id ? ' selected' : '';
+    opts.push(`<option value="${escTD(h.id)}"${sel}>${escTD(h.name || 'Handout')}</option>`);
+  });
+  return opts.join('');
+}
+function beatPinCurrentView(){
+  _beatDraftView = captureCurrentView();
+  const el = document.getElementById('beat-f-viewlbl'); if(el) el.textContent = beatViewLabel();
+}
+function beatClearView(){
+  _beatDraftView = null;
+  const el = document.getElementById('beat-f-viewlbl'); if(el) el.textContent = beatViewLabel();
+}
+
+function beatEdit(id){
+  _beatEditingId = id;
+  // Load the beat's stored view into the draft so the label + Save reflect it.
+  const b = id ? sceneBeats.find(x => x.id === id) : null;
+  _beatDraftView = b && b.view && b.view.spec ? b.view : null;
+  renderScenesPanel();
+}
 function beatDelete(id){
   if(typeof isReferee === 'function' && !isReferee()) return;
   if(id === beatPlayingId) stopBeat();
@@ -533,17 +610,21 @@ function beatSaveFromForm(){
   const val = (fid) => { const el = document.getElementById(fid); return el ? el.value.trim() : ''; };
   const name = val('beat-f-name');
   if(!name){ if(typeof showToast === 'function') showToast('Give the beat a name', 'error'); return; }
+  const handoutSel = document.getElementById('beat-f-handout');
+  const handoutId = handoutSel ? handoutSel.value : '';
   const beat = {
     id: _beatEditingId || ('beat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
     name,
     audioUrl: val('beat-f-audio'),
     externalUrl: val('beat-f-ext'),
     loop: !!(document.getElementById('beat-f-loop') || {}).checked,
-    volume: Math.min(1, Math.max(0, Number((document.getElementById('beat-f-vol') || {}).value || 80) / 100))
+    volume: Math.min(1, Math.max(0, Number((document.getElementById('beat-f-vol') || {}).value || 80) / 100)),
+    view: _beatDraftView && _beatDraftView.spec ? _beatDraftView : null
   };
+  if(handoutId) beat.handoutId = handoutId;
   const i = sceneBeats.findIndex(b => b.id === beat.id);
   if(i >= 0) sceneBeats[i] = beat; else sceneBeats.push(beat);
-  _beatEditingId = null;
+  _beatEditingId = null; _beatDraftView = null;
   saveSceneBeats(); renderScenesPanel();
   if(typeof showToast === 'function') showToast('Scene beat saved');
 }
