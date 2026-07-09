@@ -22,10 +22,14 @@
 //   Authorization: Bearer <token>
 //   Body (optional): { "networkLock": { "set": true|false } }  // referee only
 //                    { "whispersOnly": true }   // light mode for the 4s poll
-//   → 200 { identity, role, content:[{path,value}], reveals, whispers,
-//           networkLock?, players? }            // networkLock/players: referee only
-//     with whispersOnly: { identity, role, whispers } and nothing else — the
-//     poll loop must not drag the full campaign content over the wire every 4s.
+//   → 200 { identity, role, content:[{path,value}], reveals, whispers, state,
+//           networkLock?, players?, refState? } // networkLock/players/refState: referee only
+//     with whispersOnly: { identity, role, whispers, state } — the poll loop
+//     must not drag the full campaign content over the wire every 4s, but it
+//     does carry `state` (Stage 4.5.1: Group-B referee-only keys redacted to
+//     this token — combat-encounter, clocks, campaign-events, handouts). The
+//     referee additionally gets `refState` (those keys + Group-C raw). ADDITIVE
+//     and unused by shipped clients until the Stage 4.5.3 read cutover.
 //     401 { error } on a bad/missing token
 //     403 { error:"network-locked", message } when the venue-network lock blocks you
 //
@@ -61,6 +65,93 @@ function canSee(audience: unknown, role: string, audiences: string[]): boolean {
   if (audience === "referee") return false;
   if (Array.isArray(audience)) return audience.some((a) => audiences.includes(a));
   return audiences.includes(audience as string);
+}
+
+// ── Stage 4.5.1 — server-side redaction of referee-only shared-state keys ─────
+// Additive and CURRENTLY UNUSED by any shipped client (same safety posture as
+// Stage 1): these projections are computed and returned, but nothing reads them
+// yet, so deploying this changes no behaviour. The Stage 4.5.3 cutover repoints
+// the player poll (js/55) and combat poll (js/80) at `state`, and the referee
+// hydrate at `refState`; only THEN can the raw rows lose public SELECT
+// (migration 0012). Each redactor MIRRORS the client's existing player view so
+// server and client agree — the same discipline that mirrored canSee(). Keep
+// them in lockstep with their js/ source (cited per redactor).
+//
+// Group B — dual-audience keys: a player receives a redacted projection.
+// ⚠️ VERIFIED SUBSET ONLY. galaxy-lanes / splash-config / ship-roster /
+// route-blocks / faction-hidden await the Stage 4.5.0 read-site audit before a
+// redactor lands here; omitting them keeps 4.5.1 correct rather than
+// partially-wrong (see docs/stage-4.5-read-cutover-plan.md §4).
+const REDACT_KEYS = ["combat-encounter", "clocks", "campaign-events", "handouts"];
+// Group C — referee-only reads: NEVER sent to a player; returned to the referee
+// via refState so the referee can also hydrate off get-content (Stage 4.5.2).
+const REF_ONLY_STATE = [
+  "npc-roster", "session-plans", "content-history",
+  "enc-settings", "scene-beats", "econ-profiles", "recap-point",
+];
+
+const safeParse = (v: unknown, fallback: unknown) => {
+  try { return v == null ? fallback : JSON.parse(v as string); } catch { return fallback; }
+};
+
+// combat-encounter — verbatim port of redactEncounterForPlayer (js/80-combat.js).
+function redactEncounter(enc: any, role: string, who: string[]): any {
+  if (!enc || typeof enc !== "object") return enc;
+  const copy = JSON.parse(JSON.stringify(enc));
+  copy.ships = (copy.ships || [])
+    .filter((s: any) => s.ref === "player" || (s.revealed && canSee(s.visibleTo, role, who)))
+    .map((s: any) => { if (s.ref !== "player" && s.statsHidden) s.stats = null; return s; });
+  const visible = new Set(copy.ships.map((s: any) => s.id));
+  const ranges: Record<string, unknown> = {};
+  for (const k of Object.keys(copy.ranges || {})) {
+    const [a, b] = k.split("|");
+    if (visible.has(a) && visible.has(b)) ranges[k] = copy.ranges[k];
+  }
+  copy.ranges = ranges;
+  copy.initiative = (copy.initiative || []).filter((id: string) => visible.has(id));
+  copy.hazards = (copy.hazards || []).filter((h: any) => h.active);
+  copy.pendingMissiles = (copy.pendingMissiles || [])
+    .filter((m: any) => visible.has(m.attackerId) && visible.has(m.targetId));
+  const hiddenNames = (enc.ships || [])
+    .filter((s: any) => !visible.has(s.id) && s.name).map((s: any) => s.name);
+  const fogged = new Set(copy.ships.filter((s: any) => s.statsHidden).map((s: any) => s.id));
+  copy.log = (copy.log || []).filter((e: any) => {
+    const m = e.meta || {};
+    const refs = [m.shipId, m.targetId, m.attackerId, m.operatorId, m.defenderId, m.aId, m.bId].filter(Boolean);
+    if (!refs.every((id: string) => visible.has(id))) return false;
+    if (refs.some((id: string) => fogged.has(id))) return false;
+    return !hiddenNames.some((n: string) => (e.text || "").indexOf(n) !== -1);
+  });
+  return copy;
+}
+// clocks — revealed only; name + fill segments. Notes/dates stay referee-side
+// (js/85-records.js renderClocksPanel: players see name + filled/segments only).
+function redactClocks(arr: any): any[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter((c: any) => c && c.revealed)
+    .map((c: any) => ({ id: c.id, name: c.name, filled: c.filled, segments: c.segments, revealed: true }));
+}
+// campaign-events — audience gate on visibleTo gates the whole event
+// (js/85-records.js renderCalendarPanel: filter(e => canSee(e.visibleTo))).
+function redactEvents(arr: any, role: string, who: string[]): any[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter((e: any) => e && canSee(e.visibleTo, role, who));
+}
+// handouts — audience gate on visibleTo; drops items targeted at other players
+// (js/55 poll + renderHandoutsPanel: canSee(h.visibleTo)).
+function redactHandouts(arr: any, role: string, who: string[]): any[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter((h: any) => h && canSee(h.visibleTo, role, who));
+}
+function redactStateKey(key: string, raw: unknown, role: string, who: string[]): unknown {
+  const v = safeParse(raw, null);
+  switch (key) {
+    case "combat-encounter": return v == null ? null : redactEncounter(v, role, who);
+    case "clocks": return redactClocks(v);
+    case "campaign-events": return redactEvents(v, role, who);
+    case "handouts": return redactHandouts(v, role, who);
+    default: return null; // unknown → send nothing (fail closed)
+  }
 }
 
 // TASK 6 — break-glass: the lock auto-expires 12h after it was pinned.
@@ -203,8 +294,31 @@ Deno.serve(async (req) => {
     }
   } catch { whispers = []; }
 
+  // Stage 4.5.1 — referee-only shared-state, redacted per token (additive/unused
+  // until the 4.5.3 cutover). Players get `state` (Group-B redacted projections);
+  // the referee gets `refState` (raw values, since a referee sees everything).
+  // One `.in()` read, then redact in memory. Wrapped so a failure here can never
+  // break content/whisper delivery.
+  const state: Record<string, unknown> = {};
+  let refState: Record<string, unknown> | undefined;
+  try {
+    const keys = role === "referee" ? [...REDACT_KEYS, ...REF_ONLY_STATE] : REDACT_KEYS;
+    const { data: sRows } = await supabase
+      .from("aurelia_state").select("key, value").in("key", keys);
+    const map = new Map((sRows ?? []).map((r: any) => [r.key, r.value]));
+    if (role === "referee") {
+      refState = {};
+      for (const k of keys) refState[k] = safeParse(map.get(k) ?? null, null); // raw — referee sees all
+    } else {
+      for (const k of REDACT_KEYS) state[k] = redactStateKey(k, map.get(k) ?? null, role, who);
+    }
+  } catch { /* additive + unused — never break delivery */ }
+
   if (body && body.whispersOnly === true) {
-    return json({ identity: player.identity, role, whispers });
+    // The light 4 s poll response: whispers + the redacted Group-B state, so the
+    // 4.5.3 player poll can move fully onto this endpoint without dragging the
+    // full campaign content every tick.
+    return json({ identity: player.identity, role, whispers, state });
   }
 
   // 4. Read all fragments, then redact in memory. (Content is small — a few
@@ -231,12 +345,16 @@ Deno.serve(async (req) => {
     try { reveals = JSON.parse(rev.value); } catch { /* leave {} */ }
   }
 
-  const out: any = { identity: player.identity, role, content, reveals, whispers };
+  const out: any = { identity: player.identity, role, content, reveals, whispers, state };
 
   // 6. Referee-only extras. These are NEVER added to a player's response, so
   //    tokens and lock internals never leave the service-role boundary for a
   //    non-referee.
   if (role === "referee") {
+    // Stage 4.5.1 — raw referee-only shared-state so the referee also hydrates
+    // off get-content (Stage 4.5.2 parity), never leaving the service boundary
+    // for a player.
+    if (refState) out.refState = refState;
     // TASK 6 — lock status for the referee's settings toggle.
     out.networkLock = lock
       ? {

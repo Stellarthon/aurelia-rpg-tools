@@ -7,9 +7,20 @@
 > is the open item behind roadmap §7 Tier-3.16 ("Complete per-player secrecy")
 > and the follow-up finding in `per-player-redaction-plan.md` §8.
 >
-> **Status:** Not started — this document is the plan. **No production change is
-> made by writing it.** Deployment (edge-function + migration) is the owner's,
-> applied stage by stage exactly like Stages 2–4.
+> **Status:** Stage 4.5.1 **built (repo artifact, not deployed)**; the rest is
+> planned. **No production change** — the get-content extension is additive and
+> unused by any shipped client (same posture as Stage 1). Deployment
+> (edge-function redeploy + the later migration) is the owner's, applied stage by
+> stage exactly like Stages 2–4.
+>
+> | Sub-stage | State |
+> |---|---|
+> | 4.5.0 Confirm audit | ⏳ ⚠️-keys pending read-site confirmation |
+> | **4.5.1 Extend `get-content`** | ✅ **Built** — `state` (Group-B redacted: combat-encounter, clocks, campaign-events, handouts) + referee `refState`; server redactors parity-tested against the client `redactEncounterForPlayer`. **Redeploy required** (`supabase functions deploy get-content --no-verify-jwt`); additive, safe to deploy anytime. |
+> | 4.5.2 Referee read cutover + parity | ⏳ not started |
+> | 4.5.3 Player read cutover | ⏳ not started |
+> | 4.5.4 Lock rows (migration 0012) | ⏳ not started |
+> | 4.5.5 Group D | ⏳ not started |
 
 ---
 
