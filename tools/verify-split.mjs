@@ -43,8 +43,9 @@ const jsInner = between('<script>', '</script>').inner;          // first script
 
 // ── current wiring: ordered css/js the split index.html actually loads ───────
 const cur = read('index.html');
-const cssFiles = [...cur.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(m => m[1]);
-const jsFiles  = [...cur.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+// (strip the cache-busting ?v= stamp — the on-disk file is the query-less path)
+const cssFiles = [...cur.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(m => m[1].replace(/\?.*$/, ''));
+const jsFiles  = [...cur.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1].replace(/\?.*$/, ''));
 
 const cssConcat = cssFiles.map(read).join('');
 const jsConcat  = jsFiles.map(read).join('');
