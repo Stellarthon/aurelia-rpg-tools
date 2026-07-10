@@ -18,6 +18,16 @@ const SHELL = [
   './js/62-campaign-studio.js', './js/65-design-mode.js', './js/70-panels-quest.js', './js/75-ship.js',
   './js/80-combat.js', './js/85-records.js', './js/90-economy.js', './js/91-trade.js',
   './js/92-tools-misc.js', './js/93-display.js', './js/96-creators.js', './js/97-session-planner.js', './js/98-trackers-boot.js',
+  // REAL-map globe textures (~556 KB total) — local downscales served by
+  // js/15-real-map.js; precached so the REAL view is fully offline-safe.
+  './textures/catalog.json',
+  './textures/csilla.jpg', './textures/desert-02.jpg', './textures/desert-04.jpg', './textures/desert-05.jpg',
+  './textures/desert-07.jpg', './textures/desert-08.jpg', './textures/exotic-01.jpg', './textures/exotic-02.jpg',
+  './textures/exotic-03.jpg', './textures/felucia.jpg', './textures/gaseous-01.jpg', './textures/gaseous-02.jpg',
+  './textures/gaseous-03.jpg', './textures/ice-05.jpg', './textures/ice-06.jpg', './textures/korriban.jpg',
+  './textures/oceanic-05.jpg', './textures/terran-05.jpg', './textures/terran-06.jpg', './textures/terran-09-2.jpg',
+  './textures/terran-09.jpg', './textures/terran-10.jpg', './textures/volcanic-01.jpg', './textures/volcanic-05.jpg',
+  './textures/volcanic-06.jpg',
 ];
 
 self.addEventListener('install', (e) => {

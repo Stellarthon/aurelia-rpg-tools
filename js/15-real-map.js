@@ -143,6 +143,75 @@ const RealMap = (function(){
     facDirty=false;
   }
 
+  // ── Planet textures (local ./textures/, precached by sw.js — REAL view
+  //    only; the orrery/body views keep the Supabase globes pipeline).
+  //    The table mirrors textures/catalog.json: f = local downscale, c =
+  //    category, o = the ORIGINAL globes-bucket filename, so a referee's
+  //    explicit body.texture (a bucket name) resolves to its local copy. ──
+  const TEX_BASE='textures/';
+  const TEX_FILES=[
+    {f:'csilla.jpg',c:'ice',o:'Csilla (Diffuse 4k)_1920x1080.png'},
+    {f:'desert-02.jpg',c:'desert',o:'Desert 02 (Diffuse)_1920x1080.png'},
+    {f:'desert-04.jpg',c:'desert',o:'Desert 04 (Diffuse)_1920x1080.png'},
+    {f:'desert-05.jpg',c:'desert',o:'Desert 05 (Diffuse)_1920x1080.png'},
+    {f:'desert-07.jpg',c:'desert',o:'Desert 07 (Diffuse)_1920x1080_1920x1080.png'},
+    {f:'desert-08.jpg',c:'desert',o:'Desert 08 (Diffuse)_1920x1080_1920x1080.png'},
+    {f:'exotic-01.jpg',c:'volcanic',o:'Exotic 01 (Diffuse) 4k_1920x1080_1920x1080.png'},
+    {f:'exotic-02.jpg',c:'volcanic',o:'Exotic 02 (Diffuse 4k)_1920x1080.png'},
+    {f:'exotic-03.jpg',c:'volcanic',o:'Exotic 03 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'felucia.jpg',c:'terran',o:'Felucia (Diffuse)_1920x1080.png'},
+    {f:'gaseous-01.jpg',c:'gaseous',o:'Gaseous 01 (Diffuse 4k)_1920x1080.png'},
+    {f:'gaseous-02.jpg',c:'gaseous',o:'Gaseous 02 (Diffuse 4k)_1920x1080.png'},
+    {f:'gaseous-03.jpg',c:'gaseous',o:'Gaseous 03 (Diffuse 4k)_1920x1080.png'},
+    {f:'ice-05.jpg',c:'ice',o:'Ice 05 (Diffuse) 4k_1920x1080_1920x1080.png'},
+    {f:'ice-06.jpg',c:'ice',o:'Ice 06 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'korriban.jpg',c:'desert',o:'Korriban (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'oceanic-05.jpg',c:'terran',o:'Oceanic 05 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'terran-05.jpg',c:'terran',o:'Terran 05 (Diffuse)_1920x1080_1920x1080.png'},
+    {f:'terran-06.jpg',c:'terran',o:'Terran 06 (Diffuse)_1920x1080_1920x1080.png'},
+    {f:'terran-09-2.jpg',c:'terran',o:'Terran 09 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'terran-09.jpg',c:'terran',o:'Terran 09 (Diffuse 2 4k)_1920x1080_1920x1080.png'},
+    {f:'terran-10.jpg',c:'terran',o:'Terran 10 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'volcanic-01.jpg',c:'volcanic',o:'Volcanic 01 (Diffuse)_1920x1080_1920x1080.png'},
+    {f:'volcanic-05.jpg',c:'volcanic',o:'Volcanic 05 (Diffuse 4k)_1920x1080_1920x1080.png'},
+    {f:'volcanic-06.jpg',c:'volcanic',o:'Volcanic 06 (Diffuse 4k)_1920x1080_1920x1080.png'},
+  ];
+  // Preload once per unique URL: an <image> is only ever emitted for a texture
+  // confirmed loaded, so the per-frame scene rebuild never re-requests a
+  // missing file and never shows a broken tile.
+  const _texOk={};
+  function preloadTexture(url){
+    if(url in _texOk) return;
+    _texOk[url]=false;
+    const im=new Image();
+    im.onload =()=>{ _texOk[url]=true; invalidate(); };
+    im.onerror=()=>{ /* leave false → never rendered → procedural fallback */ };
+    im.src=url;
+  }
+  function texCategoryOf(b, kind){
+    if(typeof defaultTextureCategory==='function') return defaultTextureCategory(b);
+    if(kind==='belt' || b.isStar || b.isMoon) return null;   // fallback mirrors js/50
+    if(kind==='gas') return 'gaseous';
+    const t=(b.type||'').toLowerCase();
+    if(/volcan|scorch|lava|molten/.test(t)) return 'volcanic';
+    if(/desert|arid|dune|barren/.test(t)) return 'desert';
+    if(/ocean|jewel|garden|terran|earth|temperate/.test(t)) return 'terran';
+    if(/ice|frozen|glacial|tundra/.test(t)) return 'ice';
+    return null;
+  }
+  // Same precedence as textureUrlFor (js/50) but resolved against the LOCAL
+  // set: explicit URL > forced procedural > explicit catalog file (bucket
+  // name mapped to its downscale) > auto-match by category, seeded by id.
+  function texUrlFor(b, kind){
+    if(b.textureUrl) return b.textureUrl;
+    if(b.texture==='__none__') return null;
+    if(b.texture){ const m=TEX_FILES.find(x=>x.o===b.texture||x.f===b.texture); if(m) return TEX_BASE+m.f; }
+    const cat=texCategoryOf(b, kind); if(!cat) return null;
+    const pool=TEX_FILES.filter(x=>x.c===cat); if(!pool.length) return null;
+    const seed=(typeof seedFromString==='function') ? Math.abs(seedFromString(b.id)) : hashStr(b.id);
+    return TEX_BASE+pool[seed%pool.length].f;
+  }
+
   // ── Bodies: EXACTLY the app's shared overlay compose — effectiveBodies() —
   //    adapted to render shape. No procedural generation: a system nobody has
   //    authored is a bare star with no orbits. The adapter is cached per
@@ -185,12 +254,14 @@ const RealMap = (function(){
       if(!p){ while(used.has(nextSlot)) nextSlot++; p=nextSlot; used.add(p); }
       const kind=kindOf(b);
       const rng=mulberry32(hashStr(sysId+'|'+b.id));
+      const texUrl=(kind==='belt') ? null : texUrlFor(b, kind);
+      if(texUrl) preloadTexture(texUrl);
       return {
         id:b.id, name:b.name||'', type:b.type||'', kind, p,
         theta0:rng()*Math.PI*2, spd:ORBIT_SPEED/(0.6+p*0.55),
         col:b.color||(kind==='belt'?'#8B7355':'#9AA86A'),
         r:kind==='belt'?0:bodySceneR(b.displayRadius,kind),
-        ring:kind==='gas'&&!!b.ringStyle,
+        ring:kind==='gas'&&!!b.ringStyle, texUrl,
         hook:!!b.hook, uwp:b.uwpString, diameter:b.diameter,
       };
     });
@@ -388,6 +459,11 @@ const RealMap = (function(){
       if(selectedBody===bd.id) s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.9).toFixed(2)}" fill="none" stroke="#fff" stroke-opacity="0.8" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
       s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.5).toFixed(2)}" fill="${bd.col}" opacity="0.10" data-body="${at(bd.id)}" data-node="${at(n.id)}"/>`;
       s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}" fill="${bd.col}" data-body="${at(bd.id)}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
+      if(bd.texUrl && _texOk[bd.texUrl] && sizeF>0.5 && em>0.55){
+        const tid='real-tex-'+n.id+'-'+bd.p;
+        s2+=`<clipPath id="${tid}"><circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}"/></clipPath>`;
+        s2+=`<image href="${at(bd.texUrl)}" xlink:href="${at(bd.texUrl)}" x="${(px-bd.r).toFixed(2)}" y="${(py-bd.r).toFixed(2)}" width="${(bd.r*2).toFixed(2)}" height="${(bd.r*2).toFixed(2)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${tid})" pointer-events="none"/>`;
+      }
       s2+=`<circle cx="${(px-bd.r*0.32).toFixed(2)}" cy="${(py-bd.r*0.32).toFixed(2)}" r="${(bd.r*0.55).toFixed(2)}" fill="#ffffff" opacity="0.14" pointer-events="none"/>`;
       if(bd.ring){
         s2+=`<ellipse cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" rx="${(bd.r+0.9).toFixed(2)}" ry="${((bd.r+0.9)*0.34).toFixed(2)}" fill="none" stroke="${bd.col}" stroke-opacity="0.6" vector-effect="non-scaling-stroke" transform="rotate(-18,${px.toFixed(2)},${py.toFixed(2)})"/>`;
