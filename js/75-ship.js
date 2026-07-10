@@ -75,6 +75,7 @@ let shipState = {
   // The SAME field set is produced by makeShipStats() for enemy/NPC ships, so
   // there is one ship model, not a parallel one (per the Phase-1 ruling).
   thrust: 2,           // M-Drive Thrust rating (number) — drives range-band Thrust allocation
+  tl: 0,               // ship tech level — drives the Smart-missile DM (0 = unset → RAW floor of +1)
   power: 0,            // current power points available to systems
   powerMax: 0,         // power plant output
   armourRating: 0,     // numeric armour (subtracted from rolled damage); `armour` stays the sheet text
@@ -98,6 +99,7 @@ function makeShipStats(overrides){
     name: '', shipClass: '', configuration: '', hullOptions: '',
     armour: '', armourRating: 0,
     tonnage: 100, jumpRating: 1,
+    tl: 0,   // ship tech level — drives the Smart-missile DM in combat (0 = unset → RAW floor of +1)
     hullPoints: 40, hullPointsMax: 40,
     // MgT2e 2022 has no Structure track (Hull 0 = wrecked). Kept at 0 as an
     // opt-in HOUSE lever — set both on a boss ship to give it an overflow pool.
