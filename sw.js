@@ -12,7 +12,7 @@ const SHELL = [
   // CSS + ordered classic scripts (index.html was split into these; all must be
   // precached or an installed PWA loses styling / breaks on first offline load).
   './css/tokens.css', './css/app.css',
-  './js/00-core-data.js', './js/05-campaign-pack.js', './js/10-galaxy.js', './js/20-station-data.js',
+  './js/00-core-data.js', './js/05-campaign-pack.js', './js/10-galaxy.js', './js/15-real-map.js', './js/20-station-data.js',
   './js/30-system-body.js', './js/40-station.js', './js/45-initiative.js',
   './js/50-supabase.js', './js/55-auth-gating.js', './js/60-tools-settings.js',
   './js/62-campaign-studio.js', './js/65-design-mode.js', './js/70-panels-quest.js', './js/75-ship.js',

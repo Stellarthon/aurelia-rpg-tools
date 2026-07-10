@@ -2136,7 +2136,11 @@ const HX = (function(){
     if(!fitted) requestAnimationFrame(()=>requestAnimationFrame(()=>{ if(svg) fitView(); renderSel(); })); }
   function onResize(){ if(typeof currentView!=='undefined'&&currentView!=='galaxy') return; if(!built||!svg) return; render(); }
   function selectById(id){ ensure(); const s=BY_ID[id]; if(s) selected=s; readShared(); refresh(); }
-  function externalRefresh(){ if(!built||!svg){ return; } readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); renderPicker(); }
+  function externalRefresh(){
+    // Shared-data refresh hook: the REAL map (js/15) derives its layers from the
+    // same stores, so every edit/poll that refreshes the hex map refreshes it too.
+    if(typeof window.onHXSharedRefresh==='function') window.onHXSharedRefresh();
+    if(!built||!svg){ return; } readShared(); syncInputs(); renderDate(); renderJBtns(); renderOriginNote(); render(); renderSel(); renderPicker(); }
 
   // ── window onclick shims (referenced by inline handlers / overlay buttons) ──
   window.hxToggleLanes=()=>{ showLanes=!showLanes; const b=document.getElementById('hx-lane-toggle'); if(b){ b.textContent='Lanes: '+(showLanes?'ON':'OFF'); b.classList.toggle('off',!showLanes); } render(); };
@@ -2278,7 +2282,7 @@ const HX = (function(){
     return { codes, port:uwp.port, pop:uwp.pop|0, law:uwp.law|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };
 })();
 
 function goGalaxy(){
@@ -2293,6 +2297,7 @@ function goGalaxy(){
     document.getElementById('breadcrumb').innerHTML = '';
     updateBackBtn();
     if(typeof HX!=='undefined') HX.enter();   // hex-jump galaxy layer: read shared state, render, fit
+    if(typeof RealMap!=='undefined') RealMap.onGalaxyEnter();   // second map (HEX | REAL toggle)
   });
 }
 
