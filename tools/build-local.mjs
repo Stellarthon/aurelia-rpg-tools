@@ -21,11 +21,13 @@ let css = 0, js = 0;
 // <link rel="stylesheet" href="css/x.css"> → <style>…</style>
 html = html.replace(/<link\b[^>]*\bhref="(css\/[^"]+)"[^>]*>/gi, (m, href) => {
   if(!/stylesheet/i.test(m)) return m;
+  href = href.replace(/\?.*$/, '');   // strip the cache-busting ?v= stamp
   css++; return `<style data-inlined="${href}">\n${safeCSS(read(href))}\n</style>`;
 });
 
 // <script src="js/x.js"></script> → <script>…</script>
 html = html.replace(/<script\b[^>]*\bsrc="(js\/[^"]+)"[^>]*>\s*<\/script>/gi, (m, src) => {
+  src = src.replace(/\?.*$/, '');     // strip the cache-busting ?v= stamp
   js++; return `<script data-inlined="${src}">\n${safeJS(read(src))}\n</script>`;
 });
 
