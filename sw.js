@@ -53,7 +53,9 @@ self.addEventListener('fetch', (e) => {
       caches.open(CACHE).then((c) => c.put(req, fresh.clone())).catch(() => {});
       return fresh;
     } catch (err) {
-      const cached = await caches.match(req);
+      // ignoreSearch: index.html stamps assets with ?v=NN (cache busting), but
+      // the SHELL precache stores the query-less paths — offline must match both.
+      const cached = await caches.match(req, { ignoreSearch: true });
       if (cached) return cached;
       if (req.mode === 'navigate') {
         const shell = await caches.match('./index.html');
