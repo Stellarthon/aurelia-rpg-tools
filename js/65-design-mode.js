@@ -441,6 +441,7 @@ function refreshDesignAffordances(){
   if(currentView === 'station' && cur) renderDetail();
   if(currentView === 'system'){ if(selectedBody) selectBody(selectedBody); else renderSystemOverview(); }
   if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
+  if(currentView === 'galaxy' && typeof RealMap !== 'undefined') RealMap.invalidate();  // REAL-map datacard flips read ↔ edit
 }
 
 function toggleDesignMode(){
