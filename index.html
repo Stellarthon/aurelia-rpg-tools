@@ -120,7 +120,7 @@
     <button id="back-btn" class="hidden" onclick="navBack()" title="Back" aria-label="Back">←</button>
     <div id="hdr-locus">
       <div id="hdr-title">AURELIAN SYSTEM</div>
-      <span id="build-version" title="Build version">v47</span>
+      <span id="build-version" title="Build version">v48</span>
       <div id="breadcrumb"></div>
     </div>
     <!-- ── Station Clock ── -->
@@ -214,6 +214,29 @@
       <button class="hx-zoom-btn" onclick="hxZoomBy(1.25)">+</button>
       <button class="hx-zoom-btn" onclick="hxZoomBy(0.8)">−</button>
       <button class="hx-zoom-btn" title="Reset view" onclick="hxResetView()">⊚</button>
+    </div>
+    <!-- ══ REAL MAP (seamless galaxy↔system zoom) — second map view, drawn by
+         RealMap in js/15. The HEX | REAL toggle shows in BOTH modes; the
+         real-* chrome only displays under #galaxy-canvas.real-on. ══ -->
+    <svg id="real-map" xmlns="http://www.w3.org/2000/svg"><g id="real-scene"></g></svg>
+    <div id="map-mode-toggle">
+      <button id="mm-hex" class="on" onclick="mapModeSet('hex')">Hex</button>
+      <button id="mm-real" onclick="mapModeSet('real')">Real</button>
+    </div>
+    <div id="real-readout"><b id="real-zval">1.0×</b><span id="real-mode-pill">GALAXY</span></div>
+    <button id="real-regions" onclick="realToggleRegions()" title="Toggle faction regions">◈</button>
+    <div id="real-card"></div>
+    <div id="real-datacard"></div>
+    <div id="real-search">
+      <input id="real-search-in" type="text" placeholder="Search systems…" autocomplete="off" spellcheck="false">
+      <div id="real-search-results"></div>
+    </div>
+    <div id="real-hotbar"></div>
+    <div id="real-preview"></div>
+    <div id="real-zoom">
+      <button class="hx-zoom-btn" onclick="realZoomBy(1.5)">+</button>
+      <button class="hx-zoom-btn" onclick="realZoomBy(0.6667)">−</button>
+      <button class="hx-zoom-btn" title="Fit whole arm" onclick="realResetView()">⊚</button>
     </div>
       </div><!-- end galaxy-canvas -->
     <!-- Toast lives outside galaxy-canvas so jump/refuel feedback still shows
@@ -1168,6 +1191,7 @@
 <script src="js/00-core-data.js"></script>
 <script src="js/05-campaign-pack.js"></script>
 <script src="js/10-galaxy.js"></script>
+<script src="js/15-real-map.js"></script>
 <script src="js/20-station-data.js"></script>
 <script src="js/30-system-body.js"></script>
 <script src="js/40-station.js"></script>

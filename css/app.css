@@ -3615,13 +3615,124 @@ input#ui-scale-range{
 #hx-map.hx-lblzoom .hx-econ-amt,#hx-map.hx-lblzoom .hx-econ-dem{display:block}
 #hx-toast{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);background:rgba(14,18,30,.96);border:.5px solid var(--accentGold);border-radius:8px;padding:9px 14px;color:var(--tx0);font-size:12px;font-family:var(--mono,monospace);z-index:30;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
 #hx-toast.show{opacity:1}
-#hx-legend{position:absolute;top:10px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
+/* top:52px (was 10px) — the HEX | REAL map toggle now occupies the top-left slot */
+#hx-legend{position:absolute;top:52px;left:10px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:8px;padding:9px 12px;z-index:10;pointer-events:none}
 .hx-leg-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:8px;color:var(--tx1);letter-spacing:.8px;text-transform:uppercase}
 .hx-leg-row:last-child{margin-bottom:0}
 .hx-leg-sw{width:16px;height:12px;border-radius:2px;flex-shrink:0;opacity:.85}
 #hx-zoom{position:absolute;bottom:12px;right:12px;display:flex;flex-direction:column;gap:5px;z-index:10}
 .hx-zoom-btn{width:32px;height:32px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:6px;color:var(--tx1);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .hx-zoom-btn:hover{color:var(--accentGold);border-color:var(--accentGold)}
+/* ══ REAL map — seamless galaxy↔system zoom (second map view, js/15) ══
+   real-* namespaced like hx-*. All REAL chrome displays only under
+   #galaxy-canvas.real-on; the HEX | REAL toggle shows in BOTH modes.
+   #hx-map keeps its layout while hidden (visibility, not display) so the
+   hex engine's rect-dependent maths behave exactly as if it were visible. */
+#map-mode-toggle{position:absolute;top:10px;left:10px;z-index:11;display:flex;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);border-radius:6px;overflow:hidden}
+#map-mode-toggle button{font-size:9px;font-family:var(--mono,monospace);letter-spacing:1px;text-transform:uppercase;padding:7px 12px;background:none;border:none;color:var(--tx1);cursor:pointer}
+#map-mode-toggle button.on{background:rgba(212,168,67,.16);color:var(--accentGold)}
+#galaxy-canvas.real-on #hx-map{visibility:hidden}
+#galaxy-canvas.real-on #hx-legend,#galaxy-canvas.real-on #hx-title,#galaxy-canvas.real-on #hx-lane-toggle,#galaxy-canvas.real-on #hx-terr-toggle,#galaxy-canvas.real-on #hx-range-toggle,#galaxy-canvas.real-on #hx-fuel-toggle,#galaxy-canvas.real-on #hx-trade-toggle,#galaxy-canvas.real-on #hx-paint-tools,#galaxy-canvas.real-on #hx-trade-legend,#galaxy-canvas.real-on #hx-zoom{display:none}
+#real-map{position:absolute;inset:0;width:100%;height:100%;display:none;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-moz-user-select:none}
+#galaxy-canvas.real-on #real-map{display:block}
+#real-map.real-dragging{cursor:grabbing}
+.real-lane{stroke:#20406e;stroke-opacity:.5}
+.real-orbit{fill:none;stroke:#1a3a6a}
+.real-sys-lbl{letter-spacing:.08em;font-weight:600}
+.real-fac-lbl{font-family:var(--mono,monospace);font-weight:700;letter-spacing:.14em;pointer-events:none}
+.real-star-lbl{fill:#aeb6c8;font-weight:500;pointer-events:none}
+.real-star-lbl.hot{fill:var(--tx0,#fff)}
+#real-readout{position:absolute;top:10px;right:12px;z-index:10;text-align:right;font-family:var(--mono,monospace);font-size:11px;color:var(--tx1);pointer-events:none;display:none}
+#galaxy-canvas.real-on #real-readout{display:block}
+#real-readout b{color:var(--accentGold);font-weight:700}
+#real-mode-pill{display:inline-block;margin-left:7px;padding:2px 8px;border-radius:20px;background:rgba(14,18,30,.92);border:.5px solid var(--bd0,#2e3347);color:var(--tx0);font-size:9px;letter-spacing:.08em}
+#real-regions{position:absolute;top:38px;right:12px;z-index:10;display:none;font-size:13px;background:rgba(14,18,30,.92);border:.5px solid var(--accentGold);color:var(--accentGold);border-radius:6px;padding:5px 10px;cursor:pointer}
+#galaxy-canvas.real-on #real-regions{display:block}
+#real-regions.off{border-color:var(--bd0,#2e3347);color:var(--tx1)}
+#real-zoom{position:absolute;bottom:12px;right:12px;flex-direction:column;gap:5px;z-index:10;display:none}
+#galaxy-canvas.real-on #real-zoom{display:flex}
+#real-card{position:absolute;left:12px;bottom:12px;width:280px;max-width:calc(100% - 24px);background:rgba(14,18,30,.94);border:.5px solid var(--bd0,#2e3347);border-radius:10px;padding:12px 14px;opacity:0;transform:translateY(8px);transition:opacity .18s,transform .18s;pointer-events:none;z-index:10}
+#galaxy-canvas.real-on #real-card.show{opacity:1;transform:none;pointer-events:auto}
+#real-card h2{margin:0 0 2px;font-size:13px;letter-spacing:.05em;color:var(--tx0)}
+#real-card .real-swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+#real-card .real-card-fac{font-size:10px;font-family:var(--mono,monospace);letter-spacing:.5px;margin-bottom:7px}
+#real-card .real-card-desc{font-size:11px;color:var(--tx1);line-height:1.5;max-height:120px;overflow:auto}
+#real-card .real-card-bodies{margin-top:9px;border-top:.5px solid var(--bd0,#2e3347);padding-top:8px;font-size:11px;color:var(--tx1)}
+#real-card .rcb{display:flex;align-items:center;gap:7px;padding:1px 0}
+#real-card .rcb i{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+#real-card .rcb-none{color:var(--tx2,#5f6f88);font-size:10.5px}
+/* Per-world datacard — follows the selected world around its orbit. */
+#real-datacard{position:absolute;z-index:12;width:212px;max-width:74vw;pointer-events:auto;
+  background:rgba(14,18,30,.95);border:.5px solid var(--bd0,#2e3347);border-radius:10px;padding:11px 13px;
+  opacity:0;transition:opacity .12s;font-size:12px;display:none}
+#galaxy-canvas.real-on #real-datacard{display:block}
+#real-datacard:not(.show){pointer-events:none}
+#real-datacard.show{opacity:1}
+#real-datacard .real-dc-hd{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;color:var(--tx0)}
+#real-datacard .real-dc-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+#real-datacard .real-dc-close{margin-left:auto;cursor:pointer;color:var(--tx2,#5f6f88);font-size:15px;line-height:1}
+#real-datacard .real-dc-close:hover{color:var(--tx0)}
+#real-datacard .real-dc-type{color:var(--tx1);font-size:10px;margin:2px 0 7px;text-transform:uppercase;letter-spacing:.05em}
+#real-datacard .real-dc-stat{color:var(--accentGold);font-family:var(--mono,monospace);font-size:11px;margin-bottom:6px}
+#real-datacard .real-dc-desc{color:var(--tx1);font-size:11px;line-height:1.5;max-height:130px;overflow:auto}
+#real-datacard .real-dc-muted{color:var(--tx2,#5f6f88)}
+#real-datacard .real-dc-note{margin-top:7px;padding-top:7px;border-top:.5px solid var(--bd0,#2e3347);font-size:10.5px;color:var(--tx1)}
+#real-datacard .real-dc-note b{color:var(--accentGold)}
+#real-datacard .real-dc-ra{color:#9fd0c0;font-style:italic}
+#real-datacard .real-dc-lbl{font-size:9px;color:var(--tx2,#5f6f88);text-transform:uppercase;letter-spacing:.05em;margin-top:5px}
+#real-datacard .real-dc-open{width:100%;margin-top:8px}
+#real-datacard.real-dc-edit{width:232px;max-height:76vh;overflow:auto}
+#real-datacard.real-dc-edit input[type=text],#real-datacard.real-dc-edit input:not([type]),#real-datacard.real-dc-edit textarea{
+  width:100%;box-sizing:border-box;background:rgba(9,13,24,.9);border:.5px solid var(--bd0,#2e3347);border-radius:6px;
+  color:var(--tx0);font-size:11px;padding:4px 6px;margin:2px 0;font-family:inherit}
+#real-datacard.real-dc-edit textarea{resize:vertical;min-height:38px}
+#real-datacard .real-dc-chk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx1);margin:6px 0 2px}
+/* Jump-lane arrows (in-system, one per GX_LANES lane) */
+.real-jump:hover circle{fill-opacity:.9;stroke-opacity:1}
+.real-jump:hover path{fill:#ffffff}
+/* System search — type-ahead + fly-to */
+#real-search{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:11;width:min(300px,52%);display:none}
+#galaxy-canvas.real-on #real-search{display:block}
+#real-search-in{width:100%;padding:7px 14px;border-radius:20px;border:.5px solid var(--bd0,#2e3347);
+  background:rgba(14,18,30,.9);color:var(--tx0);font-size:12px;outline:none;box-sizing:border-box}
+#real-search-in::placeholder{color:var(--tx2,#5f6f88)}
+#real-search-in:focus{border-color:var(--accentGold)}
+#real-search-results{margin-top:6px;border-radius:10px;overflow:hidden auto;max-height:50vh;
+  background:rgba(14,18,30,.96);border:.5px solid var(--bd0,#2e3347);display:none}
+#real-search-results.show{display:block}
+#real-search-results .real-sr{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:12px}
+#real-search-results .real-sr:hover{background:rgba(255,255,255,.06)}
+#real-search-results .real-sr i{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+#real-search-results .real-sr-nm{color:var(--tx0)}
+#real-search-results .real-sr-sub{color:var(--tx2,#5f6f88);font-size:10px;margin-left:auto;white-space:nowrap}
+#real-search-results .real-sr-empty{padding:8px 12px;color:var(--tx2,#5f6f88);font-size:12px}
+/* Planet hotbar — the focused system's worlds, shown as you zoom in */
+#real-hotbar{position:absolute;left:50%;bottom:14px;transform:translate(-50%,10px);z-index:11;
+  display:none;gap:9px;padding:8px 11px;border-radius:14px;max-width:calc(100% - 40px);overflow-x:auto;
+  background:rgba(14,18,30,.9);border:.5px solid var(--bd0,#2e3347);
+  opacity:0;pointer-events:none;transition:opacity .22s,transform .22s}
+#galaxy-canvas.real-on #real-hotbar{display:flex}
+#real-hotbar.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#real-hotbar .real-pi{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex:0 0 auto;width:46px}
+#real-hotbar .real-pi .real-pi-disc{width:32px;height:32px;border-radius:50%;background-size:cover;background-position:center;
+  border:2px solid rgba(255,255,255,.14);box-shadow:inset 0 0 6px rgba(0,0,0,.5);transition:border-color .15s,transform .15s}
+#real-hotbar .real-pi:hover .real-pi-disc{transform:scale(1.12);border-color:rgba(255,255,255,.4)}
+#real-hotbar .real-pi.active .real-pi-disc{border-color:#fff}
+#real-hotbar .real-pi.belt .real-pi-disc{background:transparent;border:2px dashed #8B7355;box-shadow:none}
+#real-hotbar .real-pi .real-pi-lb{font-size:9px;line-height:1;color:var(--tx1);max-width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#real-hotbar .real-pi.active .real-pi-lb{color:var(--tx0)}
+/* Hover preview popover for hotbar tiles */
+#real-preview{position:absolute;transform:translateX(-50%);z-index:12;pointer-events:none;width:150px;padding:11px;
+  border-radius:12px;background:rgba(14,18,30,.95);border:.5px solid var(--bd0,#2e3347);
+  text-align:center;opacity:0;transition:opacity .12s;display:none}
+#galaxy-canvas.real-on #real-preview{display:block}
+#real-preview.show{opacity:1}
+#real-preview .real-pv-disc{width:86px;height:86px;border-radius:50%;margin:0 auto 8px;background-size:cover;
+  background-position:center;box-shadow:inset 0 0 10px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.14)}
+#real-preview .real-pv-disc.belt{background:repeating-radial-gradient(circle at 50% 50%, #8B7355 0 1px, transparent 1px 5px)}
+#real-preview .real-pv-name{font-size:12px;font-weight:600;color:var(--tx0)}
+#real-preview .real-pv-type{font-size:10px;color:var(--tx1);margin-top:2px}
+#real-preview .real-pv-hint{font-size:9px;color:var(--tx2,#5f6f88);margin-top:6px;letter-spacing:.04em;text-transform:uppercase}
 #hx-phead{padding:14px 16px 10px;border-bottom:.5px solid var(--bd1,#252a3a);flex-shrink:0}
 #hx-ptitle{font-size:13px;font-weight:700;letter-spacing:1px;color:var(--tx0)}
 #hx-pdate{font-family:var(--mono,monospace);font-size:12px;color:var(--accentGold);letter-spacing:1px;font-weight:700}

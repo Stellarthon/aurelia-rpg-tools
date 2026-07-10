@@ -65,13 +65,21 @@ function tableViewSpec(){
     view: (typeof currentView !== 'undefined') ? currentView : 'galaxy',
     systemId: (typeof currentSystemId !== 'undefined') ? currentSystemId : null,
     bodyId: (typeof selectedBody !== 'undefined') ? selectedBody : null,
-    locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null
+    locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null,
+    // Which galaxy map the referee is on (HEX | REAL) — the display mirrors it
+    // without persisting, so the TV's own local preference is never clobbered.
+    mapMode: (typeof RealMap !== 'undefined') ? RealMap.mode() : 'hex'
   };
 }
 function tableSceneSnapshot(){
   const spec = tableViewSpec();
   let camera = null;
-  try { if(spec.view === 'galaxy' && typeof HX !== 'undefined' && HX.getCamera) camera = HX.getCamera(); } catch(e){}
+  try {
+    if(spec.view === 'galaxy'){
+      if(spec.mapMode === 'real' && typeof RealMap !== 'undefined'){ camera = RealMap.getCamera(); camera.m = 'real'; }
+      else if(typeof HX !== 'undefined' && HX.getCamera) camera = HX.getCamera();
+    }
+  } catch(e){}
   return { t:'scene', spec, camera, handout: tvHandout, blank: displayBlank };
 }
 
@@ -198,20 +206,34 @@ function initTableDisplayReferee(){
     window[name] = function(...a){ const r = orig.apply(this, a); displayFollowCast(); return r; };
   });
 
-  // Galaxy camera mirror — js/10's applyTransform() calls this hook on every
-  // pan/zoom frame; throttle to ≤1 message per animation frame.
+  // Galaxy camera mirror — js/10's applyTransform() (hex) and js/15's render()
+  // (REAL) call these hooks on every pan/zoom frame; throttle to ≤1 message
+  // per animation frame. `m:'real'` marks a REAL-map camera; absent = hex.
   let camPending = null, camQueued = false;
-  window.onHXCameraChanged = function(cam){
+  function queueCameraCast(cam, m){
     if(!displayFollow || (typeof currentView !== 'undefined' && currentView !== 'galaxy')) return;
     if(typeof isReferee === 'function' && !isReferee()) return;
-    camPending = { x: cam.x, y: cam.y, scale: cam.scale };
+    camPending = { x: cam.x, y: cam.y, scale: cam.scale, m };
     if(camQueued) return;
     camQueued = true;
     requestAnimationFrame(() => {
       camQueued = false;
-      if(camPending) displayCast({ t:'camera', x: camPending.x, y: camPending.y, scale: camPending.scale });
+      if(camPending){
+        const msg = { t:'camera', x: camPending.x, y: camPending.y, scale: camPending.scale };
+        if(camPending.m) msg.m = camPending.m;
+        displayCast(msg);
+      }
       camPending = null;
     });
+  }
+  window.onHXCameraChanged = function(cam){ queueCameraCast(cam, null); };
+  window.onRealCameraChanged = function(cam){ queueCameraCast(cam, 'real'); };
+  // HEX | REAL toggle mid-Follow: push a full scene so the TV switches map
+  // and camera atomically.
+  window.onMapModeChanged = function(){
+    if(!displayFollow) return;
+    if(typeof isReferee === 'function' && !isReferee()) return;
+    displayCast(tableSceneSnapshot());
   };
 
   // Referee lightbox: stamp the open handout id (for "→ Table" + close wiring)
@@ -336,11 +358,22 @@ function initTableDisplayWindow(){
       if(typeof applyViewSpec === 'function') applyViewSpec(spec);
       // applyViewSpec stops at the system overview; mirror a selected body too.
       if(spec.view === 'system' && spec.bodyId && typeof selectBody === 'function') selectBody(spec.bodyId);
+      // Mirror the referee's HEX | REAL map choice — never persisted, so the
+      // TV's own localStorage preference survives the session.
+      if(spec.view === 'galaxy' && spec.mapMode && typeof RealMap !== 'undefined' && RealMap.mode() !== spec.mapMode){
+        RealMap.setMode(spec.mapMode, { persist:false });
+      }
     } catch(e){ console.error('[table-display] view apply failed', e); }
   }
   function applyCamera(c){
     if(!c) return;
     if(typeof currentView !== 'undefined' && currentView !== 'galaxy') return;
+    if(c.m === 'real'){
+      // REAL-map camera frame; flip the map first if a scene message got lost.
+      try { if(typeof RealMap !== 'undefined'){ if(RealMap.mode() !== 'real') RealMap.setMode('real', { persist:false }); RealMap.setCamera(c); } } catch(e){}
+      return;
+    }
+    try { if(typeof RealMap !== 'undefined' && RealMap.mode() === 'real') RealMap.setMode('hex', { persist:false }); } catch(e){}
     try { if(typeof HX !== 'undefined' && HX.setCamera) HX.setCamera(c); } catch(e){}
   }
   function renderPing(msg){
