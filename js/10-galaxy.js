@@ -2308,7 +2308,7 @@ function currentSystemName(){
   return s ? (s.name || s.id) : 'System';
 }
 
-function enterSystem(systemId){
+function enterSystem(systemId, opts){
   if(!SYSTEMS[systemId]) return;
   playViewTransition(() => {
     currentSystemId = systemId;
@@ -2332,7 +2332,9 @@ function enterSystem(systemId){
     renderSystemOverview();
     buildOrrery();
     updateBackBtn();
-    maybeSystemWelcome(systemId);
+    // quiet: suppress the welcome splash when another view routes THROUGH the
+    // system view (e.g. the REAL map's datacard opening a body close-up).
+    if(!(opts && opts.quiet)) maybeSystemWelcome(systemId);
   });
 }
 

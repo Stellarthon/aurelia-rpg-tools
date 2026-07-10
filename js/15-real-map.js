@@ -72,6 +72,7 @@ const RealMap = (function(){
   let needRender=true, anyOpen=false, raf=0;
   let regionsOn=true;
   let layoutDirty=true, facDirty=true;
+  let dcSig=null, dcUndoDone=false, dcRev=0;   // per-world datacard state
   const POS=new Map();                         // node id → {x,y} (derived; never written to nodes)
   let _facDefs='', _facBlobs='', _facLabels='';
   let _lastCam='';
@@ -194,7 +195,8 @@ const RealMap = (function(){
       };
     });
     let maxP=0; bodies.forEach(b=>{ if(b.p>maxP) maxP=b.p; });
-    sys={ star, bodies, maxP, slots:Array.from(used).sort((a,b)=>a-b) };
+    const rawById=new Map(); eff.forEach(b=>rawById.set(b.id,b));   // full app bodies (datacard fields)
+    sys={ star, bodies, maxP, slots:Array.from(used).sort((a,b)=>a-b), raw:rawById };
     sysCache.set(sysId,sys);
     return sys;
   }
@@ -262,6 +264,7 @@ const RealMap = (function(){
     if(!active()) return;
     if(tween) stepTween(now);
     if(needRender || anyOpen){ needRender=false; render(now); }
+    updateDatacard();                        // follow the selected world
     if(tween || (anyOpen && !motionOff())) raf=requestAnimationFrame(frame);
   }
   function invalidate(){ needRender=true; if(!raf && active()) raf=requestAnimationFrame(frame); }
@@ -382,8 +385,8 @@ const RealMap = (function(){
     });
     function planetSVG(P){
       const {bd,px,py}=P; let s2='';
-      if(selectedBody===bd.id) s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.9).toFixed(2)}" fill="none" stroke="#fff" stroke-opacity="0.8" vector-effect="non-scaling-stroke"/>`;
-      s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.5).toFixed(2)}" fill="${bd.col}" opacity="0.10"/>`;
+      if(selectedBody===bd.id) s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.9).toFixed(2)}" fill="none" stroke="#fff" stroke-opacity="0.8" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+      s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.5).toFixed(2)}" fill="${bd.col}" opacity="0.10" data-body="${at(bd.id)}" data-node="${at(n.id)}"/>`;
       s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}" fill="${bd.col}" data-body="${at(bd.id)}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
       s2+=`<circle cx="${(px-bd.r*0.32).toFixed(2)}" cy="${(py-bd.r*0.32).toFixed(2)}" r="${(bd.r*0.55).toFixed(2)}" fill="#ffffff" opacity="0.14" pointer-events="none"/>`;
       if(bd.ring){
@@ -397,8 +400,8 @@ const RealMap = (function(){
     for(const P of planets){ if(P.depth<0) g+=planetSVG(P); }   // far side, behind the star
     const pulse=motionOff() ? 1 : 1+0.06*Math.sin((Date.now()/1000)*1.4);
     const sr=sys.star.r*pulse;
-    g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*2.8).toFixed(2)}" fill="${sys.star.col}" opacity="0.09"/>`;
-    g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*1.7).toFixed(2)}" fill="${sys.star.col}" opacity="0.18"/>`;
+    g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*2.8).toFixed(2)}" fill="${sys.star.col}" opacity="0.09" pointer-events="none"/>`;
+    g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*1.7).toFixed(2)}" fill="${sys.star.col}" opacity="0.18" pointer-events="none"/>`;
     g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${sr.toFixed(2)}" fill="${sys.star.col}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
     for(const P of planets){ if(P.depth>=0) g+=planetSVG(P); }  // near side, in front
     // system name over the star — focus system only
@@ -425,6 +428,105 @@ const RealMap = (function(){
     el.classList.add('show');
   }
   function hideCard(){ const el=document.getElementById('real-card'); if(el) el.classList.remove('show'); }
+
+  // ── Per-world datacard: a small card that follows the selected world around
+  //    its orbit. Read view for everyone; under designModeOn && isReferee() it
+  //    becomes editable and writes through the SHARED overlay engine
+  //    (bodyPropertyOverrides / bodyAdditions in js/65) — no parallel store.
+  //    refNote / readAloud are BUILT only for the referee (never in player
+  //    markup) and carry .ref-only as belt-and-braces. ──────────────────────
+  function refOk(){ return typeof isReferee==='function' ? isReferee() : false; }
+  function canEditNow(){ return refOk() && typeof designModeOn!=='undefined' && !!designModeOn; }
+  function datacardHTML(n,bd,raw,edit){
+    const belt=bd.kind==='belt';
+    const close='<span class="real-dc-close" data-dc="close" title="Deselect">×</span>';
+    if(edit){
+      return '<div class="real-dc-hd"><span class="real-dc-dot" style="background:'+at(bd.col||'#888')+'"></span><span>Edit — '+eh(raw.name||bd.name)+'</span>'+close+'</div>'
+        +'<div class="real-dc-lbl">Name</div><input data-f="name" value="'+at(raw.name||'')+'">'
+        +'<div class="real-dc-lbl">Type</div><input data-f="type" value="'+at(raw.type||'')+'">'
+        +(belt?'':'<div class="real-dc-lbl">UWP</div><input data-f="uwpString" value="'+at(raw.uwpString||'')+'">'
+          +'<div class="real-dc-lbl">Diameter</div><input data-f="diameter" value="'+at(raw.diameter||'')+'">')
+        +'<label class="real-dc-chk"><input type="checkbox" data-f="hook" '+(raw.hook?'checked':'')+'> Adventure hook</label>'
+        +'<div class="real-dc-lbl">Description (players)</div><textarea data-f="desc">'+eh(raw.desc||'')+'</textarea>'
+        +'<div class="real-dc-lbl">Read-aloud</div><textarea data-f="readAloud">'+eh(raw.readAloud||'')+'</textarea>'
+        +'<div class="real-dc-lbl">Referee note</div><textarea data-f="refNote">'+eh(raw.refNote||'')+'</textarea>';
+    }
+    let h='<div class="real-dc-hd"><span class="real-dc-dot" style="background:'+at(bd.col||'#888')+'"></span><span>'+eh(raw.name||bd.name)+(raw.hook?' <span style="color:#E8A020">★</span>':'')+'</span>'+close+'</div>';
+    h+='<div class="real-dc-type">'+eh(raw.type||'')+'</div>';
+    if(!belt && (raw.uwpString||raw.diameter)) h+='<div class="real-dc-stat">'+eh(raw.uwpString||'')+((raw.uwpString&&raw.diameter)?'  ·  ':'')+eh(raw.diameter||'')+'</div>';
+    h+='<div class="real-dc-desc">'+(raw.desc?eh(raw.desc):'<span class="real-dc-muted">No survey notes yet.</span>')+'</div>';
+    if(refOk()){   // referee-only content: never built into player markup
+      if(raw.readAloud) h+='<div class="real-dc-note real-dc-ra ref-only">“'+eh(raw.readAloud)+'”</div>';
+      if(raw.refNote) h+='<div class="real-dc-note ref-only"><b>Referee:</b> '+eh(raw.refNote)+'</div>';
+    }
+    h+='<button class="view-close-btn real-dc-open" data-dc="open">⊙ View '+eh(raw.name||bd.name)+' up close</button>';
+    return h;
+  }
+  function positionDatacard(dc,sx,sy,pr){
+    const w=dc.offsetWidth||210, h=dc.offsetHeight||130, pad=10, gap=(pr||0)+16;
+    let left=sx+gap;
+    if(left+w > W-pad) left=sx-gap-w;              // flip left if it would overflow
+    left=Math.max(pad, Math.min(W-w-pad, left));
+    const top=Math.max(pad, Math.min(H-h-pad, sy-h/2));
+    dc.style.left=left+'px'; dc.style.top=top+'px';
+  }
+  function updateDatacard(){
+    const dc=document.getElementById('real-datacard'); if(!dc) return;
+    const off=()=>{ if(dcSig!==null){ dc.classList.remove('show'); dcSig=null; } };
+    if(modeVal!=='real' || !selectedNode || !selectedBody){ off(); return; }
+    if(ORBIT_OUTER*view.scale < OPEN_MIN){ off(); return; }
+    const sys=adaptSystem(selectedNode);
+    const bd=sys.bodies.find(x=>x.id===selectedBody);
+    if(!bd){ off(); return; }                       // body deleted out from under us
+    const raw=sys.raw.get(bd.id)||{};
+    const edit=canEditNow();
+    // Edit mode keeps a stable signature so typing never loses input focus;
+    // read mode folds in dcRev so remote edits appear as they sync.
+    const sig=bd.id+'|'+(edit?'e':'r'+dcRev);
+    if(sig!==dcSig){ dcSig=sig; dcUndoDone=false; dc.classList.toggle('real-dc-edit',edit); dc.innerHTML=datacardHTML(selectedNode,bd,raw,edit); }
+    dc.classList.add('show');
+    const pos=posOf(selectedNode); if(!pos){ off(); return; }
+    const axes=orbitAxes(bd.p,sys.maxP);
+    const ang= bd.kind==='belt' ? bd.theta0 : bd.theta0 + (motionOff()?0:(Date.now()/1000))*bd.spd;
+    const pt=orbitPt(pos.x,pos.y,axes[0],axes[1],ang);
+    positionDatacard(dc, view.x+pt[0]*view.scale, view.y+pt[1]*view.scale, (bd.r||1)*view.scale);
+  }
+  // The single write seam: one field of one body, through the app's shared
+  // overlay engine. Added bodies mutate in place (+saveBodyAdditions), base
+  // bodies accumulate bodyPropertyOverrides — mirroring commitBodyEdit (js/96).
+  function writeBodyField(sysId, bodyId, field, val){
+    if(!canEditNow()) return;
+    if(typeof bodyPropertyOverrides==='undefined' || typeof saveBodyPropertyOverrides!=='function') return;
+    if(!dcUndoDone && typeof recordDesignUndo==='function'){ recordDesignUndo('Edit body (REAL map)'); dcUndoDone=true; }
+    const adds=(typeof bodyAdditions!=='undefined' && bodyAdditions[sysId]) || null;
+    const added=adds ? adds.find(b=>b.id===bodyId) : null;
+    if(added){ added[field]=val; if(typeof saveBodyAdditions==='function') saveBodyAdditions(); }
+    else {
+      if(!bodyPropertyOverrides[sysId]) bodyPropertyOverrides[sysId]={};
+      if(!bodyPropertyOverrides[sysId][bodyId]) bodyPropertyOverrides[sysId][bodyId]={};
+      bodyPropertyOverrides[sysId][bodyId][field]=val;
+      saveBodyPropertyOverrides();
+    }
+    sysCache.delete(sysId); invalidate();
+  }
+  function bindDatacard(){
+    const dc=document.getElementById('real-datacard'); if(!dc) return;
+    dc.addEventListener('input',e=>{
+      const f=e.target && e.target.getAttribute && e.target.getAttribute('data-f');
+      if(!f || !selectedNode || !selectedBody) return;
+      writeBodyField(sysIdOf(selectedNode), selectedBody, f, e.target.type==='checkbox'?e.target.checked:e.target.value);
+    });
+    dc.addEventListener('click',e=>{
+      if(e.target.closest && e.target.closest('[data-dc="close"]')){
+        selectedBody=null; dc.classList.remove('show'); dcSig=null; invalidate(); return; }
+      if(e.target.closest && e.target.closest('[data-dc="open"]')){
+        if(!selectedNode) return;
+        const sysId=sysIdOf(selectedNode), bodyId=selectedBody;
+        if(typeof enterSystem==='function' && typeof goBodyView==='function'){
+          enterSystem(sysId,{quiet:true}); goBodyView(bodyId); }
+      }
+    });
+  }
 
   // ── Pointer input: pan / pinch / wheel, taps on pointerup with a move-slop
   //    guard (iOS never gets a synthetic click on SVG under touch-action:none). ──
@@ -508,7 +610,7 @@ const RealMap = (function(){
   // Hex-side data changed (system CRUD, lanes, paint, faction edits, polls,
   // redaction toggles) — every such path funnels through HX.refresh(), which
   // calls this hook. Rebuild the derived layers lazily on the next render.
-  function refresh(){ layoutDirty=true; facDirty=true; sysCache.clear(); invalidate(); }
+  function refresh(){ layoutDirty=true; facDirty=true; sysCache.clear(); dcRev++; invalidate(); }
 
   // ── Camera mirror seams (table display, wired up fully in a later phase) ──
   function getCamera(){ return { x:view.x, y:view.y, scale:view.scale }; }
@@ -522,7 +624,7 @@ const RealMap = (function(){
     if(built) return;
     svg=document.getElementById('real-map'); if(!svg) return;
     scene=document.getElementById('real-scene'); if(!scene) return;
-    bindInput();
+    bindInput(); bindDatacard();
     window.addEventListener('resize',()=>{ if(!active()) return; readRect(); if(!fitted) fit(); invalidate(); });
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') invalidate(); });
     built=true;
