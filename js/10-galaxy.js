@@ -2310,6 +2310,9 @@ function currentSystemName(){
 
 function enterSystem(systemId, opts){
   if(!SYSTEMS[systemId]) return;
+  // Any entry into the system layer resets the REAL map's pending body-view
+  // return (the REAL datacard re-arms it straight after this call).
+  if(typeof RealMap !== 'undefined') RealMap.clearBodyReturn();
   playViewTransition(() => {
     currentSystemId = systemId;
     selectedBody = null;

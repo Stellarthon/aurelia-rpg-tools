@@ -18,7 +18,7 @@ const RealMap = (function(){
   // ── Tunables (scene units — RPX is scaled down from the hex map's 26 so
   //    hex spacing suits the compact orrery footprint arriving in Phase 2) ──
   const RPX = 15;                 // hex cell radius in REAL scene units
-  const JIT = 5.5;                // per-star jitter so the grid reads organically
+  const JIT = 9;                  // max per-star jitter — under the hex inradius (~13) so every star stays in its own cell
   const ORBIT_INNER = 2.3;        // innermost orbit semi-major
   const ORBIT_OUTER = 9;          // outermost orbit semi-major — compact vs ~26u hex spacing
   const AXIS_RATIO = 0.42;        // semi-minor / semi-major (top-down tilt look)
@@ -91,7 +91,9 @@ const RealMap = (function(){
   //    + seeded uniform-in-disc jitter. Rebuilt whenever the hex side edits. ──
   function jitterOf(id){
     const rng=mulberry32(hashStr(id+'jit'));
-    const ang=rng()*6.2832, mag=Math.sqrt(rng())*JIT;
+    // Magnitude floor keeps every star OFF its hex centre — dead-centred stars
+    // are what made the layout still read as a grid at low jitter.
+    const ang=rng()*6.2832, mag=(0.3+0.7*Math.sqrt(rng()))*JIT;
     return [ Math.cos(ang)*mag, Math.sin(ang)*mag ];
   }
   function ensureLayout(){
@@ -651,7 +653,7 @@ const RealMap = (function(){
         if(!selectedNode) return;
         const sysId=sysIdOf(selectedNode), bodyId=selectedBody;
         if(typeof enterSystem==='function' && typeof goBodyView==='function'){
-          enterSystem(sysId,{quiet:true}); goBodyView(bodyId); }
+          enterSystem(sysId,{quiet:true}); goBodyView(bodyId); bodyFromReal=true; }
       }
     });
   }
@@ -832,6 +834,13 @@ const RealMap = (function(){
   // calls this hook. Rebuild the derived layers lazily on the next render.
   function refresh(){ layoutDirty=true; facDirty=true; sysCache.clear(); dcRev++; invalidate(); }
 
+  // ── Body-view return seam: armed when the datacard opens the classic body
+  //    view, claimed by js/30's up-navigation so "back" lands on THIS map
+  //    (camera untouched) instead of the hex system view. ──
+  let bodyFromReal=false;
+  function claimBodyReturn(){ const v=bodyFromReal; bodyFromReal=false; return v; }
+  function clearBodyReturn(){ bodyFromReal=false; }
+
   // ── Camera mirror seams (table display, wired up fully in a later phase) ──
   function getCamera(){ return { x:view.x, y:view.y, scale:view.scale }; }
   function setCamera(c){
@@ -859,5 +868,5 @@ const RealMap = (function(){
   window.realToggleRegions=function(){ regionsOn=!regionsOn;
     const b=document.getElementById('real-regions'); if(b) b.classList.toggle('off',!regionsOn); invalidate(); };
 
-  return { mode:()=>modeVal, setMode, onGalaxyEnter, refresh, invalidate, getCamera, setCamera };
+  return { mode:()=>modeVal, setMode, onGalaxyEnter, refresh, invalidate, getCamera, setCamera, claimBodyReturn, clearBodyReturn };
 })();
