@@ -48,6 +48,16 @@ const RealMap = (function(){
   function orbitAxes(p,maxP){ const a = maxP<=1 ? (ORBIT_INNER+ORBIT_OUTER)/2 : ORBIT_INNER+(ORBIT_OUTER-ORBIT_INNER)*(p-1)/(maxP-1); return [a,a*AXIS_RATIO]; }
   function orbitPt(cx,cy,a,b,t){ const ex=a*Math.cos(t), ey=b*Math.sin(t); return [ cx+ex*TCOS-ey*TSIN, cy+ex*TSIN+ey*TCOS ]; }
   function nodes(){ return (typeof GALAXY_NODES!=='undefined') ? GALAXY_NODES : []; }
+  function nodeById(id){ if(typeof GX_MAP!=='undefined' && GX_MAP[id]) return GX_MAP[id]; return nodes().find(x=>x.id===id)||null; }
+  // Lane adjacency straight off the shared GX_LANES set (referee overlay).
+  function laneNeighbours(id){
+    const out=[];
+    if(typeof GX_LANES!=='undefined') GX_LANES.forEach(k=>{
+      const i=k.indexOf('|'), a=k.slice(0,i), b=k.slice(i+1);
+      if(a===id) out.push(b); else if(b===id) out.push(a);
+    });
+    return out;
+  }
   // Faction identity ALWAYS resolves through the hex engine's redaction seam,
   // so a referee-hidden faction reads as "Uncharted" here too (name + colour),
   // and its territory is skipped exactly as the hex map skips it.
@@ -309,6 +319,30 @@ const RealMap = (function(){
     startTween({x:p.x,y:p.y}, clampScale(OPEN_FULL*1.5/ORBIT_OUTER), 760, 0);
     extCam=false; selectedNode=n; selectedBody=null; showCard(n);
   }
+  // Fly to a specific world: centre it at its CURRENT orbital position and
+  // make sure we're zoomed into full system detail. Belts centre on the star.
+  function flyToBody(n, bd){
+    const pos=posOf(n); if(!pos) return;
+    let px=pos.x, py=pos.y;
+    if(bd && bd.kind!=='belt'){
+      const axes=orbitAxes(bd.p, adaptSystem(n).maxP);
+      const ang=bd.theta0 + (motionOff()?0:(Date.now()/1000))*bd.spd;
+      const pt=orbitPt(pos.x,pos.y,axes[0],axes[1],ang); px=pt[0]; py=pt[1];
+    }
+    startTween({x:px,y:py}, clampScale(Math.max(view.scale, OPEN_FULL*1.8/ORBIT_OUTER)), 700, 0);
+    extCam=false; selectedNode=n; selectedBody=bd?bd.id:null; if(bd) hideCard(); else showCard(n);
+  }
+  // Jump along a lane to a neighbour: travel the straight line between the
+  // stars, dipping the zoom out on longer lanes so the journey stays visible.
+  function jumpTo(fromN, toN){
+    const a=posOf(fromN), b=posOf(toN); if(!b) return;
+    const sc1=clampScale(OPEN_FULL*1.5/ORBIT_OUTER);
+    const D=a ? Math.hypot(b.x-a.x, b.y-a.y) : 0;
+    const fitBoth=0.82*Math.min(W,H)/((D+2*ORBIT_OUTER)||1);
+    const dip=Math.max(0, Math.min(0.72, 1-fitBoth/sc1));
+    startTween({x:b.x,y:b.y}, sc1, 760+Math.min(1000,D*7), dip);
+    extCam=false; selectedNode=toN; selectedBody=null; showCard(toN);
+  }
   function stepTween(now){
     if(!tween) return;
     let k=(now-tween.t0)/tween.dur; if(k>=1) k=1;
@@ -376,6 +410,7 @@ const RealMap = (function(){
     const sizeF=Math.max(0, Math.min(1, (outerPx-OPEN_MIN)/(OPEN_FULL-OPEN_MIN)));  // 0 = dot, 1 = full orrery
     const showNames=(s>fitScale*2.6);
     const inV=p=>p.x>vx0&&p.x<vx1&&p.y>vy0&&p.y<vy1;
+    let focusNode=null;                         // the system the hotbar / spotlight tracks
 
     if(sizeF<=0){
       // ── GALAXY overview: faction-coloured dots (through the redaction seam) ──
@@ -402,6 +437,7 @@ const RealMap = (function(){
         open.push({n,p,dp});
       });
       let dMin=1e9; open.forEach(o=>{ if(o.dp<dMin) dMin=o.dp; });
+      open.forEach(o=>{ if(o.dp===dMin) focusNode=o.n; });   // nearest-centre = spotlight focus
       const T=Math.max(60, FOCUS_T*minDim);
       open.forEach(o=>{
         const em=Math.max(FOCUS_FLOOR, Math.exp(-(o.dp-dMin)/T));
@@ -413,6 +449,7 @@ const RealMap = (function(){
     }
 
     scene.innerHTML=out;
+    updateHotbar((sizeF>0.35 && focusNode) ? focusNode : null);   // planet hotbar for the focused system
     const zv=document.getElementById('real-zval');
     if(zv) zv.textContent=(s/(fitScale||1)).toFixed(1)+'×';
     const pill=document.getElementById('real-mode-pill');
@@ -480,6 +517,21 @@ const RealMap = (function(){
     g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*1.7).toFixed(2)}" fill="${sys.star.col}" opacity="0.18" pointer-events="none"/>`;
     g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${sr.toFixed(2)}" fill="${sys.star.col}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
     for(const P of planets){ if(P.depth>=0) g+=planetSVG(P); }  // near side, in front
+    // ── Jump arrows: one per GX_LANES lane touching this system; tap to travel ──
+    if(em>0.6 && sizeF>0.55){
+      laneNeighbours(n.id).forEach(cid=>{
+        const tp=POS.get(cid), tn=nodeById(cid); if(!tp||!tn) return;
+        const dx=tp.x-cx, dy=tp.y-cy, L=Math.hypot(dx,dy)||1, ux=dx/L, uy=dy/L;
+        const R=ORBIT_OUTER*1.3, ax=cx+ux*R, ay=cy+uy*R, sz=1.7;
+        const adeg=(Math.atan2(uy,ux)*180/Math.PI).toFixed(1);
+        g+=`<g class="real-jump" data-jump="${at(cid)}" data-node="${at(n.id)}" transform="translate(${ax.toFixed(2)},${ay.toFixed(2)}) rotate(${adeg})" style="cursor:pointer">`;
+        g+=`<circle r="${(sz*1.55).toFixed(2)}" fill="#0a1830" fill-opacity="0.55" stroke="#4f7fc0" stroke-opacity="0.85" vector-effect="non-scaling-stroke"/>`;
+        g+=`<path d="M ${(-sz*0.45).toFixed(2)} ${(-sz*0.62).toFixed(2)} L ${(sz*0.72).toFixed(2)} 0 L ${(-sz*0.45).toFixed(2)} ${(sz*0.62).toFixed(2)} Z" fill="#cfe0ff"/>`;
+        g+=`</g>`;
+        if(showPlanetLabels){ const fs=(7.5*invS).toFixed(2);
+          g+=`<text x="${(cx+ux*(R+sz*2.4)).toFixed(2)}" y="${(cy+uy*(R+sz*2.4)+2.5*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="#7f93b8" style="font-family:var(--mono,monospace)" pointer-events="none">${eh(tn.label||tn.name)}</text>`; }
+      });
+    }
     // system name over the star — focus system only
     if(em>0.55 && sizeF>0.4){ const fs=(11*invS).toFixed(2); const nameOp=Math.max(0,Math.min(1,(sizeF-0.35)/0.5)).toFixed(2);
       g+=`<text x="${cx.toFixed(1)}" y="${(cy-sr-5*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="#E8A020" opacity="${nameOp}" class="real-sys-lbl" pointer-events="none">${eh((n.label||n.name||'').toUpperCase())}</text>`; }
@@ -609,6 +661,9 @@ const RealMap = (function(){
   function pickAt(px,py){
     const el=document.elementFromPoint(px,py);
     if(!el || !el.closest) return null;
+    const jumpEl=el.closest('[data-jump]');
+    if(jumpEl){ const n=nodeById(jumpEl.getAttribute('data-node'));
+      return { jump:jumpEl.getAttribute('data-jump'), node:n, body:null }; }
     const bodyEl=el.closest('[data-body]');
     if(bodyEl){ const n=nodes().find(x=>x.id===bodyEl.getAttribute('data-node'));
       return n?{node:n, body:bodyEl.getAttribute('data-body')}:null; }
@@ -641,6 +696,7 @@ const RealMap = (function(){
       if(e.button>0 || wasMoved) return;
       const hit=pickAt(e.clientX,e.clientY);
       if(!hit){ hideCard(); selectedNode=null; selectedBody=null; invalidate(); return; }
+      if(hit.jump){ const tn=nodeById(hit.jump); if(tn) jumpTo(hit.node||tn, tn); invalidate(); return; }   // jump arrow → travel the lane
       if(hit.body){ selectedNode=hit.node; selectedBody=hit.body; hideCard(); invalidate(); return; }
       // tapped a star: dive in (or just select it once the system is already open)
       if(ORBIT_OUTER*view.scale < OPEN_FULL) flyTo(hit.node);
@@ -656,6 +712,93 @@ const RealMap = (function(){
       }
     },{passive:false});
     svg.addEventListener('touchend',()=>{ lastDist=0; });
+  }
+
+  // ── Planet hotbar — a row of the focused system's worlds, appearing as you
+  //    zoom in. Rebuilt only when the focus / selection / data changes. ─────
+  let hotbarSig=null, hotbarNode=null;
+  function updateHotbar(node){
+    const bar=document.getElementById('real-hotbar'); if(!bar) return;
+    const sys=node ? adaptSystem(node) : null;
+    if(!node || !sys.bodies.length){
+      if(hotbarSig!==null){ bar.classList.remove('show'); bar.innerHTML=''; hotbarSig=null; hotbarNode=null; }
+      return;
+    }
+    const sig=node.id+'|'+(selectedBody||'')+'|'+dcRev;
+    if(sig===hotbarSig){ bar.classList.add('show'); return; }
+    hotbarSig=sig; hotbarNode=node;
+    bar.innerHTML=sys.bodies.map(bd=>{
+      const belt=bd.kind==='belt', active=(selectedBody===bd.id)?' active':'';
+      const style=belt?'':`background-color:${at(bd.col)}`+((bd.texUrl&&_texOk[bd.texUrl])?`;background-image:url(${at(bd.texUrl)})`:'');
+      const short=(bd.name||'').replace(node.label||node.name||'','').trim()||bd.name;
+      return `<div class="real-pi${belt?' belt':''}${active}" data-body="${at(bd.id)}" title="${at(bd.name+' — '+(bd.type||''))}"><div class="real-pi-disc" style="${style}"></div><div class="real-pi-lb">${eh(short)}</div></div>`;
+    }).join('');
+    bar.classList.add('show');
+  }
+  function showPreview(pi, bd){
+    const pv=document.getElementById('real-preview'), canvas=document.getElementById('galaxy-canvas');
+    if(!pv||!canvas) return;
+    const belt=bd.kind==='belt';
+    const disc=belt ? '<div class="real-pv-disc belt"></div>'
+      : `<div class="real-pv-disc" style="background-color:${at(bd.col)}${(bd.texUrl&&_texOk[bd.texUrl])?`;background-image:url(${at(bd.texUrl)})`:''}"></div>`;
+    pv.innerHTML=disc
+      +`<div class="real-pv-name">${eh(bd.name)}${bd.hook?' <span style="color:#E8A020">★</span>':''}</div>`
+      +`<div class="real-pv-type">${eh(bd.type||'')}</div>`
+      +'<div class="real-pv-hint">tap to fly here</div>';
+    const r=pi.getBoundingClientRect(), c=canvas.getBoundingClientRect();
+    pv.style.left=(r.left+r.width/2-c.left)+'px';
+    pv.style.bottom=(c.bottom-r.top+10)+'px';
+    pv.classList.add('show');
+  }
+  function hidePreview(){ const pv=document.getElementById('real-preview'); if(pv) pv.classList.remove('show'); }
+  function bindHotbar(){
+    const bar=document.getElementById('real-hotbar'); if(!bar) return;
+    const bodyOf=el=>{ const pi=el&&el.closest&&el.closest('.real-pi'); if(!pi||!hotbarNode) return null;
+      const id=pi.getAttribute('data-body'); return { pi, bd:adaptSystem(hotbarNode).bodies.find(b=>b.id===id) }; };
+    bar.addEventListener('click',e=>{
+      const h=bodyOf(e.target); if(!h||!h.bd) return;
+      flyToBody(hotbarNode, h.bd); hidePreview();
+    });
+    bar.addEventListener('mouseover',e=>{ const h=bodyOf(e.target); if(h&&h.bd) showPreview(h.pi,h.bd); });
+    bar.addEventListener('mouseleave',hidePreview);
+  }
+
+  // ── System search: type-ahead over label / name / (redacted) faction name;
+  //    picking a match flies the camera there. Hidden factions resolve to
+  //    "Uncharted", so a spoiler faction's name matches nothing for players. ──
+  let sMatches=[];
+  function runSearch(){
+    const sIn=document.getElementById('real-search-in'), sRes=document.getElementById('real-search-results');
+    if(!sIn||!sRes) return;
+    const q=sIn.value.trim().toLowerCase();
+    if(!q){ sRes.classList.remove('show'); sRes.innerHTML=''; sMatches=[]; return; }
+    ensureLayout();
+    sMatches=nodes().filter(n=>POS.has(n.id) &&
+      ((n.label||'')+' '+(n.name||'')+' '+(effFacOf(n.faction).name||'')).toLowerCase().includes(q)).slice(0,8);
+    sRes.innerHTML=sMatches.length
+      ? sMatches.map((n,i)=>{ const fac=effFacOf(n.faction);
+          return `<div class="real-sr" data-i="${i}"><i style="background:${fac.color}"></i><span class="real-sr-nm">${eh(n.label||n.name)}</span><span class="real-sr-sub">${eh(n.name)}</span></div>`; }).join('')
+      : '<div class="real-sr-empty">No systems found</div>';
+    sRes.classList.add('show');
+  }
+  function pickSearch(i){
+    const n=sMatches[i]; if(!n) return;
+    const sIn=document.getElementById('real-search-in'), sRes=document.getElementById('real-search-results');
+    if(sRes) sRes.classList.remove('show');
+    if(sIn){ sIn.value=n.label||n.name; sIn.blur(); }
+    flyTo(n);
+  }
+  function bindSearch(){
+    const sIn=document.getElementById('real-search-in'), sRes=document.getElementById('real-search-results');
+    if(!sIn||!sRes) return;
+    sIn.addEventListener('input',runSearch);
+    sIn.addEventListener('focus',runSearch);
+    sIn.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); if(sMatches.length) pickSearch(0); }
+      else if(e.key==='Escape'){ e.stopPropagation(); sIn.value=''; runSearch(); sIn.blur(); }
+    });
+    sRes.addEventListener('click',e=>{ const r=e.target.closest&&e.target.closest('.real-sr'); if(r) pickSearch(+r.getAttribute('data-i')); });
+    document.addEventListener('click',e=>{ if(!(e.target.closest&&e.target.closest('#real-search'))) sRes.classList.remove('show'); });
   }
 
   // ── Mode plumbing (per-device HEX | REAL preference) ───────────────────
@@ -675,6 +818,7 @@ const RealMap = (function(){
     if(!(opts && opts.persist===false)){ try{ localStorage.setItem('aurelia_map_mode', modeVal); }catch(e){} }
     applyModeUi();
     if(modeVal==='real'){ if(!fitted) scheduleFit(); else readRect(); invalidate(); }
+    else { updateHotbar(null); hidePreview(); }
     if(typeof window.onMapModeChanged==='function') window.onMapModeChanged(modeVal);
   }
   function onGalaxyEnter(){
@@ -700,7 +844,7 @@ const RealMap = (function(){
     if(built) return;
     svg=document.getElementById('real-map'); if(!svg) return;
     scene=document.getElementById('real-scene'); if(!scene) return;
-    bindInput(); bindDatacard();
+    bindInput(); bindDatacard(); bindHotbar(); bindSearch();
     window.addEventListener('resize',()=>{ if(!active()) return; readRect(); if(!fitted) fit(); invalidate(); });
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') invalidate(); });
     built=true;
