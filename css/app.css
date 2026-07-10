@@ -2000,6 +2000,27 @@ body.ai-takeover.alert-local-muted #ai-takeover-overlay{display:none}
 .trd-total{font-size:11px;font-family:monospace;color:var(--tx0);flex:1;min-width:120px}
 @media(max-width:640px){#trade-wrap{right:0;top:54px;width:340px}}
 
+/* ── Design Studio panel — context-sensitive Design-mode editors (referee-only) ── */
+#design-wrap{position:fixed;top:54px;right:0;width:372px;height:auto;z-index:75;background:var(--bg1);border:.5px solid #9B59B6;border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:120px;max-width:94vw;max-height:88vh}
+#design-wrap.hidden{display:none}
+#design-wrap.panel-collapsed{height:auto!important;min-height:0}
+#design-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:grab;flex-shrink:0;user-select:none;touch-action:none;border-bottom:.5px solid var(--bd0)}
+#design-header:active{cursor:grabbing}
+#design-title-lbl{font-size:11px;font-family:monospace;font-weight:700;color:#C98BE8;letter-spacing:1px}
+#design-toggle{font-size:10px;color:var(--tx1)}
+#design-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+#design-body.collapsed{display:none}
+/* Collapsible .hx-sec dropdowns — mirrors the #hx-pbody-scoped rules (those are
+   deliberately scoped, so the sections need their own rules to render here). */
+#design-body .hx-sec{margin-top:2px}
+#design-body .hx-sec>summary.hx-sec-lbl{font-size:9px;letter-spacing:2px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;margin:0 0 7px;user-select:none;transition:color .12s}
+#design-body .hx-sec>summary.hx-sec-lbl::-webkit-details-marker{display:none}
+#design-body .hx-sec>summary.hx-sec-lbl::before{content:'▸';font-size:8px;line-height:1;opacity:.65;transition:transform .15s ease}
+#design-body .hx-sec[open]>summary.hx-sec-lbl::before{transform:rotate(90deg)}
+#design-body .hx-sec>summary.hx-sec-lbl:hover{color:var(--tx0)}
+#design-body .hx-sec:not([open])>summary.hx-sec-lbl{margin-bottom:0;border-bottom-color:transparent}
+@media(max-width:640px){#design-wrap{right:0;top:54px;width:340px}}
+
 /* ── Starport Board panel — public postings (players read-only) ── */
 #board-wrap{position:fixed;top:54px;right:0;width:520px;height:auto;z-index:75;background:var(--bg1);border:.5px solid var(--bd0);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.45);min-width:300px;min-height:120px;max-width:94vw;max-height:88vh}
 #board-wrap.hidden{display:none}
