@@ -2742,6 +2742,7 @@ if(queueLength()) flushQueue(); // push anything parked from a previous offline 
 // ── Galaxy map is the landing view: draw it on load (no fade on first paint) ──
 if(typeof HX !== 'undefined'){
   HX.enter();
+  if(typeof RealMap !== 'undefined') RealMap.onGalaxyEnter();   // apply the per-device HEX | REAL pref
   document.getElementById('hdr-title').textContent = layerLabel('galaxy','The Orion Arm').toUpperCase();
   document.getElementById('breadcrumb').innerHTML = '';
   updateBackBtn();
