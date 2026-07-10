@@ -442,6 +442,50 @@ function refreshDesignAffordances(){
   if(currentView === 'system'){ if(selectedBody) selectBody(selectedBody); else renderSystemOverview(); }
   if(currentView === 'body' && selectedBody){ if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody); }
   if(currentView === 'galaxy' && typeof RealMap !== 'undefined') RealMap.invalidate();  // REAL-map datacard flips read ↔ edit
+  updateDesignPanelVisibility();  // the floating Design Studio follows the mode
+}
+
+// ═══ DESIGN STUDIO — floating, context-sensitive host for the Design editors ═══
+// The editor sections that used to crowd the info panels (galaxy detail, orrery
+// body detail, body/location views) render here instead. The panel exists only
+// while Design Mode is on; its content follows the current view + selection.
+// Section open/closed state lives in designSecState (bound in js/96 boot).
+let designPanelCollapsed = false;
+let designSecState = {};   // {sectionKey: open} — read by HX.designSectionsHTML
+
+function toggleDesignCollapse(){
+  const hdr = document.getElementById('design-header');
+  if(hdr && hdr.dataset.suppressClick === '1') return;
+  designPanelCollapsed = !designPanelCollapsed;
+  const t = document.getElementById('design-toggle'); if(t) t.textContent = designPanelCollapsed ? '▲' : '▼';
+  const b = document.getElementById('design-body'); if(b) b.classList.toggle('collapsed', designPanelCollapsed);
+  const w = document.getElementById('design-wrap'); if(w) w.classList.toggle('panel-collapsed', designPanelCollapsed);
+}
+
+function updateDesignPanelVisibility(){
+  const w = document.getElementById('design-wrap'); if(!w) return;
+  const on = designModeOn && isReferee();
+  w.classList.toggle('hidden', !on);
+  if(on) renderDesignPanel();
+}
+
+// Context dispatcher: each view's render path calls this after it paints, so
+// the panel always reflects the current selection without its own poll.
+function renderDesignPanel(){
+  if(!designModeOn || !isReferee()) return;
+  const body = document.getElementById('design-body'); if(!body) return;
+  let html = '';
+  const view = (typeof currentView !== 'undefined') ? currentView : 'galaxy';
+  if(view === 'galaxy' && typeof HX !== 'undefined' && HX.designSectionsHTML){
+    html = HX.designSectionsHTML();
+  } else if(view === 'system' && typeof designSystemViewHTML === 'function'){
+    html = designSystemViewHTML();
+  } else if(view === 'body' && typeof designBodyViewHTML === 'function'){
+    html = designBodyViewHTML();
+  } else if(view === 'station'){
+    html = `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
+  }
+  body.innerHTML = html || `<div class="hx-small">Select a system, body, or location to begin designing.</div>`;
 }
 
 function toggleDesignMode(){

@@ -875,3 +875,18 @@ async function restoreDeletedBody(sysId, id){
 }
 
 
+
+// ── Design Studio panel boot ─────────────────────────────────────────────────
+// Registered here (not js/65) because makePanelDraggable/Resizable live in
+// js/70, which loads after the design module. The capture-phase toggle listener
+// persists each <details> section's open state across the panel's frequent
+// full-innerHTML re-renders (same idiom as the galaxy detail panel).
+makePanelDraggable('design-wrap', 'design-header');
+makePanelResizable('design-wrap');
+(function(){
+  const b = document.getElementById('design-body');
+  if(b) b.addEventListener('toggle', ev => {
+    const d = ev.target;
+    if(d && d.tagName === 'DETAILS' && d.dataset && d.dataset.sec) designSecState[d.dataset.sec] = d.open;
+  }, true);
+})();
