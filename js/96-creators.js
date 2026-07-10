@@ -492,6 +492,9 @@ function renderBodyManualForm(prefill){
     <div class="npc-form-row body-check-row">
       <input type="checkbox" id="body-f-hook" ${d.hook?'checked':''}><label for="body-f-hook" style="margin:0;cursor:pointer">Adventure hook (gold highlight + ! marker)</label>
     </div>
+    <div class="npc-form-row body-check-row">
+      <input type="checkbox" id="body-f-dock" ${d.tradersDock?'checked':''}><label for="body-f-dock" style="margin:0;cursor:pointer">⚓ Traders dock here (NPC convoys berth at this body — one per system)</label>
+    </div>
     <div class="npc-form-row">
       <label class="npc-form-lbl">Overview / description</label>
       <textarea class="npc-form-textarea" id="body-f-desc" style="min-height:70px">${escHtml(d.desc)}</textarea>
@@ -565,6 +568,9 @@ function collectBodyForm(){
     isMoon: cls === 'moon',
     isStar: cls === 'star',
     hook: !!(document.getElementById('body-f-hook')||{}).checked,
+    // null (not false) when unticked, so an un-flagged body diffs clean against
+    // base data and never writes a no-op override.
+    tradersDock: (document.getElementById('body-f-dock')||{}).checked || null,
     desc: g('body-f-desc') || '',
     refNote: (g('body-f-refnote')||'').trim() || null,
     readAloud: (g('body-f-readaloud')||'').trim() || null,
@@ -717,12 +723,34 @@ function econAfterBodyChange(){
   try { if(typeof ECON!=='undefined' && ECON.syncLanes) ECON.syncLanes(); } catch(e){}
 }
 
+// One trade dock per system: flagging a body "Traders dock here" clears the
+// flag on every other body, through the same overlay engine body edits use
+// (added bodies mutate in place; base bodies get a bodyPropertyOverrides
+// entry). The REAL-map datacard checkbox (js/15) routes through this too.
+async function clearOtherTraderDocks(sysId, keepId){
+  let addsDirty = false, ovDirty = false;
+  effectiveBodies(sysId).forEach(b => {
+    if(b.id === keepId || !b.tradersDock) return;
+    const added = (bodyAdditions[sysId] || []).find(x => x.id === b.id);
+    if(added){ added.tradersDock = null; addsDirty = true; }
+    else {
+      if(!bodyPropertyOverrides[sysId]) bodyPropertyOverrides[sysId] = {};
+      if(!bodyPropertyOverrides[sysId][b.id]) bodyPropertyOverrides[sysId][b.id] = {};
+      bodyPropertyOverrides[sysId][b.id].tradersDock = null;
+      ovDirty = true;
+    }
+  });
+  if(addsDirty) await saveBodyAdditions();
+  if(ovDirty) await saveBodyPropertyOverrides();
+}
+
 async function commitNewBody(obj){
   recordDesignUndo('Add body "' + (obj.name||'') + '"');
   obj.id = 'body-add-' + Date.now() + '-' + Math.floor(Math.random()*1000);
   if(!bodyAdditions[currentSystemId]) bodyAdditions[currentSystemId] = [];
   bodyAdditions[currentSystemId].push(obj);
   await saveBodyAdditions();
+  if(obj.tradersDock) await clearOtherTraderDocks(currentSystemId, obj.id);
   econAfterBodyChange();
   buildOrrery();
   showToast('Body "' + obj.name + '" added');
@@ -749,7 +777,8 @@ function openBodyEditor(id){
     name:b.name, type:b.type, tag:b.tag||'', color:b.color, orbitAU:b.orbitAU,
     uwpString:b.uwpString, diameter:b.diameter, period:b.period, hook:!!b.hook,
     desc:b.desc, refNote:b.refNote, readAloud:b.readAloud, parentId:b.parentId,
-    orbitPos:b.orbitPos, beltDensity:b.beltDensity, bodyClass:cls, fields:b.fields
+    orbitPos:b.orbitPos, beltDensity:b.beltDensity, bodyClass:cls, fields:b.fields,
+    tradersDock:!!b.tradersDock
   };
   document.getElementById('body-creator-title').textContent = '✦ Edit Body Properties';
   document.getElementById('body-creator-tabs').style.display = 'none';
@@ -775,7 +804,7 @@ async function commitBodyEdit(id, obj){
     // Base body — store only the changed metadata fields as overrides so the
     // body's checks/events/npcs and identity stay anchored to the base data.
     const base = baseBodiesFor(currentSystemId).find(b => b.id === id) || {};
-    const fields = ['name','type','typeId','fields','tag','color','orbitAU','uwpString','diameter','period','hook','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
+    const fields = ['name','type','typeId','fields','tag','color','orbitAU','uwpString','diameter','period','hook','tradersDock','desc','refNote','readAloud','orbitPos','parentId','beltDensity','isMoon','isStar','discStyle','texture','textureUrl'];
     const ov = {};
     fields.forEach(f => {
       const nv = obj[f];
@@ -789,6 +818,7 @@ async function commitBodyEdit(id, obj){
     else delete bodyPropertyOverrides[currentSystemId][id];
     await saveBodyPropertyOverrides();
   }
+  if(obj.tradersDock) await clearOtherTraderDocks(currentSystemId, id);
   econAfterBodyChange();
   buildOrrery();
   showToast('Body updated');
