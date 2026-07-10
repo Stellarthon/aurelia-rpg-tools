@@ -81,6 +81,7 @@ const RealMap = (function(){
   let tween=null;                              // {t0,dur,look0,look1,sc0,sc1,dip}
   let needRender=true, anyOpen=false, raf=0;
   let regionsOn=true;
+  let tradersOn=true;                          // NPC trader convoy overlay (⚓ dock planets + moving markers)
   let layoutDirty=true, facDirty=true;
   let dcSig=null, dcUndoDone=false, dcRev=0;   // per-world datacard state
   const POS=new Map();                         // node id → {x,y} (derived; never written to nodes)
@@ -275,13 +276,115 @@ const RealMap = (function(){
         r:kind==='belt'?0:bodySceneR(b.displayRadius,kind),
         ring:kind==='gas'&&!!b.ringStyle, texUrl,
         hook:!!b.hook, uwp:b.uwpString, diameter:b.diameter,
+        dock:!!b.tradersDock,
       };
     });
     let maxP=0; bodies.forEach(b=>{ if(b.p>maxP) maxP=b.p; });
     const rawById=new Map(); eff.forEach(b=>rawById.set(b.id,b));   // full app bodies (datacard fields)
-    sys={ star, bodies, maxP, slots:Array.from(used).sort((a,b)=>a-b), raw:rawById };
+    const dockBody=bodies.find(b=>b.dock)||null;                    // "Traders dock here" body (one per system)
+    sys={ star, bodies, maxP, slots:Array.from(used).sort((a,b)=>a-b), raw:rawById, dockId:dockBody?dockBody.id:null };
     sysCache.set(sysId,sys);
     return sys;
+  }
+
+  // ── NPC trader overlay: the SAME living-economy agents the hex map draws
+  //    (ECON.agents, js/90), rendered in REAL space. The new idea here is the
+  //    per-system DOCK PLANET: a body flagged "Traders dock here" (tradersDock,
+  //    set in the body editor or this map's datacard). Convoy paths anchor at
+  //    the dock planet's LIVE orbital position instead of the star, and docked
+  //    agents cluster around it — so zooming into a system shows the traders
+  //    physically at the planet the system's goods come from. Read-only over
+  //    shared econ state; renders for everyone, exactly like the hex overlay. ──
+  function econReady(){ try{ return typeof window.ECON!=='undefined' && ECON.active(); }catch(e){ return false; } }
+  function econNow(){ try{ return (ECON.state.week||0) + ((typeof window!=='undefined'&&window.econViewFrac)||0); }catch(e){ return 0; } }
+  function econAgents(){ try{ return (ECON.agents&&ECON.agents())||[]; }catch(e){ return []; } }
+  // Berthed at pos — idle, or loading before departure. Mirrors js/90's isDocked.
+  function agentDocked(a,nowT){ return !!(a && a.pos && (!a.route || (a.route.began!=null && a.route.began>nowT))); }
+  // Where trader traffic berths in a system: the tradersDock body at its CURRENT
+  // orbital position, or the star centre when no body is flagged. A flagged belt
+  // berths at a fixed point on its ring (belts don't orbit-animate here).
+  function dockAnchor(n,t){
+    const pos=posOf(n); if(!pos) return null;
+    const sys=adaptSystem(n);
+    const bd=sys.dockId ? sys.bodies.find(b=>b.id===sys.dockId) : null;
+    if(!bd) return { x:pos.x, y:pos.y, r:sys.star.r, bd:null };
+    const axes=orbitAxes(bd.p,sys.maxP);
+    const ang=bd.kind==='belt' ? bd.theta0 : bd.theta0 + t*bd.spd;
+    const pt=orbitPt(pos.x,pos.y,axes[0],axes[1],ang);
+    return { x:pt[0], y:pt[1], r:Math.max(bd.r,0.4), bd };
+  }
+  // Route a convoy hop-by-hop: BFS over the union of surveyed jump lanes
+  // (GX_LANES) and the always-flyable commercial links — the same graphs the
+  // hex overlay routes along (visual pathing only; fuel-weighting lives there).
+  const tradePathCache=new Map();              // 'from|pickup|to' → [node ids]; cleared on refresh()
+  function tradeNeigh(id){
+    const out=new Set(laneNeighbours(id));
+    const n=nodeById(id); ((n&&(n._loreLinks||n.connections))||[]).forEach(c=>out.add(c));
+    return out;
+  }
+  function tradeLeg(fromId,toId){
+    if(!fromId||!toId||fromId===toId) return [fromId];
+    const prev={}; prev[fromId]=fromId; const q=[fromId];
+    while(q.length){ const u=q.shift(); if(u===toId) break;
+      tradeNeigh(u).forEach(v=>{ if(!(v in prev) && POS.has(v)){ prev[v]=u; q.push(v); } }); }
+    if(!(toId in prev)) return [fromId,toId];  // unreachable → direct line
+    const path=[toId]; let c=toId; while(c!==fromId){ c=prev[c]; path.unshift(c); }
+    return path;
+  }
+  function tradePathIds(route){
+    const wp=(route.pickup && route.pickup!==route.from && route.pickup!==route.to) ? route.pickup : null;
+    const key=route.from+'|'+(wp||'')+'|'+route.to;
+    let ids=tradePathCache.get(key);
+    if(!ids){
+      ids=tradeLeg(route.from, wp||route.to);
+      if(wp) ids=ids.concat(tradeLeg(wp,route.to).slice(1));   // deadhead + laden legs, shared pickup point dropped
+      tradePathCache.set(key,ids);
+    }
+    return ids;
+  }
+  // In-flight convoys: faint dashed route + a diamond marker walked along it by
+  // progress (week + econViewFrac, like the hex map). Berth endpoints (from /
+  // pickup / to) land on each system's dock anchor; transit hops pass the star.
+  function drawTraders(invS,s){
+    if(!tradersOn || !econReady()) return '';
+    const agents=econAgents(); if(!agents.length) return '';
+    const nowT=econNow(), t=motionOff()?0:(Date.now()/1000);
+    const showLbl=(s>fitScale*2.6);
+    const flying=agents.filter(a=>a.route && !agentDocked(a,nowT));
+    const many=flying.length>30;               // big fleet → drop labels (clutter), keep markers
+    let g='<g pointer-events="none">';
+    flying.forEach(a=>{
+      const ids=tradePathIds(a.route);
+      const pts=[];
+      ids.forEach((id,i)=>{
+        const berth=(i===0 || i===ids.length-1 || id===a.route.pickup);
+        if(berth){ const bn=nodeById(id); if(bn){ const d=dockAnchor(bn,t); if(d){ pts.push({x:d.x,y:d.y}); return; } } }
+        const p=POS.get(id); if(p) pts.push({x:p.x,y:p.y});
+      });
+      if(pts.length<2) return;
+      let pr=0.5;
+      if(a.route.began!=null && a.route.eta>a.route.began)
+        pr=Math.max(0.02,Math.min(0.98,(nowT-a.route.began)/(a.route.eta-a.route.began)));
+      const seg=[]; let total=0;
+      for(let i=0;i<pts.length-1;i++){ const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y); seg.push(d); total+=d; }
+      let x=pts[0].x, y=pts[0].y;
+      if(total>0){ let want=pr*total, acc=0, k=0; while(k<seg.length-1 && acc+seg[k]<want){ acc+=seg[k]; k++; }
+        const ff=seg[k]?(want-acc)/seg[k]:0; x=pts[k].x+(pts[k+1].x-pts[k].x)*ff; y=pts[k].y+(pts[k+1].y-pts[k].y)*ff; }
+      // Selection follows the econ console, same as the hex overlay.
+      const corpSel=(typeof window!=='undefined' && window.econCorpSel && a.backing===window.econCorpSel);
+      const sel=(typeof window!=='undefined' && window.econTraderSel===a.id) || corpSel;
+      const anySel=(typeof window!=='undefined' && (!!window.econTraderSel || !!window.econCorpSel)), dim=anySel&&!sel;
+      const col=sel?'#ffe27a':'#f4d35e', z=(sel?5.5:4)*invS;
+      const line=pts.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+      g+=`<polyline points="${line}" fill="none" stroke="${col}" stroke-width="${sel?1.6:0.8}" opacity="${sel?0.8:(dim?0.08:0.22)}" stroke-dasharray="${sel?'none':'2,3'}" vector-effect="non-scaling-stroke"/>`;
+      g+=`<polygon points="${(x).toFixed(2)},${(y-z).toFixed(2)} ${(x+z).toFixed(2)},${y.toFixed(2)} ${x.toFixed(2)},${(y+z).toFixed(2)} ${(x-z).toFixed(2)},${y.toFixed(2)}" fill="${col}" stroke="#04060e" stroke-width="${(0.8*invS).toFixed(2)}" opacity="${dim?0.35:1}"/>`;
+      if(showLbl && !dim && (sel || !many)){
+        const tn=nodeById(a.route.to), fs=(8*invS).toFixed(2);
+        g+=`<text x="${(x+6*invS).toFixed(2)}" y="${(y-4*invS).toFixed(2)}" font-size="${fs}" fill="${col}" fill-opacity="0.85" style="font-family:var(--mono,monospace)${sel?';font-weight:700':''}">${eh(a.name+' · '+String(a.route.good||'').replace('Common ','')+' → '+(tn?(tn.label||tn.name):a.route.to))}</text>`;
+      }
+    });
+    g+='</g>';
+    return g;
   }
 
   // ── Fit / zoom (transform maths mirror the prototype) ──────────────────
@@ -449,6 +552,8 @@ const RealMap = (function(){
       });
       anyOpen=open.length>0;
     }
+    // NPC trader convoys ride on top at every zoom (guarded — econ is a later module).
+    try{ out+=drawTraders(invS,s); }catch(e){}
 
     scene.innerHTML=out;
     updateHotbar((sizeF>0.35 && focusNode) ? focusNode : null);   // planet hotbar for the focused system
@@ -509,7 +614,7 @@ const RealMap = (function(){
       }
       if(bd.hook && em>0.4){ const fo=(12*invS).toFixed(2); s2+=`<text x="${(px+bd.r+0.4).toFixed(2)}" y="${(py-bd.r).toFixed(2)}" font-size="${fo}" fill="#E8A020" style="font-weight:700" pointer-events="none">!</text>`; }
       if(showPlanetLabels){ const fs=(8.5*invS).toFixed(2);
-        s2+=`<text x="${px.toFixed(2)}" y="${(py+bd.r+7*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="${bd.hook?'#E8A020':'#93a0bd'}" style="font-family:var(--mono,monospace)" pointer-events="none">${eh(bd.name)}</text>`; }
+        s2+=`<text x="${px.toFixed(2)}" y="${(py+bd.r+7*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="${bd.hook?'#E8A020':'#93a0bd'}" style="font-family:var(--mono,monospace)" pointer-events="none">${eh(bd.name)}${bd.dock?' ⚓':''}</text>`; }
       return s2;
     }
     for(const P of planets){ if(P.depth<0) g+=planetSVG(P); }   // far side, behind the star
@@ -519,6 +624,23 @@ const RealMap = (function(){
     g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(sr*1.7).toFixed(2)}" fill="${sys.star.col}" opacity="0.18" pointer-events="none"/>`;
     g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${sr.toFixed(2)}" fill="${sys.star.col}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
     for(const P of planets){ if(P.depth>=0) g+=planetSVG(P); }  // near side, in front
+    // ── Docked traders: agents berthed at this system cluster around the dock
+    //    anchor (the tradersDock planet, or the star when none is flagged),
+    //    slowly circling so a busy port visibly bustles. Guarded — js/90 later. ──
+    if(tradersOn && sizeF>0.3){ try{
+      if(econReady()){
+        const nowT=econNow();
+        const here=econAgents().filter(a=>a.pos===n.id && agentDocked(a,nowT));
+        if(here.length){
+          const d=dockAnchor(n,t);
+          if(d) here.forEach((a,i)=>{
+            const ang=i*2.4 + t*0.1, rad=d.r+0.9+0.38*(i%3);
+            const mx=d.x+Math.cos(ang)*rad, my=d.y+Math.sin(ang)*rad*0.55, z2=0.42;
+            g+=`<polygon points="${mx.toFixed(2)},${(my-z2).toFixed(2)} ${(mx+z2).toFixed(2)},${my.toFixed(2)} ${mx.toFixed(2)},${(my+z2).toFixed(2)} ${(mx-z2).toFixed(2)},${my.toFixed(2)}" fill="#f4d35e" stroke="#04060e" stroke-width="0.12" opacity="0.92" pointer-events="none"><title>${at((a.name||'Trader')+' — docked')}</title></polygon>`;
+          });
+        }
+      }
+    }catch(e){} }
     // ── Jump arrows: one per GX_LANES lane touching this system; tap to travel ──
     if(em>0.6 && sizeF>0.55){
       laneNeighbours(n.id).forEach(cid=>{
@@ -548,7 +670,7 @@ const RealMap = (function(){
     const sys=adaptSystem(n);
     const bodiesHtml=sys.bodies.length
       ? '<div class="real-card-bodies">'+sys.bodies.map(b=>
-          `<div class="rcb"><i style="background:${b.col}"></i>${eh(b.name)} — ${eh(b.type)}${b.hook?' <span style="color:#E8A020">★</span>':''}</div>`).join('')+'</div>'
+          `<div class="rcb"><i style="background:${b.col}"></i>${eh(b.name)} — ${eh(b.type)}${b.dock?' <span title="Traders dock here">⚓</span>':''}${b.hook?' <span style="color:#E8A020">★</span>':''}</div>`).join('')+'</div>'
       : '<div class="real-card-bodies"><span class="rcb-none">No bodies charted yet.</span></div>';
     el.innerHTML=
       `<h2><span class="real-swatch" style="background:${fac.color}"></span>${eh(n.label||n.name)}</h2>`+
@@ -577,6 +699,7 @@ const RealMap = (function(){
         +(belt?'':'<div class="real-dc-lbl">UWP</div><input data-f="uwpString" value="'+at(raw.uwpString||'')+'">'
           +'<div class="real-dc-lbl">Diameter</div><input data-f="diameter" value="'+at(raw.diameter||'')+'">')
         +'<label class="real-dc-chk"><input type="checkbox" data-f="hook" '+(raw.hook?'checked':'')+'> Adventure hook</label>'
+        +'<label class="real-dc-chk"><input type="checkbox" data-f="tradersDock" '+(raw.tradersDock?'checked':'')+'> ⚓ Traders dock here</label>'
         +'<div class="real-dc-lbl">Description (players)</div><textarea data-f="desc">'+eh(raw.desc||'')+'</textarea>'
         +'<div class="real-dc-lbl">Read-aloud</div><textarea data-f="readAloud">'+eh(raw.readAloud||'')+'</textarea>'
         +'<div class="real-dc-lbl">Referee note</div><textarea data-f="refNote">'+eh(raw.refNote||'')+'</textarea>';
@@ -584,6 +707,7 @@ const RealMap = (function(){
     let h='<div class="real-dc-hd"><span class="real-dc-dot" style="background:'+at(bd.col||'#888')+'"></span><span>'+eh(raw.name||bd.name)+(raw.hook?' <span style="color:#E8A020">★</span>':'')+'</span>'+close+'</div>';
     h+='<div class="real-dc-type">'+eh(raw.type||'')+'</div>';
     if(!belt && (raw.uwpString||raw.diameter)) h+='<div class="real-dc-stat">'+eh(raw.uwpString||'')+((raw.uwpString&&raw.diameter)?'  ·  ':'')+eh(raw.diameter||'')+'</div>';
+    if(raw.tradersDock) h+='<div class="real-dc-stat" style="color:#f4d35e">⚓ Traders dock here — NPC convoys berth at this body</div>';
     h+='<div class="real-dc-desc">'+(raw.desc?eh(raw.desc):'<span class="real-dc-muted">No survey notes yet.</span>')+'</div>';
     if(refOk()){   // referee-only content: never built into player markup
       if(raw.readAloud) h+='<div class="real-dc-note real-dc-ra ref-only">“'+eh(raw.readAloud)+'”</div>';
@@ -636,6 +760,11 @@ const RealMap = (function(){
       if(!bodyPropertyOverrides[sysId][bodyId]) bodyPropertyOverrides[sysId][bodyId]={};
       bodyPropertyOverrides[sysId][bodyId][field]=val;
       saveBodyPropertyOverrides();
+    }
+    // One dock per system: ticking "Traders dock here" un-flags every other
+    // body, through the shared helper the body editor uses (js/96 — guarded).
+    if(field==='tradersDock' && val && typeof clearOtherTraderDocks==='function'){
+      try{ clearOtherTraderDocks(sysId, bodyId); }catch(e){}
     }
     sysCache.delete(sysId); invalidate();
   }
@@ -733,7 +862,7 @@ const RealMap = (function(){
       const belt=bd.kind==='belt', active=(selectedBody===bd.id)?' active':'';
       const style=belt?'':`background-color:${at(bd.col)}`+((bd.texUrl&&_texOk[bd.texUrl])?`;background-image:url(${at(bd.texUrl)})`:'');
       const short=(bd.name||'').replace(node.label||node.name||'','').trim()||bd.name;
-      return `<div class="real-pi${belt?' belt':''}${active}" data-body="${at(bd.id)}" title="${at(bd.name+' — '+(bd.type||''))}"><div class="real-pi-disc" style="${style}"></div><div class="real-pi-lb">${eh(short)}</div></div>`;
+      return `<div class="real-pi${belt?' belt':''}${active}" data-body="${at(bd.id)}" title="${at(bd.name+' — '+(bd.type||'')+(bd.dock?' · traders dock here':''))}"><div class="real-pi-disc" style="${style}"></div><div class="real-pi-lb">${eh(short)}${bd.dock?' ⚓':''}</div></div>`;
     }).join('');
     bar.classList.add('show');
   }
@@ -832,7 +961,7 @@ const RealMap = (function(){
   // Hex-side data changed (system CRUD, lanes, paint, faction edits, polls,
   // redaction toggles) — every such path funnels through HX.refresh(), which
   // calls this hook. Rebuild the derived layers lazily on the next render.
-  function refresh(){ layoutDirty=true; facDirty=true; sysCache.clear(); dcRev++; invalidate(); }
+  function refresh(){ layoutDirty=true; facDirty=true; sysCache.clear(); tradePathCache.clear(); dcRev++; invalidate(); }
 
   // ── Body-view return seam: armed when the datacard opens the classic body
   //    view, claimed by js/30's up-navigation so "back" lands on THIS map
@@ -867,6 +996,8 @@ const RealMap = (function(){
   window.realResetView=function(){ extCam=false; tween=null; hideCard(); selectedNode=null; selectedBody=null; fit(); };
   window.realToggleRegions=function(){ regionsOn=!regionsOn;
     const b=document.getElementById('real-regions'); if(b) b.classList.toggle('off',!regionsOn); invalidate(); };
+  window.realToggleTraders=function(){ tradersOn=!tradersOn;
+    const b=document.getElementById('real-traders'); if(b) b.classList.toggle('off',!tradersOn); invalidate(); };
 
   return { mode:()=>modeVal, setMode, onGalaxyEnter, refresh, invalidate, getCamera, setCamera, claimBodyReturn, clearBodyReturn };
 })();
