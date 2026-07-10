@@ -2429,6 +2429,15 @@ function dockedTradersSectionHTML(nodeId){
     return b.charAt(0).toUpperCase()+b.slice(1);
   };
   let h = `<div class="s-sec ref-only"><div class="s-sec-lbl" style="color:#5f87c9">🚢 Docked Traders <span style="color:var(--tx1);font-weight:400">· referee</span></div>`;
+  // Berth line: the body flagged "Traders dock here" (tradersDock — set in the
+  // body editor / REAL-map datacard). That's where the REAL map parks these
+  // ships; unflagged systems berth at the star, so nothing is shown.
+  try {
+    const nd = (typeof GX_MAP!=='undefined' && GX_MAP[nodeId]) || null;
+    const sysId = (nd && nd.systemId) || nodeId;
+    const db = (typeof effectiveBodies==='function' ? effectiveBodies(sysId) : []).find(b => b.tradersDock && !b.isStar);
+    if(db) h += `<div style="font-size:11px;color:#f4d35e;margin-bottom:4px">⚓ Berth: <b>${esc(db.name)}</b></div>`;
+  } catch(e){}
   if(!docked.length){
     h += `<div style="font-size:11px;color:var(--tx1)">No traders docked here${inbound?` · <b style="color:var(--tx0)">${inbound}</b> inbound`:''}.</div>`;
   } else {
