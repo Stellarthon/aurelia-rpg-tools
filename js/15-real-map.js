@@ -189,9 +189,9 @@ const RealMap = (function(){
     {f:'volcanic-05.jpg',c:'volcanic',o:'Volcanic 05 (Diffuse 4k)_1920x1080_1920x1080.png'},
     {f:'volcanic-06.jpg',c:'volcanic',o:'Volcanic 06 (Diffuse 4k)_1920x1080_1920x1080.png'},
   ];
-  // Preload once per unique URL: an <image> is only ever emitted for a texture
-  // confirmed loaded, so the per-frame scene rebuild never re-requests a
-  // missing file and never shows a broken tile.
+  // Preload once per unique URL: texture markup is only ever emitted for a
+  // texture confirmed loaded, so the per-frame scene rebuild never re-requests
+  // a missing file and never shows a broken tile.
   const _texOk={};
   function preloadTexture(url){
     if(url in _texOk) return;
@@ -200,6 +200,32 @@ const RealMap = (function(){
     im.onload =()=>{ _texOk[url]=true; invalidate(); };
     im.onerror=()=>{ /* leave false → never rendered → procedural fallback */ };
     im.src=url;
+  }
+  // Textures paint via <pattern> defs living OUTSIDE the innerHTML-swapped
+  // scene group. An <image> rebuilt inside the scene every animation frame
+  // re-rasterises asynchronously, so big textured planets blinked once open
+  // (the ~14× screen flicker); a persistent pattern keeps ONE decoded image
+  // alive for the session and per-frame markup only references its id. It
+  // also ends the duplicate-clipPath hazard when two bodies round to the
+  // same orbit slot. objectBoundingBox units scale the tile to any disc.
+  const SVG_NS='http://www.w3.org/2000/svg', XLINK_NS='http://www.w3.org/1999/xlink';
+  let _texDefs=null; const _texPatIds={};
+  function texPatternId(url){
+    if(_texPatIds[url]) return _texPatIds[url];
+    if(!svg) return null;
+    if(!_texDefs){ _texDefs=document.createElementNS(SVG_NS,'defs'); svg.insertBefore(_texDefs, svg.firstChild); }
+    const pid='real-pat-'+url.replace(/[^A-Za-z0-9_-]/g,'-');
+    const pat=document.createElementNS(SVG_NS,'pattern');
+    pat.setAttribute('id',pid);
+    pat.setAttribute('patternContentUnits','objectBoundingBox');
+    pat.setAttribute('width','1'); pat.setAttribute('height','1');
+    const im=document.createElementNS(SVG_NS,'image');
+    im.setAttribute('href',url); im.setAttributeNS(XLINK_NS,'xlink:href',url);
+    im.setAttribute('width','1'); im.setAttribute('height','1');
+    im.setAttribute('preserveAspectRatio','xMidYMid slice');
+    pat.appendChild(im); _texDefs.appendChild(pat);
+    _texPatIds[url]=pid;
+    return pid;
   }
   function texCategoryOf(b, kind){
     if(typeof defaultTextureCategory==='function') return defaultTextureCategory(b);
@@ -604,9 +630,10 @@ const RealMap = (function(){
       s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(bd.r+0.5).toFixed(2)}" fill="${bd.col}" opacity="0.10" data-body="${at(bd.id)}" data-node="${at(n.id)}"/>`;
       s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}" fill="${bd.col}" data-body="${at(bd.id)}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
       if(bd.texUrl && _texOk[bd.texUrl] && sizeF>0.5 && em>0.55){
-        const tid='real-tex-'+n.id+'-'+bd.p;
-        s2+=`<clipPath id="${tid}"><circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}"/></clipPath>`;
-        s2+=`<image href="${at(bd.texUrl)}" xlink:href="${at(bd.texUrl)}" x="${(px-bd.r).toFixed(2)}" y="${(py-bd.r).toFixed(2)}" width="${(bd.r*2).toFixed(2)}" height="${(bd.r*2).toFixed(2)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${tid})" pointer-events="none"/>`;
+        const pid=texPatternId(bd.texUrl);
+        // Opacity ramp so pinch jitter around the sizeF gate can't strobe the texture.
+        if(pid){ const texOp=Math.min(1,(sizeF-0.5)/0.12);
+          s2+=`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${bd.r.toFixed(2)}" fill="url(#${pid})" fill-opacity="${texOp.toFixed(2)}" pointer-events="none"/>`; }
       }
       s2+=`<circle cx="${(px-bd.r*0.32).toFixed(2)}" cy="${(py-bd.r*0.32).toFixed(2)}" r="${(bd.r*0.55).toFixed(2)}" fill="#ffffff" opacity="0.14" pointer-events="none"/>`;
       if(bd.ring){
