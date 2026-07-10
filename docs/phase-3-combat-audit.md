@@ -151,12 +151,35 @@ range/initiative/hazard referencing them.
     blips are click-to-target (prefills the action selects); fog-safe (players
     only ever plot revealed ships). 10 radar tests pass.
 
+- **Phase 6 — RAW missile salvos ✅ (v52).** Replaced the single-missile
+  pending-attack model (to-hit pre-rolled at launch; point defence purely
+  cosmetic) with the verified 2022-core salvo rules (printed pp. 171–173):
+  missiles launched at one target in a round form/merge into a salvo (`salvos[]`
+  on the encounter; old `pendingMissiles` rows are migrated to size-1 salvos);
+  nothing rolls at launch; the salvo makes ONE attack roll at impact — no
+  Gunner, no range DM, +1 per remaining missile, Smart TL DM (max(missile TL,
+  ship TL) − target TL, clamped +1…+6 — new `tl` field on the ship model),
+  DM−2 if Distant-launched; damage rolls once, minus armour, ×Effect capped at
+  salvo size (Effect never added); inert after 10 rounds. Counterplay:
+  Electronic Warfare (Difficult 10+, Effect = missiles destroyed, once per
+  salvo per round), point defence rewritten (only in the impact round, Effect =
+  missiles removed, +1 twin / +2 triple lasers, one attempt per gunner —
+  crew-count enforcement stays table-side), flee (+1 round), and evasive action
+  fixed to RAW (−Pilot per dodged attack, one dodge per unspent Thrust,
+  consumed per attack — replaces the flagged `dodgePerThrust` tunable;
+  `pointDefenceStep` also retired). Missile ammo now tracked per mount with a
+  Reload action. UI: an "Inbound Missiles" strip (referee countermeasure
+  controls; read-only fog-safe rows for players), salvo-size + stealth-launch
+  controls in the Attack phase, a missiles-inbound warning in the player
+  heads-up view, and launch/impact FX. Detection stays a table-side roll — the
+  referee mirrors it with a per-salvo detected flag; undetected salvos and
+  their log lines are stripped by the player redactor. 54 harness assertions.
+
 ## 6. Open questions (non-blocking for Phase 1/2)
 
 - **Phase 4 (answered, but confirm DMs):** hazard set shipped as asteroid /
   nebula / gravity well / debris / dust-glare. Default DMs in `COMBAT_HAZARDS`
   are best-effort and flagged — confirm/adjust against your table.
 - **Phase 5 (answered):** abstract/diagrammatic chosen and shipped.
-- **Phase 3 refinement (still open):** per-stat fog (e.g. reveal a ship but hide
-  its weapon loadout) — needed, or is whole-ship reveal enough? Currently reveal
-  is whole-ship.
+- **Phase 3 refinement (answered):** per-stat fog shipped as blip-only reveal
+  (`statsHidden`); Phase 6 extends fog to salvo detection.
