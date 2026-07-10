@@ -42,7 +42,7 @@ function makeEncounter(){
     ships: [ makeCombatShip({ id:'player', ref:'player', revealed:true, name: shipState.name }) ],
     ranges: {},                // { pairKey(aId,bId): bandIndex }
     hazards: [],               // [{ id, kind, name, dm, note, active }] — Phase 4
-    pendingMissiles: [],       // [{ attackerId, targetId, weapon, effect, impactRound, name }] — in flight
+    salvos: [],                // in-flight missile salvos — see launchSalvo() for the shape
     log: [],                   // append-only battle log (Phase 2 fills it)
     createdAt: Date.now()
   };
@@ -62,9 +62,9 @@ function makeCombatShip(o){
     stats: o.ref === 'player' ? null : makeShipStats(o.stats || {}),
     // live combat state
     thrustAllocated: 0,
-    dodge: false,
+    dodge: 0,                           // evasive action: attacks it can still dodge this round (each at −Pilot)
     sensorLocks: {},                    // { targetShipId: true }
-    pointDefenceUsed: 0,                // cumulative PD penalty counter this round
+    pointDefenceUsed: 0,                // PD attempts this round (one per gunner is the RAW limit — table-side)
     initiativeScore: 0,
     pendingInitiativeAdj: 0,            // Leadership adjustment, applied at next round start
     status: 'active',                   // 'active' | 'disabled' | 'destroyed'
@@ -88,10 +88,32 @@ function getRangeBand(aId, bId){
 }
 
 // ── Persistence (referee writes; players read) ─────────────────────────────
+// Pre-v52 encounters carried single-missile `pendingMissiles` with the to-hit
+// pre-rolled at launch. RAW missiles fly as SALVOS rolled at impact, so convert
+// any stragglers to size-1 salvos (they re-roll at impact — additive, lossless
+// for everything except the discarded pre-roll).
+function migrateCombatEncounter(raw){
+  if(!raw) return raw;
+  if(!Array.isArray(raw.salvos)) raw.salvos = [];
+  if(Array.isArray(raw.pendingMissiles) && raw.pendingMissiles.length){
+    raw.pendingMissiles.forEach(m => raw.salvos.push({
+      id: 'sv_' + Math.random().toString(36).slice(2, 8),
+      attackerId: m.attackerId, targetId: m.targetId,
+      name: m.name || 'Missile', damage: (m.weapon && m.weapon.damage) || '4D',
+      size: 1, smart: true, tl: 0,
+      launchRound: raw.round || 0, band: 'Long', distant: false,
+      impactRound: m.impactRound || ((raw.round || 0) + 1),
+      detected: true, ewRound: -1
+    }));
+  }
+  delete raw.pendingMissiles;
+  return raw;
+}
+
 async function loadCombatEncounter(){
   try {
     const res = await supaStorage.get('combat-encounter', true);
-    const raw = res.value != null ? JSON.parse(res.value) : null;
+    const raw = migrateCombatEncounter(res.value != null ? JSON.parse(res.value) : null);
     // Players only ever hold the redacted view; the referee holds the full one.
     combatEncounter = (raw && !isReferee()) ? redactEncounterForPlayer(raw) : raw;
   } catch(e){ combatEncounter = null; }
@@ -130,8 +152,12 @@ function redactEncounterForPlayer(enc){
   copy.ranges = prunedRanges;
   copy.initiative = (copy.initiative || []).filter(id => visibleIds.has(id));
   copy.hazards = (copy.hazards || []).filter(h => h.active);
-  // In-flight missiles that involve a hidden ship must not leak to players.
-  copy.pendingMissiles = (copy.pendingMissiles || []).filter(m => visibleIds.has(m.attackerId) && visibleIds.has(m.targetId));
+  // In-flight missile salvos: hide any that involve a hidden ship, and any the
+  // target's crew has not yet detected (the RAW launch-detection check is rolled
+  // at the table; the referee mirrors its outcome on the salvo's flag).
+  copy.salvos = (copy.salvos || []).filter(sv =>
+    visibleIds.has(sv.attackerId) && visibleIds.has(sv.targetId) && sv.detected !== false);
+  const hiddenSalvoIds = new Set((enc.salvos || []).filter(sv => sv.detected === false).map(sv => sv.id));
   // Battle log: drop any entry that references a ship the player can't see —
   // by meta id OR by the hidden ship's NAME appearing in the free text — so the
   // log itself never betrays an unrevealed contact's existence.
@@ -147,6 +173,8 @@ function redactEncounterForPlayer(enc){
     const refs = [m.shipId, m.targetId, m.attackerId, m.operatorId, m.defenderId, m.aId, m.bId].filter(Boolean);
     if(!refs.every(id => visibleIds.has(id))) return false;
     if(refs.some(id => foggedIds.has(id))) return false;
+    if(m.salvoId && hiddenSalvoIds.has(m.salvoId)) return false; // undetected launch — no log tell
+
     const text = e.text || '';
     return !hiddenNames.some(n => text.indexOf(n) !== -1);
   });
@@ -189,7 +217,7 @@ async function pollCombatEncounter(){
   try {
     const res = await supaStorage.get('combat-encounter', true);
     if(res.ok){
-      const raw = res.value != null ? JSON.parse(res.value) : null;
+      const raw = migrateCombatEncounter(res.value != null ? JSON.parse(res.value) : null);
       const fresh = raw ? redactEncounterForPlayer(raw) : null;
       if(JSON.stringify(fresh) !== JSON.stringify(combatEncounter)){
         combatEncounter = fresh;
@@ -209,12 +237,10 @@ async function pollCombatEncounter(){
 // battle log is the authoritative record. No combat visuals yet (Phase 3).
 //
 // Rules provenance: every fixed number MgT2e core states is in MGT2E below, with
-// the Table reference. A few values are interpretation-dependent across the 2016
-// / 2022 printings (sensor-lock DM, per-range attack DM, dodge/PD magnitudes) —
-// those are isolated in MGT2E.tunables and flagged so the referee can correct
-// one place rather than hunt through logic. Sources verified against the
-// Traveller SRD and Core Rulebook tables (Table 207 Thrust; Sustained Damage;
-// Critical Hits Location 2D table; missile travel-time by band).
+// the Table reference, verified against the Core Rulebook Update 2022 (missile
+// salvos, point defence and evasive action from printed pp. 171–173). The few
+// remaining interpretation-dependent values live in MGT2E.tunables so the
+// referee can correct one place rather than hunt through logic.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MGT2E = {
@@ -229,8 +255,17 @@ const MGT2E = {
                   7:'hull', 8:'mdrive', 9:'cargo', 10:'jdrive', 11:'crew', 12:'bridge' },
 
   // Missile travel time (rounds to impact) by the range band at launch (verified).
-  // Outside Close, missiles gain the Smart trait. Listed = rounds AFTER launch.
+  // Listed = rounds AFTER launch; missiles LOSE the Smart trait at Adjacent/Close.
   missileTravel: { Adjacent:0, Close:0, Short:0, Medium:0, Long:1, 'Very Long':4, Distant:10 },
+
+  // Missile salvo rules (2022 core, printed pp. 172–173 — all verified):
+  salvo: {
+    inertAfterRounds: 10,   // a missile that hasn't reached its target in 10 rounds runs out of fuel
+    distantLaunchDM: -2,    // salvos launched at Distant range attack at DM−2
+    ewDifficulty: 10,       // Electronic Warfare vs a salvo = Difficult (10+) Electronics (sensors); Effect = missiles destroyed; once per salvo per round
+    smartMinDM: 1,          // Smart trait: DM = max(missile TL, launching-ship TL) − target TL,
+    smartMaxDM: 6           //   clamped to +1…+6 (p. 79 + p. 173)
+  },
 
   // Sustained Damage: each time cumulative damage crosses a 10%-of-max-Hull
   // threshold, a Severity-1 critical strikes a rolled location (verified, 2022).
@@ -247,9 +282,10 @@ const MGT2E = {
     },
     weaponAttackDM: {           // 2022 core to-hit DMs by weapon type; a mount's own
       'beam-laser':4, 'pulse-laser':2   // numeric `attackDM` field overrides these
-    },
-    pointDefenceStep: -1,       // cumulative DM per extra PD attempt this round (1st = 0)
-    dodgePerThrust: -1          // attacker DM per Thrust the target spends dodging (cap = pilot skill)
+    }
+    // (dodge and point defence are no longer tunables — both now follow the
+    //  verified 2022 text: evasive action = −Pilot per dodged attack, and PD
+    //  removes Effect missiles from a salvo, +1 twin / +2 triple lasers.)
   }
 };
 
@@ -363,27 +399,234 @@ function newCombatRound(){
       .sort((a, b) => b.initiativeScore - a.initiativeScore).map(s => s.id);
   }
   // Reset per-round state.
-  combatEncounter.ships.forEach(s => { s.thrustAllocated = 0; s.dodge = false; s.pointDefenceUsed = 0; });
+  combatEncounter.ships.forEach(s => { s.thrustAllocated = 0; s.dodge = 0; s.pointDefenceUsed = 0; });
   combatLog('system', `Round ${combatEncounter.round} — Manoeuvre phase.`);
-  // Resolve any missiles arriving this round (impact happens before actions).
-  resolvePendingMissiles();
+  // Missile salvos: expire inert ones, auto-resolve any the referee left overdue,
+  // and flag the ones whose attack roll falls due this round.
+  salvosOnRoundStart();
   const order = combatEncounter.initiative.filter(id => { const s = combatShipById(id); return s && s.status !== 'destroyed'; });
   combatEncounter.activeShipId = order[0] || null;
   saveCombatEncounter();
 }
 
-// Resolve in-flight missiles whose impact round has arrived (Long+ launches).
-function resolvePendingMissiles(){
-  if(!combatEncounter || !combatEncounter.pendingMissiles) return;
-  const due = combatEncounter.pendingMissiles.filter(m => m.impactRound <= combatEncounter.round);
-  combatEncounter.pendingMissiles = combatEncounter.pendingMissiles.filter(m => m.impactRound > combatEncounter.round);
-  due.forEach(m => {
-    const tgt = combatShipById(m.targetId);
-    if(!tgt || tgt.status === 'destroyed') return; // target gone — missile is wasted
-    const dmgInfo = applyCombatDamage(m.targetId, m.weapon, m.effect);
-    combatLog('attack', `${m.name || 'Missile'} from ${(combatShipById(m.attackerId)||{}).name || '?'} impacts ${tgt.name}${dmgInfo ? `, ${dmgInfo.summary}` : ''}.`,
-      { attackerId: m.attackerId, targetId: m.targetId, weapon: m.name, hit: true, travel: 0, damage: dmgInfo });
+// ── Missile salvos (2022 core pp. 172–173) ───────────────────────────────────
+// A salvo = all missiles one ship launches at one target in the same round
+// (different missile types = separate salvos). Nothing is rolled at launch —
+// the salvo makes ONE attack roll when it arrives: no Gunner, no range DM,
+// +1 per remaining missile, Smart TL DM, DM−2 if launched at Distant; damage is
+// rolled once, armour subtracted, then multiplied by Effect capped at the
+// remaining salvo size (attack Effect is NOT added to the dice). In between,
+// the defenders whittle the salvo down with Electronic Warfare and, at the last
+// moment, point defence.
+function combatSalvoById(id){ return combatEncounter ? (combatEncounter.salvos || []).find(sv => sv.id === id) : null; }
+
+// Ammo bookkeeping: a mount with ammoMax > 0 tracks its remaining `ammo`
+// (missiles/sand canisters); ammoMax 0 = untracked (energy weapons).
+function wpnAmmoTracked(w){ return Number(w && w.ammoMax) > 0; }
+function wpnAmmoLeft(w){
+  if(!wpnAmmoTracked(w)) return Infinity;
+  const a = Number(w.ammo);
+  return (w.ammo == null || isNaN(a)) ? Number(w.ammoMax) : Math.max(0, a);
+}
+
+function launchSalvo(attackerId, targetId, weapon, count, stealth){
+  if(!isReferee() || !combatEncounter) return null;
+  const atk = combatShipById(attackerId), tgt = combatShipById(targetId);
+  if(!atk || !tgt || !weapon) return null;
+  const aSt = combatStatsOf(atk);
+  const band = getRangeBand(attackerId, targetId) || 'Long';
+  const left = wpnAmmoLeft(weapon);
+  if(left <= 0){
+    combatLog('attack', `${atk.name}: ${weapon.name} is out of missiles — reload first.`, { attackerId });
+    saveCombatEncounter();
+    return null;
+  }
+  const n = Math.max(1, Math.min(Number(count) || 1, left === Infinity ? (Number(count) || 1) : left));
+  if(left !== Infinity){
+    weapon.ammo = left - n;
+    if(atk.ref === 'player') saveShipState();  // player weapons live on shipState
+  }
+  const travel = MGT2E.missileTravel[band] || 0;
+  // RAW p. 173: "missiles almost always have the Smart trait" — treated as
+  // standard for missile mounts; lost when launched at Adjacent/Close range.
+  const smart = band !== 'Adjacent' && band !== 'Close';
+  const tl = Math.max(Number(weapon.tl) || 0, (aSt && Number(aSt.tl)) || 0);
+  // Same attacker, same target, same missile type, same round → one salvo.
+  let sv = (combatEncounter.salvos || []).find(x =>
+    x.attackerId === attackerId && x.targetId === targetId &&
+    x.launchRound === combatEncounter.round && x.name === (weapon.name || 'Missiles'));
+  if(sv){
+    sv.size += n;
+    sv.tl = Math.max(sv.tl, tl);
+    combatLog('attack', `${atk.name} adds ${n} missile(s) to the salvo tracking ${tgt.name} — now ${sv.size}.`,
+      { salvoLaunch: true, salvoId: sv.id, attackerId, targetId, size: sv.size });
+  } else {
+    sv = {
+      id: 'sv_' + Math.random().toString(36).slice(2, 8),
+      attackerId, targetId,
+      name: weapon.name || 'Missiles', damage: weapon.damage || '4D',
+      size: n, smart, tl,
+      launchRound: combatEncounter.round, band, distant: band === 'Distant',
+      impactRound: combatEncounter.round + travel,
+      detected: !stealth,   // RAW detection is a table-side Electronics (sensors) roll — the referee mirrors it here
+      ewRound: -1
+    };
+    combatEncounter.salvos = combatEncounter.salvos || [];
+    combatEncounter.salvos.push(sv);
+    combatLog('attack', `${atk.name} launches a missile salvo (${n}) at ${tgt.name} — ${band} range, impact ${travel ? `in ${travel} round(s)` : 'this round'}.`,
+      { salvoLaunch: true, salvoId: sv.id, attackerId, targetId, size: n, band, travel });
+  }
+  saveCombatEncounter();
+  return sv.id;
+}
+
+// The salvo's single attack roll (Attack step of its impact round).
+function resolveSalvoImpact(salvoId, auto){
+  if(!combatEncounter) return null;
+  const sv = combatSalvoById(salvoId); if(!sv) return null;
+  combatEncounter.salvos = combatEncounter.salvos.filter(x => x.id !== sv.id);
+  const atkName = (combatShipById(sv.attackerId) || {}).name || '?';
+  const tgt = combatShipById(sv.targetId);
+  if(!tgt || tgt.status === 'destroyed'){
+    combatLog('system', `${sv.name} salvo from ${atkName} finds nothing — target gone.`, { salvoId: sv.id, attackerId: sv.attackerId });
+    saveCombatEncounter();
+    return null;
+  }
+  if(sv.size <= 0){
+    combatLog('system', `${sv.name} salvo from ${atkName} neutralised before impact.`, { salvoId: sv.id, attackerId: sv.attackerId, targetId: sv.targetId });
+    saveCombatEncounter();
+    return null;
+  }
+  const tSt = combatStatsOf(tgt);
+  // RAW impact modifiers: NO Gunner, NO range DM, NO sensor lock — missiles
+  // remaining, Smart, Distant-launch penalty, then "other modifiers as normal"
+  // (target size, evasive action, environment).
+  const dm = [{ label: 'Missiles in salvo', value: sv.size }];
+  if(sv.smart){
+    const tTL = (tSt && Number(tSt.tl)) || 0;
+    const sdm = (sv.tl > 0 && tTL > 0)
+      ? Math.max(MGT2E.salvo.smartMinDM, Math.min(MGT2E.salvo.smartMaxDM, sv.tl - tTL))
+      : MGT2E.salvo.smartMinDM;   // TLs unset → the RAW floor of +1
+    dm.push({ label: 'Smart', value: sdm });
+  }
+  if(sv.distant) dm.push({ label: 'Distant launch', value: MGT2E.salvo.distantLaunchDM });
+  const sizeDM = COMBAT_SHIP_SIZE_DM(tSt && tSt.tonnage);
+  if(sizeDM) dm.push({ label: 'Target size', value: sizeDM });
+  if(Number(tgt.dodge) > 0){
+    const tPilot = (tSt && tSt.crewSkills && Number(tSt.crewSkills.pilot)) || 0;
+    if(tPilot) dm.push({ label: 'Target evasive (−Pilot)', value: -tPilot });
+    tgt.dodge -= 1;   // the reaction is spent even if Pilot 0
+  }
+  const hazDM = combatHazardAttackDM();
+  if(hazDM) dm.push({ label: 'Environment', value: hazDM });
+  const total = dm.reduce((s, d) => s + d.value, 0);
+  const bd = { band: sv.band, locked: false, weapon: { name: sv.name, type: 'missile' }, difficulty: MGT2E.tunables.attackDifficulty, dm, total };
+  const r = combatRoll2D();
+  const roll = r.sum + total;
+  const effect = roll - bd.difficulty;
+  const hit = effect >= 0;
+  let dmgInfo = null;
+  if(hit){
+    const armour = (tSt && Number(tSt.armourRating)) || 0;
+    const raw = rollDiceExpr(sv.damage);
+    const mult = Math.max(0, Math.min(effect, sv.size));   // ×Effect, capped at remaining missiles; Effect NOT added to dice
+    const net = Math.max(0, raw - armour) * mult;
+    const res = applyNetDamage(sv.targetId, net, effect);
+    if(res){
+      const crits = res.crits.filter(Boolean);
+      const critTxt = crits.length ? ` + ${crits.length} critical(s): ${crits.map(c => `${c.location} sev ${c.severity}`).join(', ')}` : '';
+      dmgInfo = { raw, armour, dmg: net, mult, hull: res.hull, structure: res.structure, crits: res.crits,
+                  summary: `${net} damage (rolled ${raw} − ${armour} armour, ×${mult} missiles) → Hull ${res.hull}/${res.maxHull}${critTxt}` };
+    }
+  }
+  combatLog('attack',
+    `Missile salvo (${sv.size}) from ${atkName} strikes at ${tgt.name}: 2D ${r.sum} ${total >= 0 ? '+' : ''}${total} = ${roll} vs ${bd.difficulty} → ${hit ? `HIT (Effect ${effect})` : 'miss'}${dmgInfo ? `, ${dmgInfo.summary}` : (hit ? ' — no penetration (Effect 0)' : '')}${auto ? ' (auto-resolved)' : ''}.`,
+    { salvoImpact: true, salvoId: sv.id, attackerId: sv.attackerId, targetId: sv.targetId, dice: r, breakdown: bd, roll, effect, hit, damage: dmgInfo });
+  saveCombatEncounter();
+  return { roll, effect, hit, breakdown: bd, damage: dmgInfo };
+}
+
+// Round-start sweep: inert expiry, overdue auto-resolution, due-this-round flag.
+function salvosOnRoundStart(){
+  if(!combatEncounter || !(combatEncounter.salvos || []).length) return;
+  const rd = combatEncounter.round;
+  combatEncounter.salvos.slice().forEach(sv => {
+    if(rd - sv.launchRound >= MGT2E.salvo.inertAfterRounds){
+      combatEncounter.salvos = combatEncounter.salvos.filter(x => x.id !== sv.id);
+      combatLog('system', `${sv.name} salvo runs out of fuel and goes inert.`, { salvoId: sv.id, attackerId: sv.attackerId, targetId: sv.targetId });
+      return;
+    }
+    if(sv.impactRound < rd){ resolveSalvoImpact(sv.id, true); return; }   // referee skipped its impact round
+    if(sv.impactRound === rd){
+      combatLog('system', `☄ ${sv.name} salvo (${sv.size}) reaches ${(combatShipById(sv.targetId) || {}).name || '?'} this round — resolve it in the Attack step.`,
+        { salvoId: sv.id, attackerId: sv.attackerId, targetId: sv.targetId });
+    }
   });
+}
+
+// Electronic warfare vs a salvo in flight — Difficult (10+) Electronics
+// (sensors); Effect = missiles destroyed; a salvo can only be jammed once per
+// round no matter how many operators try (RAW p. 173).
+function ewJamSalvo(salvoId){
+  if(!isReferee() || !combatEncounter) return null;
+  const sv = combatSalvoById(salvoId); if(!sv) return null;
+  if(sv.ewRound === combatEncounter.round) return { ok: false, reason: 'salvo already subjected to EW this round' };
+  const def = combatShipById(sv.targetId); if(!def) return null;
+  const st = combatStatsOf(def);
+  const sensors = (st && st.crewSkills && Number(st.crewSkills.sensors)) || 0;
+  const sensorDM = (st && Number(st.sensorDM)) || 0;
+  const hazDM = combatHazardSensorDM();
+  sv.ewRound = combatEncounter.round;
+  const r = combatRoll2D();
+  const total = r.sum + sensors + sensorDM + hazDM;
+  const effect = total - MGT2E.salvo.ewDifficulty;
+  const removed = effect > 0 ? Math.min(effect, sv.size) : 0;
+  sv.size -= removed;
+  combatLog('action', `${def.name} electronic warfare vs the ${sv.name} salvo: 2D ${r.sum} + Sensors ${sensors} + DM ${sensorDM}${hazDM ? ` ${hazDM >= 0 ? '+' : ''}${hazDM} env` : ''} = ${total} vs ${MGT2E.salvo.ewDifficulty} → ${removed ? `${removed} missile(s) destroyed (${sv.size} remain)` : 'no effect'}.`,
+    { operatorId: def.id, salvoId: sv.id, ok: removed > 0, removed });
+  if(sv.size <= 0){
+    combatEncounter.salvos = combatEncounter.salvos.filter(x => x.id !== sv.id);
+    combatLog('system', `${sv.name} salvo destroyed — nothing left inbound.`, { salvoId: sv.id, targetId: sv.targetId });
+  }
+  saveCombatEncounter();
+  return { total, removed };
+}
+
+// Flee: the target burns away from the salvo, buying a round (referee adjudicates
+// the manoeuvre itself — this just moves the impact out).
+function salvoDelay(salvoId){
+  if(!isReferee() || !combatEncounter) return;
+  const sv = combatSalvoById(salvoId); if(!sv) return;
+  sv.impactRound += 1;
+  combatLog('manoeuvre', `${(combatShipById(sv.targetId) || {}).name || '?'} burns away from the ${sv.name} salvo — impact pushed to round ${sv.impactRound}.`,
+    { salvoId: sv.id, targetId: sv.targetId });
+  saveCombatEncounter();
+}
+function salvoToggleDetected(salvoId){
+  if(!isReferee() || !combatEncounter) return;
+  const sv = combatSalvoById(salvoId); if(!sv) return;
+  sv.detected = sv.detected === false;
+  if(sv.detected) combatLog('system', `Inbound missiles detected — ${sv.name} salvo (${sv.size}) tracking ${(combatShipById(sv.targetId) || {}).name || '?'}!`, { salvoId: sv.id, targetId: sv.targetId });
+  saveCombatEncounter();
+}
+function removeSalvo(salvoId){
+  if(!isReferee() || !combatEncounter) return;
+  combatEncounter.salvos = (combatEncounter.salvos || []).filter(x => x.id !== salvoId);
+  saveCombatEncounter();
+}
+
+// Reload a turret from the magazine — RAW: that turret makes no attacks in the
+// round spent reloading (enforcement is table-side, like crew counts).
+function reloadCombatWeapon(shipId, weaponId){
+  if(!isReferee() || !combatEncounter) return;
+  const s = combatShipById(shipId); if(!s) return;
+  const st = combatStatsOf(s); if(!st || !st.weapons) return;
+  const w = st.weapons.find(x => x.id === weaponId);
+  if(!w || !wpnAmmoTracked(w)) return;
+  w.ammo = Number(w.ammoMax) || 0;
+  if(s.ref === 'player') saveShipState();
+  combatLog('action', `${s.name} reloads ${w.name} (${w.ammo} loaded) — that turret makes no attacks this round.`, { shipId });
+  saveCombatEncounter();
 }
 
 // ── Referee: Manoeuvre phase — Thrust, range bands, dodge ────────────────────
@@ -426,10 +669,16 @@ function allocateThrust(shipId, n){
 function setDodge(shipId, thrustSpent){
   if(!isReferee() || !combatEncounter) return;
   const s = combatShipById(shipId); if(!s) return;
-  const st = combatStatsOf(s);
-  const pilot = (st && st.crewSkills && Number(st.crewSkills.pilot)) || 0;
-  s.dodge = Math.max(0, Math.min(pilot, Number(thrustSpent) || 0)); // dodge DM capped at Pilot skill
-  if(s.dodge > 0) combatLog('manoeuvre', `${s.name} evades (dodge ${s.dodge}).`, { shipId });
+  // RAW (2022 p. 171): each point of unspent Thrust lets the pilot dodge ONE
+  // attack; each dodged attack suffers a DM− equal to the Pilot skill. The
+  // engine consumes one dodge per incoming attack in order — re-set here if the
+  // pilot would rather save them.
+  s.dodge = Math.max(0, Number(thrustSpent) || 0);
+  if(s.dodge > 0){
+    const st = combatStatsOf(s);
+    const pilot = (st && st.crewSkills && Number(st.crewSkills.pilot)) || 0;
+    combatLog('manoeuvre', `${s.name} takes evasive action — can dodge ${s.dodge} attack(s) at −${pilot} each.`, { shipId });
+  }
   saveCombatEncounter();
 }
 
@@ -455,7 +704,10 @@ function buildAttackDM(attackerId, targetId, weapon){
   if(rdm) dm.push({ label: `Range (${band})`, value: rdm });
   const sizeDM = COMBAT_SHIP_SIZE_DM(tSt && tSt.tonnage);
   if(sizeDM) dm.push({ label: 'Target size', value: sizeDM });
-  if(tgt && tgt.dodge) dm.push({ label: 'Target dodging', value: MGT2E.tunables.dodgePerThrust * tgt.dodge });
+  if(tgt && Number(tgt.dodge) > 0){
+    const tPilot = (tSt && tSt.crewSkills && Number(tSt.crewSkills.pilot)) || 0;
+    if(tPilot) dm.push({ label: 'Target evasive (−Pilot)', value: -tPilot });
+  }
   const wcrit = (aSt && aSt.crits && Number(aSt.crits.weapons)) || 0; // weapons-system damage degrades fire
   if(wcrit) dm.push({ label: 'Weapon crit', value: -wcrit });
   const hazDM = combatHazardAttackDM();
@@ -469,42 +721,40 @@ function resolveAttack(attackerId, targetId, weaponId){
   if(!atk || !tgt) return null;
   const aSt = combatStatsOf(atk);
   const weapon = (aSt.weapons || []).find(w => w.id === weaponId) || (aSt.weapons || [])[0] || { name:'Weapon', type:'beam-laser', damage:'1D' };
+  // Missiles never make a direct attack roll — they fly as a salvo and roll at
+  // impact (uiFire passes the salvo size; other callers launch a single missile).
+  if(weapon.type === 'missile') return launchSalvo(attackerId, targetId, weapon, 1, false);
   const bd = buildAttackDM(attackerId, targetId, weapon);
+  if(Number(tgt.dodge) > 0) tgt.dodge -= 1;   // evasive action: the reaction is spent per attack
   const r = combatRoll2D();
   const roll = r.sum + bd.total;
   const effect = roll - bd.difficulty;
   const hit = effect >= 0;
-  // Missile timing (Smart outside Close); core impact is immediate at short ranges.
-  const travel = (weapon.type === 'missile') ? (MGT2E.missileTravel[bd.band] || 0) : 0;
-  let dmgInfo = null;
-  if(hit && travel === 0){
-    dmgInfo = applyCombatDamage(targetId, weapon, effect);
-  } else if(hit && travel > 0){
-    // Long-range missile: schedule the impact for a later round (resolved at
-    // round start) rather than dropping it.
-    combatEncounter.pendingMissiles = combatEncounter.pendingMissiles || [];
-    combatEncounter.pendingMissiles.push({ attackerId, targetId, weapon, effect, impactRound: combatEncounter.round + travel, name: weapon.name });
-  }
+  const dmgInfo = hit ? applyCombatDamage(targetId, weapon, effect) : null;
   combatLog('attack',
-    `${atk.name} fires ${weapon.name} at ${tgt.name}: 2D ${r.sum} ${bd.total>=0?'+':''}${bd.total} = ${roll} vs ${bd.difficulty} → ${hit?'HIT':'miss'}${hit?` (Effect ${effect})`:''}${travel?` — missile impacts in ${travel} round(s)`:''}${dmgInfo?`, ${dmgInfo.summary}`:''}.`,
-    { attackerId, targetId, weapon: weapon.name, dice: r, breakdown: bd, roll, effect, hit, travel, damage: dmgInfo });
+    `${atk.name} fires ${weapon.name} at ${tgt.name}: 2D ${r.sum} ${bd.total>=0?'+':''}${bd.total} = ${roll} vs ${bd.difficulty} → ${hit?'HIT':'miss'}${hit?` (Effect ${effect})`:''}${dmgInfo?`, ${dmgInfo.summary}`:''}.`,
+    { attackerId, targetId, weapon: weapon.name, dice: r, breakdown: bd, roll, effect, hit, damage: dmgInfo });
   saveCombatEncounter();
-  return { roll, effect, hit, breakdown: bd, travel, damage: dmgInfo };
+  return { roll, effect, hit, breakdown: bd, damage: dmgInfo };
 }
 
 // ── Damage → Hull → criticals (2022 core: Hull 0 = wrecked; Structure is an
 //    opt-in HOUSE overflow pool — see makeShipStats) ──────────────────────────
-function rollDamage(weapon, effect){
-  // Weapon damage is an editable dice expression on the mount (e.g. '2D', '3D6').
-  // Effect of the attack is added to damage (verified). No guessing on weapon
-  // damage values — they come from the referee-entered weapon stat.
-  const expr = String((weapon && weapon.damage) || '1D').toLowerCase();
-  const m = expr.match(/(\d+)\s*d(?:6)?\s*([+-]\s*\d+)?/);
+// Roll a referee-entered dice expression (e.g. '2D', '3D6', '4D+2') — the bare
+// dice total, no Effect. Salvo damage uses this directly (RAW: Effect multiplies
+// but is never added); direct-fire damage adds Effect via rollDamage below.
+function rollDiceExpr(expr){
+  const s = String(expr || '1D').toLowerCase();
+  const m = s.match(/(\d+)\s*d(?:6)?\s*([+-]\s*\d+)?/);
   let total = 0, dice = 1, mod = 0;
   if(m){ dice = parseInt(m[1], 10) || 1; mod = m[2] ? parseInt(m[2].replace(/\s/g,''), 10) : 0; }
   for(let i = 0; i < dice; i++) total += 1 + Math.floor(Math.random() * 6);
-  total += mod + (Number(effect) || 0);
-  return Math.max(0, total);
+  return Math.max(0, total + mod);
+}
+function rollDamage(weapon, effect){
+  // Effect of the attack is added to direct-fire damage (verified). No guessing
+  // on weapon damage values — they come from the referee-entered weapon stat.
+  return Math.max(0, rollDiceExpr(weapon && weapon.damage) + (Number(effect) || 0));
 }
 function applyCombatDamage(targetId, weapon, effect){
   const tgt = combatShipById(targetId); if(!tgt) return null;
@@ -612,21 +862,35 @@ function breakSensorLock(operatorId, targetId){
   saveCombatEncounter();
 }
 
-// ── Point defence vs incoming missiles (cumulative penalty per attempt) ──────
-function pointDefence(defenderId, weaponId){
+// ── Point defence — turret laser vs a salvo about to strike (2022 p. 171) ────
+// Only usable against a salvo in its impact round ("as they are about to make
+// their attack roll"). The Effect of a Gunner (turret) check removes that many
+// missiles; a twin-laser turret gives DM+1, a triple DM+2. One attempt per
+// GUNNER per round, and a PD turret cannot also attack that round — crew counts
+// live at the table, so the engine logs the attempt number and leaves that
+// enforcement to the referee.
+function pointDefence(salvoId, turretDM){
   if(!isReferee() || !combatEncounter) return null;
-  const def = combatShipById(defenderId); if(!def) return null;
+  const sv = combatSalvoById(salvoId); if(!sv) return null;
+  if(sv.impactRound > combatEncounter.round) return { ok: false, reason: 'salvo not yet in terminal approach — PD fires as it is about to strike' };
+  const def = combatShipById(sv.targetId); if(!def) return null;
   const st = combatStatsOf(def);
   const gunnery = (st && st.crewSkills && Number(st.crewSkills.gunnery)) || 0;
-  const penalty = (def.pointDefenceUsed || 0) * MGT2E.tunables.pointDefenceStep; // 1st attempt = 0
+  const tdm = Math.max(0, Math.min(2, Number(turretDM) || 0));
   const r = combatRoll2D();
-  const total = r.sum + gunnery + penalty;
-  const ok = total >= 8;
+  const total = r.sum + gunnery + tdm;
+  const effect = total - 8;
+  const removed = effect > 0 ? Math.min(effect, sv.size) : 0;
   def.pointDefenceUsed = (def.pointDefenceUsed || 0) + 1;
-  combatLog('action', `${def.name} point defence (attempt ${def.pointDefenceUsed}): 2D ${r.sum} + Gunnery ${gunnery} ${penalty} = ${total} vs 8 → ${ok?'missile destroyed':'miss'}.`,
-    { defenderId, total, ok, penalty });
+  sv.size -= removed;
+  combatLog('action', `${def.name} point defence vs the ${sv.name} salvo (attempt ${def.pointDefenceUsed} — one per gunner, PD turret cannot also attack): 2D ${r.sum} + Gunnery ${gunnery}${tdm ? ` + turret ${tdm}` : ''} = ${total} vs 8 → ${removed ? `${removed} missile(s) destroyed (${sv.size} remain)` : 'no effect'}.`,
+    { defenderId: def.id, salvoId: sv.id, total, ok: removed > 0, removed });
+  if(sv.size <= 0){
+    combatEncounter.salvos = combatEncounter.salvos.filter(x => x.id !== sv.id);
+    combatLog('system', `${sv.name} salvo destroyed — nothing left inbound.`, { salvoId: sv.id, targetId: sv.targetId });
+  }
   saveCombatEncounter();
-  return { ok, total, penalty };
+  return { ok: removed > 0, total, removed };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -721,6 +985,9 @@ function renderCombat(){
   out.push(`<div class="cbt-sec-tab">Ships</div>`);
   out.push(enc.ships.map(s => renderCombatShip(s, ref)).join(''));
 
+  // In-flight missile salvos (referee gets the countermeasure controls).
+  out.push(renderSalvoStrip(enc, ref));
+
   // Active environmental hazards — visible to everyone (read-only chips).
   const hazChips = combatHazardChips();
   if(hazChips) out.push(hazChips);
@@ -768,6 +1035,16 @@ function renderCombatHeadsUp(enc){
       <span class="cbt-chip">Phase <b>${escQH(enc.phase)}</b></span>
       <span class="cbt-chip${yourTurn ? ' cbt-hu-yourturn' : ''}">Active <b>${act ? escQH(redactedShipName(act)) : '—'}</b>${yourTurn ? ' — <b>you</b>' : ''}</span>
     </div>`);
+  }
+
+  // Missiles inbound on the player ship — the one thing that must never be
+  // missable in the glanceable view. (The player copy is already redacted, so
+  // undetected salvos never reach this render.)
+  const inbound = (enc.salvos || []).filter(sv => player && sv.targetId === player.id);
+  if(inbound.length){
+    const n = inbound.reduce((s, sv) => s + (Number(sv.size) || 0), 0);
+    const soonest = Math.min.apply(null, inbound.map(sv => sv.impactRound));
+    out.push(`<div class="cbt-statusbar"><span class="cbt-chip live">⚠ Missiles inbound — ${n} missile${n === 1 ? '' : 's'}, impact ${soonest <= enc.round ? 'THIS ROUND' : `round ${soonest}`}</span></div>`);
   }
 
   // Your ship — hull / structure / crits (reuse the ship card, controls off).
@@ -949,7 +1226,10 @@ function renderCombatControls(enc){
   } else if(enc.phase === 'attack'){
     const st = act ? combatStatsOf(act) : null;
     const weapons = st && st.weapons ? st.weapons : [];
-    const wOpts = weapons.length ? weapons.map(w => `<option value="${w.id}">${escQH(w.name)} (${escQH(w.type)}${w.damage ? ', ' + escQH(w.damage) : ''})</option>`).join('') : `<option value="">— no weapons on sheet —</option>`;
+    const wOpts = weapons.length ? weapons.map(w => {
+      const ammo = wpnAmmoTracked(w) ? `, ammo ${wpnAmmoLeft(w)}/${Number(w.ammoMax) || 0}` : '';
+      return `<option value="${w.id}">${escQH(w.name)} (${escQH(w.type)}${w.damage ? ', ' + escQH(w.damage) : ''}${ammo})</option>`;
+    }).join('') : `<option value="">— no weapons on sheet —</option>`;
     phaseCtl = `
       <div class="cbt-ctl-row">
         <select class="cbt-sel" id="cbt-atk-target" style="flex:1;min-width:90px">${targetOpts}</select>
@@ -957,7 +1237,10 @@ function renderCombatControls(enc){
       </div>
       <div class="cbt-ctl-row">
         <button class="cbt-btn fire" onclick="uiFire()">🔥 Fire</button>
-        <button class="cbt-btn" onclick="uiPointDefence()" title="Turret lasers vs incoming missiles">🛡 Point Defence</button>
+        <span style="font-size:9px;color:var(--tx1)" title="Missile mounts only — every missile fired at one target this round joins a single salvo">salvo ×</span>
+        <input class="cbt-num" type="number" id="cbt-salvo-n" min="1" value="1" title="Missiles to launch (missile mounts only)">
+        <label style="font-size:9px;color:var(--tx1)" title="Launch undetected — players will not see this salvo until you mark it detected. RAW detection: Electronics (sensors) 6+ (8+ if the launcher itself is undetected), +1 per full 10 missiles"><input type="checkbox" id="cbt-salvo-stealth"> 🫥</label>
+        <button class="cbt-btn" onclick="uiReloadWeapon()" title="Reload the selected turret from the magazine — it makes no attacks in the round spent reloading">↻ Reload</button>
         <button class="cbt-btn" onclick="uiSensorLock()" title="Electronics (Sensors) lock">📡 Lock</button>
       </div>`;
   } else { // action
@@ -1061,6 +1344,35 @@ function uiQuickEnd(){
   if(confirm(`Call the encounter — ${o.value}?`)){ quickResolveEnd(o.value, n ? n.value.trim() : ''); renderCombat(); }
 }
 
+// ── Inbound-salvo strip: one row per salvo in flight ─────────────────────────
+// Referee rows carry the RAW countermeasure controls (point defence at impact,
+// electronic warfare in flight, flee, detection fog, fiat scrub); players get a
+// read-only row — and only for salvos their crew has detected (redaction).
+function renderSalvoStrip(enc, ref){
+  const salvos = enc.salvos || [];
+  if(!salvos.length) return '';
+  const rows = salvos.map(sv => {
+    const atk = combatShipById(sv.attackerId), tgt = combatShipById(sv.targetId);
+    const due = enc.status === 'active' && sv.impactRound <= enc.round;
+    const label = ref ? sv.name : 'Missile salvo';   // players never learn the mount from the strip
+    const flight = due ? `<b style="color:var(--txD)">IMPACT DUE</b>` : `impact R${sv.impactRound}`;
+    const head = `<span class="cbt-haz-name${due ? ' on' : ''}">☄ ${escQH(label)} ×${sv.size}</span>
+      <span class="cbt-haz-dm">${escQH(atk ? redactedShipName(atk) : '?')} → ${escQH(tgt ? redactedShipName(tgt) : '?')} · ${flight}${sv.smart ? ' · Smart' : ''}${sv.detected === false ? ' · 🫥 undetected' : ''}</span>`;
+    if(!ref) return `<div class="cbt-haz-row">${head}</div>`;
+    return `<div class="cbt-haz-row" style="flex-wrap:wrap">${head}
+      <select class="cbt-sel" id="sv-pd-${sv.id}" title="Point-defence turret: lasers fitted (twin +1 / triple +2)"><option value="0">1 laser</option><option value="1">twin +1</option><option value="2">triple +2</option></select>
+      <button class="cbt-btn" onclick="uiSalvoPD('${sv.id}')" title="Point defence — Gunner (turret) check as the salvo is about to strike; Effect = missiles destroyed. One attempt per gunner per round; a PD turret cannot also attack">🛡 PD</button>
+      <button class="cbt-btn" onclick="uiSalvoEW('${sv.id}')" title="Electronic warfare — Difficult (10+) Electronics (sensors); Effect = missiles destroyed. Once per salvo per round">📡 EW</button>
+      ${due
+        ? `<button class="cbt-btn fire" onclick="uiSalvoImpact('${sv.id}')" title="Resolve the salvo's attack roll now (Attack step)">☄ Impact</button>`
+        : `<button class="cbt-btn" onclick="uiSalvoDelay('${sv.id}')" title="Target flees — burns away from the salvo, delaying impact one round">⏳ +1 rd</button>`}
+      <button class="cbt-btn" onclick="uiSalvoDetected('${sv.id}')" title="Toggle whether the target's crew has detected the launch (Electronics (sensors) 6+, or 8+ if the launcher is undetected; +1 per full 10 missiles) — undetected salvos are hidden from players">${sv.detected === false ? '👁 reveal' : '🫥 hide'}</button>
+      <button class="cbt-btn danger" onclick="uiSalvoRemove('${sv.id}')" title="Scrub the salvo (referee fiat)">✕</button>
+    </div>`;
+  }).join('');
+  return `<div class="cbt-sec-tab">Inbound Missiles</div><div class="cbt-controls">${rows}</div>`;
+}
+
 function renderCombatLog(enc){
   const entries = (enc.log || []).slice(-60).reverse();
   if(!entries.length) return `<div class="cbt-log"><div style="font-size:10px;color:var(--tx1);font-style:italic">No actions yet.</div></div>`;
@@ -1115,10 +1427,36 @@ function uiChangeRange(delta){
 function uiFire(){
   const act = combatActiveShip(); const t = document.getElementById('cbt-atk-target'); const w = document.getElementById('cbt-atk-weapon');
   if(!act || !t || !t.value) return;
-  resolveAttack(act.id, t.value, w ? w.value : null);
+  const st = combatStatsOf(act);
+  const weapon = (st && st.weapons || []).find(x => x.id === (w ? w.value : null));
+  if(weapon && weapon.type === 'missile'){
+    const n = document.getElementById('cbt-salvo-n');
+    const stealth = document.getElementById('cbt-salvo-stealth');
+    launchSalvo(act.id, t.value, weapon, n ? n.value : 1, !!(stealth && stealth.checked));
+  } else {
+    resolveAttack(act.id, t.value, w ? w.value : null);
+  }
   renderCombat();
 }
-function uiPointDefence(){ const act = combatActiveShip(); if(act){ pointDefence(act.id, null); renderCombat(); } }
+function uiReloadWeapon(){
+  const act = combatActiveShip(); const w = document.getElementById('cbt-atk-weapon');
+  if(act && w && w.value){ reloadCombatWeapon(act.id, w.value); renderCombat(); }
+}
+function uiSalvoPD(id){
+  const sel = document.getElementById('sv-pd-' + id);
+  const r = pointDefence(id, sel ? sel.value : 0);
+  if(r && r.reason && typeof showToast === 'function') showToast(r.reason, 'info');
+  renderCombat();
+}
+function uiSalvoEW(id){
+  const r = ewJamSalvo(id);
+  if(r && r.reason && typeof showToast === 'function') showToast(r.reason, 'info');
+  renderCombat();
+}
+function uiSalvoImpact(id){ resolveSalvoImpact(id, false); renderCombat(); }
+function uiSalvoDelay(id){ salvoDelay(id); renderCombat(); }
+function uiSalvoDetected(id){ salvoToggleDetected(id); renderCombat(); }
+function uiSalvoRemove(id){ if(confirm('Scrub this salvo?')){ removeSalvo(id); renderCombat(); } }
 function uiSensorLock(){
   const act = combatActiveShip();
   const t = document.getElementById('cbt-atk-target') || document.getElementById('cbt-act-target');
@@ -1205,7 +1543,7 @@ function persistShipStat(shipId){
 function updateCombatShipStat(shipId, path, value){
   if(!isReferee()) return;
   const st = combatEditStats(shipId); if(!st) return;
-  const numericFlat = ['tonnage','jumpRating','hullPoints','hullPointsMax','structurePoints','structurePointsMax','thrust','power','powerMax','armourRating','sensorDM','fuel','fuelMax'];
+  const numericFlat = ['tonnage','tl','jumpRating','hullPoints','hullPointsMax','structurePoints','structurePointsMax','thrust','power','powerMax','armourRating','sensorDM','fuel','fuelMax'];
   if(path.indexOf('crewSkills.') === 0){
     const k = path.split('.')[1];
     st.crewSkills = st.crewSkills || {};
@@ -1411,13 +1749,13 @@ function genShipStats(opts){
     const tpl = cat.find(w => w.type === t);
     if(tpl){
       const notes = [tpl.notes, tpl.traits ? ('Traits: ' + tpl.traits) : '', (tpl.tl !== '' && tpl.tl != null) ? ('TL' + tpl.tl) : ''].filter(Boolean).join(' · ');
-      return { id:'w_'+Math.random().toString(36).slice(2,7), name:tpl.name, type:tpl.type, mount:tpl.mount||'turret', damage:tpl.damage||'', range:tpl.range||'Very Long', ammo:tpl.ammoMax||0, ammoMax:tpl.ammoMax||0, notes };
+      return { id:'w_'+Math.random().toString(36).slice(2,7), name:tpl.name, type:tpl.type, mount:tpl.mount||'turret', damage:tpl.damage||'', range:tpl.range||'Very Long', ammo:tpl.ammoMax||0, ammoMax:tpl.ammoMax||0, tl:(tpl.tl===''||tpl.tl==null)?0:(Number(tpl.tl)||0), notes };
     }
-    return { id:'w_'+Math.random().toString(36).slice(2,7), name:t, type:t, mount:'turret', damage:'2D', range:'Very Long', ammo:0, ammoMax:0, notes:'' };
+    return { id:'w_'+Math.random().toString(36).slice(2,7), name:t, type:t, mount:'turret', damage:'2D', range:'Very Long', ammo:0, ammoMax:0, tl:0, notes:'' };
   };
   return makeShipStats({
     name: opts.name || ('TL' + tl + ' ' + role.charAt(0).toUpperCase() + role.slice(1)),
-    tonnage, jumpRating: r.jump, armourRating: r.armour,
+    tonnage, tl, jumpRating: r.jump, armourRating: r.armour,
     hullPoints: hp, hullPointsMax: hp,   // no Structure — RAW durability (makeShipStats defaults it to 0)
     thrust: r.thrust, power: pwr, powerMax: pwr, sensorDM: (tl>=14?2:(tl>=12?1:0)),
     crewSkills: { pilot:r.pilot, gunnery:r.gun, engineer:1, sensors:1, tactics:r.tac, leadership:Math.max(0,r.tac-1) },
@@ -1547,6 +1885,8 @@ function renderShipEditor(){
       <input class="sf-input" style="flex:2" value="${escAttr(w.name)}" onchange="updateCombatWeapon('${ship.id}','${w.id}','name',this.value)">
       <select class="cbt-sel" onchange="updateCombatWeapon('${ship.id}','${w.id}','type',this.value)">${COMBAT_WEAPON_TYPES.map(t => `<option value="${t}"${t === w.type ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <input class="sf-input" style="width:56px" value="${escAttr(w.damage || '')}" placeholder="dmg" title="Damage dice, e.g. 2D" onchange="updateCombatWeapon('${ship.id}','${w.id}','damage',this.value)">
+      <input class="sf-input" style="width:44px" type="number" value="${wpnAmmoTracked(w) ? wpnAmmoLeft(w) : (Number(w.ammo) || 0)}" title="Ammo remaining" onchange="updateCombatWeapon('${ship.id}','${w.id}','ammo',this.value)">
+      <input class="sf-input" style="width:44px" type="number" value="${Number(w.ammoMax) || 0}" title="Ammo capacity (0 = untracked)" onchange="updateCombatWeapon('${ship.id}','${w.id}','ammoMax',this.value)">
       <button class="cbt-btn danger" onclick="removeCombatWeapon('${ship.id}','${w.id}')">✕</button>
     </div>`).join('');
   const catItems = (typeof effectiveWeapons==='function') ? effectiveWeapons() : [];
@@ -1561,6 +1901,7 @@ function renderShipEditor(){
         <div class="sf-row"><span class="sf-lbl">Name</span><span class="sf-fld">${efText(ship.id,'name','Ship name')}</span></div>
         <div class="sf-row"><span class="sf-lbl">Class</span><span class="sf-fld">${efText(ship.id,'shipClass')}</span></div>
         <div class="sf-row"><span class="sf-lbl">Size</span><span class="sf-fld">${efNum(ship.id,'tonnage','tons')}</span></div>
+        <div class="sf-row"><span class="sf-lbl">TL</span><span class="sf-fld">${efNum(ship.id,'tl')}</span></div>
         <div class="sf-row"><span class="sf-lbl">Armour</span><span class="sf-fld">${efNum(ship.id,'armourRating')}</span></div>
       </div></div>
       <div class="sf-sec"><div class="sf-tab">Hull / Structure</div><div class="sf-card">
@@ -1727,8 +2068,26 @@ function playCombatFX(e){
   if(!e) return;
   const m = e.meta || {};
   if(e.kind === 'attack'){
+    if(m.salvoLaunch){
+      // Launch flare only — the flight can span rounds; the projectile flies at impact.
+      combatSfx('missile');
+      fxFloatText(m.attackerId, '☄ launch ×' + (m.size || 1), '');
+      return;
+    }
+    if(m.salvoImpact){
+      combatSfx('missile');
+      fxProjectile(m.attackerId, m.targetId, () => {
+        if(m.hit && m.damage && m.damage.dmg > 0){
+          fxFlashCard(m.targetId, (m.damage.crits && m.damage.crits.filter(Boolean).length) ? 'fx-crit' : 'fx-hit');
+          fxFloatText(m.targetId, '−' + m.damage.dmg, '');
+          combatSfx('impact');
+        } else {
+          fxFloatText(m.targetId, m.hit ? 'no pen' : 'miss', 'miss');
+        }
+      });
+      return;
+    }
     const type = (m.breakdown && m.breakdown.weapon && m.breakdown.weapon.type) || 'beam-laser';
-    const isMissile = type === 'missile';
     const impact = () => {
       if(m.hit){
         fxFlashCard(m.targetId, (m.damage && m.damage.crits && m.damage.crits.filter(Boolean).length) ? 'fx-crit' : 'fx-hit');
@@ -1739,14 +2098,9 @@ function playCombatFX(e){
         fxFloatText(m.targetId, 'miss', 'miss');
       }
     };
-    if(isMissile && m.hit && (m.travel === 0)){
-      combatSfx('missile');
-      fxProjectile(m.attackerId, m.targetId, impact);
-    } else {
-      fxBeam(m.attackerId, m.targetId, type, !m.hit);
-      combatSfx(type === 'plasma' ? 'plasma' : 'laser');
-      setTimeout(impact, combatReducedMotion ? 60 : 240);
-    }
+    fxBeam(m.attackerId, m.targetId, type, !m.hit);
+    combatSfx(type === 'plasma' ? 'plasma' : 'laser');
+    setTimeout(impact, combatReducedMotion ? 60 : 240);
   } else if(e.kind === 'critical'){
     if(m.targetId){ fxFlashCard(m.targetId, 'fx-crit'); fxFloatText(m.targetId, '✦ ' + (m.location || 'crit'), 'crit'); combatSfx('crit'); }
   } else if(e.kind === 'action'){
