@@ -318,24 +318,9 @@ function buildOrreryNow(){
     });
   }
 
-  // ── Design-mode "Add Body" control (sibling of the table) ──
-  const ovEl = document.getElementById("sys-overview");
-  if(ovEl){
-    let addBtn = document.getElementById("design-add-body-btn");
-    if(designModeOn && isReferee()){
-      if(!addBtn){
-        addBtn = document.createElement("button");
-        addBtn.id = "design-add-body-btn";
-        addBtn.className = "design-add-btn";
-        addBtn.style.cssText = "width:100%;margin-top:10px";
-        addBtn.textContent = "+ Add Body";
-        addBtn.onclick = openBodyCreator;
-        ovEl.appendChild(addBtn);
-      }
-    } else if(addBtn){
-      addBtn.remove();
-    }
-  }
+  // Design-mode controls (Add Body, body editing) live in the floating Design
+  // Studio panel (js/65) — keep it in step with this overview render.
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
 
   let html = "";
 
@@ -688,17 +673,9 @@ function selectBody(id){
 
   html += renderBodyContentSections(body, pm);
 
-  // ── Design-mode body controls ──────────────────────────────
-  if(designModeOn && isReferee()){
-    const added = isAddedBody(body.id);
-    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
-      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Body</div>
-      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openBodyEditor('${body.id}')">✦ Edit Body Properties</button>
-      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteBody('${body.id}')">🗑 ${added?'Delete This Body':'Remove This Body'}</button>
-    </div>`;
-  }
-
   det.innerHTML = html;
+  // Body editing lives in the floating Design Studio panel (js/65).
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
   setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
 }
 
@@ -1029,19 +1006,11 @@ function buildBodyView(id){
   // Player notes (private + party notebook) — same feature as the station areas.
   html += playerNotesSectionHTML();
 
-  // Design-mode body controls, same as the orrery detail panel
-  if(designModeOn && isReferee()){
-    const added = isAddedBody(body.id);
-    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
-      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Body</div>
-      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openBodyEditor('${body.id}')">✦ Edit Body Properties</button>
-      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteBody('${body.id}')">🗑 ${added?'Delete This Body':'Remove This Body'}</button>
-    </div>`;
-  }
-
   const db = document.getElementById('bv-db');
   if(db) db.innerHTML = html;
   mountPlayerNotes('body-'+body.id);
+  // Body editing lives in the floating Design Studio panel (js/65).
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
 
   setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
@@ -1058,6 +1027,45 @@ function playerNotesSectionHTML(){
 function mountPlayerNotes(key){
   const host = document.getElementById('body-notes-host');
   if(host && typeof renderPlayerNotesTab === 'function') renderPlayerNotesTab(host, key);
+}
+
+// ── Design Studio content for the SYSTEM / BODY views ────────────────────────
+// The Design-mode blocks that used to sit at the bottom of the orrery detail,
+// body view and location view now render in the floating Design panel
+// (js/65 renderDesignPanel), keyed off the same selection state.
+function designBodySectionHTML(body){
+  const added = isAddedBody(body.id);
+  return `<div class="s-sec ref-only">
+    <div class="s-sec-lbl" style="color:#9B59B6">Design — ${escHtml(body.name)}</div>
+    <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openBodyEditor('${body.id}')">✦ Edit Body Properties</button>
+    <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteBody('${body.id}')">🗑 ${added?'Delete This Body':'Remove This Body'}</button>
+  </div>`;
+}
+function designSystemViewHTML(){
+  const body = selectedBody ? getBodies().find(b => b.id === selectedBody) : null;
+  let html = body
+    ? designBodySectionHTML(body)
+    : `<div class="hx-small">Select a body in the orrery to edit it, or add a new one.</div>`;
+  html += `<button class="design-add-btn" style="width:100%;margin-top:8px" onclick="openBodyCreator()">＋ Add Body</button>`;
+  return html;
+}
+function designBodyViewHTML(){
+  const body = selectedBody ? getBodies().find(b => b.id === selectedBody) : null;
+  let html = '';
+  if(selectedBodyLoc){
+    const found = findLocation(selectedBodyLoc);
+    if(found) html += `<div class="s-sec ref-only" style="margin-bottom:10px">
+      <div class="s-sec-lbl" style="color:#9B59B6">Design — ${escHtml(found.loc.name)}</div>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openLocationEditor('${found.loc.id}')">✦ Edit Location</button>
+      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="beginPlaceLocation('${found.bodyId}','${found.loc.id}')">📍 Reposition</button>
+      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteLocation('${found.loc.id}')">🗑 Delete Location</button>
+    </div>`;
+  }
+  if(body){
+    html += designBodySectionHTML(body);
+    html += `<button class="design-add-btn" style="width:100%;margin-top:8px" onclick="beginPlaceLocation('${body.id}')">＋ Add Location</button>`;
+  }
+  return html;
 }
 
 function goBodyView(id){
@@ -1289,9 +1297,7 @@ function renderLocationsSection(body, pm){
       </div>`;
     });
   }
-  if(designModeOn && isReferee()){
-    html += `<button class="design-add-btn" style="width:100%;margin-top:8px" onclick="beginPlaceLocation('${body.id}')">+ Add Location</button>`;
-  }
+  // (The "+ Add Location" control lives in the floating Design Studio panel.)
   html += `</div>`;
   return html;
 }
@@ -1633,18 +1639,10 @@ function selectBodyLocation(locId){
   // Player notes (private + party notebook) — same feature as the station areas.
   html += playerNotesSectionHTML();
 
-  // Design-mode location controls
-  if(designModeOn && isReferee()){
-    html += `<div class="s-sec ref-only" style="border-top:.5px dashed var(--bd0);margin-top:14px;padding-top:12px">
-      <div class="s-sec-lbl" style="color:#9B59B6">Design — This Location</div>
-      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openLocationEditor('${locId}')">✦ Edit Location</button>
-      <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="beginPlaceLocation('${found.bodyId}','${locId}')">📍 Reposition</button>
-      <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteLocation('${locId}')">🗑 Delete Location</button>
-    </div>`;
-  }
-
   const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
   mountPlayerNotes('loc-'+locId);
+  // Location editing lives in the floating Design Studio panel (js/65).
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
   setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){
@@ -1674,6 +1672,9 @@ function attachDiscTapHandler(svg){
 // shows straight after.
 function playViewTransition(switchFn){
   switchFn();
+  // The floating Design Studio panel (js/65) is context-sensitive — keep it in
+  // step with whichever view the swap just landed on.
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
 }
 
 function enterStation(){
