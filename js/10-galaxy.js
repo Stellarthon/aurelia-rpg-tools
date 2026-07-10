@@ -2033,8 +2033,43 @@ const HX = (function(){
         : `<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMarkVisited('${s.id}')">○ Mark visited — reveal market to players</button></div>`; }
     }
     }   // end of the selected-system (else) branch
-    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){ const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
-      html+=sec('dlanes','Design — Jump Lanes',true,'color:#9B59B6');
+    const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
+    if(fromLanes.length){ html+=sec('lanes','Lanes from '+eh(disp(origin))+' · '+fromLanes.length,false);
+      fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
+    const reach=SYS.filter(x=>x!==origin&&hexDist(x,origin)>=1&&hexDist(x,origin)<=jumpRating).sort((a,b)=>hexDist(a,origin)-hexDist(b,origin));
+    html+=sec('range','In range of '+eh(disp(origin))+' · '+reach.length,false);
+    if(!reach.length) html+=`<div class="hx-small">Nothing within Jump-${jumpRating}. Increase the jump drive or move.</div>`;
+    reach.forEach(x=>{ const dh=hexDist(x,origin), lane=onLane(x,origin); html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${x.q},${x.r}')"><span class="hx-reach-name" style="${lane?'color:#00cc88':''}">${lane?'⟢ ':''}${eh(disp(x))}</span><span class="d">${dh} pc · ${legFuel(x,origin).toFixed(0)}t</span></div>`; });
+    const log=(typeof shipState!=='undefined'&&Array.isArray(shipState.jumpLog))?shipState.jumpLog:[];
+    if(log.length){ html+=sec('log',"Captain's Log · "+log.length,false);
+      log.slice(0,8).forEach(e=>{ html+=`<div class="hx-log-item"><b>${eh(e.date||'')}</b> · ${eh(e.from||'')} → <b>${eh(e.to||'')}</b> · ${e.weeks||0} wk · ${e.burn||0}t`+(e.refuels?` · ${e.refuels}⛽`:'')+`</div>`;
+        (e.events||[]).forEach(ev=>html+=`<div class="hx-log-event">▸ <b style="color:#caa83b">${eh(ev.title||'')}</b>${ev.note?' — '+eh(ev.note):''}</div>`); }); }
+    if(_secOpen) html+='</div></details>';   // close the final open section
+    el.innerHTML=html;
+    if(!secBound){ secBound=true;   // capture-phase listener: <details> toggle doesn't bubble, so remember each section's open state across re-renders
+      el.addEventListener('toggle',ev=>{ const d=ev.target; if(d&&d.tagName==='DETAILS'&&d.dataset&&d.dataset.sec) secState[d.dataset.sec]=d.open; },true); }
+    // Design-mode editors live in the floating Design Studio panel (js/65), not
+    // here — but they follow this panel's selection, so keep them in step.
+    if(typeof renderDesignPanel==='function') renderDesignPanel();
+  }
+
+  // ── Design Studio content for the GALAXY view ─────────────────────────────
+  // The four Design-mode sections that used to crowd the info panel above,
+  // extracted verbatim for the floating Design panel (js/65 renderDesignPanel).
+  // Built inside the HX closure so lane/block/selection state keeps working.
+  // Open/closed state persists in the global designSecState (js/65) via the
+  // panel body's capture-phase toggle listener (js/96 boot).
+  function designSectionsHTML(){
+    if(typeof designModeOn==='undefined'||!designModeOn||!ref()) return '';
+    const s=selected, fac=s?effFac(s.fac):null;
+    const st=(typeof designSecState!=='undefined')?designSecState:{};
+    let out='';
+    const dsec=(k,t,def,body)=>{ const o=(k in st)?st[k]:(def!==false);
+      out+=`<details class="hx-sec" data-sec="${k}"${o?' open':''}><summary class="hx-sec-lbl" style="color:#9B59B6">${t}</summary><div class="hx-sec-body">${body}</div></details>`; };
+
+    { // Jump lanes
+      const linking=(typeof gxLinkMode!=='undefined'&&gxLinkMode);
+      let html='';
       html+= linking ? `<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="gxCancelLink()">✕ Cancel — tap a destination on the map</button></div>`
         : (s ? `<div class="hx-btn-row"><button class="hx-act-btn" onclick="gxArmLink('${s.id}')">+ Add jump lane from ${eh(disp(s))}</button></div>`
              : `<div class="hx-small">Select a star, then tap a destination to draw a jump lane between it and another.</div>`);
@@ -2042,13 +2077,16 @@ const HX = (function(){
       const nblk=(routeBlocks&&routeBlocks.blocks)?Object.keys(routeBlocks.blocks).length:0;
       html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn"${gxBlockMode?' style="border-color:#d45050;color:#ff9b9b"':''} onclick="gxArmBlock()">${gxBlockMode?'✓ Block mode ON — tap a lane to close/open':'🔒 Close / reopen jump lanes'}</button></div>`;
       html+=`<div class="hx-btn-row"><button class="hx-act-btn"${routeBlocks.enabled?'':' style="border-color:#caa83b;color:#e8c65a"'} onclick="gxToggleBlocksEnabled()">${routeBlocks.enabled?('Blocks active · '+nblk+' closed — tap to lift all'):('Kill-switch OFF · '+nblk+' held')}</button></div>`;
-      html+=`<div class="hx-small">Closed lanes show dashed-red with 🔒 to you and nav crew (Rhett, Cass); other players see an ordinary lane. Blocks are a story signal — the route planner itself is unchanged.</div>`; }
-    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
-      html+=sec('dsys','Design — System',false,'color:#9B59B6');
-      if(typeof HX!=='undefined'&&HX.placing&&HX.placing()){
+      html+=`<div class="hx-small">Closed lanes show dashed-red with 🔒 to you and nav crew (Rhett, Cass); other players see an ordinary lane. Blocks are a story signal — the route planner itself is unchanged.</div>`;
+      dsec('dlanes','Design — Jump Lanes',true,html);
+    }
+
+    { // System editor
+      let html='';
+      if(placeMode){
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="HX.cancelPlace()">✕ Cancel — or tap an empty hex on the map</button></div>`;
       } else if(!s){
-        html+=`<div class="hx-small">Tap an empty hex on the map (or the button below) to chart a new system, then select it to edit its details.</div>`;
+        html+=`<div class="hx-small">Tap a system on the map to edit it, tap an empty hex (or the button below) to chart a new one.</div>`;
         html+=`<div class="hx-btn-row" style="margin-top:6px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
       } else if(s.uncharted){
         html+=`<div class="hx-small">Uncharted frontier star — not an authored system, so there's nothing to edit here. Use “Add new system” to chart a system of your own.</div>`;
@@ -2070,14 +2108,16 @@ const HX = (function(){
           html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxRollBases('${s.id}')" title="2D per base type against this world's starport class, with the Highport and Corsair DMs (2022 core p. 254)">🎲 Roll bases (RAW, from UWP)</button></div>`;
           html+=`<div class="hx-small" style="margin:2px 0 6px">Bases show on the system card — corsair bases only to you. Frontier worlds carry a seeded RAW set until you author one here (first toggle adopts it).</div>`; }
         html+=`<label class="hx-edit-row hx-edit-col"><span>Notes</span><textarea class="hx-edit-in" rows="2" onchange="hxEditSystemField('${s.id}','desc',this.value)">${eh(nd.desc||'')}</textarea></label>`;
-        html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> above to add or randomly generate bodies.</div>`;
+        html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> to add or randomly generate bodies.</div>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">Drag the star on the map to reposition it, or use <b>✎ Move on map</b> to place it by tapping an empty hex.</div>`;
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxMoveSystem('${s.id}')">✎ Move on map</button> <button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="hxRemoveSystem('${s.id}')">🗑 Remove</button></div>`;
         html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxBeginAddSystem()">＋ Add new system</button></div>`;
       }
+      dsec('dsys','Design — System'+(s?` · ${eh(disp(s))}`:''),true,html);
     }
-    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()){
-      html+=sec('dregions','Design — Regions',false,'color:#9B59B6');
+
+    { // Regions
+      let html='';
       const RF=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
       const ea2=(typeof escAttr==='function')?escAttr:eh;
       Object.keys(RF).forEach(fk=>{ const f=RF[fk]||{}; const builtin=(fk==='independent'||fk==='uncharted'); const mem=SYS.filter(x=>x.fac===fk&&!x.uncharted).length;
@@ -2088,9 +2128,11 @@ const HX = (function(){
         `</div>`; });
       html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxAddFaction()">＋ Add region</button></div>`;
       html+=`<div class="hx-small">Regions are the galaxy's sectors — they colour the territory overlay and tag systems. Assign a system to a region under “Design — System”.</div>`;
+      dsec('dregions','Design — Regions',false,html);
     }
-    if(typeof designModeOn!=='undefined'&&designModeOn&&ref()&&typeof ECON!=='undefined'&&s){
-      html+=sec('decon','Design — Production &amp; Consumption',true,'color:#9B59B6');
+
+    if(typeof ECON!=='undefined'&&s){ // Production & consumption
+      let html='';
       if(!ECON.isMarketId(s.id)){
         html+=`<div class="hx-small">${eh((fac&&fac.name)||'This faction')} keeps no open market at ${eh(disp(s))} — nothing to configure.</div>`;
       } else {
@@ -2102,22 +2144,9 @@ const HX = (function(){
         html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="openEconEditor('${s.id}')">⚒ Edit production &amp; consumption</button></div>`;
         if(typeof econPriceControlHTML==='function') html+=econPriceControlHTML(s.id);
       }
+      dsec('decon','Design — Production &amp; Consumption · '+eh(disp(s)),true,html);
     }
-    const fromLanes=laneEdges().filter(L=>L.a===origin||L.b===origin).map(L=>({to:L.a===origin?L.b:L.a,len:L.len})).sort((a,b)=>a.len-b.len);
-    if(fromLanes.length){ html+=sec('lanes','Lanes from '+eh(disp(origin))+' · '+fromLanes.length,false);
-      fromLanes.forEach(f=>{ html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${f.to.q},${f.to.r}')"><span class="hx-reach-name" style="color:#00cc88">⟢ ${eh(disp(f.to))}</span><span class="d">${f.len} pc · 1 jump</span></div>`; }); }
-    const reach=SYS.filter(x=>x!==origin&&hexDist(x,origin)>=1&&hexDist(x,origin)<=jumpRating).sort((a,b)=>hexDist(a,origin)-hexDist(b,origin));
-    html+=sec('range','In range of '+eh(disp(origin))+' · '+reach.length,false);
-    if(!reach.length) html+=`<div class="hx-small">Nothing within Jump-${jumpRating}. Increase the jump drive or move.</div>`;
-    reach.forEach(x=>{ const dh=hexDist(x,origin), lane=onLane(x,origin); html+=`<div class="hx-reach-item" onclick="hxSelectByKey('${x.q},${x.r}')"><span class="hx-reach-name" style="${lane?'color:#00cc88':''}">${lane?'⟢ ':''}${eh(disp(x))}</span><span class="d">${dh} pc · ${legFuel(x,origin).toFixed(0)}t</span></div>`; });
-    const log=(typeof shipState!=='undefined'&&Array.isArray(shipState.jumpLog))?shipState.jumpLog:[];
-    if(log.length){ html+=sec('log',"Captain's Log · "+log.length,false);
-      log.slice(0,8).forEach(e=>{ html+=`<div class="hx-log-item"><b>${eh(e.date||'')}</b> · ${eh(e.from||'')} → <b>${eh(e.to||'')}</b> · ${e.weeks||0} wk · ${e.burn||0}t`+(e.refuels?` · ${e.refuels}⛽`:'')+`</div>`;
-        (e.events||[]).forEach(ev=>html+=`<div class="hx-log-event">▸ <b style="color:#caa83b">${eh(ev.title||'')}</b>${ev.note?' — '+eh(ev.note):''}</div>`); }); }
-    if(_secOpen) html+='</div></details>';   // close the final open section
-    el.innerHTML=html;
-    if(!secBound){ secBound=true;   // capture-phase listener: <details> toggle doesn't bubble, so remember each section's open state across re-renders
-      el.addEventListener('toggle',ev=>{ const d=ev.target; if(d&&d.tagName==='DETAILS'&&d.dataset&&d.dataset.sec) secState[d.dataset.sec]=d.open; },true); }
+    return out;
   }
 
   // ── Phone-only system picker — on handsets the map canvas is hidden (the
@@ -2359,7 +2388,8 @@ const HX = (function(){
 
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; },
     // Bases (UWP Bases field) — id-based accessors in the localMarket/worldFacts style.
-    basesOf(id){ const s=BY_ID[id]; return s?basesOf(s):[]; }, BASE_META };
+    basesOf(id){ const s=BY_ID[id]; return s?basesOf(s):[]; }, BASE_META,
+    designSectionsHTML };
 })();
 
 function goGalaxy(){
