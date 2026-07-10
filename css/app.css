@@ -3683,6 +3683,7 @@ input#ui-scale-range{
 #real-card .real-swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
 #real-card .real-card-fac{font-size:10px;font-family:var(--mono,monospace);letter-spacing:.5px;margin-bottom:7px}
 #real-card .real-card-desc{font-size:11px;color:var(--tx1);line-height:1.5;max-height:120px;overflow:auto}
+#real-card .real-card-adv{font-size:10px;font-family:var(--mono,monospace);letter-spacing:.4px;margin-bottom:6px}
 #real-card .real-card-bodies{margin-top:9px;border-top:.5px solid var(--bd0,#2e3347);padding-top:8px;font-size:11px;color:var(--tx1)}
 #real-card .rcb{display:flex;align-items:center;gap:7px;padding:1px 0}
 #real-card .rcb i{width:7px;height:7px;border-radius:50%;flex:0 0 auto}

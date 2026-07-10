@@ -66,6 +66,26 @@ const RealMap = (function(){
     return { name:'Independent', color:'#9fb0c8' };
   }
   function facHiddenOf(facId){ return !!(typeof HX!=='undefined' && HX.facHidden && HX.facHidden(facId)); }
+  // Where the party currently is (shipState.locationId — the same field the hex
+  // map's origin tracks). Null-safe: display devices without ship state simply
+  // draw no marker.
+  function partyLocId(){ try{ return (typeof shipState!=='undefined' && shipState && shipState.locationId) || null; }catch(e){ return null; } }
+  // Travel-zone ring colour (MgT2e convention, matching the hex map exactly).
+  function zoneColOf(n){ return n.zone==='red' ? '#ff5a4d' : n.zone==='amber' ? '#e8c65a' : null; }
+  // Party-ship marker: a cyan ring + notched chevron pointing at the system.
+  // Drawn for everyone — where the party's own ship sits is not a secret.
+  function partyMarkerSVG(x,y,ringR,invS,withLabel){
+    const name=(typeof shipState!=='undefined' && shipState && shipState.name) || 'PARTY';
+    const cw=4.2*invS, ch=5.6*invS;              // chevron half-width / height (screen-constant)
+    const ty=y-ringR-ch-2*invS;                  // chevron floats just above the ring
+    let g='<g pointer-events="none">';
+    g+=`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${ringR.toFixed(2)}" fill="none" stroke="#00e5ff" stroke-opacity="0.9" stroke-width="1.2" stroke-dasharray="5,3" vector-effect="non-scaling-stroke"/>`;
+    g+=`<path d="M ${x.toFixed(2)} ${ty.toFixed(2)} l ${cw.toFixed(2)} ${ch.toFixed(2)} l ${(-cw).toFixed(2)} ${(-ch*0.42).toFixed(2)} l ${(-cw).toFixed(2)} ${(ch*0.42).toFixed(2)} Z" fill="#00e5ff" fill-opacity="0.95"/>`;
+    if(withLabel){ const fs=(9*invS).toFixed(2);
+      g+=`<text x="${x.toFixed(2)}" y="${(ty-3*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="#00e5ff" fill-opacity="0.9" style="font-family:var(--mono,monospace)">${eh(String(name).toUpperCase())}</text>`; }
+    g+='</g>';
+    return g;
+  }
   function motionOff(){
     try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true; }catch(e){}
     const r=document.getElementById('root'); return !!(r && r.classList.contains('anim-off'));
@@ -552,9 +572,16 @@ const RealMap = (function(){
         const rr=3.1*invS;
         out+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(rr*1.9).toFixed(2)}" fill="${fac.color}" opacity="${hot?0.28:0.14}"/>`;
         out+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rr.toFixed(2)}" fill="${fac.color}" data-node="${at(n.id)}" style="cursor:pointer"/>`;
+        // Travel-zone ring — public traveller data, drawn exactly like the hex map.
+        const zc=zoneColOf(n);
+        if(zc) out+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(rr*2.3).toFixed(2)}" fill="none" stroke="${zc}" stroke-width="1.1" vector-effect="non-scaling-stroke" opacity="0.85" pointer-events="none"/>`;
         if(showNames||hot){ const fs=(11*invS).toFixed(2);
           out+=`<text x="${p.x.toFixed(1)}" y="${(p.y-5.5*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" class="real-star-lbl${hot?' hot':''}">${eh(n.label||n.name)}</text>`; }
       });
+      // Party ship — on top of the dots so "where are we" is one glance on the TV.
+      { const hn=partyLocId() ? nodeById(partyLocId()) : null;
+        const hp=hn ? posOf(hn) : null;
+        if(hp && inV(hp)) out+=partyMarkerSVG(hp.x, hp.y, 3.1*invS*2.9, invS, showNames); }
       anyOpen=false;
     } else {
       // ── SYSTEM reveal: spotlight the open system nearest the viewport centre ──
@@ -683,6 +710,11 @@ const RealMap = (function(){
           g+=`<text x="${(cx+ux*(R+sz*2.4)).toFixed(2)}" y="${(cy+uy*(R+sz*2.4)+2.5*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="#7f93b8" style="font-family:var(--mono,monospace)" pointer-events="none">${eh(tn.label||tn.name)}</text>`; }
       });
     }
+    // Travel-zone advisory ring around the whole system (public, hex-map parity).
+    { const zc=zoneColOf(n);
+      if(zc) g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(ORBIT_OUTER*1.34).toFixed(1)}" fill="none" stroke="${zc}" stroke-opacity="0.55" stroke-width="1.1" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" pointer-events="none"/>`; }
+    // Party ship — ring the whole system so the table display reads "we are here".
+    if(partyLocId()===n.id) g+=partyMarkerSVG(cx, cy, ORBIT_OUTER*1.24, invS, showPlanetLabels);
     // system name over the star — focus system only
     if(em>0.55 && sizeF>0.4){ const fs=(11*invS).toFixed(2); const nameOp=Math.max(0,Math.min(1,(sizeF-0.35)/0.5)).toFixed(2);
       g+=`<text x="${cx.toFixed(1)}" y="${(cy-sr-5*invS).toFixed(2)}" text-anchor="middle" font-size="${fs}" fill="#E8A020" opacity="${nameOp}" class="real-sys-lbl" pointer-events="none">${eh((n.label||n.name||'').toUpperCase())}</text>`; }
@@ -691,10 +723,21 @@ const RealMap = (function(){
   }
 
   // ── Info card (read-only system card; faction through the redaction seam) ──
+  // Bases come through HX.basesOf — the SAME accessor the hex detail panel
+  // reads, so authored/seeded values and the corsair referee-only fog agree.
+  function basesLineHTML(n){
+    if(typeof HX==='undefined' || !HX.basesOf || !HX.BASE_META) return '';
+    const bs=HX.basesOf(n.id).filter(b=>HX.BASE_META[b] && (refOk() || HX.BASE_META[b].pub));
+    if(!bs.length) return '';
+    return '<div class="real-card-adv" style="color:#93a0bd">'+bs.map(b=>
+      HX.BASE_META[b].icon+' '+eh(HX.BASE_META[b].label)+(!HX.BASE_META[b].pub?' <span style="opacity:.6">🔒</span>':'')).join(' · ')+'</div>';
+  }
   function showCard(n){
     const el=document.getElementById('real-card'); if(!el) return;
     const fac=effFacOf(n.faction);
     const sys=adaptSystem(n);
+    const zc=zoneColOf(n);
+    const zoneHtml=zc ? `<div class="real-card-adv" style="color:${zc}">${n.zone==='red'?'⛔ Red Zone — interdicted':'⚠ Amber Zone — caution advised'}</div>` : '';
     const bodiesHtml=sys.bodies.length
       ? '<div class="real-card-bodies">'+sys.bodies.map(b=>
           `<div class="rcb"><i style="background:${b.col}"></i>${eh(b.name)} — ${eh(b.type)}${b.dock?' <span title="Traders dock here">⚓</span>':''}${b.hook?' <span style="color:#E8A020">★</span>':''}</div>`).join('')+'</div>'
@@ -702,6 +745,8 @@ const RealMap = (function(){
     el.innerHTML=
       `<h2><span class="real-swatch" style="background:${fac.color}"></span>${eh(n.label||n.name)}</h2>`+
       `<div class="real-card-fac" style="color:${fac.color}">${eh(fac.name)} · ${eh(n.name)}</div>`+
+      zoneHtml+
+      basesLineHTML(n)+
       (n.desc?`<div class="real-card-desc">${eh(n.desc)}</div>`:'')+
       bodiesHtml;
     el.classList.add('show');
