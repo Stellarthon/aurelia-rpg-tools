@@ -1043,7 +1043,7 @@ function buildBodyView(id){
   if(db) db.innerHTML = html;
   mountPlayerNotes('body-'+body.id);
 
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
 }
 
@@ -1593,7 +1593,7 @@ function selectBodyLocation(locId){
       <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
       <div style="font-size:12px;max-width:220px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
     const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
-    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
     return;
   }
 
@@ -1645,7 +1645,7 @@ function selectBodyLocation(locId){
 
   const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
   mountPlayerNotes('loc-'+locId);
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){
   if(selectedBody) buildBodyView(selectedBody);
@@ -1691,6 +1691,8 @@ function enterStation(){
 }
 
 function goSystem(){
+  // Explicitly entering the hex system layer ends any pending REAL-map return.
+  if(typeof RealMap !== 'undefined') RealMap.clearBodyReturn();
   playViewTransition(() => {
     currentView = "system";
     document.getElementById("view-galaxy").classList.add("v-hidden");
@@ -1725,9 +1727,16 @@ function setBreadcrumb(crumbs,current){
 function navBack(){
   if(currentView === 'galaxy'){ return; }                 // top of the stack
   if(currentView === 'station'){ goAurelia(); return; }
-  if(currentView === 'body'){ goSystem(); return; }
+  if(currentView === 'body'){ goSystemFromBody(); return; }
   if(currentView === 'system' && selectedBody){ goSystemOverview(); return; }
   if(currentView === 'system'){ goGalaxy(); return; }      // system root → back to the galaxy
+}
+// Up one level from the planet close-up. If the body view was opened from the
+// REAL map's datacard, "up" means back to that map (its camera is untouched, so
+// this lands on the same zoomed system) — otherwise the hex system view.
+function goSystemFromBody(){
+  if(typeof RealMap !== 'undefined' && RealMap.claimBodyReturn()){ goGalaxy(); return; }
+  goSystem();
 }
 function updateBackBtn(){
   const btn = document.getElementById('back-btn');
