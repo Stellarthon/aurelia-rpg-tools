@@ -836,6 +836,31 @@ const WGEN = (function(){
     return (a<=1||a===10)?8 : (a===2||a===3)?5 : (a===4||a===7||a===9)?3
          : (a===11)?9 : (a===12)?10 : (a===13||a===14)?5 : (a===15)?8 : 0; }
   function uwpStr(u){ return fPort(u)+ehex(u.size)+ehex(fAtm(u))+ehex(u.hydro)+ehex(u.pop)+ehex(u.gov)+ehex(u.law)+'-'+ehex(fTl(u)); }
+  // Bases (RAW, 2022 core p. 254): 2D per base type, thresholds by starport
+  // class. Highport DMs: TL9–11 +1 / TL12+ +2, Pop 9+ +1 / Pop ≤6 −1.
+  // Corsair DMs: Law 0 +2 / Law 2+ −2. Returns letter codes in UWP order
+  // (H highport · M military · N naval · S scout · C corsair; D depot and
+  // W way station are referee-authored only — no roll in core).
+  const BASE_ROLLS = {
+    A: [['H',6],['M',8],['N',8],['S',10]],
+    B: [['H',8],['M',8],['N',8],['S',9]],
+    C: [['H',10],['M',10],['S',9]],
+    D: [['H',12],['S',8],['C',12]],
+    E: [['C',10]],
+    X: [['C',10]]
+  };
+  function genBases(u, rng){
+    const r2 = () => (Math.floor(rng()*6)+1) + (Math.floor(rng()*6)+1);
+    const tl = fTl(u), pop = u.pop|0, law = u.law|0;
+    const out = [];
+    (BASE_ROLLS[fPort(u)] || []).forEach(([code, tgt]) => {
+      let dm = 0;
+      if(code === 'H'){ dm += tl >= 12 ? 2 : (tl >= 9 ? 1 : 0); dm += pop >= 9 ? 1 : (pop <= 6 ? -1 : 0); }
+      if(code === 'C'){ dm += law === 0 ? 2 : (law >= 2 ? -2 : 0); }
+      if(r2() + dm >= tgt) out.push(code);
+    });
+    return out;
+  }
   // Canonical MgT2e trade codes (single source of truth).
   function tradeCodes(u){
     const c=[], size=u.size|0, atmo=fAtm(u), hydro=u.hydro|0, pop=u.pop|0, gov=u.gov|0, law=u.law|0, tl=fTl(u);
@@ -859,7 +884,7 @@ const WGEN = (function(){
     if(hydro===10) c.push('Wa');
     return c;
   }
-  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes, tempBand, envMinTL };
+  return { clamp, hashStr, mulberry, seededRng, ehex, d6, roll2d6, genStarport, genTechLevel, genUWP, uwpStr, tradeCodes, tempBand, envMinTL, genBases };
 })();
 
 // ═══ GALAXY MAP — HEX-JUMP ENGINE (ported onto main; replaces the Orion render layer) ═══
@@ -1066,6 +1091,37 @@ const HX = (function(){
     s._uwp=u; return u; }
   function uwpStr(s){ return WGEN.uwpStr(uwpOf(s)); }
   function tradeCodes(s){ return WGEN.tradeCodes(uwpOf(s)); }
+  // ── Bases (the UWP line's Bases field, as map data) ─────────────────────────
+  // Letter codes per RAW; `pub:false` types are referee-only on every player
+  // surface (a corsair haven is not on anyone's chart). Precedence mirrors UWPs:
+  // an authored `bases` value (Design-mode, via systemPropertyOverrides — even
+  // an explicit empty string) always wins; unsurveyed worlds fall back to a
+  // deterministic RAW roll seeded like their UWP (separate stream, so adding
+  // bases shifts NO existing seeded UWPs); surveyed/authored main worlds get no
+  // auto bases — canon stays referee-authored.
+  const BASE_META = {
+    H:{ icon:'🛰', label:'Highport',    pub:true  },
+    M:{ icon:'🪖', label:'Military Base', pub:true },
+    N:{ icon:'⚓', label:'Naval Base',  pub:true  },
+    S:{ icon:'🔭', label:'Scout Base',  pub:true  },
+    D:{ icon:'🛢', label:'Naval Depot', pub:true  },
+    W:{ icon:'🛜', label:'Way Station', pub:true  },
+    C:{ icon:'☠', label:'Corsair Base', pub:false }
+  };
+  function basesOf(s){
+    if(!s || s.deep) return [];
+    if(s.bases != null) return String(s.bases).split(/\s+/).filter(c => BASE_META[c]);
+    if(s._bases) return s._bases;
+    let out = [];
+    // Uninhabited worlds seed no bases (author one there deliberately if the
+    // story wants a corsair den); uncharted stars have no surveyed main world,
+    // so realMainWorld() is null and they roll like any frontier world.
+    if(!s.uninhabited && !realMainWorld(s.systemId)){
+      out = WGEN.genBases(uwpOf(s), WGEN.seededRng((s.star||s.label)+'|bases'));
+    }
+    s._bases = out;
+    return out;
+  }
   // MgT2e Core 2022 Trade Goods table (curated subset for the map catalogue).
   // Cells verified against the rulebook (2e rules audit, 114-2026); deviations
   // kept on purpose are marked HOUSE. Negative DMs are real — bestDM() honours
@@ -1901,6 +1957,9 @@ const HX = (function(){
     html+=`<div class="hx-kv"><span class="k">Starport / fuel</span><span class="v" style="color:${FUEL_INFO[selFuel].c}">Class ${portOf(s)} · ${FUEL_INFO[selFuel].t}</span></div>`;
     html+=`<div class="hx-kv"><span class="k">UWP</span><span class="v">${uwpStr(s)}</span></div>`;
     const selCodes=tradeCodes(s); if(selCodes.length) html+=`<div class="hx-kv"><span class="k">Trade codes</span><span class="v">${selCodes.join(' ')}</span></div>`;
+    { // Bases — the UWP line's Bases field. Non-public types (corsair) render for the referee only.
+      const selBases=basesOf(s).filter(b=>ref()||BASE_META[b].pub);
+      if(selBases.length) html+=`<div class="hx-kv"><span class="k">Bases</span><span class="v" style="text-align:right">${selBases.map(b=>`${BASE_META[b].icon} ${BASE_META[b].label}${!BASE_META[b].pub?' <span style="opacity:.6">🔒</span>':''}`).join(' · ')}</span></div>`; }
     { const selU=uwpOf(s), climate=WGEN.tempBand(selU);
       if(climate) html+=`<div class="hx-kv"><span class="k">Climate</span><span class="v">${climate}${selU.temp!=null?` <span style="opacity:.6">(${selU.temp})</span>`:''}</span></div>`;
       // RAW life-support viability: a populated world under its environmental TL
@@ -2005,6 +2064,11 @@ const HX = (function(){
         const zoneOpts=[['','Green — no advisory'],['amber','Amber — caution advised'],['red','Red — interdicted']].map(([v,l])=>`<option value="${v}"${(nd.zone||'')===v?' selected':''}>${l}</option>`).join('');
         html+=`<label class="hx-edit-row"><span>Zone</span><select class="hx-edit-in" onchange="hxEditSystemField('${s.id}','zone',this.value)">${zoneOpts}</select></label>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">Zone rings show on the map for everyone and feed the Starport Board's passenger &amp; freight DMs (amber +1/−2, red −4/−6).</div>`;
+        { const cur=basesOf(s);
+          const boxes=Object.keys(BASE_META).map(code=>`<label style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox"${cur.includes(code)?' checked':''} onchange="hxEditBasesToggle('${s.id}','${code}',this.checked)">${BASE_META[code].icon} ${eh(BASE_META[code].label)}</label>`).join('');
+          html+=`<div class="hx-edit-row hx-edit-col"><span>Bases</span><div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:var(--tx0)">${boxes}</div></div>`;
+          html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="hxRollBases('${s.id}')" title="2D per base type against this world's starport class, with the Highport and Corsair DMs (2022 core p. 254)">🎲 Roll bases (RAW, from UWP)</button></div>`;
+          html+=`<div class="hx-small" style="margin:2px 0 6px">Bases show on the system card — corsair bases only to you. Frontier worlds carry a seeded RAW set until you author one here (first toggle adopts it).</div>`; }
         html+=`<label class="hx-edit-row hx-edit-col"><span>Notes</span><textarea class="hx-edit-in" rows="2" onchange="hxEditSystemField('${s.id}','desc',this.value)">${eh(nd.desc||'')}</textarea></label>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">UWP &amp; worlds come from this system's main world — use <b>⊙ View close up</b> above to add or randomly generate bodies.</div>`;
         html+=`<div class="hx-small" style="margin:2px 0 6px">Drag the star on the map to reposition it, or use <b>✎ Move on map</b> to place it by tapping an empty hex.</div>`;
@@ -2190,6 +2254,17 @@ const HX = (function(){
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
   window.hxTradeAllGoods=on=>{ tradeGoods.clear(); if(on) Object.keys(GOOD_COL).forEach(g=>tradeGoods.add(g));
     const lg=document.getElementById('hx-trade-legend'); if(lg) buildTradeLegend(lg); render(); };
+  // Design-mode base editing. Toggling authors the FULL current effective set
+  // (so a frontier world's seeded bases are adopted on first touch, then edited);
+  // the roll button re-rolls the RAW table live — referee dice, Design tooling.
+  window.hxEditBasesToggle=(id,code,on)=>{ if(!ref()) return; const s=BY_ID[id]; if(!s||!BASE_META[code]) return;
+    const cur=basesOf(s).slice(); const i=cur.indexOf(code);
+    if(on&&i<0) cur.push(code); if(!on&&i>=0) cur.splice(i,1);
+    const order=Object.keys(BASE_META); cur.sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+    if(typeof hxEditSystemField==='function') hxEditSystemField(id,'bases',cur.join(' ')); };
+  window.hxRollBases=(id)=>{ if(!ref()) return; const s=BY_ID[id]; if(!s) return;
+    const rolled=WGEN.genBases(uwpOf(s), Math.random);
+    if(typeof hxEditSystemField==='function') hxEditSystemField(id,'bases',rolled.join(' ')); };
   window.hxZoomBy=f=>zoomBy(f);
   window.hxResetView=()=>fitView();
   window.hxExecuteJump=executeJump;
@@ -2213,13 +2288,13 @@ const HX = (function(){
       if(!want[s.id]){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r]; delete BY_ID[s.id]; SYS.splice(i,1); } }
     // Add new / update existing.
     Object.keys(want).forEach(id=>{ const n=want[id]; let s=BY_ID[id];
-      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.uninhabited=!!n.uninhabited; s.systemId=n.systemId||n.id; s.zone=n.zone||''; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
+      if(s){ s.star=n.name; s.label=(n.label||n.name); s.fac=n.faction; s.connections=n.connections||[]; s.pc=pcOf(n.name); s.deep=isDeep(n); s.uninhabited=!!n.uninhabited; s.systemId=n.systemId||n.id; s.zone=n.zone||''; s.bases=(n.bases==null?null:n.bases); s._bases=null; s._uwp=null;   // drop cached UWP so a faction/survey edit re-derives trade codes (and ECON.worldFacts) fresh
         if(n.q!=null&&n.r!=null&&(s.q!==n.q||s.r!==n.r)){ const occ=BY_KEY[n.q+','+n.r];
           if(!occ||occ===s){ occupied.delete(s.q+','+s.r); if(BY_KEY[s.q+','+s.r]===s) delete BY_KEY[s.q+','+s.r];
             s.q=n.q; s.r=n.r; occupied.add(s.q+','+s.r); BY_KEY[s.q+','+s.r]=s; } } }
       else { let q=n.q, r=n.r;
         if(q==null||r==null||occupied.has(q+','+r)){ const a=FACTION_ANCHOR[n.faction]||[0,0]; const f=nearestFreeHex(q!=null?q:a[0], r!=null?r:a[1]); q=f.q; r=f.r; }
-        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), uninhabited:!!n.uninhabited, zone:n.zone||'', campaign:true, q, r };
+        s={ id:n.id, systemId:n.systemId||n.id, star:n.name, label:(n.label||n.name), fac:n.faction, connections:n.connections||[], pc:pcOf(n.name), deep:isDeep(n), uninhabited:!!n.uninhabited, zone:n.zone||'', bases:(n.bases==null?null:n.bases), campaign:true, q, r };
         SYS.push(s); BY_ID[id]=s; BY_KEY[q+','+r]=s; occupied.add(q+','+r); } });
     if(selected&&!BY_ID[selected.id]) selected=null;
     if(origin&&!BY_ID[origin.id]) origin=BY_ID['aurelia']||SYS[0]||null;
@@ -2282,7 +2357,9 @@ const HX = (function(){
     return { codes, port:uwp.port, pop:uwp.pop|0, law:uwp.law|0, tl:uwp.tl|0, gasGiant, fac:node.faction };
   }
 
-  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; } };
+  return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; },
+    // Bases (UWP Bases field) — id-based accessors in the localMarket/worldFacts style.
+    basesOf(id){ const s=BY_ID[id]; return s?basesOf(s):[]; }, BASE_META };
 })();
 
 function goGalaxy(){
