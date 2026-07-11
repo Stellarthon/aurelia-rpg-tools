@@ -2761,6 +2761,9 @@ makePanelResizable('gen-wrap');
 //    (theme, terminology, module flags) BEFORE the first render. For the
 //    built-in Archon Gambit pack this is a no-op-equivalent (defaults match). ──
 if(typeof initCampaignPacks === 'function') initCampaignPacks();
+// Authored station deck maps (js/40 defines the store; supaStorage loads later,
+// so the fetch belongs here in the boot block with the other shared stores).
+if(typeof loadAuthoredStations === 'function') loadAuthoredStations();
 
 buildOrrery();
 renderInit();
