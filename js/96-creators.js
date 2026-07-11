@@ -5,8 +5,11 @@
 // mergeListWithAdditions alongside the hardcoded NPCs.
 
 // The list key for the currently-selected area/sub's NPC additions.
+// staKey (js/40) prefixes the station id for authored stations, so two
+// stations can reuse an area id; Aurelia keeps its historical bare keys.
 function stKeyForNpcs(){
-  return cur + (curSub ? '_' + curSub : '') + '-npcs';
+  const k = cur + (curSub ? '_' + curSub : '') + '-npcs';
+  return (typeof staKey === 'function') ? staKey(k) : k;
 }
 
 // ── Random generator tables (Traveller-flavoured, Hegemony setting) ────────
@@ -133,7 +136,8 @@ function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/
 function renderNpcCreatorBody(){
   const body = document.getElementById('npc-creator-body');
   if(!body) return;
-  const areaLabel = MAIN[cur] ? (curSub && MAIN[cur].subs && MAIN[cur].subs[curSub] ? MAIN[cur].subs[curSub].label : MAIN[cur].label) : '';
+  const _stAreas = (typeof stationAreas === 'function') ? stationAreas() : (typeof MAIN !== 'undefined' ? MAIN : {});
+  const areaLabel = _stAreas[cur] ? (curSub && _stAreas[cur].subs && _stAreas[cur].subs[curSub] ? _stAreas[cur].subs[curSub].label : _stAreas[cur].label) : '';
 
   if(npcCreatorMode === 'manual'){
     body.innerHTML = renderManualForm(areaLabel);

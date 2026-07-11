@@ -676,7 +676,7 @@ function selectBody(id){
   det.innerHTML = html;
   // Body editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
 }
 
 // Returns to the system body-list overview (used after deleting the body
@@ -690,7 +690,7 @@ function goSystemOverview(){
   const stBtn = document.getElementById("btn-view-station");
   if(stBtn) stBtn.classList.add("v-hidden");
   renderSystemOverview(); // sets name/star-info, swaps body-list vs blank prompt
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"}], currentSystemName());
   updateBackBtn();
   buildOrrery();
 }
@@ -1012,7 +1012,7 @@ function buildBodyView(id){
   // Body editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
 
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
 }
 
@@ -1054,12 +1054,26 @@ function designBodyViewHTML(){
   let html = '';
   if(selectedBodyLoc){
     const found = findLocation(selectedBodyLoc);
-    if(found) html += `<div class="s-sec ref-only" style="margin-bottom:10px">
+    if(found){
+      // Deck-map interior controls — authored campaigns only (Aurelia's deck
+      // map is canon content). Create seeds a one-area station and links it
+      // to this location; Unlink keeps the station data (relink any time).
+      let interiorBtns = '';
+      if(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign() && typeof stationAdditions !== 'undefined'){
+        const iid = found.loc.interiorId;
+        interiorBtns = (iid && stationAdditions[iid])
+          ? `<button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="enterStation('${escHtml(iid)}')">⬡ Open deck map</button>
+             <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="staUnlinkInterior('${found.loc.id}','${found.bodyId}')">✕ Unlink deck map</button>`
+          : `<button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="staCreateInterior('${found.loc.id}','${found.bodyId}')">⬡ Create deck map interior</button>`;
+      }
+      html += `<div class="s-sec ref-only" style="margin-bottom:10px">
       <div class="s-sec-lbl" style="color:#9B59B6">Design — ${escHtml(found.loc.name)}</div>
       <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="openLocationEditor('${found.loc.id}')">✦ Edit Location</button>
       <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="beginPlaceLocation('${found.bodyId}','${found.loc.id}')">📍 Reposition</button>
+      ${interiorBtns}
       <button class="design-add-btn" style="width:100%;border-color:#d45050;color:#d45050" onclick="deleteLocation('${found.loc.id}')">🗑 Delete Location</button>
     </div>`;
+    }
   }
   if(body){
     html += designBodySectionHTML(body);
@@ -1489,6 +1503,31 @@ async function commitNewLocation(d){
   showToast('Location "' + loc.name + '" added');
   selectBodyLocation(loc.id);
 }
+// ── Authored deck-map interiors: create/link and unlink (Design Studio) ─────
+// The station itself lives in stationAdditions (js/40, campaign-namespaced);
+// the location carries only interiorId, written through writeLocationFields so
+// base-vs-added branching is handled once. Unlink keeps the station data.
+async function staCreateInterior(locId, bodyId){
+  if(!isReferee() || typeof stationAdditions === 'undefined') return;
+  const found = findLocation(locId); if(!found) return;
+  const sid = 'sta-' + locId;
+  if(!stationAdditions[sid]){
+    stationAdditions[sid] = { name: found.loc.name || 'Station', areas: {
+      'arrival': { label:'Arrival Bay', sub:'Where visitors dock', tag:'ARRIVAL', ac:'#5b8ef0', read:'', conn:[], subs:{} }
+    } };
+    if(typeof saveAuthoredStations === 'function') await saveAuthoredStations();
+  }
+  await writeLocationFields(locId, bodyId, { interiorId: sid });
+  selectBodyLocation(locId);
+  enterStation(sid);
+}
+async function staUnlinkInterior(locId, bodyId){
+  if(!isReferee()) return;
+  if(!confirm('Unlink this deck map from the location? (The station itself is kept — relink it any time.)')) return;
+  await writeLocationFields(locId, bodyId, { interiorId: '' });
+  selectBodyLocation(locId);
+}
+
 // Write a set of {field:value} onto a location, branching base vs added exactly
 // like the body engine: an added location is edited in place; a base location
 // stores only its changed fields as overrides (vs BASE_LOCATIONS) so the base
@@ -1599,16 +1638,23 @@ function selectBodyLocation(locId){
       <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
       <div style="font-size:12px;max-width:220px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
     const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
-    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+    setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
     return;
   }
 
   if(!pm){ html += revealToggleRowHTML(locId); }
 
-  // Interior entry (e.g. Aurelia Orbital Station). The Station sub-app itself is
-  // unchanged for Phase 3 — only its entry point moved onto the generic view.
-  if(loc.isStation || loc.interiorId){
-    html += `<button class="view-close-btn" style="margin-bottom:10px" onclick="enterStation()">⬡ Enter ${escHtml(loc.name)}</button>`;
+  // Interior entry. Built-in campaign: the hand-drawn Aurelia deck map.
+  // Authored campaigns: a location whose interiorId points at a referee-
+  // authored station (created in the Design Studio) opens ITS generated map.
+  {
+    const authored = typeof isAuthoredCampaign === 'function' && isAuthoredCampaign();
+    const openable = authored
+      ? !!(loc.interiorId && typeof stationAdditions !== 'undefined' && stationAdditions[loc.interiorId])
+      : (loc.isStation || loc.interiorId);
+    if(openable){
+      html += `<button class="view-close-btn" style="margin-bottom:10px" onclick="enterStation('${escHtml(loc.interiorId||'')}')">⬡ Enter ${escHtml(loc.name)}</button>`;
+    }
   }
 
   // Overview
@@ -1643,7 +1689,7 @@ function selectBodyLocation(locId){
   mountPlayerNotes('loc-'+locId);
   // Location editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){
   if(selectedBody) buildBodyView(selectedBody);
@@ -1677,16 +1723,37 @@ function playViewTransition(switchFn){
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
 }
 
-function enterStation(){
+function enterStation(interiorId){
+  const authored = typeof isAuthoredCampaign === 'function' && isAuthoredCampaign();
+  let sid = interiorId || 'aurelia';
+  if(authored){
+    // Authored campaigns only ever open THEIR OWN stations — never Aurelia's
+    // deck map, and never a dangling interior id (scene pushes, stale links).
+    if(!interiorId || typeof stationAdditions === 'undefined' || !stationAdditions[interiorId]){
+      if(typeof showToast === 'function') showToast('No deck map linked here — create one from the location in the Design Studio');
+      return;
+    }
+    sid = interiorId;
+  }
   playViewTransition(() => {
+    if(typeof currentStationId !== 'undefined' && currentStationId !== sid && typeof stationResetSel === 'function') stationResetSel();
+    if(typeof currentStationId !== 'undefined') currentStationId = sid;
     currentView = "station";
     document.getElementById("view-galaxy").classList.add("v-hidden");
     document.getElementById("view-system").classList.add("v-hidden");
     document.getElementById("view-body").classList.add("v-hidden");
     document.getElementById("view-station").classList.remove("v-hidden");
     document.getElementById("view-station").style.display="flex";
-    document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
-    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+    const def = (typeof stationDef === 'function') ? stationDef() : null;
+    document.getElementById("hdr-title").textContent = ((def && def.name) || 'Aurelia Orbital Station').toUpperCase();
+    if(sid === 'aurelia'){
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+    } else {
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], (def && def.name) || 'Station');
+    }
+    if(typeof renderStationMap === 'function') renderStationMap();
+    if(typeof updateNodes === 'function') updateNodes();
+    if(typeof renderHeader === 'function'){ renderHeader(); renderTabs(); renderDetail(); renderFooter(); }
     updateStationLocks();
   });
 }
@@ -1704,9 +1771,9 @@ function goSystem(){
     document.getElementById("hdr-title").textContent = currentSystemName().toUpperCase()+" "+layerShort('system','System').toUpperCase();
     if(selectedBody){
       const b=getBodies().find(x=>x.id===selectedBody);
-      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");
     } else {
-      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"}], currentSystemName());
     }
     updateBackBtn();
   });
@@ -1727,7 +1794,16 @@ function setBreadcrumb(crumbs,current){
 // from the current view; hidden at the root (system view, no body selected).
 function navBack(){
   if(currentView === 'galaxy'){ return; }                 // top of the stack
-  if(currentView === 'station'){ goAurelia(); return; }
+  if(currentView === 'station'){
+    // Authored stations step back to their host body/location; Aurelia keeps
+    // its bespoke body close-up.
+    if(typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia'){
+      if(selectedBody){ goBodyView(selectedBody); if(selectedBodyLoc) selectBodyLocation(selectedBodyLoc); }
+      else goSystem();
+      return;
+    }
+    goAurelia(); return;
+  }
   if(currentView === 'body'){ goSystemFromBody(); return; }
   if(currentView === 'system' && selectedBody){ goSystemOverview(); return; }
   if(currentView === 'system'){ goGalaxy(); return; }      // system root → back to the galaxy
