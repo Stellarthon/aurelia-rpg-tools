@@ -214,6 +214,40 @@ const GALAXY_NODES = [
 // apply retroactively to the original systems and stay restorable.
 const GALAXY_NODES_BASE = GALAXY_NODES.map(n => JSON.parse(JSON.stringify(n)));
 
+// ── Campaign Pack content inversion — the galaxy itself ─────────────────────
+// An AUTHORED campaign replaces the built-in Archon Gambit starmap WHOLESALE
+// here, before GX_MAP, the hex engine, or the economy ever read it: a new
+// campaign genuinely starts blank (or with whatever galaxyNodes its pack
+// carries) and the referee charts systems/regions in Design Mode from there.
+// The built-in campaign never enters this branch — behaviour stays
+// byte-identical. The HX frontier-star fill keys off placed campaign systems,
+// so an empty pack gets no uncharted filler either. js/05 loads first, so
+// activeCampaignId / buildAuthoredPack are available at this point; the
+// authored pack's config+content live in localStorage (created by
+// createCampaign / installImportedPack), safe to read synchronously.
+if(typeof activeCampaignId !== 'undefined' && typeof DEFAULT_CAMPAIGN_ID !== 'undefined'
+   && activeCampaignId !== DEFAULT_CAMPAIGN_ID && typeof buildAuthoredPack === 'function'){
+  try {
+    const _pk = buildAuthoredPack(activeCampaignId);
+    const _pkNodes = (_pk.content && _pk.content.galaxyNodes) || [];
+    GALAXY_NODES.length = 0;
+    GALAXY_NODES_BASE.length = 0;
+    _pkNodes.forEach(n => {
+      GALAXY_NODES.push(JSON.parse(JSON.stringify(n)));
+      GALAXY_NODES_BASE.push(JSON.parse(JSON.stringify(n)));
+    });
+    const _pkFacs = (_pk.content && _pk.content.factions) || {};
+    Object.keys(GALAXY_FACTIONS).forEach(k => delete GALAXY_FACTIONS[k]);
+    Object.keys(_pkFacs).forEach(k => GALAXY_FACTIONS[k] = JSON.parse(JSON.stringify(_pkFacs[k])));
+    // Every galaxy needs the two protected fallback regions the region editor
+    // guarantees (systems from removed regions reassign to `independent`).
+    if(!GALAXY_FACTIONS.independent) GALAXY_FACTIONS.independent = { name:'Independent', color:'#9fb0c8' };
+    if(!GALAXY_FACTIONS.uncharted)   GALAXY_FACTIONS.uncharted   = { name:'Uncharted',   color:'#5b6575' };
+    Object.keys(GALAXY_FACTIONS_BASE).forEach(k => delete GALAXY_FACTIONS_BASE[k]);
+    Object.keys(GALAXY_FACTIONS).forEach(k => GALAXY_FACTIONS_BASE[k] = JSON.parse(JSON.stringify(GALAXY_FACTIONS[k])));
+  } catch(e){ console.error('Campaign pack: galaxy content swap failed — falling back to the built-in map', e); }
+}
+
 // Snapshot each node's ORIGINAL lore connections before the live jump-lane
 // overlay (GX_LANES) overwrites `connections` further down. The economy sim
 // trades along these established commercial routes — independent of whatever
@@ -1910,7 +1944,14 @@ const HX = (function(){
       `<br><b style="color:#D4A843">Range</b> on ${fuelAboard.toFixed(0)}/${fuelMax.toFixed(0)}t + refuelling: <b>${rg.count}</b> system${rg.count===1?'':'s'}`+
       (rg.farthest?` — farthest <b>${eh(disp(rg.farthest))}</b> (${rg.farthestJumps} jump${rg.farthestJumps===1?'':'s'})`:'')+'.'; }
   function renderSel(){ const el=document.getElementById('hx-sel-block'); if(!el) return;
-    if(!origin){ el.innerHTML=''; return; }
+    if(!origin){
+      // Empty galaxy — a freshly-authored campaign before its first system.
+      // Keep the panel informative and keep the Design Studio in step, so the
+      // referee's "＋ Add new system" affordance is reachable from a blank map.
+      el.innerHTML=`<div class="hx-small" style="margin-top:8px">No systems charted in this galaxy yet. Open <b>Design Mode</b> and chart the first one — tap an empty hex, or use “＋ Add new system” in the Design Studio panel.</div>`;
+      if(typeof renderDesignPanel==='function') renderDesignPanel();
+      return;
+    }
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const s=selected, fac=s?effFac(s.fac):null, dHex=s?hexDist(s,origin):0; let html='';
     // Each panel section is a collapsible <details> dropdown. `sec()` closes the
