@@ -3927,7 +3927,8 @@ body.light-mode-body #starfield{display:none}
    dragged panel writes an inline top and still overrides this. */
 #quest-wrap,#journal-wrap,#turnorder-wrap,#ship-wrap,#combat-wrap,#cal-wrap,
 #disc-wrap,#npc-wrap,#rep-wrap,#funds-wrap,#gen-wrap,#econ-wrap,
-#cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap,#clocks-wrap,#scenes-wrap,#whispers-wrap{
+#cargo-wrap,#handouts-wrap,#downtime-wrap,#wiki-wrap,#contacts-wrap,#clocks-wrap,#scenes-wrap,#whispers-wrap,
+#galnet-wrap,#standing-wrap,#trade-wrap,#design-wrap,#board-wrap{
   top:calc(var(--hdr-h,82px) + 6px)
 }
 

@@ -960,7 +960,10 @@ function plannerSendCurrentView(){
     view: (typeof currentView !== 'undefined') ? currentView : 'galaxy',
     systemId: (typeof currentSystemId !== 'undefined') ? currentSystemId : null,
     bodyId: (typeof selectedBody !== 'undefined') ? selectedBody : null,
-    locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null
+    locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null,
+    // Carry the station id so "Send current view" lands players on the authored
+    // station's deck plan too — applyViewSpec (js/55) re-enters it by id.
+    stationId: (typeof currentStationId !== 'undefined') ? currentStationId : null
   };
   forcedViewSet(spec, currentViewLabel(spec));
 }
