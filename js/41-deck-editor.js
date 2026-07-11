@@ -156,7 +156,7 @@ function dkeTokenInitials(name){
   const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
   return (((parts[0]||'')[0]||'') + ((parts[1]||'')[0]||'')).toUpperCase() || '?';
 }
-function dkeTokenSVG(t, opt, st){
+function dkeTokenSVG(t, opt, st, idx){
   const C = DKE_CELL, eh = dkeEsc, r = 13;
   const cx = (t.x+.5)*C, cy = (t.y+.5)*C, col = dkeTokenColour(t.n);
   // Portrait on top of the initials disc: if the character has no uploaded
@@ -183,9 +183,16 @@ function dkeTokenSVG(t, opt, st){
     ? `<circle cx="${cx+10}" cy="${cy-10}" r="6.5" fill="#10131c" stroke="${st.cur ? '#D4A843' : '#7f93b8'}" stroke-width="1.2"/>`
       + `<text x="${cx+10}" y="${cy-7.5}" text-anchor="middle" font-size="7" font-weight="700" fill="${st.cur ? '#D4A843' : '#a3a9bf'}" font-family="system-ui,sans-serif">${st.ord}</text>`
     : '';
-  // On the station view tokens are tap-transparent so a tap on one still opens
-  // the room beneath; the editor hit-tests by coordinate, so it needs nothing.
-  return `<g${opt.interactive ? ' style="pointer-events:none"' : ''}><title>${eh(t.n)}</title>`
+  // Station view: for PLAYERS tokens are tap-transparent so a tap on one still
+  // opens the room beneath. For the REFEREE they are grab targets — data-tk
+  // marks the group for the map-drag handlers below, and touch-action:none is
+  // scoped to the token only, so room taps keep firing their click on iOS
+  // (the v33 gotcha: click dies under a broad touch-action:none).
+  const refDrag = opt.interactive && typeof isReferee === 'function' && isReferee();
+  const gAttrs = opt.interactive
+    ? (refDrag ? ` data-tk="${idx}" style="touch-action:none;cursor:grab"` : ' style="pointer-events:none"')
+    : '';
+  return `<g${gAttrs}><title>${eh(t.n)}</title>`
     + (down ? `<g opacity=".45">${disc}</g>` : disc)
     + pulse + strike + badge
     + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(t.n)}</text>`
@@ -258,7 +265,7 @@ function dkeContentSVG(deck, opt){
     // because the editor canvas and the station map can be in the DOM at once.
     out += `<defs><clipPath id="${eh(opt.idp||'sta')}-tkclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>`;
     const initRows = dkeInitRows();
-    deck.tokens.forEach(t => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n)); });
+    deck.tokens.forEach((t, i) => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i); });
   }
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   return out;
@@ -834,6 +841,83 @@ function dkeTapAction(p){
     dkeCommit();
   }
 }
+// ═══ TOKEN DRAG ON THE STATION VIEW (referee, no editor needed) ══════════════
+// Delegated pointer handlers on #mapsvg (they survive the innerHTML re-renders).
+// A drag starts only from a token group (data-tk, referee render); anything
+// under the 5px threshold stays a plain tap so room taps behave as before.
+// During the drag the token <g> is moved by transform (re-queried each move in
+// case a poll re-render swapped the DOM); the drop snaps to the cell under the
+// pointer, saves, and swallows the one click the drop would otherwise fire.
+let dkeMapDrag = null;          // {i, sx, sy, p0:{x,y}, last:{x,y}|null, moved}
+let dkeMapClickGuardUntil = 0;  // swallow clicks until this timestamp after a drag
+
+function dkeMapDeck(){
+  if(typeof currentStationId === 'undefined' || currentStationId === 'aurelia') return null;
+  const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
+  return (s && s.deck && deckHasContent(s.deck)) ? s.deck : null;
+}
+// Client → svg user coords. The station map is letterboxed (preserveAspectRatio
+// default), so unlike the editor's aspect-managed viewBox this needs the CTM.
+function dkeMapPt(ev){
+  const svg = document.getElementById('mapsvg');
+  const m = svg && svg.getScreenCTM(); if(!m) return null;
+  const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
+  return { x: p.x, y: p.y };
+}
+function dkeMapDown(ev){
+  if(dkeIsOpen || typeof isReferee !== 'function' || !isReferee()) return;
+  const deck = dkeMapDeck(); if(!deck) return;
+  const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
+  if(!tg) return;
+  const i = parseInt(tg.getAttribute('data-tk'), 10);
+  if(!(deck.tokens||[])[i]) return;
+  const p0 = dkeMapPt(ev); if(!p0) return;
+  dkeMapDrag = { i, sx: ev.clientX, sy: ev.clientY, p0, last: null, moved: false };
+  const svg = document.getElementById('mapsvg');
+  try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+}
+function dkeMapMove(ev){
+  const g = dkeMapDrag; if(!g) return;
+  if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
+  g.moved = true;
+  ev.preventDefault();
+  const p = dkeMapPt(ev); if(!p) return;
+  g.last = p;
+  const svg = document.getElementById('mapsvg');
+  const el = svg && svg.querySelector('g[data-tk="' + g.i + '"]');
+  if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
+}
+function dkeMapUp(ev){
+  const g = dkeMapDrag; if(!g) return;
+  dkeMapDrag = null;
+  if(!g.moved) return;                       // plain tap — let normal clicks run
+  const deck = dkeMapDeck();
+  const p = dkeMapPt(ev) || g.last;
+  if(deck && p && deck.tokens[g.i]){
+    deck.tokens[g.i].x = Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL)));
+    deck.tokens[g.i].y = Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL)));
+    if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  }
+  dkeMapClickGuardUntil = Date.now() + 400;  // the drop's click must not open an area
+  if(typeof renderStationMap === 'function'){ renderStationMap(); }
+  if(typeof updateNodes === 'function') updateNodes();
+}
+function dkeMapClickGuard(ev){
+  if(Date.now() < dkeMapClickGuardUntil){
+    dkeMapClickGuardUntil = 0;
+    ev.stopPropagation(); ev.preventDefault();
+  }
+}
+(function dkeMapDragInit(){
+  const svg = document.getElementById('mapsvg');
+  if(!svg) return;
+  svg.addEventListener('pointerdown', dkeMapDown);
+  svg.addEventListener('pointermove', dkeMapMove);
+  svg.addEventListener('pointerup', dkeMapUp);
+  svg.addEventListener('pointercancel', dkeMapUp);
+  svg.addEventListener('click', dkeMapClickGuard, true);
+})();
+
 function dkeKeyDown(ev){
   if(!dkeIsOpen) return;
   const tag = (ev.target && ev.target.tagName) || '';
