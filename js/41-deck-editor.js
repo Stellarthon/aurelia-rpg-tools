@@ -10,10 +10,16 @@
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
 // (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v'}] (edge from
 // vertex (x,y) rightward / downward), props:[{t,x,y,r}] (cell + rotation),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y}] (areaId marker) }.
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y}] (areaId marker),
+// tokens:[{n,x,y}] (name + cell — PCs and NPCs on the map) }.
 // A link marker claims its ROOM: every floor cell reachable from it without
 // crossing an axis-aligned wall becomes the tap target on the station view,
 // so players tap anywhere in the room — not just the marker — to open the area.
+// Tokens carry their display NAME in the deck (the NPC roster is referee-only,
+// so player devices could never resolve an id). Art: the character's uploaded
+// sheet portrait (public bucket, portraitUrlFor) clipped to a circle — when no
+// portrait exists the <image> paints nothing and the initials disc beneath
+// shows through, so no async portrait lookup is needed.
 //
 // The referee edits in a full-screen overlay (#dke-wrap, built lazily);
 // players get the read-only render via deckStationSVG() from renderStationMap.
@@ -36,16 +42,16 @@ const DKE_PROPS = {
 };
 
 // ── Deck data helpers ────────────────────────────────────────────────────────
-function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[] }; }
+function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
 function dkeNorm(d){
   d.w = Math.max(4, Math.min(64, parseInt(d.w,10) || 24));
   d.h = Math.max(4, Math.min(64, parseInt(d.h,10) || 16));
-  ['floors','walls','doors','props','labels','links'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
+  ['floors','walls','doors','props','labels','links','tokens'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
   return d;
 }
 function deckHasContent(d){
   return !!(d && ((d.floors||[]).length || (d.walls||[]).length || (d.doors||[]).length
-    || (d.props||[]).length || (d.labels||[]).length || (d.links||[]).length));
+    || (d.props||[]).length || (d.labels||[]).length || (d.links||[]).length || (d.tokens||[]).length));
 }
 // Current station's deck (editor always mutates through here so undo/redo and
 // the poll's stationAdditions replacement can never leave a stale reference).
@@ -104,6 +110,37 @@ function dkeRoomOutlineD(cells){
     if(!set.has((c.x+1)+','+c.y)) d += `M${(c.x+1)*C},${c.y*C}v${C}`;
   });
   return d;
+}
+
+// ── Tokens ───────────────────────────────────────────────────────────────────
+const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
+function dkeTokenColour(name){
+  let h = 0; const s = String(name||'');
+  for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return DKE_TOKEN_COLS[h % DKE_TOKEN_COLS.length];
+}
+function dkeTokenInitials(name){
+  if(typeof portraitInitials === 'function') return portraitInitials(name);
+  const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
+  return (((parts[0]||'')[0]||'') + ((parts[1]||'')[0]||'')).toUpperCase() || '?';
+}
+function dkeTokenSVG(t, opt){
+  const C = DKE_CELL, eh = dkeEsc, r = 13;
+  const cx = (t.x+.5)*C, cy = (t.y+.5)*C, col = dkeTokenColour(t.n);
+  // Portrait on top of the initials disc: if the character has no uploaded
+  // photo the <image> paints nothing (and onerror prunes it), so the initials
+  // show through. No portraitVer cache-buster here — a changed photo may stay
+  // stale until a reload, which is fine for a map counter.
+  const url = (typeof portraitUrlFor === 'function') ? portraitUrlFor(t.n) : '';
+  // On the station view tokens are tap-transparent so a tap on one still opens
+  // the room beneath; the editor hit-tests by coordinate, so it needs nothing.
+  return `<g${opt.interactive ? ' style="pointer-events:none"' : ''}><title>${eh(t.n)}</title>`
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="${col}" stroke-width="2"/>`
+    + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(t.n))}</text>`
+    + (url ? `<image x="${cx-r}" y="${cy-r}" width="${2*r}" height="${2*r}" href="${eh(url)}" clip-path="url(#${eh(opt.idp||'sta')}-tkclip)" preserveAspectRatio="xMidYMid slice" onerror="this.remove()"/>` : '')
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="2"/>`
+    + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(t.n)}</text>`
+    + `</g>`;
 }
 
 // ── Shared SVG renderer (editor canvas + read-only station view) ─────────────
@@ -166,6 +203,13 @@ function dkeContentSVG(deck, opt){
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
   out += roomLayer + markerLayer;
+  if((deck.tokens||[]).length){
+    // One shared circle clip for every portrait (objectBoundingBox = it fits
+    // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
+    // because the editor canvas and the station map can be in the DOM at once.
+    out += `<defs><clipPath id="${eh(opt.idp||'sta')}-tkclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>`;
+    deck.tokens.forEach(t => { out += dkeTokenSVG(t, opt); });
+  }
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   return out;
 }
@@ -179,6 +223,7 @@ function dkeSelHighlightSVG(deck, sel){
     : `<rect x="${it.x*C-6}" y="${it.y*C}" width="12" height="${C}" ${S}/>`;
   if(sel.kind === 'prop')  return `<rect x="${it.x*C+2}" y="${it.y*C+2}" width="${C-4}" height="${C-4}" rx="3" ${S}/>`;
   if(sel.kind === 'link')  return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="13" ${S}/>`;
+  if(sel.kind === 'token') return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="16" ${S}/>`;
   if(sel.kind === 'label'){
     const hw = Math.max(20, String(it.t||'').length*3.1) + 6;
     return `<rect x="${it.x*C-hw}" y="${it.y*C-12}" width="${hw*2}" height="18" rx="3" ${S}/>`;
@@ -193,12 +238,12 @@ function deckStationViewBox(deck){
 function deckStationSVG(deck, def){
   const name = ((def && def.name) || 'STATION').toUpperCase();
   return `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(name)} — DECK PLAN</text>`
-    + dkeContentSVG(dkeNorm(deck), { interactive:true });
+    + dkeContentSVG(dkeNorm(deck), { interactive:true, idp:'sta' });
 }
 
 // ═══ EDITOR ══════════════════════════════════════════════════════════════════
 let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [];
-let dkePropType = 'console', dkeLinkArea = '';
+let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
 let dkeView = { x:0, y:0, w:100, h:100 };
 let dkePoly = null;                 // active wall-run last vertex {x,y}
 let dkeGesture = null;              // single-pointer gesture state
@@ -209,7 +254,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
   ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Door'], ['prop','📦 Props'],
-  ['label','🏷 Label'], ['link','⊕ Area link'], ['erase','⌫ Erase']
+  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
@@ -220,6 +265,7 @@ const DKE_HINTS = {
   poly:'Tap corner after corner to chain walls. End the run from the bar above.',
   door:'Tap a cell edge to place a door there. Tap again to remove it.',
   prop:'Pick a stamp above, then tap a cell. Tap the same prop again to rotate it.',
+  token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
   erase:'Tap or drag over anything to delete it.'
@@ -303,7 +349,7 @@ function dkeStudioRowHTML(){
 function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeApplyView(); }
 function dkeRenderContent(){
   const d = dkeD(), g = document.getElementById('dke-content');
-  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel }) : '';
+  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, idp:'dke' }) : '';
 }
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
@@ -331,6 +377,15 @@ function dkeRenderSub(){
     html = Object.keys(DKE_PROPS).map(k =>
       `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(DKE_PROPS[k].n)}">`
       + `<svg viewBox="-16 -16 32 32" width="20" height="20" style="vertical-align:middle">${DKE_PROPS[k].g}</svg> ${eh(DKE_PROPS[k].n)}</button>`).join('');
+  } else if(dkeTool === 'token'){
+    const crew = (typeof crewRoster === 'function') ? crewRoster() : [];
+    if(!dkeTokenName && crew.length) dkeTokenName = crew[0];
+    html = crew.map(n => {
+      const col = dkeTokenColour(n);
+      return `<button class="dke-tool${dkeTokenName===n?' on':''}" onclick="dkeTokenName='${eh(n)}';dkeRenderSub()">`
+        + `<span class="dke-tk-chip" style="border-color:${col};color:${col}">${eh(dkeTokenInitials(n))}</span> ${eh(n)}</button>`;
+    }).join('')
+    + `<input class="hx-edit-in" id="dke-token-custom" placeholder="Or any name — Vey, Pirate 1…" style="max-width:200px">`;
   } else if(dkeTool === 'label'){
     html = `<input class="hx-edit-in" id="dke-label-text" placeholder="Label text — then tap the map…" style="max-width:260px">`;
   } else if(dkeTool === 'link'){
@@ -349,6 +404,7 @@ function dkeRenderSub(){
     if(it){
       if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button>`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
+      if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
       html += `<button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
   }
@@ -357,6 +413,10 @@ function dkeRenderSub(){
   if(dkeTool === 'label'){
     const inp = document.getElementById('dke-label-text');
     if(inp){ inp.value = dkeLabelTextVal; inp.addEventListener('input', function(){ dkeLabelTextVal = this.value; }); }
+  }
+  if(dkeTool === 'token'){
+    const inp = document.getElementById('dke-token-custom');
+    if(inp) inp.addEventListener('input', function(){ dkeTokenName = this.value.trim(); });
   }
 }
 let dkeLabelTextVal = '';
@@ -437,6 +497,8 @@ function dkeHitTest(p){
     const i = d.doors.findIndex(dr => dr.x === e.x && dr.y === e.y && dr.o === e.o);
     if(i >= 0) return { kind:'door', i };
   }
+  for(let i = d.tokens.length - 1; i >= 0; i--)
+    if(Math.hypot(u.x - (d.tokens[i].x+.5), u.y - (d.tokens[i].y+.5)) < .5) return { kind:'token', i };
   for(let i = d.props.length - 1; i >= 0; i--)
     if(Math.floor(u.x) === d.props[i].x && Math.floor(u.y) === d.props[i].y) return { kind:'prop', i };
   for(let i = d.links.length - 1; i >= 0; i--)
@@ -511,6 +573,13 @@ function dkeEditLabelSel(v){
   d.labels[dkeSel.i].t = t;
   dkeCommit();
 }
+function dkeEditTokenSel(v){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'token') return;
+  const n = String(v||'').trim(); if(!n) return;
+  dkeSnapshot();
+  d.tokens[dkeSel.i].n = n;
+  dkeCommit();
+}
 function dkePolyEnd(silent){
   if(dkePoly){ dkePoly = null; dkeGhost(''); if(!silent) dkeRenderSub(); }
 }
@@ -543,7 +612,7 @@ function dkePointerDown(ev){
     dkeEraseAt(p, dkeGesture);
   } else if(dkeTool === 'select'){
     const hit = dkeHitTest(p);
-    if(hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link')){
+    if(hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token')){
       dkeGesture = { t:'move', hit, sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false };
     } else {
       dkeSel = hit; dkeRenderContent(); dkeRenderSub();
@@ -690,6 +759,15 @@ function dkeTapAction(p){
     if(existing && existing.t === dkePropType) existing.r = ((existing.r||0) + 90) % 360;
     else if(existing){ existing.t = dkePropType; existing.r = 0; }
     else d.props.push({ t: dkePropType, x: c.x, y: c.y, r: 0 });
+    dkeCommit();
+  } else if(dkeTool === 'token'){
+    const c = dkeCell(p); if(!c) return;
+    const n = String(dkeTokenName||'').trim();
+    if(!n){ if(typeof showToast === 'function') showToast('Pick a character or type a name first'); return; }
+    const i = d.tokens.findIndex(t => t.x === c.x && t.y === c.y);
+    dkeSnapshot();
+    if(i >= 0) d.tokens.splice(i, 1);           // tap a placed token → remove it
+    else d.tokens.push({ n, x: c.x, y: c.y });
     dkeCommit();
   } else if(dkeTool === 'label'){
     const t = String(dkeLabelTextVal||'').trim();

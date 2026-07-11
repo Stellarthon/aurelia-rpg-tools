@@ -4385,3 +4385,4 @@ html.is-phone #hx-pbody{
 #dke-canvas{flex:1;min-height:0;touch-action:none;background:var(--bg0);overscroll-behavior:contain}
 #dke-svg{width:100%;height:100%;display:block}
 .dke-hint{font-size:10px;color:var(--tx1);padding:5px 10px;background:var(--bg1);border-top:.5px solid var(--bd0)}
+.dke-tk-chip{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1.5px solid;font-size:8px;font-weight:700;flex:0 0 auto}
