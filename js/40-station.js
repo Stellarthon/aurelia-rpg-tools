@@ -43,7 +43,19 @@ let _origStationMap = null;
 function renderStationMap(){
   const svg = document.getElementById('mapsvg'); if(!svg) return;
   if(_origStationMap == null) _origStationMap = svg.innerHTML;
-  if(currentStationId === 'aurelia'){ svg.innerHTML = _origStationMap; return; }
+  if(currentStationId === 'aurelia'){
+    svg.setAttribute('viewBox','0 0 400 500');
+    svg.innerHTML = _origStationMap; return;
+  }
+  // A referee-drawn grid deck plan (js/41-deck-editor.js) beats the automatic
+  // ring layout; the plan needs its own viewBox, so restore 400×500 otherwise.
+  const s = stationAdditions[currentStationId];
+  if(s && s.deck && typeof deckHasContent === 'function' && deckHasContent(s.deck)){
+    svg.setAttribute('viewBox', deckStationViewBox(s.deck));
+    svg.innerHTML = deckStationSVG(s.deck, stationDef());
+    return;
+  }
+  svg.setAttribute('viewBox','0 0 400 500');
   svg.innerHTML = authoredStationMapSVG();
 }
 function authoredStationMapSVG(){
@@ -826,6 +838,7 @@ function designStationViewHTML(){
   const s = staEnsure();
   const ids = Object.keys(s.areas || {});
   let html = `<label class="hx-edit-row"><span>Name</span><input class="hx-edit-in" value="${eh(s.name||'')}" onchange="staSetName(this.value)"></label>`;
+  if(typeof dkeStudioRowHTML === 'function') html += dkeStudioRowHTML();
   html += `<div class="hx-small" style="margin:2px 0 8px">Areas are the rooms on the deck map. Tap one on the map to write its read-aloud, NPCs, checks and events with the usual ✏ editors.</div>`;
   ids.forEach(id => {
     const a = s.areas[id];
