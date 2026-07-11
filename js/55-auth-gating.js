@@ -1063,7 +1063,7 @@ function applyViewSpec(spec){
   try {
     if(spec.view === 'galaxy'){ if(typeof goGalaxy === 'function') goGalaxy(); return; }
     if(spec.systemId && typeof enterSystem === 'function') enterSystem(spec.systemId);
-    if(spec.view === 'station'){ if(typeof enterStation === 'function') enterStation(); return; }
+    if(spec.view === 'station'){ if(typeof enterStation === 'function') enterStation(spec.stationId); return; }
     if(spec.view === 'system') return;
     if(spec.bodyId && typeof goBodyView === 'function') goBodyView(spec.bodyId);
     if(spec.locId && typeof selectBodyLocation === 'function') selectBodyLocation(spec.locId);

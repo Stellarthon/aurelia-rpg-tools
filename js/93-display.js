@@ -66,6 +66,10 @@ function tableViewSpec(){
     systemId: (typeof currentSystemId !== 'undefined') ? currentSystemId : null,
     bodyId: (typeof selectedBody !== 'undefined') ? selectedBody : null,
     locId: (typeof selectedBodyLoc !== 'undefined') ? selectedBodyLoc : null,
+    // Which station the referee is inside ('aurelia' = built-in, else an authored
+    // interior id) so a deck plan mirrors to the TV — applyViewSpec re-enters it by
+    // id. Absent/undefined falls back to the built-in station, as before.
+    stationId: (typeof currentStationId !== 'undefined') ? currentStationId : null,
     // Which galaxy map the referee is on (HEX | REAL) — the display mirrors it
     // without persisting, so the TV's own local preference is never clobbered.
     mapMode: (typeof RealMap !== 'undefined') ? RealMap.mode() : 'hex'
