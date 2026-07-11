@@ -26,8 +26,25 @@ function imperialNow(){ return { day: imperialDate.day, year: imperialDate.year 
 function imperialOrdinal(d){ return (d.year * IMPERIAL_YEAR_DAYS) + (d.day - 1); } // absolute day index
 function ordinalToImperial(n){ return { year: Math.floor(n / IMPERIAL_YEAR_DAYS), day: (n % IMPERIAL_YEAR_DAYS) + 1 }; }
 function addImperialDays(d, n){ return ordinalToImperial(imperialOrdinal(d) + n); }
-function formatImperial(d){ return String(d.day).padStart(3,'0') + '-' + d.year; }
-function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[(d.day - 2) % 7]; }
+// Presentation is Campaign Pack config (pkCalendar, js/05): the {day, year}
+// spine is universal bookkeeping; how a date READS belongs to the setting.
+// Tokens: {ddd} zero-padded day-of-year · {dd} · {d} · {yyyy} · {yy}.
+function formatImperial(d){
+  const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null;
+  const fmt = (cal && cal.format) || '{ddd}-{yyyy}';
+  return fmt.replace(/{ddd}/g, String(d.day).padStart(3,'0'))
+            .replace(/{dd}/g, String(d.day).padStart(2,'0'))
+            .replace(/{d}/g, String(d.day))
+            .replace(/{yyyy}/g, String(d.year))
+            .replace(/{yy}/g, String(Math.abs(d.year) % 100).padStart(2,'0'));
+}
+function calendarChip(){ const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null; return (cal && cal.chip != null) ? cal.chip : 'IMP'; }
+function calendarEra(){ const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null; return (cal && cal.era != null) ? cal.era : 'Imperial'; }
+function imperialWeekday(d){
+  const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null;
+  const wd = (cal && Array.isArray(cal.weekdays) && cal.weekdays.length === 7) ? cal.weekdays : IMPERIAL_WEEKDAYS;
+  return d.day === 1 ? 'Holiday' : wd[(d.day - 2) % 7];
+}
 
 // ── Persistence + sync ──
 async function loadImperialDate(){
@@ -51,8 +68,9 @@ async function saveCampaignEvents(){
 function renderImperialDate(){
   const el = document.getElementById('impdate-display');
   if(!el) return;
-  el.innerHTML = `<span class="impd-lbl">IMP</span>${formatImperial(imperialDate)}`;
-  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + ' Imperial';
+  const era = calendarEra();
+  el.innerHTML = `<span class="impd-lbl">${escQH(calendarChip())}</span>${escQH(formatImperial(imperialDate))}`;
+  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + (era ? ' ' + era : '');
 }
 
 // ── Date mutation (referee) ──
@@ -157,8 +175,8 @@ function renderCalendarPanel(){
 
   body.innerHTML = `
     <div class="cal-now">
-      <div class="cal-now-date">${formatImperial(now)}</div>
-      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year} Imperial</div>
+      <div class="cal-now-date">${escQH(formatImperial(now))}</div>
+      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year}${calendarEra() ? ' ' + escQH(calendarEra()) : ''}</div>
     </div>
     ${controls}
     <div class="cal-tl-title">Campaign Timeline</div>
@@ -864,7 +882,7 @@ function renderFundsPanel(){
   // All purses — referee only
   if(ref){
     h += `<div class="fund-lbl" style="margin-top:2px">Character purses</div><div class="fund-card">`;
-    KNOWN_CHARACTERS.forEach(n => { const safe = n.replace(/'/g, "\\'");
+    crewRoster().forEach(n => { const safe = n.replace(/'/g, "\\'");
       h += `<div class="fund-purse"><span>${escQH(n)}</span><span style="display:flex;gap:6px;align-items:center"><b style="font-family:monospace;color:var(--tx0)">${fmtCr(purseOf(n))}</b>
         <button class="disc-mini" onclick="refAdjustPurse('${safe}',1)">+</button><button class="disc-mini" onclick="refAdjustPurse('${safe}',-1)">−</button></span></div>`; });
     h += `</div>`;
@@ -1028,7 +1046,7 @@ const ORACLE_GOODS = ['refined fuel','medical supplies','luxury goods','machine 
 const ORACLE_PLACES = ['Aurelia Station','the Aurelia approaches','Cairn Station','the outer berths','the concourse','the elevator gate'];
 const RUMOUR_TEMPLATES = {
   generic: [
-    'A dock worker swears {ship} was flagged on a Hegemony watch advisory.',
+    'A dock worker swears {ship} was flagged on a patrol watch advisory.',
     'Someone is paying good credits to anyone who can place {ship} two weeks ago.',
     'Prices on {good} are about to move — somebody knows something.',
     'A broker on {place} is quietly buying {good} well above market.',
@@ -1156,7 +1174,20 @@ let genPanelOpen = false;
 let genCollapsed = false;
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
-function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
+function oraclePlace(){
+  let p;
+  if(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign()){
+    // Authored campaigns: rumours name THIS galaxy's charted systems, not the
+    // Archon Gambit docks. Falls back to neutral dockside spots pre-charting.
+    p = (typeof GALAXY_NODES !== 'undefined' ? GALAXY_NODES : [])
+      .filter(n => !n.uninhabited).map(n => n.label || n.name).filter(Boolean);
+    if(!p.length) p = ['the docks', 'the port concourse', 'the outer berths'];
+  } else {
+    p = ORACLE_PLACES.slice();
+  }
+  if(shipState.destination) p.push(shipState.destination);
+  return pick(p);
+}
 
 function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
 // ── FACTION CONTRACTS — jobs the STATES post (parallel to CORP_CONTRACT; {faction} = the power). The
@@ -1825,7 +1856,7 @@ function renderHandoutsPanel(){
   }
   let form = '';
   if(ref){
-    const opts = ['all'].concat((typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []));
+    const opts = ['all'].concat((typeof crewRoster === 'function' ? crewRoster() : []));
     const optHtml = opts.map(o => `<option value="${escQH(o)}">${o === 'all' ? 'Everyone' : escQH(o)}</option>`).join('');
     form = `<div class="handout-add">
       <label class="handout-up">⬆ Push a handout<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onHandoutFile(this)"></label>
@@ -1929,7 +1960,7 @@ function contactSave(){
   c.favOwed = Math.max(0, parseInt(gv('contact-f-favowed')) || 0);
   c.favOwing = Math.max(0, parseInt(gv('contact-f-favowing')) || 0);
   c.known = c.known || {};
-  (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).forEach((nm, i) => {
+  (typeof crewRoster === 'function' ? crewRoster() : []).forEach((nm, i) => {
     const v = gv('contact-f-known-' + i).trim(); if(v) c.known[nm] = v; else delete c.known[nm];
   });
   contactsEditingId = null;
@@ -1945,7 +1976,7 @@ function contactRemove(id){
 }
 function contactEditorHTML(c){
   const escA = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x).replace(/"/g, '&quot;'));
-  const chars = (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [];
+  const chars = (typeof crewRoster === 'function') ? crewRoster() : [];
   const visRaw = (typeof calVisRaw === 'function') ? calVisRaw(c.visibleTo) : '';
   const knownFields = chars.map((nm, i) => `<label class="con-known-lbl">${escQH(nm)} knows<textarea id="contact-f-known-${i}" rows="2" placeholder="What ${escQH(nm)} knows…">${escQH((c.known && c.known[nm]) || '')}</textarea></label>`).join('');
   const ownerOpts = ['<option value="">Party contact (shared)</option>'].concat(chars.map(nm => `<option value="${escA(nm)}"${c.owner === nm ? ' selected' : ''}>${escQH(nm)}'s contact</option>`)).join('');
@@ -2730,6 +2761,9 @@ makePanelResizable('gen-wrap');
 //    (theme, terminology, module flags) BEFORE the first render. For the
 //    built-in Archon Gambit pack this is a no-op-equivalent (defaults match). ──
 if(typeof initCampaignPacks === 'function') initCampaignPacks();
+// Authored station deck maps (js/40 defines the store; supaStorage loads later,
+// so the fetch belongs here in the boot block with the other shared stores).
+if(typeof loadAuthoredStations === 'function') loadAuthoredStations();
 
 buildOrrery();
 renderInit();

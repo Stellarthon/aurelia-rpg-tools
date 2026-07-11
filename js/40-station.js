@@ -2,7 +2,99 @@
 // STATION
 // ═══════════════════════════════════════════════════════════════════════════
 let cur=null, curSub=null, curTab="overview";
-const nodeColours={elevator:"#BA7517",docking:"#185FA5",concourse:"#BA7517",security:"#534AB7",medical:"#0F6E56",maintenance:"#A32D2D"};
+
+// ── Which station is open ────────────────────────────────────────────────────
+// 'aurelia' = the built-in hand-drawn deck map (MAIN below). Anything else is a
+// referee-AUTHORED station: pure data in stationAdditions (campaign-namespaced
+// key 'station-additions'), reached from a body location's interiorId and drawn
+// by the procedural map generator — so agnostic campaigns get real deck maps
+// with zero code. Shape mirrors MAIN: { stationId: { name, areas:{ areaId:
+// { label, sub, tag, ac, read, conn:[areaIds], subs:{ subId:{label,sub,read} } } } } }.
+let currentStationId = 'aurelia';
+let stationAdditions = {};
+async function loadAuthoredStations(){
+  try { const r = await supaStorage.get('station-additions', true);
+    stationAdditions = (r.value != null ? JSON.parse(r.value) : {}) || {}; }
+  catch(e){ stationAdditions = {}; }
+}
+async function saveAuthoredStations(){
+  try { await supaStorage.set('station-additions', JSON.stringify(stationAdditions), true); }
+  catch(e){ console.error('Station save failed:', e); }
+}
+function stationDef(){
+  if(currentStationId === 'aurelia')
+    return { id:'aurelia', name:'Aurelia Orbital Station', areas: (typeof MAIN !== 'undefined' ? MAIN : {}), builtin:true };
+  const s = stationAdditions[currentStationId];
+  return s ? { id: currentStationId, name: s.name || 'Station', areas: s.areas || {}, builtin:false } : null;
+}
+function stationAreas(){ const s = stationDef(); return s ? s.areas : {}; }
+// Content-overlay keys for authored areas carry the station id so two stations
+// can reuse an area id; the built-in station keeps its historical bare keys
+// (live referee edits already stored under them).
+function staKey(k){ return currentStationId === 'aurelia' ? k : currentStationId + '~' + k; }
+// Drop any selection state that belongs to another station's areas.
+function stationResetSel(){ cur = null; curSub = null; curTab = 'overview'; }
+
+// ── Deck map rendering ───────────────────────────────────────────────────────
+// The built-in station keeps its hand-drawn SVG (index.html #mapsvg); authored
+// stations get a PROCEDURAL map generated from their area data — rooms on a
+// ring, corridors from each area's conn list — in the same visual language.
+let _origStationMap = null;
+function renderStationMap(){
+  const svg = document.getElementById('mapsvg'); if(!svg) return;
+  if(_origStationMap == null) _origStationMap = svg.innerHTML;
+  if(currentStationId === 'aurelia'){
+    svg.setAttribute('viewBox','0 0 400 500');
+    svg.innerHTML = _origStationMap; return;
+  }
+  // A referee-drawn grid deck plan (js/41-deck-editor.js) beats the automatic
+  // ring layout; the plan needs its own viewBox, so restore 400×500 otherwise.
+  const s = stationAdditions[currentStationId];
+  if(s && s.deck && typeof deckHasContent === 'function' && deckHasContent(s.deck)){
+    svg.setAttribute('viewBox', deckStationViewBox(s.deck));
+    svg.innerHTML = deckStationSVG(s.deck, stationDef());
+    return;
+  }
+  svg.setAttribute('viewBox','0 0 400 500');
+  svg.innerHTML = authoredStationMapSVG();
+}
+function authoredStationMapSVG(){
+  const eh = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const def = stationDef(); if(!def) return '';
+  const ids = Object.keys(def.areas);
+  let out = `<text x="200" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${eh((def.name||'STATION').toUpperCase())}</text>`;
+  if(!ids.length)
+    return out + `<text x="200" y="250" text-anchor="middle" font-size="10" fill="#8b91a8" font-family="system-ui,sans-serif">No areas yet — add one in the Design Studio.</text>`;
+  // Ring layout in the map's 400×500 viewBox; a lone area sits centred.
+  const CX = 200, CY = 260, RX = 128, RY = 168;
+  const pos = {};
+  ids.forEach((id, i) => {
+    if(ids.length === 1){ pos[id] = { x: CX, y: CY }; return; }
+    const ang = -Math.PI/2 + (i * 2 * Math.PI / ids.length);
+    pos[id] = { x: CX + Math.cos(ang)*RX, y: CY + Math.sin(ang)*RY };
+  });
+  // Station frame + corridors first, so rooms draw over them.
+  out += `<ellipse cx="${CX}" cy="${CY}" rx="${RX+42}" ry="${RY+38}" fill="none" stroke="#1e2333" stroke-width="16"/>`;
+  const seen = new Set();
+  ids.forEach(id => (def.areas[id].conn || []).forEach(o => {
+    if(!pos[o]) return;
+    const k = [id, o].sort().join('|'); if(seen.has(k)) return; seen.add(k);
+    out += `<line x1="${pos[id].x.toFixed(1)}" y1="${pos[id].y.toFixed(1)}" x2="${pos[o].x.toFixed(1)}" y2="${pos[o].y.toFixed(1)}" stroke="#2e3347" stroke-width="1" stroke-dasharray="3,3"/>`;
+  }));
+  ids.forEach(id => {
+    const a = def.areas[id], p = pos[id];
+    const ac = a.ac || '#7f93b8';
+    const w = Math.max(96, Math.min(150, String(a.label||id).length*6.6 + 26)), h = 44;
+    const x = p.x - w/2, y = p.y - h/2;
+    out += `<g id="n-${eh(id)}" style="cursor:pointer" onclick="selArea('${eh(id)}')">`
+      + `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(0)}" height="${h}" rx="4" id="r-${eh(id)}" fill="#0f1117" stroke="${eh(ac)}" stroke-width="1.5"/>`
+      + (a.tag ? `<text x="${p.x.toFixed(1)}" y="${(y+13).toFixed(1)}" text-anchor="middle" font-size="8" fill="${eh(ac)}" font-weight="600" font-family="system-ui,sans-serif">${eh(a.tag)}</text>` : '')
+      + `<text x="${p.x.toFixed(1)}" y="${(y+(a.tag?25:20)).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif">${eh(a.label||id)}</text>`
+      + (a.sub ? `<text x="${p.x.toFixed(1)}" y="${(y+36).toFixed(1)}" text-anchor="middle" font-size="8" fill="#8b91a8" font-family="system-ui,sans-serif">${eh(a.sub)}</text>` : '')
+      + `</g>`;
+  });
+  return out;
+}
 
 function selArea(areaId){
   cur=areaId; curSub=null; curTab="overview";
@@ -33,27 +125,34 @@ function showMap(){
 }
 
 function updateNodes(){
-  ["elevator","docking","concourse","security","medical","maintenance"].forEach(id=>{
+  const areas=stationAreas();
+  Object.keys(areas).forEach(id=>{
     const el=document.getElementById("r-"+id);
     if(!el) return;
-    const on=cur===id;
-    el.setAttribute("fill",on?nodeColours[id]+"33":"#0f1117");
+    const on=cur===id, ac=areas[id].ac||"#7f93b8";
+    // Deck-plan room shapes declare their own resting fill (transparent) so the
+    // floor shows through; map nodes keep the historical dark fill.
+    el.setAttribute("fill",on?ac+"33":(el.getAttribute("data-off-fill")||"#0f1117"));
     el.setAttribute("stroke-width",on?"2.5":"1.5");
   });
 }
 
 function getArea(){
-  const a=MAIN[cur];
+  const a=stationAreas()[cur];
+  if(!a) return null;
   if(curSub&&a.subs&&a.subs[curSub]) return a.subs[curSub];
   return a;
 }
 
 function renderHeader(){
   const h=document.getElementById("area-hdr");
-  if(!cur){h.style.display="none";return;}
-  const a=MAIN[cur], sub=curSub&&a.subs&&a.subs[curSub];
+  const a=cur?stationAreas()[cur]:null;
+  if(!a){h.style.display="none";return;}
+  const sub=curSub&&a.subs&&a.subs[curSub];
   h.style.display="block";
-  h.innerHTML=`<span class="atag" style="background:${a.tagBg};color:${a.tagColor}">${a.tag}</span>`
+  // Authored areas carry only an accent colour — derive the tag chip from it.
+  const tagBg=a.tagBg||((a.ac||'#7f93b8')+'22'), tagCol=a.tagColor||a.ac||'#7f93b8';
+  h.innerHTML=(a.tag?`<span class="atag" style="background:${tagBg};color:${tagCol}">${a.tag}</span>`:'')
     +`<div class="aname">${sub?a.label+" → "+sub.label:a.label}</div>`;
 }
 
@@ -64,7 +163,8 @@ function renderTabs(){
   const refOnly=["npcs","checks","events","refnotes"];
   const allTabs=[["overview","Overview"],["npcs","NPCs"],["checks","Checks"],["events","Events"],["refnotes","Ref Notes"],["notes","My Notes"]];
   const tabs=pm?allTabs.filter(([k])=>!refOnly.includes(k)):allTabs;
-  const hasSubs=!curSub&&MAIN[cur].subs&&Object.keys(MAIN[cur].subs).length>0;
+  const curArea=stationAreas()[cur]||{};
+  const hasSubs=!curSub&&curArea.subs&&Object.keys(curArea.subs).length>0;
   const validTabs = tabs.map(t=>t[0]);
   if(hasSubs) validTabs.push("subareas");
   if(!validTabs.includes(curTab)) curTab="overview";
@@ -82,12 +182,14 @@ function renderDetail(){
     d.innerHTML='<div class="empty"><div class="empty-icon">🛰</div><div style="font-size:14px;font-weight:600;color:#e8eaf0">Select an area</div><div style="font-size:12px;max-width:180px;text-align:center">Tap any node on the map.</div></div>';
     return;
   }
-  const a=getArea(), mainA=MAIN[cur], pm=pmCheck.checked;
+  const a=getArea(), mainA=stationAreas()[cur], pm=pmCheck.checked;
+  if(!a||!mainA){ d.innerHTML=''; return; }   // area removed (or another station's stale id)
   if(pm&&refOnly_tabs.includes(curTab)) curTab="overview";
   const backBtn=curSub?`<button class="back-btn" onclick="goBack()">← Back to ${mainA.label}</button>`:"";
 
-  // ── Reveal gate: only top-level areas are gated, not sub-areas ──
-  const isTopLevelArea = !curSub && REVEALABLE_STATION_AREAS.includes(cur);
+  // ── Reveal gate: only the built-in station's top-level areas are gated —
+  //    an authored station is gated as a whole by its host location's reveal ──
+  const isTopLevelArea = !curSub && currentStationId==='aurelia' && REVEALABLE_STATION_AREAS.includes(cur);
   const locked = isTopLevelArea && pm && !isRevealed(cur);
 
   if(locked){
@@ -103,7 +205,7 @@ function renderDetail(){
     if(!pm && isTopLevelArea){
       html += revealToggleRowHTML(cur);
     }
-    const stKey = cur+(curSub?"_"+curSub:"");
+    const stKey = staKey(cur+(curSub?"_"+curSub:""));
     if(a.read){
       designOriginalRegistry[stKey+'-read'] = a.read;
       const readText = resolveContent(stKey+'-read', a.read);
@@ -127,7 +229,7 @@ function renderDetail(){
   } else if(curTab==="npcs"){
     let html=backBtn;
     const npcListKey = stKeyForNpcs();
-    const npcBaseKey = "sta-npc-"+cur+(curSub||"");
+    const npcBaseKey = staKey("sta-npc-"+cur+(curSub||""));
     const mergedNpcs = mergeListWithAdditions(a.npcs, npcListKey, npcBaseKey);
     const addNpcBtn = designModeOn
       ? `<button class="design-add-btn" style="margin-bottom:10px;width:100%" onclick="openNpcCreator()">+ Add NPC</button>`
@@ -192,8 +294,8 @@ function renderDetail(){
   } else if(curTab==="checks"){
     let html=backBtn;
     const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
-    const chkListKey = cur+(curSub?"_"+curSub:"")+'-checks';
-    const chkBaseKey = cur+(curSub?"_"+curSub:"")+'-check-';
+    const chkListKey = staKey(cur+(curSub?"_"+curSub:"")+'-checks');
+    const chkBaseKey = staKey(cur+(curSub?"_"+curSub:"")+'-check-');
     const mergedChecks = mergeListWithAdditions(a.checks, chkListKey, chkBaseKey);
     if(!mergedChecks.length){
       html += `<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No skill checks in this area.</div>`;
@@ -217,8 +319,8 @@ function renderDetail(){
     d.innerHTML=html;
   } else if(curTab==="events"){
     let html=backBtn;
-    const evtListKey = cur+(curSub?"_"+curSub:"")+'-events';
-    const evtBaseKey = cur+(curSub?"_"+curSub:"")+'-event-';
+    const evtListKey = staKey(cur+(curSub?"_"+curSub:"")+'-events');
+    const evtBaseKey = staKey(cur+(curSub?"_"+curSub:"")+'-event-');
     const mergedEvents = mergeListWithAdditions(a.events, evtListKey, evtBaseKey);
     if(!mergedEvents.length){
       html += `<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No events scheduled.</div>`;
@@ -237,18 +339,18 @@ function renderDetail(){
     d.innerHTML=html;
   } else if(curTab==="refnotes"){
     let html=backBtn;
-    const rnKey = (cur+(curSub?"_"+curSub:""))+'-refnotes';
+    const rnKey = staKey((cur+(curSub?"_"+curSub:""))+'-refnotes');
     const origRefnotes = a.refnotes||"No referee notes for this area.";
     designOriginalRegistry[rnKey] = origRefnotes;
     const refnotesText = resolveContent(rnKey, origRefnotes);
     html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${designWrap(rnKey, origRefnotes, refnotesText)}</div></div>`;
     d.innerHTML=html;
   } else if(curTab==="subareas"){
-    const subs=MAIN[cur].subs||{}, keys=Object.keys(subs);
+    const subs=(stationAreas()[cur]||{}).subs||{}, keys=Object.keys(subs);
     if(!keys.length){d.innerHTML=`<div style="color:#8b91a8;font-size:12px;font-style:italic;padding:4px">No sub-areas defined.</div>`;return;}
     d.innerHTML=`<div class="blk-lbl" style="margin-bottom:8px">Select a Sub-Area</div><div class="sub-grid">${keys.map(k=>`<button class="sub-btn" onclick="selSub('${k}')" ontouchend="event.preventDefault();selSub('${k}')"><div class="sub-btn-name">${subs[k].label}</div><div class="sub-btn-desc">${subs[k].sub||""}</div></button>`).join("")}</div>`;
   } else if(curTab==="notes"){
-    const key=cur+(curSub?"_"+curSub:"");
+    const key=staKey(cur+(curSub?"_"+curSub:""));
     renderPlayerNotesTab(d, key);
   }
 }
@@ -329,12 +431,12 @@ function toggleNPC(id,hdr){
 function renderFooter(){
   const f=document.getElementById("foot"), cr=document.getElementById("conn-row");
   if(!cur||curSub){f.style.display="none";return;}
-  const a=MAIN[cur];
-  if(!a.conn||a.conn.length===0){f.style.display="none";return;}
+  const areas=stationAreas(), a=areas[cur];
+  if(!a||!a.conn||a.conn.length===0){f.style.display="none";return;}
   f.style.display="block";
-  cr.innerHTML=a.conn.map(id=>{
-    const c=nodeColours[id]||"#5b8ef0";
-    return `<button class="conn-btn" onclick="selArea('${id}')" style="background:${c}22;color:${c};border-color:${c}">${MAIN[id].label}</button>`;
+  cr.innerHTML=a.conn.filter(id=>areas[id]).map(id=>{
+    const c=areas[id].ac||"#5b8ef0";
+    return `<button class="conn-btn" onclick="selArea('${id}')" style="background:${c}22;color:${c};border-color:${c}">${areas[id].label}</button>`;
   }).join("");
 }
 
@@ -645,3 +747,125 @@ const BASE_LOCATIONS = {
 // as a named entry point because breadcrumbs (enterStation) and navBack call it.
 function goAurelia(){ goBodyView('aurelia'); }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTHORED STATION EDITOR — Design Studio content for the station view
+// ═══════════════════════════════════════════════════════════════════════════
+// Structural editing (areas, connections, sub-areas) for referee-authored
+// stations. The built-in Aurelia station keeps its inline ✏ pencils — its
+// structure is campaign canon; only authored stations are structurally
+// editable. Text/NPC/check content on authored areas flows through the SAME
+// content-overlay editors as Aurelia's (keys carry the station id via staKey).
+function staSlug(label){
+  const base = String(label||'area').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'area';
+  const areas = stationAreas(); let s = base, n = 2;
+  while(areas[s]){ s = base + '-' + n; n++; }
+  return s;
+}
+function staEnsure(){
+  if(currentStationId === 'aurelia') return null;
+  const s = stationAdditions[currentStationId];
+  if(s && !s.areas) s.areas = {};
+  return s || null;
+}
+function staCommit(){
+  saveAuthoredStations();
+  renderStationMap();
+  if(cur && !stationAreas()[cur]) stationResetSel();
+  updateNodes(); renderHeader(); renderTabs(); renderDetail(); renderFooter();
+  if(typeof renderDesignPanel === 'function') renderDesignPanel();
+}
+function staSetName(v){
+  const s = staEnsure(); if(!s) return;
+  s.name = String(v||'').trim() || 'Station';
+  staCommit();
+  const hdr = document.getElementById('hdr-title');
+  if(hdr && currentView === 'station') hdr.textContent = s.name.toUpperCase();
+}
+function staAddArea(){
+  const s = staEnsure(); if(!s) return;
+  const inp = document.getElementById('sta-new-area');
+  const label = inp ? String(inp.value).trim() : '';
+  if(!label) return;
+  s.areas[staSlug(label)] = { label, sub:'', tag:'', ac:'#7f93b8', read:'', conn:[], subs:{} };
+  staCommit();
+}
+function staAreaField(id, f, v){
+  const s = staEnsure(); if(!s || !s.areas[id]) return;
+  s.areas[id][f] = String(v||'');
+  staCommit();
+}
+function staRemoveArea(id){
+  const s = staEnsure(); if(!s || !s.areas[id]) return;
+  if(!confirm('Remove area "' + (s.areas[id].label||id) + '" and its sub-areas?')) return;
+  delete s.areas[id];
+  Object.values(s.areas).forEach(a => { a.conn = (a.conn||[]).filter(c => c !== id); });
+  staCommit();
+}
+function staAreaConn(id, other, on){
+  const s = staEnsure(); if(!s || !s.areas[id] || !s.areas[other]) return;
+  // Corridors are symmetric — keep both sides' conn lists in step.
+  [[id,other],[other,id]].forEach(([a,b])=>{
+    const A = s.areas[a]; A.conn = (A.conn||[]).filter(c => c !== b);
+    if(on) A.conn.push(b);
+  });
+  staCommit();
+}
+function staAddSub(areaId){
+  const s = staEnsure(); if(!s || !s.areas[areaId]) return;
+  const inp = document.getElementById('sta-new-sub-' + areaId);
+  const label = inp ? String(inp.value).trim() : '';
+  if(!label) return;
+  const a = s.areas[areaId]; a.subs = a.subs || {};
+  const base = String(label).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'sub';
+  let sid = base, n = 2; while(a.subs[sid]){ sid = base + '-' + n; n++; }
+  a.subs[sid] = { label, sub:'', read:'' };
+  staCommit();
+}
+function staSubField(areaId, subId, f, v){
+  const s = staEnsure(); if(!s || !s.areas[areaId] || !(s.areas[areaId].subs||{})[subId]) return;
+  s.areas[areaId].subs[subId][f] = String(v||'');
+  staCommit();
+}
+function staRemoveSub(areaId, subId){
+  const s = staEnsure(); if(!s || !s.areas[areaId]) return;
+  delete (s.areas[areaId].subs||{})[subId];
+  if(curSub === subId) curSub = null;
+  staCommit();
+}
+function designStationViewHTML(){
+  const eh = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if(currentStationId === 'aurelia' || !staEnsure())
+    return `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
+  const s = staEnsure();
+  const ids = Object.keys(s.areas || {});
+  let html = `<label class="hx-edit-row"><span>Name</span><input class="hx-edit-in" value="${eh(s.name||'')}" onchange="staSetName(this.value)"></label>`;
+  if(typeof dkeStudioRowHTML === 'function') html += dkeStudioRowHTML();
+  html += `<div class="hx-small" style="margin:2px 0 8px">Areas are the rooms on the deck map. Tap one on the map to write its read-aloud, NPCs, checks and events with the usual ✏ editors.</div>`;
+  ids.forEach(id => {
+    const a = s.areas[id];
+    const connBoxes = ids.filter(o => o !== id).map(o =>
+      `<label style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox"${(a.conn||[]).includes(o)?' checked':''} onchange="staAreaConn('${eh(id)}','${eh(o)}',this.checked)">${eh(s.areas[o].label||o)}</label>`).join('');
+    const subs = a.subs || {};
+    const subRows = Object.keys(subs).map(sid => `
+      <div style="display:flex;align-items:center;gap:6px;margin:0 0 4px">
+        <input class="hx-edit-in" style="flex:1" value="${eh(subs[sid].label||'')}" onchange="staSubField('${eh(id)}','${eh(sid)}','label',this.value)">
+        <button class="hx-reg-del" title="Remove sub-area" onclick="staRemoveSub('${eh(id)}','${eh(sid)}')">🗑</button>
+      </div>`).join('');
+    html += `<details class="hx-sec" data-sec="sta-${eh(id)}"><summary class="hx-sec-lbl" style="color:#9B59B6">${eh(a.label||id)}</summary><div class="hx-sec-body">
+      <label class="hx-edit-row"><span>Label</span><input class="hx-edit-in" value="${eh(a.label||'')}" onchange="staAreaField('${eh(id)}','label',this.value)"></label>
+      <label class="hx-edit-row"><span>Subtitle</span><input class="hx-edit-in" value="${eh(a.sub||'')}" onchange="staAreaField('${eh(id)}','sub',this.value)"></label>
+      <label class="hx-edit-row"><span>Tag</span><input class="hx-edit-in" value="${eh(a.tag||'')}" placeholder="e.g. ARRIVAL, RESTRICTED" onchange="staAreaField('${eh(id)}','tag',this.value)"></label>
+      <label class="hx-edit-row"><span>Colour</span><input type="color" class="hx-reg-col" value="${eh(a.ac||'#7f93b8')}" onchange="staAreaField('${eh(id)}','ac',this.value)"></label>
+      <label class="hx-edit-row hx-edit-col"><span>Read aloud</span><textarea class="hx-edit-in" rows="3" onchange="staAreaField('${eh(id)}','read',this.value)">${eh(a.read||'')}</textarea></label>
+      ${ids.length > 1 ? `<div class="hx-edit-row hx-edit-col"><span>Corridors</span><div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:var(--tx0)">${connBoxes}</div></div>` : ''}
+      <div class="hx-edit-row hx-edit-col"><span>Sub-areas</span><div style="flex:1">
+        ${subRows}
+        <div style="display:flex;gap:6px"><input class="hx-edit-in" style="flex:1" id="sta-new-sub-${eh(id)}" placeholder="New sub-area name…"><button class="hx-act-btn" style="flex:0 0 auto" onclick="staAddSub('${eh(id)}')">＋</button></div>
+      </div></div>
+      <div class="hx-btn-row"><button class="hx-act-btn" onclick="selArea('${eh(id)}')">👁 Open area</button><button class="hx-act-btn" style="border-color:#c0506e;color:#ff9bb6" onclick="staRemoveArea('${eh(id)}')">🗑 Remove</button></div>
+    </div></details>`;
+  });
+  html += `<div style="display:flex;gap:6px;margin-top:8px"><input class="hx-edit-in" style="flex:1" id="sta-new-area" placeholder="New area name…" onkeydown="if(event.key==='Enter')staAddArea()"><button class="hx-act-btn" style="flex:0 0 auto" onclick="staAddArea()">＋ Add area</button></div>`;
+  return html;
+}

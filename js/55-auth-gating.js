@@ -634,6 +634,26 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Authored station deck maps — players receive referee-authored interiors
+  // (and live edits to them) the same way they receive galaxy edits.
+  try {
+    if(typeof stationAdditions !== 'undefined'){
+      const rst = await supaStorage.get('station-additions', true);
+      if(rst.ok){
+        const fresh = (rst.value != null ? JSON.parse(rst.value) : {}) || {};
+        if(JSON.stringify(fresh) !== JSON.stringify(stationAdditions)){
+          stationAdditions = fresh;
+          if(currentView === 'station' && typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia'){
+            if(typeof stationDef === 'function' && !stationDef()){ if(typeof navBack === 'function') navBack(); } // station deleted under us
+            else if(typeof renderStationMap === 'function'){
+              renderStationMap(); updateNodes(); renderHeader(); renderTabs(); renderDetail(); renderFooter();
+            }
+          }
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Quest log — players see live updates as referee changes quest status,
   // adds objectives, or marks things done during a session
   try {
@@ -668,6 +688,7 @@ async function pollRevealState(){
         const wasShared = playerInit.shared;
         playerInit = freshTO;
         if(typeof updateTurnOrderBtn === 'function') updateTurnOrderBtn();
+        if(typeof dkeInitChanged === 'function') dkeInitChanged();   // deck-plan token overlays
         if(playerInit.shared && !wasShared && !turnOrderPanelOpen){
           toggleTurnOrderPanel();      // reveal the board when combat begins
         } else if(turnOrderPanelOpen){
@@ -1260,6 +1281,9 @@ const STATION_NODE_RECTS = {
 function updateStationLocks(){
   // Remove any existing lock badges first
   document.querySelectorAll('.station-lock-badge').forEach(el => el.remove());
+  // Lock badges belong to the built-in Aurelia map's fixed geometry — an
+  // authored station is gated as a whole by its host location's reveal.
+  if(typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia') return;
   if(isReferee()) return; // referee always sees everything, no badges needed
   const svg = document.getElementById('mapsvg');
   if(!svg) return;
@@ -1290,6 +1314,9 @@ function updateStationLocks(){
 }
 
 // ── Player identity ────────────────────────────────────────────────────
+// The Archon Gambit crew — the DEFAULT Campaign Pack's source of truth only.
+// Consumers read crewRoster() (js/05), which serves the active pack's crew;
+// authored campaigns define their own in Studio ▸ Crew & Ship.
 const KNOWN_CHARACTERS = ['Rhett Calder','Cassia Velen','Dr Curculion','Riley','Riven Dahl'];
 
 function checkIdentity(){
@@ -1314,7 +1341,7 @@ function checkIdentity(){
 function showIdentityModal(){
   const modal = document.getElementById('identity-modal');
   const quick = document.getElementById('identity-quick');
-  quick.innerHTML = KNOWN_CHARACTERS.map(n =>
+  quick.innerHTML = crewRoster().map(n =>
     `<button class="identity-quick-btn" onclick="document.getElementById('identity-input').value='${n}'">${n}</button>`
   ).join('');
   modal.classList.remove('hidden');

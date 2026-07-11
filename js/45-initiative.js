@@ -306,6 +306,9 @@ function renderInit(){
   }).join('');
 
   renderHealthPanel();
+  // Deck-plan tokens mirror the tracker (turn glow, order badges, down) —
+  // keep any visible deck map in step with every initiative change.
+  if(typeof dkeInitChanged === 'function') dkeInitChanged();
 }
 
 // ── Standalone NPC Health Panel ──────────────────────────────────────────

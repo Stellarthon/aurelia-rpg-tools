@@ -483,7 +483,10 @@ function renderDesignPanel(){
   } else if(view === 'body' && typeof designBodyViewHTML === 'function'){
     html = designBodyViewHTML();
   } else if(view === 'station'){
-    html = `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
+    // Authored stations get their structural editor; Aurelia keeps its note.
+    html = (typeof designStationViewHTML === 'function')
+      ? designStationViewHTML()
+      : `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
   }
   body.innerHTML = html || `<div class="hx-small">Select a system, body, or location to begin designing.</div>`;
 }

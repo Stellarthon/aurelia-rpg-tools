@@ -76,6 +76,21 @@ const PACK_DEFAULTS = {
   // Meters / trackers. 0-to-many. The Archon morality meter is folded in at
   // boot from its existing definition (buildDefaultPack) so it stays single-source.
   meters: [],
+  // Crew & ship. null = folded in at boot (built-in pack: KNOWN_CHARACTERS /
+  // SHIP_PILOT / SHIP_NAV_AUDIENCE / the shipState literal stay single-source);
+  // authored packs are seeded empty so no Archon identity ever leaks into a
+  // new universe. roster drives the identity picker, sheets, whisper/visibleTo
+  // audiences; pilot gets the fuel readout foregrounded; nav sees jump
+  // distances and closed-lane locks.
+  crew: null,   // { roster:[names…], pilot:'name', nav:[names…] }
+  ship: null,   // { name:'…', startLocationId:'…' } — defaults for a fresh campaign's shipState
+  // Calendar PRESENTATION. The date spine stays {day 1–365, year} everywhere
+  // (jump weeks, recovery dates, ledger stamps all count days on it); the pack
+  // decides how a date READS. format tokens: {ddd} zero-padded day-of-year,
+  // {dd}, {d}, {yyyy}, {yy}. chip = the little header badge; era = the word
+  // after the year in long-form readouts ("Day 123, 1105 Imperial"); weekdays =
+  // optional 7 names replacing the Imperial week (day 1 stays the holiday).
+  calendar: { format:'{ddd}-{yyyy}', chip:'IMP', era:'Imperial', weekdays:null },
   // Terminology map — every user-facing noun the engine can override.
   terminology: {
     referee:'Referee', player:'Traveller', playerView:'Traveller View',
@@ -172,6 +187,13 @@ function buildDefaultPack(){
   }
   // Status-effect catalog for character sheets.
   if(typeof TRAVELLER_STATUS_FX !== 'undefined') config.statusFx = _clone(TRAVELLER_STATUS_FX);
+  // Crew & ship — folded from the code constants (single source of truth).
+  config.crew = {
+    roster: (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS.slice() : [],
+    pilot:  (typeof SHIP_PILOT !== 'undefined') ? SHIP_PILOT : '',
+    nav:    (typeof SHIP_NAV_AUDIENCE !== 'undefined') ? SHIP_NAV_AUDIENCE.slice() : [],
+  };
+  config.ship = { name: 'Archon Gambit', startLocationId: 'aurelia' };
 
   // Content references the live constants (default campaign only).
   const content = {
@@ -207,6 +229,20 @@ function buildAuthoredPack(id, title){
     // A fresh authored pack still gets a starter meter so the tracker isn't empty;
     // referees rename/replace/remove it freely.
     config.meters = [];
+  }
+  // Authored packs must NEVER fall back to the Archon crew/ship constants —
+  // seed them empty; the referee fills them in Studio ▸ Crew & Ship.
+  if(!config.crew || typeof config.crew !== 'object') config.crew = { roster:[], pilot:'', nav:[] };
+  if(!config.ship || typeof config.ship !== 'object') config.ship = { name:'', startLocationId:'' };
+  // …and the galaxy layer starts neutrally named, not "The Orion Arm" (the
+  // referee renames it in Studio ▸ Layers).
+  if(!saved || !saved.config || !saved.config.taxonomy){
+    const g = (config.taxonomy || []).find(l => l.id === 'galaxy');
+    if(g) g.label = 'The Galaxy';
+  }
+  // …and the calendar reads neutrally (same format, no Imperial badge/era).
+  if(!saved || !saved.config || !saved.config.calendar){
+    config.calendar = { format:'{ddd}-{yyyy}', chip:'DATE', era:'', weekdays:null };
   }
   const content = (saved && saved.content) || { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { id, title: title || (saved && saved.title) || id, builtin:false, config, content };
@@ -244,6 +280,11 @@ function resetActivePackConfig(){
 function activePackConfig(){ return (_activePack && _activePack.config) || PACK_DEFAULTS; }
 function activePackContent(){ return _activePack && _activePack.content; }
 
+// True when the active campaign is referee-authored (not the built-in Archon
+// Gambit pack). Safe at any point after js/05 loads — used by later modules to
+// skip Archon-flavoured seeds (econ corps, faction AIs, oracle place lists).
+function isAuthoredCampaign(){ return activeCampaignId !== DEFAULT_CAMPAIGN_ID; }
+
 // Terminology lookup. Named TERM (not t) to avoid clashing with the hundreds of
 // local `const t = …` in the render code.
 function TERM(key){
@@ -263,6 +304,24 @@ function pkAttributes(){ return activePackConfig().attributes || PACK_DEFAULTS.a
 function pkMeters(){ return activePackConfig().meters || []; }
 function pkStatusFx(){ return activePackConfig().statusFx || (typeof TRAVELLER_STATUS_FX!=='undefined'?TRAVELLER_STATUS_FX:[]); }
 function pkModules(){ return activePackConfig().modules || PACK_DEFAULTS.modules; }
+// Crew & ship. Fallback to the code constants covers exactly two cases — the
+// built-in pack before its boot fold, and a call during early load — so the
+// default campaign behaves identically; authored packs always carry their own
+// (seeded empty in buildAuthoredPack / validateAndMigratePack).
+function pkCrew(){
+  const c = activePackConfig().crew;
+  if(c && typeof c === 'object') return c;
+  return {
+    roster: (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [],
+    pilot:  (typeof SHIP_PILOT !== 'undefined') ? SHIP_PILOT : '',
+    nav:    (typeof SHIP_NAV_AUDIENCE !== 'undefined') ? SHIP_NAV_AUDIENCE : [],
+  };
+}
+function crewRoster(){ return pkCrew().roster || []; }
+function crewPilot(){ return pkCrew().pilot || ''; }
+function crewNav(){ return pkCrew().nav || []; }
+function pkShip(){ return activePackConfig().ship || { name:'', startLocationId:'' }; }
+function pkCalendar(){ return activePackConfig().calendar || PACK_DEFAULTS.calendar; }
 function moduleOn(key){ const m = pkModules(); return m[key] !== false; }
 function pkTheme(){ return activePackConfig().theme || PACK_DEFAULTS.theme; }
 
@@ -352,6 +411,9 @@ function applyTerminology(){
   // Galaxy legend jump-lane wording.
   const lane = document.getElementById('hx-leg-lane');
   if(lane && lane.lastChild && lane.lastChild.nodeType === 3) lane.lastChild.textContent = TERM('jumpLane') + ' (−15% fuel)';
+  // Calendar panel header follows the calendar terminology.
+  const calT = document.getElementById('cal-title');
+  if(calT) calT.textContent = '📅 ' + TERM('calendar').toUpperCase();
 }
 
 function applyPackToUI(){
@@ -441,6 +503,9 @@ function validateAndMigratePack(obj){
   // Forward-migration hook: schema 1 had no objectTypes/worldSchema — fill from defaults.
   const config = _mergeConfig(PACK_DEFAULTS, obj.config);
   if(obj.statusFx) config.statusFx = obj.statusFx;
+  // Packs exported before crew/ship existed must not inherit the Archon crew.
+  if(!config.crew || typeof config.crew !== 'object') config.crew = { roster:[], pilot:'', nav:[] };
+  if(!config.ship || typeof config.ship !== 'object') config.ship = { name:'', startLocationId:'' };
   const content = (obj.content && typeof obj.content === 'object') ? obj.content
     : { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { ok:true, migrated, pack:{ id: obj.id || _slugCampaign(obj.title||'imported'), title: obj.title || 'Imported Campaign', builtin:false, config, content } };
