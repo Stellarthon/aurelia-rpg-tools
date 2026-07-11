@@ -22,6 +22,7 @@ const STUDIO_TABS = [
   { id:'meters',      label:'Meters' },
   { id:'modules',     label:'Modules' },
   { id:'dice',        label:'Dice' },
+  { id:'calendar',    label:'Calendar' },
   { id:'theme',       label:'Theme' },
   { id:'worlds',      label:'Worlds' },
   { id:'layers',      label:'Layers' },
@@ -64,7 +65,7 @@ function renderCampaignStudio(){
   ).join('');
   const R = {
     campaigns: studioRenderCampaigns, crew: studioRenderCrew, terminology: studioRenderTerminology, meters: studioRenderMeters,
-    modules: studioRenderModules, dice: studioRenderDice, theme: studioRenderTheme,
+    modules: studioRenderModules, dice: studioRenderDice, calendar: studioRenderCalendar, theme: studioRenderTheme,
     worlds: studioRenderWorlds, layers: studioRenderLayers, types: studioRenderTypes,
   };
   bodyEl.innerHTML = (R[studioTab] || studioRenderCampaigns)();
@@ -149,6 +150,43 @@ function studioResetConfig(){
   if(typeof resetActivePackConfig === 'function') resetActivePackConfig();
   if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
   renderCampaignStudio();
+}
+
+// ── Tab: Calendar ────────────────────────────────────────────────────────────
+// How dates READ in this universe. The {day 1–365, year} spine is bookkeeping
+// (jump weeks, recovery dates, ledger stamps) and never changes; the format
+// string, header chip, era word and week names are presentation.
+function studioRenderCalendar(){
+  const cfg = studioCfg();
+  const cal = cfg.calendar || { format:'{ddd}-{yyyy}', chip:'IMP', era:'Imperial', weekdays:null };
+  const preview = (typeof formatImperial === 'function' && typeof imperialNow === 'function')
+    ? formatImperial(imperialNow()) : '';
+  const wk = Array.isArray(cal.weekdays) ? cal.weekdays.join(', ') : '';
+  const row = (label, html) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:110px;font-size:10px;font-family:monospace;color:var(--tx1)">${label}</span>${html}
+    </div>`;
+  return `
+    <div style="font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:8px">How dates read in this universe. Tokens: <b>{ddd}</b> day-of-year (001–365) · <b>{dd}</b> · <b>{d}</b> · <b>{yyyy}</b> year · <b>{yy}</b>. e.g. Traveller <b>{ddd}-{yyyy}</b> · 40k-style <b>{ddd}.{yy}.M41</b> · plain <b>Day {d}, {yyyy}</b>. The day/year spine itself never changes — only how it reads.</div>
+    ${row('format', `<input style="${S_IN}" value="${studioEsc(cal.format||'')}" onchange="studioCalField('format', this.value)">`)}
+    ${row('header chip', `<input style="${S_IN}" value="${studioEsc(cal.chip||'')}" placeholder="e.g. IMP, UNSC, M41" onchange="studioCalField('chip', this.value)">`)}
+    ${row('era word', `<input style="${S_IN}" value="${studioEsc(cal.era||'')}" placeholder="after the year in long dates — e.g. Imperial (blank = none)" onchange="studioCalField('era', this.value)">`)}
+    ${row('week names', `<input style="${S_IN}" value="${studioEsc(wk)}" placeholder="7 comma-separated names (blank = Imperial week)" onchange="studioCalField('weekdays', this.value)">`)}
+    ${preview ? `<div style="font-size:11px;color:var(--tx1);margin-top:10px">Today reads: <b style="color:var(--accentGold)">${studioEsc(preview)}</b></div>` : ''}`;
+}
+function studioCalField(key, val){
+  const c = studioCfg();
+  if(!c.calendar || typeof c.calendar !== 'object') c.calendar = { format:'{ddd}-{yyyy}', chip:'IMP', era:'Imperial', weekdays:null };
+  if(key === 'weekdays'){
+    const names = String(val || '').split(',').map(s => s.trim()).filter(Boolean);
+    c.calendar.weekdays = names.length === 7 ? names : null;   // anything but exactly 7 names → Imperial week
+  } else {
+    c.calendar[key] = String(val || '');
+  }
+  if(key === 'format' && !c.calendar.format) c.calendar.format = '{ddd}-{yyyy}';   // never let dates render blank
+  studioCommit();
+  if(typeof renderImperialDate === 'function') renderImperialDate();   // the header chip updates live
+  if(typeof renderCalendarPanel === 'function' && typeof calPanelOpen !== 'undefined' && calPanelOpen) renderCalendarPanel();
 }
 
 // ── Tab: Crew & Ship ─────────────────────────────────────────────────────────

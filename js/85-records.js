@@ -26,8 +26,25 @@ function imperialNow(){ return { day: imperialDate.day, year: imperialDate.year 
 function imperialOrdinal(d){ return (d.year * IMPERIAL_YEAR_DAYS) + (d.day - 1); } // absolute day index
 function ordinalToImperial(n){ return { year: Math.floor(n / IMPERIAL_YEAR_DAYS), day: (n % IMPERIAL_YEAR_DAYS) + 1 }; }
 function addImperialDays(d, n){ return ordinalToImperial(imperialOrdinal(d) + n); }
-function formatImperial(d){ return String(d.day).padStart(3,'0') + '-' + d.year; }
-function imperialWeekday(d){ return d.day === 1 ? 'Holiday' : IMPERIAL_WEEKDAYS[(d.day - 2) % 7]; }
+// Presentation is Campaign Pack config (pkCalendar, js/05): the {day, year}
+// spine is universal bookkeeping; how a date READS belongs to the setting.
+// Tokens: {ddd} zero-padded day-of-year · {dd} · {d} · {yyyy} · {yy}.
+function formatImperial(d){
+  const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null;
+  const fmt = (cal && cal.format) || '{ddd}-{yyyy}';
+  return fmt.replace(/{ddd}/g, String(d.day).padStart(3,'0'))
+            .replace(/{dd}/g, String(d.day).padStart(2,'0'))
+            .replace(/{d}/g, String(d.day))
+            .replace(/{yyyy}/g, String(d.year))
+            .replace(/{yy}/g, String(Math.abs(d.year) % 100).padStart(2,'0'));
+}
+function calendarChip(){ const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null; return (cal && cal.chip != null) ? cal.chip : 'IMP'; }
+function calendarEra(){ const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null; return (cal && cal.era != null) ? cal.era : 'Imperial'; }
+function imperialWeekday(d){
+  const cal = (typeof pkCalendar === 'function') ? pkCalendar() : null;
+  const wd = (cal && Array.isArray(cal.weekdays) && cal.weekdays.length === 7) ? cal.weekdays : IMPERIAL_WEEKDAYS;
+  return d.day === 1 ? 'Holiday' : wd[(d.day - 2) % 7];
+}
 
 // ── Persistence + sync ──
 async function loadImperialDate(){
@@ -51,8 +68,9 @@ async function saveCampaignEvents(){
 function renderImperialDate(){
   const el = document.getElementById('impdate-display');
   if(!el) return;
-  el.innerHTML = `<span class="impd-lbl">IMP</span>${formatImperial(imperialDate)}`;
-  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + ' Imperial';
+  const era = calendarEra();
+  el.innerHTML = `<span class="impd-lbl">${escQH(calendarChip())}</span>${escQH(formatImperial(imperialDate))}`;
+  el.title = imperialWeekday(imperialDate) + ' — Day ' + imperialDate.day + ', ' + imperialDate.year + (era ? ' ' + era : '');
 }
 
 // ── Date mutation (referee) ──
@@ -157,8 +175,8 @@ function renderCalendarPanel(){
 
   body.innerHTML = `
     <div class="cal-now">
-      <div class="cal-now-date">${formatImperial(now)}</div>
-      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year} Imperial</div>
+      <div class="cal-now-date">${escQH(formatImperial(now))}</div>
+      <div class="cal-now-sub">${imperialWeekday(now)} · Day ${now.day} · ${now.year}${calendarEra() ? ' ' + escQH(calendarEra()) : ''}</div>
     </div>
     ${controls}
     <div class="cal-tl-title">Campaign Timeline</div>

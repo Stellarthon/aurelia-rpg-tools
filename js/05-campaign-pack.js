@@ -84,6 +84,13 @@ const PACK_DEFAULTS = {
   // distances and closed-lane locks.
   crew: null,   // { roster:[names…], pilot:'name', nav:[names…] }
   ship: null,   // { name:'…', startLocationId:'…' } — defaults for a fresh campaign's shipState
+  // Calendar PRESENTATION. The date spine stays {day 1–365, year} everywhere
+  // (jump weeks, recovery dates, ledger stamps all count days on it); the pack
+  // decides how a date READS. format tokens: {ddd} zero-padded day-of-year,
+  // {dd}, {d}, {yyyy}, {yy}. chip = the little header badge; era = the word
+  // after the year in long-form readouts ("Day 123, 1105 Imperial"); weekdays =
+  // optional 7 names replacing the Imperial week (day 1 stays the holiday).
+  calendar: { format:'{ddd}-{yyyy}', chip:'IMP', era:'Imperial', weekdays:null },
   // Terminology map — every user-facing noun the engine can override.
   terminology: {
     referee:'Referee', player:'Traveller', playerView:'Traveller View',
@@ -233,6 +240,10 @@ function buildAuthoredPack(id, title){
     const g = (config.taxonomy || []).find(l => l.id === 'galaxy');
     if(g) g.label = 'The Galaxy';
   }
+  // …and the calendar reads neutrally (same format, no Imperial badge/era).
+  if(!saved || !saved.config || !saved.config.calendar){
+    config.calendar = { format:'{ddd}-{yyyy}', chip:'DATE', era:'', weekdays:null };
+  }
   const content = (saved && saved.content) || { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { id, title: title || (saved && saved.title) || id, builtin:false, config, content };
 }
@@ -310,6 +321,7 @@ function crewRoster(){ return pkCrew().roster || []; }
 function crewPilot(){ return pkCrew().pilot || ''; }
 function crewNav(){ return pkCrew().nav || []; }
 function pkShip(){ return activePackConfig().ship || { name:'', startLocationId:'' }; }
+function pkCalendar(){ return activePackConfig().calendar || PACK_DEFAULTS.calendar; }
 function moduleOn(key){ const m = pkModules(); return m[key] !== false; }
 function pkTheme(){ return activePackConfig().theme || PACK_DEFAULTS.theme; }
 
@@ -399,6 +411,9 @@ function applyTerminology(){
   // Galaxy legend jump-lane wording.
   const lane = document.getElementById('hx-leg-lane');
   if(lane && lane.lastChild && lane.lastChild.nodeType === 3) lane.lastChild.textContent = TERM('jumpLane') + ' (−15% fuel)';
+  // Calendar panel header follows the calendar terminology.
+  const calT = document.getElementById('cal-title');
+  if(calT) calT.textContent = '📅 ' + TERM('calendar').toUpperCase();
 }
 
 function applyPackToUI(){
