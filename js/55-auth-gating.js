@@ -688,6 +688,7 @@ async function pollRevealState(){
         const wasShared = playerInit.shared;
         playerInit = freshTO;
         if(typeof updateTurnOrderBtn === 'function') updateTurnOrderBtn();
+        if(typeof dkeInitChanged === 'function') dkeInitChanged();   // deck-plan token overlays
         if(playerInit.shared && !wasShared && !turnOrderPanelOpen){
           toggleTurnOrderPanel();      // reveal the board when combat begins
         } else if(turnOrderPanelOpen){
