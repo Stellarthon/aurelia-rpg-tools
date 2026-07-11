@@ -62,7 +62,10 @@ function deckHasContent(d){
 // Current station's deck (editor always mutates through here so undo/redo and
 // the poll's stationAdditions replacement can never leave a stale reference).
 function dkeD(){
-  if(typeof currentStationId === 'undefined' || currentStationId === 'aurelia') return null;
+  if(typeof currentStationId === 'undefined') return null;
+  // The built-in Aurelia station carries its deck under stationAdditions['aurelia']
+  // too (a deck-only holder — its areas still come from MAIN); when it has content
+  // the deck overrides the hand-drawn canon map (see renderStationMap, js/40).
   const s = stationAdditions[currentStationId];
   return (s && s.deck) ? s.deck : null;
 }
@@ -412,15 +415,20 @@ function dkeEnsureDom(){
 
 function dkeOpen(){
   if(typeof isReferee === 'function' && !isReferee()) return;
-  if(typeof currentStationId === 'undefined' || currentStationId === 'aurelia') return;
-  const s = stationAdditions[currentStationId]; if(!s) return;
+  if(typeof currentStationId === 'undefined') return;
+  // The built-in Aurelia station has no stationAdditions entry (its areas come from
+  // MAIN), so seed a deck-only holder for it — that lets the canon station carry a
+  // drawable deck like authored stations, overriding the hand-drawn map once drawn.
+  let s = stationAdditions[currentStationId];
+  if(!s){ if(currentStationId === 'aurelia'){ s = stationAdditions['aurelia'] = {}; } else { return; } }
   if(!s.deck) s.deck = dkeBlank();
   dkeNorm(s.deck);
   dkeEnsureDom();
   dkeIsOpen = true; dkeTool = deckHasContent(s.deck) ? 'select' : 'room';
   dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkePtrs.clear(); dkePinch = null;
   document.getElementById('dke-wrap').classList.add('open');
-  document.getElementById('dke-title').textContent = ((s.name || 'STATION').toUpperCase()) + ' — DECK PLAN';
+  const stnName = (typeof stationDef === 'function' && stationDef() && stationDef().name) || s.name || 'STATION';
+  document.getElementById('dke-title').textContent = (stnName.toUpperCase()) + ' — DECK PLAN';
   document.getElementById('dke-w').value = s.deck.w;
   document.getElementById('dke-h').value = s.deck.h;
   dkeFitView();
@@ -903,7 +911,7 @@ let dkeMapDrag = null;          // {i, sx, sy, p0:{x,y}, last:{x,y}|null, moved}
 let dkeMapClickGuardUntil = 0;  // swallow clicks until this timestamp after a drag
 
 function dkeMapDeck(){
-  if(typeof currentStationId === 'undefined' || currentStationId === 'aurelia') return null;
+  if(typeof currentStationId === 'undefined') return null;
   const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
   return (s && s.deck && deckHasContent(s.deck)) ? s.deck : null;
 }

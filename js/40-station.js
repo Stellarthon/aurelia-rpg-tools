@@ -44,6 +44,15 @@ function renderStationMap(){
   const svg = document.getElementById('mapsvg'); if(!svg) return;
   if(_origStationMap == null) _origStationMap = svg.innerHTML;
   if(currentStationId === 'aurelia'){
+    // A referee-drawn deck plan (stored under stationAdditions['aurelia'], a
+    // deck-only holder — areas still come from MAIN) overrides the hand-drawn canon
+    // map once it has content; otherwise fall back to the original hand-drawn map.
+    const a = stationAdditions['aurelia'];
+    if(a && a.deck && typeof deckHasContent === 'function' && deckHasContent(a.deck)){
+      svg.setAttribute('viewBox', deckStationViewBox(a.deck));
+      svg.innerHTML = deckStationSVG(a.deck, stationDef());
+      return;
+    }
     svg.setAttribute('viewBox','0 0 400 500');
     svg.innerHTML = _origStationMap; return;
   }
@@ -835,7 +844,14 @@ function staRemoveSub(areaId, subId){
 }
 function designStationViewHTML(){
   const eh = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  if(currentStationId === 'aurelia' || !staEnsure())
+  if(currentStationId === 'aurelia'){
+    // Aurelia's areas are canon and edited in place, but the station can still carry a
+    // drawable deck plan that overrides the hand-drawn map when present (js/41).
+    let html = `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
+    if(typeof dkeStudioRowHTML === 'function') html += dkeStudioRowHTML();
+    return html;
+  }
+  if(!staEnsure())
     return `<div class="hx-small">Station content is edited in place — ✏ pencils appear on each text block while Design Mode is on.</div>`;
   const s = staEnsure();
   const ids = Object.keys(s.areas || {});
