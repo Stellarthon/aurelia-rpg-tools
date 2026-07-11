@@ -227,6 +227,12 @@ function buildAuthoredPack(id, title){
   // seed them empty; the referee fills them in Studio ▸ Crew & Ship.
   if(!config.crew || typeof config.crew !== 'object') config.crew = { roster:[], pilot:'', nav:[] };
   if(!config.ship || typeof config.ship !== 'object') config.ship = { name:'', startLocationId:'' };
+  // …and the galaxy layer starts neutrally named, not "The Orion Arm" (the
+  // referee renames it in Studio ▸ Layers).
+  if(!saved || !saved.config || !saved.config.taxonomy){
+    const g = (config.taxonomy || []).find(l => l.id === 'galaxy');
+    if(g) g.label = 'The Galaxy';
+  }
   const content = (saved && saved.content) || { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { id, title: title || (saved && saved.title) || id, builtin:false, config, content };
 }
@@ -262,6 +268,11 @@ function resetActivePackConfig(){
 // ── Accessors (safe before assembly — fall back to PACK_DEFAULTS) ───────────
 function activePackConfig(){ return (_activePack && _activePack.config) || PACK_DEFAULTS; }
 function activePackContent(){ return _activePack && _activePack.content; }
+
+// True when the active campaign is referee-authored (not the built-in Archon
+// Gambit pack). Safe at any point after js/05 loads — used by later modules to
+// skip Archon-flavoured seeds (econ corps, faction AIs, oracle place lists).
+function isAuthoredCampaign(){ return activeCampaignId !== DEFAULT_CAMPAIGN_ID; }
 
 // Terminology lookup. Named TERM (not t) to avoid clashing with the hundreds of
 // local `const t = …` in the render code.

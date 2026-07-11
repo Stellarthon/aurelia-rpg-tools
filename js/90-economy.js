@@ -472,10 +472,15 @@ window.ECON = (function(){
   function agentUnitPrice(good, p, id){ return (AGENT_VALUE[good]||100) * (1 - (p||0)*0.08) * (id?overlayMult(id,good):1); }  // cheaper when glutted (p>0), dearer when short (p<0); ×price-level overlay so traders bank inflated margins
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
   function genAgentName(){ for(let i=0;i<8;i++){ const nm=pick(NAME_A)+' '+pick(NAME_B); if(!state.agents.some(a=>a.name===nm)) return nm; } return pick(NAME_A)+' '+pick(NAME_B); }
-  function pickBacking(){ if(Math.random()<0.55) return 'private'; return pick(['hegemony','omnisynth','sanhedrin','rsc','uhc']); }
+  // Authored campaigns get no Archon-flavoured seeds: every trader is private,
+  // the corp houses don't exist, and the faction AIs stay off — the referee's
+  // own factions drive politics through the shock/price levers instead.
+  function authored(){ return typeof isAuthoredCampaign==='function' && isAuthoredCampaign(); }
+  function pickBacking(){ if(authored() || Math.random()<0.55) return 'private'; return pick(['hegemony','omnisynth','sanhedrin','rsc','uhc']); }
   // A fresh starting roster — a mix of independents and a couple of faction relief fleets.
   function freshAgents(){
     const seed=[['private','free'],['private','far'],['hegemony','subm'],['omnisynth','fat'],['private','free']];
+    if(authored()) seed.forEach(s=>{ s[0]='private'; });
     return seed.map((s,i)=>({ id:'tr'+i, name:AGENT_NAMES[i], cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing:s[0], shipId:s[1], insolventWk:0, hist:[], capHist:[] }));
   }
   // ── Corporations: a THIRD backing type (alongside `private` and the factions). Pooled-capital
@@ -532,7 +537,9 @@ window.ECON = (function(){
   function corpOf(b){ return (state && state.corps && state.corps[b]) || null; }
   function corpHomeOf(a){ const h=(a.homes||[]).find(id=>worlds && worlds[id]); return h || (a.homes&&a.homes[0]) || null; }
   function newCorpShip(id, name, corp, shipId, cap){ return { id, name, cap, pos:null, route:null, trips:0, profit:0, backing:corp.id, shipId, insolventWk:0, hist:[], capHist:[] }; }
-  function freshCorps(){ const out={}; corpSeedList().forEach(a=>{   // deterministic seed (empty invests → corp-free base) — 3 rivals + the OmniSynth megacorp
+  function freshCorps(){ const out={};
+    if(authored()) return out;   // authored campaigns: no OmniSynth & co — houses form organically (formCorp) or not at all
+    corpSeedList().forEach(a=>{   // deterministic seed (empty invests → corp-free base) — 3 rivals + the OmniSynth megacorp
     out[a.id]={ id:a.id, name:a.name, specialty:a.specialty, color:a.color, home:corpHomeOf(a),
       treasury: a.megacorp?MEGACORP_SEED_TREASURY:CORP_SEED_TREASURY, invests:[], founded:0, megacorp: !!a.megacorp }; }); return out; }
   function traderCapOf(){ return Math.max(3, Math.min(TRADER_CAP_MAX, (state&&state.traderCap)||DEFAULT_TRADER_CAP)); }
@@ -1133,6 +1140,7 @@ window.ECON = (function(){
   }
 
   function freshFactions(){ const out={};
+    if(authored()) return out;   // authored campaigns: the Archon power AIs stay off — statecraft is the referee's
     FAC_AI_IDS.forEach(id=>{ const stance={};
       FAC_AI_IDS.forEach(o=>{ if(o!==id) stance[o]=relBaseline(id,o); });
       out[id]={ id, treasury:FAC_SEED_TREASURY, income:0, stance, agenda:'CONSOLIDATE', lastCraft:-999, hist:[], cabinet:freshCabinet(id), prevAgenda:'CONSOLIDATE' };

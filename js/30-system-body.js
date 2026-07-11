@@ -676,7 +676,7 @@ function selectBody(id){
   det.innerHTML = html;
   // Body editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}], body.name);
 }
 
 // Returns to the system body-list overview (used after deleting the body
@@ -690,7 +690,7 @@ function goSystemOverview(){
   const stBtn = document.getElementById("btn-view-station");
   if(stBtn) stBtn.classList.add("v-hidden");
   renderSystemOverview(); // sets name/star-info, swaps body-list vs blank prompt
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"}], currentSystemName());
   updateBackBtn();
   buildOrrery();
 }
@@ -1012,7 +1012,7 @@ function buildBodyView(id){
   // Body editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
 
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"}], body.name);
   document.getElementById('hdr-title').textContent = (body.name||'').toUpperCase();
 }
 
@@ -1599,7 +1599,7 @@ function selectBodyLocation(locId){
       <div style="font-size:14px;font-weight:600;color:#e8eaf0">Not yet revealed</div>
       <div style="font-size:12px;max-width:220px;text-align:center;color:var(--tx1)">Your referee hasn't opened up this location yet.</div></div>`;
     const db = document.getElementById('bv-db'); if(db) db.innerHTML = html;
-    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+    setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
     return;
   }
 
@@ -1607,7 +1607,10 @@ function selectBodyLocation(locId){
 
   // Interior entry (e.g. Aurelia Orbital Station). The Station sub-app itself is
   // unchanged for Phase 3 — only its entry point moved onto the generic view.
-  if(loc.isStation || loc.interiorId){
+  // The deck-map sub-app is Archon Gambit content (MAIN, js/20) with no
+  // authoring path, so authored campaigns never offer the door — their
+  // stations are body locations with full content editing instead.
+  if((loc.isStation || loc.interiorId) && !(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign())){
     html += `<button class="view-close-btn" style="margin-bottom:10px" onclick="enterStation()">⬡ Enter ${escHtml(loc.name)}</button>`;
   }
 
@@ -1643,7 +1646,7 @@ function selectBodyLocation(locId){
   mountPlayerNotes('loc-'+locId);
   // Location editing lives in the floating Design Studio panel (js/65).
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
-  setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
+  setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystemFromBody"},{label:body?body.name:'',fn:"goBackToBodyFromLoc"}], loc.name);
 }
 function goBackToBodyFromLoc(){
   if(selectedBody) buildBodyView(selectedBody);
@@ -1678,6 +1681,13 @@ function playViewTransition(switchFn){
 }
 
 function enterStation(){
+  // Authored campaigns have no deck map — the station sub-app renders MAIN
+  // (Aurelia, js/20). Guard every entry path (scene pushes, display specs,
+  // stale links), not just the button above.
+  if(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign()){
+    if(typeof showToast === 'function') showToast('No station deck map in this campaign — stations are body locations here');
+    return;
+  }
   playViewTransition(() => {
     currentView = "station";
     document.getElementById("view-galaxy").classList.add("v-hidden");
@@ -1686,7 +1696,7 @@ function enterStation(){
     document.getElementById("view-station").classList.remove("v-hidden");
     document.getElementById("view-station").style.display="flex";
     document.getElementById("hdr-title").textContent = "AURELIA ORBITAL STATION";
-    setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
+    setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"},{label:"Aurelia",fn:"goAurelia"}],"Orbital Station");
     updateStationLocks();
   });
 }
@@ -1704,9 +1714,9 @@ function goSystem(){
     document.getElementById("hdr-title").textContent = currentSystemName().toUpperCase()+" "+layerShort('system','System').toUpperCase();
     if(selectedBody){
       const b=getBodies().find(x=>x.id===selectedBody);
-      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"},{label:currentSystemName(),fn:"goSystem"}],b?b.name:"");
     } else {
-      setBreadcrumb([{label:"The Orion Arm",fn:"goGalaxy"}], currentSystemName());
+      setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'),fn:"goGalaxy"}], currentSystemName());
     }
     updateBackBtn();
   });

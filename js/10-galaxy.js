@@ -1963,7 +1963,7 @@ const HX = (function(){
     if(!s){
       // ── Galaxy overview (nothing selected) — tap a star to inspect it ──
       html+=sec('galaxy','Galaxy',true);
-      html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">The Orion Arm</div>`;
+      html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(layerLabel('galaxy','The Orion Arm'))}</div>`;
       html+=`<div class="hx-small hx-mono" style="margin-top:2px">Hex navigation · 1 hex = 1 parsec</div>`;
       const charted=SYS.filter(x=>!x.uncharted).length, unch=SYS.filter(x=>x.uncharted).length;
       html+=`<div class="hx-kv" style="margin-top:6px"><span class="k">Charted systems</span><span class="v">${charted}</span></div>`;
@@ -2479,7 +2479,7 @@ function enterSystem(systemId, opts){
     const stBtn = document.getElementById('btn-view-station');
     if(stBtn) stBtn.classList.add('v-hidden');
     document.getElementById('hdr-title').textContent = currentSystemName().toUpperCase() + ' ' + layerShort('system','System').toUpperCase();
-    setBreadcrumb([{label:'The Orion Arm', fn:'goGalaxy'}], currentSystemName());
+    setBreadcrumb([{label:layerLabel('galaxy','The Orion Arm'), fn:'goGalaxy'}], currentSystemName());
     renderSystemOverview();
     buildOrrery();
     updateBackBtn();
