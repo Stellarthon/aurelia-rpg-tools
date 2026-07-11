@@ -112,6 +112,38 @@ function dkeRoomOutlineD(cells){
   return d;
 }
 
+// ── Initiative tie-in ────────────────────────────────────────────────────────
+// Tokens match initiative entries BY NAME (case-insensitive). The referee reads
+// the live combatants array (js/45) so the glow works even before sharing; a
+// player reads the redacted shared board (playerInit) — the same names their
+// Turn Order panel shows, so nothing referee-private reaches the map.
+function dkeInitRows(){
+  const ref = (typeof isReferee === 'function') && isReferee();
+  if(ref && typeof combatants !== 'undefined' && Array.isArray(combatants) && combatants.length){
+    return combatants.map((c,i) => ({ name:c.name, down:!!c.down, cur: i === currentTurnIdx, ord: i+1 }));
+  }
+  if(!ref && typeof playerInit !== 'undefined' && playerInit && playerInit.shared && Array.isArray(playerInit.rows) && playerInit.rows.length){
+    return playerInit.rows.map((r,i) => ({ name:r.name, down:!!r.down, cur: playerInit.turnId != null && r.id === playerInit.turnId, ord: i+1 }));
+  }
+  return null;
+}
+function dkeInitFor(rows, name){
+  if(!rows) return null;
+  const k = String(name||'').trim().toLowerCase();
+  return rows.find(r => String(r.name||'').trim().toLowerCase() === k) || null;
+}
+// Nudged by renderInit (js/45) and the player initiative poll (js/55) so token
+// overlays track the fight live. Only redraws surfaces actually showing a deck.
+function dkeInitChanged(){
+  if(dkeIsOpen) dkeRenderContent();
+  if(typeof currentView !== 'undefined' && currentView === 'station'
+     && typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia'
+     && typeof renderStationMap === 'function'){
+    renderStationMap();
+    if(typeof updateNodes === 'function') updateNodes();
+  }
+}
+
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
 function dkeTokenColour(name){
@@ -124,7 +156,7 @@ function dkeTokenInitials(name){
   const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
   return (((parts[0]||'')[0]||'') + ((parts[1]||'')[0]||'')).toUpperCase() || '?';
 }
-function dkeTokenSVG(t, opt){
+function dkeTokenSVG(t, opt, st){
   const C = DKE_CELL, eh = dkeEsc, r = 13;
   const cx = (t.x+.5)*C, cy = (t.y+.5)*C, col = dkeTokenColour(t.n);
   // Portrait on top of the initials disc: if the character has no uploaded
@@ -132,13 +164,30 @@ function dkeTokenSVG(t, opt){
   // show through. No portraitVer cache-buster here — a changed photo may stay
   // stale until a reload, which is fine for a map counter.
   const url = (typeof portraitUrlFor === 'function') ? portraitUrlFor(t.n) : '';
+  const down = !!(st && st.down);
+  const disc = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="${col}" stroke-width="2"/>`
+    + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(t.n))}</text>`
+    + (url ? `<image x="${cx-r}" y="${cy-r}" width="${2*r}" height="${2*r}" href="${eh(url)}" clip-path="url(#${eh(opt.idp||'sta')}-tkclip)" preserveAspectRatio="xMidYMid slice" onerror="this.remove()"/>` : '')
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="2"/>`;
+  // Initiative overlays: pulsing ring on whose turn it is, order badge for
+  // everyone in the tracker, dim + strike when down.
+  const pulse = (st && st.cur && !down)
+    ? `<circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="#D4A843" stroke-width="2">`
+      + `<animate attributeName="r" values="15;18;15" dur="1.6s" repeatCount="indefinite"/>`
+      + `<animate attributeName="stroke-opacity" values=".9;.3;.9" dur="1.6s" repeatCount="indefinite"/></circle>`
+    : '';
+  const strike = down
+    ? `<line x1="${cx-10}" y1="${cy-10}" x2="${cx+10}" y2="${cy+10}" stroke="#d45050" stroke-width="2.5" stroke-linecap="round"/>`
+    : '';
+  const badge = st
+    ? `<circle cx="${cx+10}" cy="${cy-10}" r="6.5" fill="#10131c" stroke="${st.cur ? '#D4A843' : '#7f93b8'}" stroke-width="1.2"/>`
+      + `<text x="${cx+10}" y="${cy-7.5}" text-anchor="middle" font-size="7" font-weight="700" fill="${st.cur ? '#D4A843' : '#a3a9bf'}" font-family="system-ui,sans-serif">${st.ord}</text>`
+    : '';
   // On the station view tokens are tap-transparent so a tap on one still opens
   // the room beneath; the editor hit-tests by coordinate, so it needs nothing.
   return `<g${opt.interactive ? ' style="pointer-events:none"' : ''}><title>${eh(t.n)}</title>`
-    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="${col}" stroke-width="2"/>`
-    + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(t.n))}</text>`
-    + (url ? `<image x="${cx-r}" y="${cy-r}" width="${2*r}" height="${2*r}" href="${eh(url)}" clip-path="url(#${eh(opt.idp||'sta')}-tkclip)" preserveAspectRatio="xMidYMid slice" onerror="this.remove()"/>` : '')
-    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="2"/>`
+    + (down ? `<g opacity=".45">${disc}</g>` : disc)
+    + pulse + strike + badge
     + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(t.n)}</text>`
     + `</g>`;
 }
@@ -208,7 +257,8 @@ function dkeContentSVG(deck, opt){
     // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
     // because the editor canvas and the station map can be in the DOM at once.
     out += `<defs><clipPath id="${eh(opt.idp||'sta')}-tkclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>`;
-    deck.tokens.forEach(t => { out += dkeTokenSVG(t, opt); });
+    const initRows = dkeInitRows();
+    deck.tokens.forEach(t => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n)); });
   }
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   return out;
