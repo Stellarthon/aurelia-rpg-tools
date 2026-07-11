@@ -634,6 +634,26 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Authored station deck maps — players receive referee-authored interiors
+  // (and live edits to them) the same way they receive galaxy edits.
+  try {
+    if(typeof stationAdditions !== 'undefined'){
+      const rst = await supaStorage.get('station-additions', true);
+      if(rst.ok){
+        const fresh = (rst.value != null ? JSON.parse(rst.value) : {}) || {};
+        if(JSON.stringify(fresh) !== JSON.stringify(stationAdditions)){
+          stationAdditions = fresh;
+          if(currentView === 'station' && typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia'){
+            if(typeof stationDef === 'function' && !stationDef()){ if(typeof navBack === 'function') navBack(); } // station deleted under us
+            else if(typeof renderStationMap === 'function'){
+              renderStationMap(); updateNodes(); renderHeader(); renderTabs(); renderDetail(); renderFooter();
+            }
+          }
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Quest log — players see live updates as referee changes quest status,
   // adds objectives, or marks things done during a session
   try {
@@ -1260,6 +1280,9 @@ const STATION_NODE_RECTS = {
 function updateStationLocks(){
   // Remove any existing lock badges first
   document.querySelectorAll('.station-lock-badge').forEach(el => el.remove());
+  // Lock badges belong to the built-in Aurelia map's fixed geometry — an
+  // authored station is gated as a whole by its host location's reveal.
+  if(typeof currentStationId !== 'undefined' && currentStationId !== 'aurelia') return;
   if(isReferee()) return; // referee always sees everything, no badges needed
   const svg = document.getElementById('mapsvg');
   if(!svg) return;
