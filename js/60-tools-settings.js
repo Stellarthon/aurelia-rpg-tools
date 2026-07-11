@@ -85,7 +85,7 @@ function openSheetMenu(){
   // so they can flip between any character's sheet from the dropdown. Default to
   // whoever they're viewing as, else the first known character.
   if(isReferee()){
-    const first = (typeof KNOWN_CHARACTERS !== 'undefined' && KNOWN_CHARACTERS.length) ? KNOWN_CHARACTERS[0] : null;
+    const first = (typeof crewRoster === 'function' && crewRoster().length) ? crewRoster()[0] : null;
     const target = myIdentity || first;
     if(target){ openSheet(target); return; }
   }
@@ -1300,7 +1300,7 @@ async function openSheet(characterName){
     if(isReferee()){
       const eatt = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
       const ea = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
-      const names = (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS.slice() : []);
+      const names = (typeof crewRoster === 'function' ? crewRoster().slice() : []);
       if(characterName && !names.includes(characterName)) names.unshift(characterName);   // include a one-off (e.g. an NPC) name
       picker.innerHTML = names.map(n => `<option value="${eatt(n)}"${n === characterName ? ' selected' : ''}>${ea(n)}</option>`).join('');
       picker.value = characterName;
@@ -2062,7 +2062,7 @@ function renderCatalogueBrowser(){
   if(catalogueTargetChar){
     note = `<div class="cat-target">Adding to <b>${ea(catalogueTargetChar)}</b> — tap ＋ Add${ref ? ` · <button class="cat-link" onclick="catSetTarget('')">done</button>` : ''}</div>`;
   } else if(ref){
-    const opts = (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).map(n => `<option value="${eatt(n)}">${ea(n)}</option>`).join('');
+    const opts = (typeof crewRoster === 'function' ? crewRoster() : []).map(n => `<option value="${eatt(n)}">${ea(n)}</option>`).join('');
     note = `<div class="cat-target">Authoring the shared library · <label>grant to <select class="cat-grant" onchange="if(this.value)catSetTarget(this.value)"><option value="">—</option>${opts}</select></label></div>`;
   } else { note = ''; }
   const chips = ['all'].concat(ITEM_CATEGORIES).map(c =>

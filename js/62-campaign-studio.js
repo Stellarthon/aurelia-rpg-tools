@@ -17,6 +17,7 @@
 let studioTab = 'campaigns';
 const STUDIO_TABS = [
   { id:'campaigns',   label:'Campaigns' },
+  { id:'crew',        label:'Crew & Ship' },
   { id:'terminology', label:'Terminology' },
   { id:'meters',      label:'Meters' },
   { id:'modules',     label:'Modules' },
@@ -62,7 +63,7 @@ function renderCampaignStudio(){
     `<button onclick="studioGo('${t.id}')" style="font-size:10px;font-family:monospace;padding:4px 9px;border-radius:5px;cursor:pointer;border:.5px solid var(--bd0);background:${t.id===studioTab?'var(--accentGoldBg)':'transparent'};color:${t.id===studioTab?'var(--accentGold)':'var(--tx1)'}">${t.label}</button>`
   ).join('');
   const R = {
-    campaigns: studioRenderCampaigns, terminology: studioRenderTerminology, meters: studioRenderMeters,
+    campaigns: studioRenderCampaigns, crew: studioRenderCrew, terminology: studioRenderTerminology, meters: studioRenderMeters,
     modules: studioRenderModules, dice: studioRenderDice, theme: studioRenderTheme,
     worlds: studioRenderWorlds, layers: studioRenderLayers, types: studioRenderTypes,
   };
@@ -148,6 +149,83 @@ function studioResetConfig(){
   if(typeof resetActivePackConfig === 'function') resetActivePackConfig();
   if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
   renderCampaignStudio();
+}
+
+// ── Tab: Crew & Ship ─────────────────────────────────────────────────────────
+// The party roster (identity picker, sheets, purses, whisper/visibleTo
+// audiences), which member is the pilot (fuel readout foregrounded) and who
+// counts as nav crew (jump distances, closed-lane locks), plus the default
+// ship identity a fresh campaign's shipState boots with. Honour-system like
+// all identity gating; renaming a member does not rewrite past audiences.
+function studioRenderCrew(){
+  const cfg = studioCfg();
+  const crew = cfg.crew || { roster:[], pilot:'', nav:[] };
+  const ship = cfg.ship || { name:'', startLocationId:'' };
+  const roster = crew.roster || [];
+  const nav = crew.nav || [];
+  const rows = roster.map((n, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input style="${S_IN};flex:1" value="${studioEsc(n)}" onchange="studioCrewRename(${i}, this.value)">
+      <label style="font-size:10px;color:var(--tx1);white-space:nowrap" title="Pilot — the fuel readout is foregrounded for them"><input type="radio" name="studio-pilot"${crew.pilot===n?' checked':''} onchange="studioCrewPilot('${studioEsc(n).replace(/'/g,"\\'")}')"> pilot</label>
+      <label style="font-size:10px;color:var(--tx1);white-space:nowrap" title="Nav crew — sees jump distances and closed-lane locks"><input type="checkbox"${nav.includes(n)?' checked':''} onchange="studioCrewNav('${studioEsc(n).replace(/'/g,"\\'")}', this.checked)"> nav</label>
+      <button style="${S_MINI}" onclick="studioCrewRemove(${i})" title="Remove from the roster">✕</button>
+    </div>`).join('');
+  return `
+    <div style="font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:8px">The party roster — drives the identity picker, character sheets, purses and whisper audiences. Mark the <b>pilot</b> and the <b>nav</b> crew for the ship readout gating.</div>
+    ${rows || '<div style="font-size:11px;color:var(--tx1);margin-bottom:8px">No crew yet — add your players below.</div>'}
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input style="${S_IN};flex:1" id="studio-crew-new" placeholder="Character name…" onkeydown="if(event.key==='Enter')studioCrewAdd()">
+      <button style="${S_BTNP}" onclick="studioCrewAdd()">＋ Add</button>
+    </div>
+    <div style="${S_LBL}">Ship</div>
+    <div style="font-size:11px;color:var(--tx1);line-height:1.5;margin-bottom:8px">Defaults for this campaign's first boot — rename the live ship any time on the ${typeof TERM==='function'?studioEsc(TERM('ship')):'Ship'} sheet.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:110px;font-size:10px;font-family:monospace;color:var(--tx1)">name</span>
+      <input style="${S_IN}" value="${studioEsc(ship.name||'')}" placeholder="e.g. Pillar of Autumn" onchange="studioShipField('name', this.value)">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:110px;font-size:10px;font-family:monospace;color:var(--tx1)">start system id</span>
+      <input style="${S_IN}" value="${studioEsc(ship.startLocationId||'')}" placeholder="a charted system's id (optional)" onchange="studioShipField('startLocationId', this.value)">
+    </div>`;
+}
+function studioCrew(){ const c = studioCfg(); if(!c.crew || typeof c.crew !== 'object') c.crew = { roster:[], pilot:'', nav:[] }; c.crew.roster = c.crew.roster || []; c.crew.nav = c.crew.nav || []; return c.crew; }
+function studioCrewAdd(){
+  const el = document.getElementById('studio-crew-new');
+  const name = el ? el.value.trim() : '';
+  if(!name) return;
+  const crew = studioCrew();
+  if(!crew.roster.includes(name)) crew.roster.push(name);
+  studioCommit();
+}
+function studioCrewRename(i, val){
+  const crew = studioCrew();
+  const old = crew.roster[i];
+  const name = String(val || '').trim();
+  if(old == null || !name) { renderCampaignStudio(); return; }
+  crew.roster[i] = name;
+  if(crew.pilot === old) crew.pilot = name;
+  crew.nav = crew.nav.map(n => n === old ? name : n);
+  studioCommit();
+}
+function studioCrewRemove(i){
+  const crew = studioCrew();
+  const old = crew.roster[i]; if(old == null) return;
+  crew.roster.splice(i, 1);
+  if(crew.pilot === old) crew.pilot = '';
+  crew.nav = crew.nav.filter(n => n !== old);
+  studioCommit();
+}
+function studioCrewPilot(name){ studioCrew().pilot = name; studioCommit(); }
+function studioCrewNav(name, on){
+  const crew = studioCrew();
+  crew.nav = crew.nav.filter(n => n !== name);
+  if(on) crew.nav.push(name);
+  studioCommit();
+}
+function studioShipField(key, val){
+  const c = studioCfg(); if(!c.ship || typeof c.ship !== 'object') c.ship = { name:'', startLocationId:'' };
+  c.ship[key] = String(val || '').trim();
+  studioCommit();
 }
 
 // ── Tab: Terminology ────────────────────────────────────────────────────────

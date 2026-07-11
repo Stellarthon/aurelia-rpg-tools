@@ -1478,7 +1478,7 @@ const HX = (function(){
         // Route block: the referee + nav crew (Rhett/Cass) see a closed lane as
         // dashed red with a lock; other players see an ordinary lane.
         const blk=(typeof isLaneBlocked==='function')&&isLaneBlocked(L.key);
-        const showBlk=blk&&(ref()||(typeof canSee==='function'&&typeof SHIP_NAV_AUDIENCE!=='undefined'&&canSee(SHIP_NAV_AUDIENCE)));
+        const showBlk=blk&&(ref()||(typeof canSee==='function'&&typeof crewNav==='function'&&canSee(crewNav())));
         if(showBlk){ line.setAttribute('stroke','#d45050'); line.setAttribute('stroke-dasharray','5,4'); line.setAttribute('opacity','0.92'); line.setAttribute('stroke-width',touches?'2':'1.5'); }
         laneLayer.appendChild(line);
         if(showBlk){ const mx=(pa.x+pb.x)/2, my=(pa.y+pb.y)/2;

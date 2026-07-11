@@ -12,6 +12,9 @@
 // Gating is spoiler/visibility control, not security (see CLAUDE.md).
 // ═══════════════════════════════════════════════════════════════════════════
 
+// The Archon Gambit pilot/nav crew — the DEFAULT Campaign Pack's source of
+// truth only. Consumers read crewPilot()/crewNav() (js/05); authored campaigns
+// set their own in Studio ▸ Crew & Ship.
 const SHIP_PILOT = 'Rhett Calder';
 const SHIP_NAV_AUDIENCE = ['Rhett Calder', 'Cassia Velen']; // jump-distance readout
 
@@ -89,6 +92,25 @@ let shipState = {
   // ── Critical hits — severity 0..6 per system ──
   crits: { armour:0,bridge:0,cargo:0,crew:0,fuel:0,hull:0,jdrive:0,mdrive:0,powerplant:0,sensors:0,weapons:0 }
 };
+
+// Campaign Pack: an authored campaign starts with a NEUTRAL ship — its name /
+// start location from the pack (Studio ▸ Crew & Ship), no Archon Gambit
+// identity. Load-time, same pattern as the galaxy swap in js/10 (js/05 loads
+// first; the authored pack's config is synchronous localStorage). The
+// campaign-namespaced 'ship-state' row then merges over these in
+// loadShipState(), so this only shapes a campaign's FIRST boot.
+if(typeof activeCampaignId !== 'undefined' && typeof DEFAULT_CAMPAIGN_ID !== 'undefined'
+   && activeCampaignId !== DEFAULT_CAMPAIGN_ID && typeof buildAuthoredPack === 'function'){
+  try {
+    const _shipCfg = (buildAuthoredPack(activeCampaignId).config || {}).ship || {};
+    shipState.name = _shipCfg.name || '';
+    shipState.origin = '';
+    shipState.destination = '';
+    shipState.locationId = _shipCfg.startLocationId || '';
+    shipState.visited = [];
+    shipState.jumpLog = [];
+  } catch(e){ console.error('Campaign pack: ship defaults failed — keeping built-in', e); }
+}
 
 // ── Shared ship-stat factory ───────────────────────────────────────────────
 // Produces the canonical ship-stat shape used for BOTH the player ship and
@@ -209,7 +231,7 @@ function renderShipPanel(){
   const nameBadge = document.getElementById('ship-name-badge');
   if(nameBadge) nameBadge.textContent = shipState.name || '';
 
-  const isPilot = !ref && myIdentity === SHIP_PILOT;
+  const isPilot = !ref && !!crewPilot() && myIdentity === crewPilot();
   const sec = [];
 
   // ── SHIP DATA FILE ──
@@ -272,8 +294,8 @@ function renderShipPanel(){
       ${needLine}
     </div>`);
   }
-  // Jump distance — Rhett + Cass only (canSee filters other identities)
-  if(canSee(SHIP_NAV_AUDIENCE)){
+  // Jump distance — the pack's nav crew only (canSee filters other identities)
+  if(canSee(crewNav())){
     const p = Number(shipState.jumpParsecs) || 0, r = Number(shipState.jumpRating) || 1;
     const jumps = shipJumpsNeeded(), dest = shipState.destination || '—';
     const feas = p > 0 ? (p <= r ? `Reachable in one J-${r} jump` : `${jumps} jumps at J-${r}`) : 'No destination plotted';

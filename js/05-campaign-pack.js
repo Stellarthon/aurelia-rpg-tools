@@ -76,6 +76,14 @@ const PACK_DEFAULTS = {
   // Meters / trackers. 0-to-many. The Archon morality meter is folded in at
   // boot from its existing definition (buildDefaultPack) so it stays single-source.
   meters: [],
+  // Crew & ship. null = folded in at boot (built-in pack: KNOWN_CHARACTERS /
+  // SHIP_PILOT / SHIP_NAV_AUDIENCE / the shipState literal stay single-source);
+  // authored packs are seeded empty so no Archon identity ever leaks into a
+  // new universe. roster drives the identity picker, sheets, whisper/visibleTo
+  // audiences; pilot gets the fuel readout foregrounded; nav sees jump
+  // distances and closed-lane locks.
+  crew: null,   // { roster:[names…], pilot:'name', nav:[names…] }
+  ship: null,   // { name:'…', startLocationId:'…' } — defaults for a fresh campaign's shipState
   // Terminology map — every user-facing noun the engine can override.
   terminology: {
     referee:'Referee', player:'Traveller', playerView:'Traveller View',
@@ -172,6 +180,13 @@ function buildDefaultPack(){
   }
   // Status-effect catalog for character sheets.
   if(typeof TRAVELLER_STATUS_FX !== 'undefined') config.statusFx = _clone(TRAVELLER_STATUS_FX);
+  // Crew & ship — folded from the code constants (single source of truth).
+  config.crew = {
+    roster: (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS.slice() : [],
+    pilot:  (typeof SHIP_PILOT !== 'undefined') ? SHIP_PILOT : '',
+    nav:    (typeof SHIP_NAV_AUDIENCE !== 'undefined') ? SHIP_NAV_AUDIENCE.slice() : [],
+  };
+  config.ship = { name: 'Archon Gambit', startLocationId: 'aurelia' };
 
   // Content references the live constants (default campaign only).
   const content = {
@@ -208,6 +223,10 @@ function buildAuthoredPack(id, title){
     // referees rename/replace/remove it freely.
     config.meters = [];
   }
+  // Authored packs must NEVER fall back to the Archon crew/ship constants —
+  // seed them empty; the referee fills them in Studio ▸ Crew & Ship.
+  if(!config.crew || typeof config.crew !== 'object') config.crew = { roster:[], pilot:'', nav:[] };
+  if(!config.ship || typeof config.ship !== 'object') config.ship = { name:'', startLocationId:'' };
   const content = (saved && saved.content) || { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { id, title: title || (saved && saved.title) || id, builtin:false, config, content };
 }
@@ -263,6 +282,23 @@ function pkAttributes(){ return activePackConfig().attributes || PACK_DEFAULTS.a
 function pkMeters(){ return activePackConfig().meters || []; }
 function pkStatusFx(){ return activePackConfig().statusFx || (typeof TRAVELLER_STATUS_FX!=='undefined'?TRAVELLER_STATUS_FX:[]); }
 function pkModules(){ return activePackConfig().modules || PACK_DEFAULTS.modules; }
+// Crew & ship. Fallback to the code constants covers exactly two cases — the
+// built-in pack before its boot fold, and a call during early load — so the
+// default campaign behaves identically; authored packs always carry their own
+// (seeded empty in buildAuthoredPack / validateAndMigratePack).
+function pkCrew(){
+  const c = activePackConfig().crew;
+  if(c && typeof c === 'object') return c;
+  return {
+    roster: (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [],
+    pilot:  (typeof SHIP_PILOT !== 'undefined') ? SHIP_PILOT : '',
+    nav:    (typeof SHIP_NAV_AUDIENCE !== 'undefined') ? SHIP_NAV_AUDIENCE : [],
+  };
+}
+function crewRoster(){ return pkCrew().roster || []; }
+function crewPilot(){ return pkCrew().pilot || ''; }
+function crewNav(){ return pkCrew().nav || []; }
+function pkShip(){ return activePackConfig().ship || { name:'', startLocationId:'' }; }
 function moduleOn(key){ const m = pkModules(); return m[key] !== false; }
 function pkTheme(){ return activePackConfig().theme || PACK_DEFAULTS.theme; }
 
@@ -441,6 +477,9 @@ function validateAndMigratePack(obj){
   // Forward-migration hook: schema 1 had no objectTypes/worldSchema — fill from defaults.
   const config = _mergeConfig(PACK_DEFAULTS, obj.config);
   if(obj.statusFx) config.statusFx = obj.statusFx;
+  // Packs exported before crew/ship existed must not inherit the Archon crew.
+  if(!config.crew || typeof config.crew !== 'object') config.crew = { roster:[], pilot:'', nav:[] };
+  if(!config.ship || typeof config.ship !== 'object') config.ship = { name:'', startLocationId:'' };
   const content = (obj.content && typeof obj.content === 'object') ? obj.content
     : { systems:{}, galaxyNodes:[], factions:{}, locations:{}, timedEvents:[], stations:{} };
   return { ok:true, migrated, pack:{ id: obj.id || _slugCampaign(obj.title||'imported'), title: obj.title || 'Imported Campaign', builtin:false, config, content } };
