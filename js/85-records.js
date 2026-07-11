@@ -1028,7 +1028,7 @@ const ORACLE_GOODS = ['refined fuel','medical supplies','luxury goods','machine 
 const ORACLE_PLACES = ['Aurelia Station','the Aurelia approaches','Cairn Station','the outer berths','the concourse','the elevator gate'];
 const RUMOUR_TEMPLATES = {
   generic: [
-    'A dock worker swears {ship} was flagged on a Hegemony watch advisory.',
+    'A dock worker swears {ship} was flagged on a patrol watch advisory.',
     'Someone is paying good credits to anyone who can place {ship} two weeks ago.',
     'Prices on {good} are about to move — somebody knows something.',
     'A broker on {place} is quietly buying {good} well above market.',
@@ -1156,7 +1156,20 @@ let genPanelOpen = false;
 let genCollapsed = false;
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
-function oraclePlace(){ const p = ORACLE_PLACES.slice(); if(shipState.destination) p.push(shipState.destination); return pick(p); }
+function oraclePlace(){
+  let p;
+  if(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign()){
+    // Authored campaigns: rumours name THIS galaxy's charted systems, not the
+    // Archon Gambit docks. Falls back to neutral dockside spots pre-charting.
+    p = (typeof GALAXY_NODES !== 'undefined' ? GALAXY_NODES : [])
+      .filter(n => !n.uninhabited).map(n => n.label || n.name).filter(Boolean);
+    if(!p.length) p = ['the docks', 'the port concourse', 'the outer berths'];
+  } else {
+    p = ORACLE_PLACES.slice();
+  }
+  if(shipState.destination) p.push(shipState.destination);
+  return pick(p);
+}
 
 function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
 // ── FACTION CONTRACTS — jobs the STATES post (parallel to CORP_CONTRACT; {faction} = the power). The
