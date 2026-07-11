@@ -130,7 +130,9 @@ function updateNodes(){
     const el=document.getElementById("r-"+id);
     if(!el) return;
     const on=cur===id, ac=areas[id].ac||"#7f93b8";
-    el.setAttribute("fill",on?ac+"33":"#0f1117");
+    // Deck-plan room shapes declare their own resting fill (transparent) so the
+    // floor shows through; map nodes keep the historical dark fill.
+    el.setAttribute("fill",on?ac+"33":(el.getAttribute("data-off-fill")||"#0f1117"));
     el.setAttribute("stroke-width",on?"2.5":"1.5");
   });
 }

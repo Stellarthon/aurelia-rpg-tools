@@ -10,8 +10,10 @@
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
 // (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v'}] (edge from
 // vertex (x,y) rightward / downward), props:[{t,x,y,r}] (cell + rotation),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y}] (areaId marker →
-// tapping it in the station view opens that area) }.
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y}] (areaId marker) }.
+// A link marker claims its ROOM: every floor cell reachable from it without
+// crossing an axis-aligned wall becomes the tap target on the station view,
+// so players tap anywhere in the room — not just the marker — to open the area.
 //
 // The referee edits in a full-screen overlay (#dke-wrap, built lazily);
 // players get the read-only render via deckStationSVG() from renderStationMap.
@@ -53,6 +55,57 @@ function dkeD(){
   return (s && s.deck) ? s.deck : null;
 }
 
+// ── Room detection (tap-the-room area links) ─────────────────────────────────
+// Is the unit grid edge starting at vertex (x,y) — rightward for 'h', downward
+// for 'v' — covered by an axis-aligned wall segment? Diagonal walls never block.
+function dkeEdgeWalled(deck, x, y, o){
+  return (deck.walls||[]).some(w => o === 'v'
+    ? (w.x1 === x && w.x2 === x && Math.min(w.y1,w.y2) <= y && Math.max(w.y1,w.y2) >= y+1)
+    : (w.y1 === y && w.y2 === y && Math.min(w.x1,w.x2) <= x && Math.max(w.x1,w.x2) >= x+1));
+}
+function dkeWallBlocks(deck, cx, cy, dx, dy){
+  if(dx === 1)  return dkeEdgeWalled(deck, cx+1, cy, 'v');
+  if(dx === -1) return dkeEdgeWalled(deck, cx, cy, 'v');
+  if(dy === 1)  return dkeEdgeWalled(deck, cx, cy+1, 'h');
+  return dkeEdgeWalled(deck, cx, cy, 'h');
+}
+// Flood-fill from a cell across floor cells, bounded by walls (doors sit ON a
+// wall segment, so doorways bound rooms too). Null if the start cell isn't floor.
+function dkeRoomCells(deck, sx, sy){
+  const floor = new Set();
+  (deck.floors||[]).forEach(f => {
+    for(let i = 0; i < f.w; i++) for(let j = 0; j < f.h; j++) floor.add((f.x+i)+','+(f.y+j));
+  });
+  if(!floor.has(sx+','+sy)) return null;
+  const seen = new Set([sx+','+sy]), queue = [[sx,sy]], out = [];
+  while(queue.length){
+    const cell = queue.shift(); out.push({ x: cell[0], y: cell[1] });
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(d => {
+      const nx = cell[0]+d[0], ny = cell[1]+d[1], k = nx+','+ny;
+      if(seen.has(k) || !floor.has(k) || dkeWallBlocks(deck, cell[0], cell[1], d[0], d[1])) return;
+      seen.add(k); queue.push([nx,ny]);
+    });
+  }
+  return out;
+}
+function dkeRoomFillD(cells){
+  const C = DKE_CELL;
+  return cells.map(c => `M${c.x*C},${c.y*C}h${C}v${C}h${-C}z`).join('');
+}
+// Boundary-only path (edges between a room cell and a non-room cell) — used for
+// the editor's dashed "this is what the marker claims" outline.
+function dkeRoomOutlineD(cells){
+  const C = DKE_CELL, set = new Set(cells.map(c => c.x+','+c.y));
+  let d = '';
+  cells.forEach(c => {
+    if(!set.has(c.x+','+(c.y-1))) d += `M${c.x*C},${c.y*C}h${C}`;
+    if(!set.has(c.x+','+(c.y+1))) d += `M${c.x*C},${(c.y+1)*C}h${C}`;
+    if(!set.has((c.x-1)+','+c.y)) d += `M${c.x*C},${c.y*C}v${C}`;
+    if(!set.has((c.x+1)+','+c.y)) d += `M${(c.x+1)*C},${c.y*C}v${C}`;
+  });
+  return d;
+}
+
 // ── Shared SVG renderer (editor canvas + read-only station view) ─────────────
 function dkeContentSVG(deck, opt){
   opt = opt || {};
@@ -88,16 +141,31 @@ function dkeContentSVG(deck, opt){
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   const seenArea = {};
+  let roomLayer = '', markerLayer = '';
   (deck.links||[]).forEach(lk => {
     const a = areas[lk.a]; if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
-    // First marker per area carries id r-<areaId> so updateNodes() highlights it.
-    const idAttr = seenArea[lk.a] ? '' : ` id="r-${eh(lk.a)}"`; seenArea[lk.a] = true;
     const open = opt.interactive ? ` style="cursor:pointer" onclick="selArea('${eh(lk.a)}')"` : '';
-    out += `<g${open}><circle${idAttr} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
+    const room = dkeRoomCells(deck, lk.x, lk.y);
+    // First claim per area carries id r-<areaId> so updateNodes() highlights it
+    // — on the room shape when the marker sits on floor, else on the marker
+    // circle. Only the interactive station view emits ids: the editor canvas
+    // can share the DOM with it, and duplicate ids would corrupt both.
+    const wantId = !!opt.interactive && !seenArea[lk.a]; seenArea[lk.a] = true;
+    if(room && opt.interactive){
+      // Whole-room tap target; transparent fill still catches pointer events,
+      // and updateNodes() swaps it for the accent glow when the area is open.
+      roomLayer += `<path${wantId ? ` id="r-${eh(lk.a)}"` : ''} data-off-fill="transparent" d="${dkeRoomFillD(room)}" fill="transparent"${open}/>`;
+    } else if(room && opt.editor){
+      roomLayer += `<path d="${dkeRoomOutlineD(room)}" fill="none" stroke="${eh(ac)}" stroke-width="1.2" stroke-dasharray="4,4" opacity=".4"/>`;
+    }
+    markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
          + `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`
          + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}</text></g>`;
   });
+  // Rooms under markers: a tap anywhere in the room opens the area, but each
+  // marker stays individually tappable even inside another marker's room.
+  out += roomLayer + markerLayer;
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   return out;
 }
