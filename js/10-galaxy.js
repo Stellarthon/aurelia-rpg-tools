@@ -1563,8 +1563,12 @@ const HX = (function(){
       // swallows the event so the map doesn't pan; the move/commit is driven from the
       // svg + window pointer handlers in bindPanZoom (they survive the per-move re-render).
       if(sysMovable(s)){ hit.style.cursor='move';
+        // stopPropagation keeps this pointerdown from reaching the svg handler that
+        // normally clears dragMoved/tapConsumed at gesture start — so reset them here,
+        // else a stale dragMoved from a prior pan swallows this star's tap (it drags
+        // fine but won't open). Fresh gesture each grab.
         hit.addEventListener('pointerdown',ev=>{ if(ev.button>0||!sysMovable(s)) return;
-          ev.stopPropagation(); sysDrag={ id:s.id, moved:false, lastKey:s.q+','+s.r }; }); }
+          ev.stopPropagation(); dragMoved=false; tapConsumed=false; sysDrag={ id:s.id, moved:false, lastKey:s.q+','+s.r }; }); }
       // Drive selection off pointerup, not click: iOS Safari does not reliably emit a
       // synthetic click on SVG shapes once we've taken over touch (touch-action:none +
       // custom pointer handlers), which left stars untappable on iPad. tapConsumed tells
@@ -2239,7 +2243,7 @@ const HX = (function(){
     // the target cell changes and is free; the commit (persist) happens on release.
     window.addEventListener('pointermove',e=>{ if(!sysDrag) return; const h=clientToHex(e.clientX,e.clientY); if(!h) return;
       const key=h.q+','+h.r; if(key===sysDrag.lastKey) return; const occ=BY_KEY[key]; if(occ&&occ.id!==sysDrag.id) return;
-      if(!sysDrag.moved&&svg) svg.classList.add('hx-dragging'); moveSystem(sysDrag.id,h.q,h.r); sysDrag.lastKey=key; sysDrag.moved=true; });
+      if(!sysDrag.moved&&svg) svg.classList.add('hx-dragging'); moveSystem(sysDrag.id,h.q,h.r); sysDrag.lastKey=key; sysDrag.moved=true; dragMoved=true; });
     // Cleanup on window so a release that drifts off the map still ends the pan.
     window.addEventListener('pointerup',()=>{
       // End a star drag: persist the star's final hex through the overlay (base systems get

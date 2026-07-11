@@ -1726,6 +1726,13 @@ function playViewTransition(switchFn){
 function enterStation(interiorId){
   const authored = typeof isAuthoredCampaign === 'function' && isAuthoredCampaign();
   let sid = interiorId || 'aurelia';
+  // The built-in Aurelia station is keyed 'aurelia', but its location links to it via the
+  // legacy interiorId 'aurelia-station' (a migration artifact — see BASE_LOCATIONS). Left
+  // as-is, entering from the location button set currentStationId='aurelia-station', which
+  // no stationDef() matches, so renderStationMap fell through to the empty authored-map path
+  // and the deck rendered BLANK. Normalise to the canonical id. Scoped to the built-in
+  // campaign so it can never collide with a real authored interior.
+  if(!authored && sid === 'aurelia-station') sid = 'aurelia';
   if(authored){
     // Authored campaigns only ever open THEIR OWN stations — never Aurelia's
     // deck map, and never a dangling interior id (scene pushes, stale links).
