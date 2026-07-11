@@ -1290,6 +1290,9 @@ function updateStationLocks(){
 }
 
 // ── Player identity ────────────────────────────────────────────────────
+// The Archon Gambit crew — the DEFAULT Campaign Pack's source of truth only.
+// Consumers read crewRoster() (js/05), which serves the active pack's crew;
+// authored campaigns define their own in Studio ▸ Crew & Ship.
 const KNOWN_CHARACTERS = ['Rhett Calder','Cassia Velen','Dr Curculion','Riley','Riven Dahl'];
 
 function checkIdentity(){
@@ -1314,7 +1317,7 @@ function checkIdentity(){
 function showIdentityModal(){
   const modal = document.getElementById('identity-modal');
   const quick = document.getElementById('identity-quick');
-  quick.innerHTML = KNOWN_CHARACTERS.map(n =>
+  quick.innerHTML = crewRoster().map(n =>
     `<button class="identity-quick-btn" onclick="document.getElementById('identity-input').value='${n}'">${n}</button>`
   ).join('');
   modal.classList.remove('hidden');

@@ -864,7 +864,7 @@ function renderFundsPanel(){
   // All purses — referee only
   if(ref){
     h += `<div class="fund-lbl" style="margin-top:2px">Character purses</div><div class="fund-card">`;
-    KNOWN_CHARACTERS.forEach(n => { const safe = n.replace(/'/g, "\\'");
+    crewRoster().forEach(n => { const safe = n.replace(/'/g, "\\'");
       h += `<div class="fund-purse"><span>${escQH(n)}</span><span style="display:flex;gap:6px;align-items:center"><b style="font-family:monospace;color:var(--tx0)">${fmtCr(purseOf(n))}</b>
         <button class="disc-mini" onclick="refAdjustPurse('${safe}',1)">+</button><button class="disc-mini" onclick="refAdjustPurse('${safe}',-1)">−</button></span></div>`; });
     h += `</div>`;
@@ -1825,7 +1825,7 @@ function renderHandoutsPanel(){
   }
   let form = '';
   if(ref){
-    const opts = ['all'].concat((typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []));
+    const opts = ['all'].concat((typeof crewRoster === 'function' ? crewRoster() : []));
     const optHtml = opts.map(o => `<option value="${escQH(o)}">${o === 'all' ? 'Everyone' : escQH(o)}</option>`).join('');
     form = `<div class="handout-add">
       <label class="handout-up">⬆ Push a handout<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onHandoutFile(this)"></label>
@@ -1929,7 +1929,7 @@ function contactSave(){
   c.favOwed = Math.max(0, parseInt(gv('contact-f-favowed')) || 0);
   c.favOwing = Math.max(0, parseInt(gv('contact-f-favowing')) || 0);
   c.known = c.known || {};
-  (typeof KNOWN_CHARACTERS !== 'undefined' ? KNOWN_CHARACTERS : []).forEach((nm, i) => {
+  (typeof crewRoster === 'function' ? crewRoster() : []).forEach((nm, i) => {
     const v = gv('contact-f-known-' + i).trim(); if(v) c.known[nm] = v; else delete c.known[nm];
   });
   contactsEditingId = null;
@@ -1945,7 +1945,7 @@ function contactRemove(id){
 }
 function contactEditorHTML(c){
   const escA = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x).replace(/"/g, '&quot;'));
-  const chars = (typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS : [];
+  const chars = (typeof crewRoster === 'function') ? crewRoster() : [];
   const visRaw = (typeof calVisRaw === 'function') ? calVisRaw(c.visibleTo) : '';
   const knownFields = chars.map((nm, i) => `<label class="con-known-lbl">${escQH(nm)} knows<textarea id="contact-f-known-${i}" rows="2" placeholder="What ${escQH(nm)} knows…">${escQH((c.known && c.known[nm]) || '')}</textarea></label>`).join('');
   const ownerOpts = ['<option value="">Party contact (shared)</option>'].concat(chars.map(nm => `<option value="${escA(nm)}"${c.owner === nm ? ' selected' : ''}>${escQH(nm)}'s contact</option>`)).join('');
