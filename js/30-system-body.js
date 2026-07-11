@@ -1055,13 +1055,20 @@ function designBodyViewHTML(){
   if(selectedBodyLoc){
     const found = findLocation(selectedBodyLoc);
     if(found){
-      // Deck-map interior controls — authored campaigns only (Aurelia's deck
-      // map is canon content). Create seeds a one-area station and links it
-      // to this location; Unlink keeps the station data (relink any time).
+      // Deck-map interior controls — every campaign. Create seeds a one-area
+      // station and links it to this location; Unlink keeps the station data
+      // (relink any time). The built-in campaign's canon station location
+      // (legacy interiorId 'aurelia-station', or isStation with no interior)
+      // links to the hand-drawn Aurelia map: it gets Open only — Create there
+      // would overwrite the canon link.
       let interiorBtns = '';
-      if(typeof isAuthoredCampaign === 'function' && isAuthoredCampaign() && typeof stationAdditions !== 'undefined'){
+      if(typeof stationAdditions !== 'undefined'){
         const iid = found.loc.interiorId;
-        interiorBtns = (iid && stationAdditions[iid])
+        const authored = typeof isAuthoredCampaign === 'function' && isAuthoredCampaign();
+        const canonLink = !authored && (iid === 'aurelia-station' || iid === 'aurelia' || (found.loc.isStation && !iid));
+        interiorBtns = canonLink
+          ? `<button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="enterStation('${escHtml(iid||'')}')">⬡ Open deck map</button>`
+          : (iid && stationAdditions[iid])
           ? `<button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="enterStation('${escHtml(iid)}')">⬡ Open deck map</button>
              <button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="staUnlinkInterior('${found.loc.id}','${found.bodyId}')">✕ Unlink deck map</button>`
           : `<button class="design-add-btn" style="width:100%;margin-bottom:6px" onclick="staCreateInterior('${found.loc.id}','${found.bodyId}')">⬡ Create deck map interior</button>`;
