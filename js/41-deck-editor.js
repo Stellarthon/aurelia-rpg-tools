@@ -10,8 +10,14 @@
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
 // (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v'}] (edge from
 // vertex (x,y) rightward / downward), props:[{t,x,y,r}] (cell + rotation),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y}] (areaId marker),
-// tokens:[{n,x,y}] (name + cell — PCs and NPCs on the map) }.
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1}] (areaId
+// marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
+// FOG OF WAR rides the link marker: hid hides the marker's whole claimed room
+// from players (opaque fog with the grid redrawn over it — only boundary walls
+// and doors stay visible, like seeing a hull from outside) and removes the tap
+// target. The referee sees hidden rooms dimmed, with an eye toggle under each
+// marker name on the station view. Links default to revealed so live maps
+// don't black out; the referee closes the eye on rooms not yet explored.
 // A link marker claims its ROOM: every floor cell reachable from it without
 // crossing an axis-aligned wall becomes the tap target on the station view,
 // so players tap anywhere in the room — not just the marker — to open the area.
@@ -144,6 +150,36 @@ function dkeInitChanged(){
   }
 }
 
+// ── Fog of war ───────────────────────────────────────────────────────────────
+// Player fog: opaque wash over the room's cells with the grid redrawn on top,
+// so the interior (floor tint, props, labels, tokens, marker) vanishes while
+// boundary walls and doors stay visible — the hull without the inside.
+function dkePlayerFogSVG(cells){
+  const d = dkeRoomFillD(cells);
+  return `<g style="pointer-events:none"><path d="${d}" fill="#0f1117"/>`
+    + `<path d="${d}" fill="none" stroke="#1e2333" stroke-width=".6"/></g>`;
+}
+// The referee's reveal toggle: open eye = players see the room, closed = fog.
+function dkeFogEyeSVG(cx, cy, li, hid){
+  const glyph = hid
+    ? `<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linecap="round"/>`
+      + `<path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#D4A843" stroke-width="1.1" stroke-linecap="round"/>`
+    : `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#a3a9bf" stroke-width="1.2"/>`
+      + `<circle r="1.8" fill="#a3a9bf"/>`;
+  return `<g transform="translate(${cx},${cy})" style="cursor:pointer" onclick="dkeToggleFog(${li})">`
+    + `<title>${hid ? 'Hidden from players — tap to reveal' : 'Revealed — tap to hide from players'}</title>`
+    + `<circle r="9" fill="transparent"/>${glyph}</g>`;
+}
+function dkeToggleFog(li){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const deck = dkeMapDeck(); if(!deck || !(deck.links||[])[li]) return;
+  if(deck.links[li].hid) delete deck.links[li].hid;
+  else deck.links[li].hid = 1;
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+}
+
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
 function dkeTokenColour(name){
@@ -234,12 +270,21 @@ function dkeContentSVG(deck, opt){
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   const seenArea = {};
-  let roomLayer = '', markerLayer = '';
-  (deck.links||[]).forEach(lk => {
+  const refView = !!opt.interactive && (typeof isReferee === 'function') && isReferee();
+  let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
+  (deck.links||[]).forEach((lk, li) => {
     const a = areas[lk.a]; if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
     const open = opt.interactive ? ` style="cursor:pointer" onclick="selArea('${eh(lk.a)}')"` : '';
     const room = dkeRoomCells(deck, lk.x, lk.y);
+    const hid = !!lk.hid;
+    // Fog of war, player side: a hidden link renders NOTHING here — no marker,
+    // no name, no tap target — just an opaque fog patch appended after the
+    // token layer so it also covers whoever is standing inside.
+    if(hid && opt.interactive && !refView){
+      if(room) fogPlayer += dkePlayerFogSVG(room);
+      return;
+    }
     // First claim per area carries id r-<areaId> so updateNodes() highlights it
     // — on the room shape when the marker sits on floor, else on the marker
     // circle. Only the interactive station view emits ids: the editor canvas
@@ -252,13 +297,18 @@ function dkeContentSVG(deck, opt){
     } else if(room && opt.editor){
       roomLayer += `<path d="${dkeRoomOutlineD(room)}" fill="none" stroke="${eh(ac)}" stroke-width="1.2" stroke-dasharray="4,4" opacity=".4"/>`;
     }
+    // Fog of war, referee side (station view AND editor): hidden rooms stay
+    // readable under a dim wash drawn below the markers.
+    if(hid && room) fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
     markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
          + `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`
          + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}</text></g>`;
+    // Referee reveal toggle — an eye under the marker name on the station view.
+    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, hid);
   });
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
-  out += roomLayer + markerLayer;
+  out += roomLayer + fogDim + markerLayer;
   if((deck.tokens||[]).length){
     // One shared circle clip for every portrait (objectBoundingBox = it fits
     // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
@@ -267,6 +317,7 @@ function dkeContentSVG(deck, opt){
     const initRows = dkeInitRows();
     deck.tokens.forEach((t, i) => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i); });
   }
+  out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   return out;
 }
