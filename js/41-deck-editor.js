@@ -395,6 +395,9 @@ function dkeFogAutoReveal(deck, token){
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
+// Referee-set token conditions → pip colour (bookkeeping shown on the map, not automated).
+const DKE_TOKEN_STATUS = { bloodied:'#c0506e', stunned:'#D4A843', prone:'#5b8ef0' };
+const DKE_STATUS_ORDER = ['', 'bloodied', 'stunned', 'prone'];
 function dkeTokenColour(name){
   let h = 0; const s = String(name||'');
   for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -432,6 +435,10 @@ function dkeTokenSVG(t, opt, st, idx){
     ? `<circle cx="${cx+10}" cy="${cy-10}" r="6.5" fill="#10131c" stroke="${st.cur ? '#D4A843' : '#7f93b8'}" stroke-width="1.2"/>`
       + `<text x="${cx+10}" y="${cy-7.5}" text-anchor="middle" font-size="7" font-weight="700" fill="${st.cur ? '#D4A843' : '#a3a9bf'}" font-family="system-ui,sans-serif">${st.ord}</text>`
     : '';
+  // Referee-set condition pip (bottom-left of the disc).
+  const stPip = (t.st && DKE_TOKEN_STATUS[t.st])
+    ? `<circle cx="${cx-10}" cy="${cy+10}" r="4.5" fill="${DKE_TOKEN_STATUS[t.st]}" stroke="#0f1117" stroke-width="1.2"><title>${eh(t.st)}</title></circle>`
+    : '';
   // Station view: for PLAYERS tokens are tap-transparent so a tap on one still
   // opens the room beneath. For the REFEREE they are grab targets — data-tk
   // marks the group for the map-drag handlers below, and touch-action:none is
@@ -443,7 +450,7 @@ function dkeTokenSVG(t, opt, st, idx){
     : '';
   return `<g${gAttrs}><title>${eh(t.n)}</title>`
     + (down ? `<g opacity=".45">${disc}</g>` : disc)
-    + pulse + strike + badge
+    + pulse + strike + badge + stPip
     + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(t.n)}</text>`
     + `</g>`;
 }
@@ -544,7 +551,8 @@ function dkeContentSVG(deck, opt){
     const def = DKE_PROPS[p.t]; if(!def) return;
     const f = dkePropFootprint(p), sc = dkePropScaleOf(p);   // s=1 → same transform as before
     const scaleTx = sc !== 1 ? ` scale(${sc})` : '';
-    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(def.n)}</title>${def.g}</g>`;
+    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(p.label || def.n)}</title>${def.g}</g>`;
+    if(p.label && L.labels !== false) out += `<text x="${(p.x+f.fw/2)*C}" y="${(p.y+f.fh)*C-2}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(p.label)}</text>`;
   });
   if(L.labels !== false) (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
@@ -619,6 +627,13 @@ function dkeContentSVG(deck, opt){
     out += memGhosts;
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
+  if(deck.ping){   // referee attention ping — a pulsing "look here" ring for everyone
+    const px = (deck.ping.x+.5)*C, py = (deck.ping.y+.5)*C;
+    out += `<g style="pointer-events:none"><circle cx="${px}" cy="${py}" r="12" fill="none" stroke="#D4A843" stroke-width="2.5">`
+      + `<animate attributeName="r" values="7;20;7" dur="1.2s" repeatCount="indefinite"/>`
+      + `<animate attributeName="stroke-opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite"/></circle>`
+      + `<circle cx="${px}" cy="${py}" r="2.5" fill="#D4A843"/></g>`;
+  }
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   if(opt.group) opt.group.forEach(s => { out += dkeSelHighlightSVG(deck, s); });
   if(opt.editor) out += dkeResizeHandlesSVG(deck);   // drag to resize the grid
@@ -1035,7 +1050,33 @@ function dkeRenderDecks(){
     `<button class="dke-deck${i===cur?' on':''}" onclick="dkeSwitchDeck(${i})">${dkeEsc(dkeDeckName(dk, i))}</button>`).join('')
     + `<button class="dke-deck dke-deck-add" onclick="dkeAddDeck()" title="Add a deck">＋ Deck</button>`
     + `<button class="dke-deck" onclick="dkeRenameDeck(${cur})" title="Rename this deck">✎</button>`
+    + `<button class="dke-deck" onclick="dkeExportDeck()" title="Copy this deck as JSON">⤓</button>`
+    + `<button class="dke-deck" onclick="dkeImportDeck()" title="Import a deck from JSON">⤒</button>`
     + (decks.length > 1 ? `<button class="dke-deck dke-danger" onclick="dkeRemove()" title="Remove this deck">🗑</button>` : '');
+}
+// Export the active deck to the clipboard as JSON (fallback: a copyable prompt).
+function dkeExportDeck(){
+  const d = dkeD(); if(!d) return;
+  const json = JSON.stringify(d);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(json)
+      .then(() => { if(typeof showToast === 'function') showToast('Deck JSON copied to clipboard'); })
+      .catch(() => { if(typeof prompt === 'function') prompt('Copy this deck JSON:', json); });
+  } else if(typeof prompt === 'function') prompt('Copy this deck JSON:', json);
+}
+// Import a pasted deck as a NEW deck on the current holder (never overwrites).
+function dkeImportDeck(){
+  const s = dkeHolder(); if(!s) return;
+  const json = (typeof prompt === 'function') ? prompt('Paste deck JSON to import as a new deck:') : null;
+  if(!json) return;
+  let nd; try { nd = JSON.parse(json); } catch(e){ if(typeof showToast === 'function') showToast('Invalid deck JSON'); return; }
+  if(!nd || typeof nd !== 'object' || (!('w' in nd) && !Array.isArray(nd.floors))){ if(typeof showToast === 'function') showToast('That does not look like a deck'); return; }
+  dkeNorm(nd);
+  const decks = dkeEnsureDecks(s);
+  if(!nd.name) nd.name = 'Deck ' + (decks.length + 1);
+  decks.push(nd);
+  dkeSwitchDeck(decks.length - 1);
+  if(typeof showToast === 'function') showToast('Deck imported');
 }
 function dkeSwitchDeck(i){
   const s = dkeHolder(); if(!s) return;
@@ -1243,9 +1284,10 @@ function dkeRenderSub(){
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
-      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button>`;
+      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button><input class="hx-edit-in" style="max-width:150px" placeholder="name…" value="${eh(it.label||'')}" onchange="dkeEditPropLabel(this.value)">`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
-      if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
+      if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:180px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)"><button class="dke-tool" onclick="dkeCycleTokenStatus()">◍ ${it.st || 'status'}</button>`;
+      if(dkeSel.kind === 'floor'){ const room = dkeRoomCells(d, it.x, it.y), mpc = dkeDeckMpc(d), cells = room ? room.length : it.w*it.h; html += `<span class="dke-note">Room ≈ ${Math.round(cells*mpc*mpc)} m² (${cells} cells)</span>`; }
       html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
   }
@@ -1536,6 +1578,21 @@ function dkeEditTokenSel(v){
   dkeSnapshot();
   d.tokens[dkeSel.i].n = n;
   dkeCommit();
+}
+function dkeEditPropLabel(v){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
+  const t = String(v||'').trim().slice(0, 30);
+  dkeSnapshot();
+  if(t) d.props[dkeSel.i].label = t; else delete d.props[dkeSel.i].label;
+  dkeCommit();
+}
+function dkeCycleTokenStatus(){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'token') return;
+  const t = d.tokens[dkeSel.i]; if(!t) return;
+  dkeSnapshot();
+  const ni = (DKE_STATUS_ORDER.indexOf(t.st || '') + 1) % DKE_STATUS_ORDER.length;
+  if(DKE_STATUS_ORDER[ni]) t.st = DKE_STATUS_ORDER[ni]; else delete t.st;
+  dkeCommit(); dkeRenderSub();
 }
 function dkePolyEnd(silent){
   if(dkePoly){ dkePoly = null; dkeGhost(''); if(!silent) dkeRenderSub(); }
@@ -1893,10 +1950,21 @@ let dkeMapRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeMapRulerG = null;        // active drag gesture {a, sx, sy, moved, b?}
 let dkeMapRanges = false;       // range-rings mode (referee): tap a token to ring it
 let dkeRangeTokenIdx = null;    // focused token index (local to the referee's view)
+let dkeMapPing = false;         // ping mode (referee): tap a cell to drop a shared "look here"
+function dkeMapTogglePing(){
+  dkeMapPing = !dkeMapPing;
+  if(dkeMapPing){ if(dkeMapRuler) dkeMapToggleRuler(false); if(dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); } }
+  else { const deck = dkeMapDeck(); if(deck && deck.ping){ delete deck.ping; if(typeof saveAuthoredStations === 'function') saveAuthoredStations(); } }   // exiting clears the ping
+  const btn = document.getElementById('deck-ping-btn'); if(btn) btn.classList.toggle('on', dkeMapPing);
+  const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = (dkeMapPing || dkeMapRuler || dkeMapRanges) ? 'none' : '';
+  if(dkeMapPing && typeof showToast === 'function') showToast('Ping — tap to point players at a spot');
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
 function dkeMapToggleRanges(){
   dkeMapRanges = !dkeMapRanges;
   if(!dkeMapRanges) dkeRangeTokenIdx = null;
   if(dkeMapRanges && dkeMapRuler) dkeMapToggleRuler(false);   // mutually exclusive with the ruler
+  if(dkeMapRanges && dkeMapPing){ dkeMapPing = false; const pb = document.getElementById('deck-ping-btn'); if(pb) pb.classList.remove('on'); }
   const btn = document.getElementById('deck-ranges-btn'); if(btn) btn.classList.toggle('on', dkeMapRanges);
   const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = dkeMapRanges ? 'none' : (dkeMapRuler ? 'none' : '');
   if(dkeMapRanges && typeof showToast === 'function') showToast('Range rings — tap a token');
@@ -1918,8 +1986,10 @@ function dkeMapToggleRuler(force){
   const on = (typeof force === 'boolean') ? force : !dkeMapRuler;
   dkeMapRuler = on;
   if(!on){ dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null; }
-  if(on && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null;   // exclusive with range rings
-    const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
+  if(on){   // ruler is exclusive with range rings + ping
+    if(dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
+    if(dkeMapPing){ dkeMapPing = false; const pb = document.getElementById('deck-ping-btn'); if(pb) pb.classList.remove('on'); }
+  }
   const btn = document.getElementById('deck-ruler-btn');
   if(btn) btn.classList.toggle('on', on);
   const svg = document.getElementById('mapsvg');
@@ -1939,13 +2009,19 @@ function dkeRulerBtnSync(){
   }
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
-  // Range-rings button — referee only (it's a positioning aid keyed to a token).
+  // Range-rings + ping buttons — referee only.
+  const ref = has && (typeof isReferee === 'function') && isReferee();
   const rb = document.getElementById('deck-ranges-btn');
   if(rb){
-    const showR = has && (typeof isReferee === 'function') && isReferee();
-    if(!showR && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
-    rb.style.display = showR ? 'flex' : 'none';
+    if(!ref && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
+    rb.style.display = ref ? 'flex' : 'none';
     rb.classList.toggle('on', dkeMapRanges);
+  }
+  const pb = document.getElementById('deck-ping-btn');
+  if(pb){
+    if(!ref && dkeMapPing) dkeMapPing = false;
+    pb.style.display = ref ? 'flex' : 'none';
+    pb.classList.toggle('on', dkeMapPing);
   }
 }
 // Station-view deck switcher — shown only when the station has 2+ decks. The
@@ -2003,6 +2079,15 @@ function dkeMapDown(ev){
     const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
     dkeRangeTokenIdx = tg ? parseInt(tg.getAttribute('data-tk'), 10) : null;
     dkeMapClickGuardUntil = Date.now() + 400;   // don't also open a room
+    if(typeof renderStationMap === 'function') renderStationMap();
+    ev.preventDefault();
+    return;
+  }
+  if(dkeMapPing){   // tap a cell to drop a shared attention ping (referee)
+    if(typeof isReferee !== 'function' || !isReferee()) return;
+    const p = dkeMapPt(ev);
+    if(p){ deck.ping = dkeMapCellAt(deck, p); if(typeof saveAuthoredStations === 'function') saveAuthoredStations(); }
+    dkeMapClickGuardUntil = Date.now() + 400;
     if(typeof renderStationMap === 'function') renderStationMap();
     ev.preventDefault();
     return;
