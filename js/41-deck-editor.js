@@ -533,13 +533,17 @@ function dkeOpeningHitSVG(op){
     : `<rect x="${op.x*C-7}" y="${(op.y+.1)*C}" width="14" height="${(L-.2)*C}" fill="transparent"/>`;
 }
 
-// Public URL of a deck's floorplan-underlay image (stored in the handouts bucket,
-// js/50). '' when the deck has none. Different-origin, so the SW won't cache it —
-// offline the <image> just paints nothing and the traced walls/links still show.
+// Public URL of a deck's floorplan-underlay image. '' when the deck has none.
+// Different-origin, so the SW won't cache it — offline the <image> just paints
+// nothing and the traced walls/links still show. New uploads live in the
+// dedicated 'deck-maps' bucket (deck.img.dm, migration 0012); images uploaded
+// before that still resolve from the shared 'handouts' bucket.
 function dkeDeckImgUrl(deck){
-  if(!deck || !deck.img || !deck.img.id || typeof handoutUrlFor !== 'function') return '';
+  if(!deck || !deck.img || !deck.img.id) return '';
   const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
-  return handoutUrlFor(camp, deck.img.id, deck.img.ver);
+  if(deck.img.dm && typeof deckMapUrlFor === 'function') return deckMapUrlFor(camp, deck.img.id, deck.img.ver);
+  if(typeof handoutUrlFor === 'function') return handoutUrlFor(camp, deck.img.id, deck.img.ver);   // legacy (pre-0012)
+  return '';
 }
 function dkeContentSVG(deck, opt){
   opt = opt || {};
@@ -1231,7 +1235,7 @@ function dkeUploadDeckImage(input){
   const file = input && input.files && input.files[0];
   if(input) input.value = '';
   if(!file) return;
-  if(typeof resizeHandoutImage !== 'function' || typeof uploadHandoutBlob !== 'function'){
+  if(typeof resizeHandoutImage !== 'function' || typeof uploadDeckMapBlob !== 'function'){
     if(typeof showToast === 'function') showToast('Image upload unavailable here'); return;
   }
   if(file.type && !/^image\/(jpeg|png|webp)$/.test(file.type)){ if(typeof showToast === 'function') showToast('Choose a JPG/PNG/WebP image'); return; }
@@ -1240,15 +1244,15 @@ function dkeUploadDeckImage(input){
   dkeImgBusy = true; if(typeof showToast === 'function') showToast('Preparing floorplan…');
   const id = (d.img && d.img.id) || ('dkimg_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
   const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
-  resizeHandoutImage(file, 1600)
-    .then(blob => uploadHandoutBlob(camp, id, blob))
+  resizeHandoutImage(file, 1600)   // generic image resizer (js/85), reused
+    .then(blob => uploadDeckMapBlob(camp, id, blob))
     .then(() => {
       dkeSnapshot();
-      d.img = { id, ver: Date.now(), op: (d.img && typeof d.img.op === 'number') ? d.img.op : 0.55 };
+      d.img = { id, ver: Date.now(), dm: 1, op: (d.img && typeof d.img.op === 'number') ? d.img.op : 0.55 };   // dm:1 → deck-maps bucket
       dkeCommit(); dkeRenderSub();
       if(typeof showToast === 'function') showToast('Floorplan added — trace walls on top');
     })
-    .catch(err => { if(typeof showToast === 'function') showToast('Upload failed — is the handouts bucket set up? (migration 0004)'); console.error(err); })
+    .catch(err => { if(typeof showToast === 'function') showToast('Upload failed — is the deck-maps bucket set up? (migration 0012)'); console.error(err); })
     .finally(() => { dkeImgBusy = false; });
 }
 function dkeSetDeckImgOpacity(v){
