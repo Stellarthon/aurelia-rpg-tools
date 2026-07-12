@@ -614,6 +614,7 @@ function dkeContentSVG(deck, opt){
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
+  if(opt.group) opt.group.forEach(s => { out += dkeSelHighlightSVG(deck, s); });
   if(opt.editor) out += dkeResizeHandlesSVG(deck);   // drag to resize the grid
   return out;
 }
@@ -710,6 +711,8 @@ function dkeRulerOverlaySVG(deck, a, b){
 
 // ═══ EDITOR ══════════════════════════════════════════════════════════════════
 let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [], dkeRedoStack = [];
+let dkeGroup = [];   // marquee multi-selection: [{kind,i}] of movable items (prop/label/link/token)
+function dkeInGroup(hit){ return !!hit && dkeGroup.some(s => s.kind === hit.kind && s.i === hit.i); }
 let dkeLayers = { grid:true, image:true, labels:true };   // editor-only layer visibility
 function dkeToggleLayer(k){ dkeLayers[k] = dkeLayers[k] === false; dkeRenderTools(); dkeRenderContent(); }
 let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
@@ -735,7 +738,7 @@ const DKE_TOOLS = [
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
-  select:'Tap anything to select it. Drag props, labels and links to move them.',
+  select:'Tap to select · drag a prop/label/link/token to move it · drag a box over empty space to marquee-select several, then drag any of them to move the group (or Delete).',
   room:'Drag a rectangle — floor and perimeter walls are placed in one go.',
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
@@ -796,7 +799,7 @@ function dkeBeginEdit(holder, titleName){
   dkeNorm(d);
   dkeEnsureDom();
   dkeIsOpen = true; dkeTool = deckHasContent(d) ? 'select' : 'room';
-  dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkeRedoStack = []; dkePtrs.clear(); dkePinch = null;
+  dkeSel = null; dkeGroup = []; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkeRedoStack = []; dkePtrs.clear(); dkePinch = null;
   document.getElementById('dke-wrap').classList.add('open');
   document.getElementById('dke-title').textContent = (String(titleName || 'STATION').toUpperCase()) + ' — DECK PLAN';
   document.getElementById('dke-w').value = d.w;
@@ -901,7 +904,7 @@ function dkeSwitchDeck(i){
   dkeFlushSave();
   const decks = dkeEnsureDecks(s);
   s.deckIdx = Math.max(0, Math.min(decks.length - 1, i));
-  dkeSel = null; dkePoly = null; dkeUndoStack = []; dkeRedoStack = [];   // undo is per-deck
+  dkeSel = null; dkeGroup = []; dkePoly = null; dkeUndoStack = []; dkeRedoStack = [];   // undo is per-deck
   const d = dkeCurrentDeck(s); if(d){ dkeNorm(d);
     const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
     if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
@@ -931,7 +934,7 @@ function dkeRenameDeck(i){
 function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeRenderDecks(); dkeApplyView(); }
 function dkeRenderContent(){
   const d = dkeD(), g = document.getElementById('dke-content');
-  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, idp:'dke', layers: dkeLayers }) : '';
+  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, group: dkeGroup, idp:'dke', layers: dkeLayers }) : '';
 }
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
@@ -959,7 +962,7 @@ function dkeSetTool(t){
   dkeTool = t;
   if(t !== 'poly') dkePolyEnd(true);
   if(t !== 'ruler'){ dkeRuler = null; dkeRulerAnchor = null; dkeGhost(''); }
-  if(t !== 'select'){ dkeSel = null; dkeRenderContent(); }
+  if(t !== 'select'){ dkeSel = null; dkeGroup = []; dkeRenderContent(); }
   dkeRenderTools(); dkeRenderSub(); dkeRenderHint();
 }
 // Editor ruler overlay + readout for the current state (measurement / pending
@@ -1097,6 +1100,8 @@ function dkeRenderSub(){
     }
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
+  } else if(dkeTool === 'select' && dkeGroup.length){
+    html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
@@ -1323,6 +1328,28 @@ function dkeDeleteSel(){
   dkeSel = null;
   dkeCommit(); dkeRenderSub();
 }
+// Movable items (prop/label/link/token) whose anchor point falls inside a cell
+// rectangle — the marquee's catch. Anchor = cell centre (label = its point).
+function dkeItemsInRect(d, ax, ay, bx, by){
+  const out = [];
+  ['prop','label','link','token'].forEach(kind => {
+    (d[kind + 's']||[]).forEach((it, i) => {
+      const px = kind === 'label' ? it.x : it.x + .5, py = kind === 'label' ? it.y : it.y + .5;
+      if(px >= ax && px <= bx && py >= ay && py <= by) out.push({ kind, i });
+    });
+  });
+  return out;
+}
+function dkeDeleteGroup(){
+  const d = dkeD(); if(!d || !dkeGroup.length) return;
+  dkeSnapshot();
+  const byKind = {};
+  dkeGroup.forEach(s => { (byKind[s.kind] = byKind[s.kind] || []).push(s.i); });
+  // splice each kind in descending index order so earlier removals don't shift the rest
+  Object.keys(byKind).forEach(kind => byKind[kind].sort((a,b) => b - a).forEach(i => (d[kind + 's']||[]).splice(i, 1)));
+  dkeGroup = [];
+  dkeCommit(); dkeRenderSub();
+}
 function dkeRotateSel(){
   const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
   dkeSnapshot();
@@ -1390,12 +1417,18 @@ function dkePointerDown(ev){
     const v = dkeVertex(p);
     dkeGesture = { t:'tplcopy', x0: v.x, y0: v.y, x1: v.x, y1: v.y };
   } else if(dkeTool === 'select'){
-    const hit = dkeHitTest(p);
-    if(hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token')){
-      dkeGesture = { t:'move', hit, sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false };
-    } else {
-      dkeSel = hit; dkeRenderContent(); dkeRenderSub();
-      dkeGesture = { t:'tapped' };
+    const hit = dkeHitTest(p), u = dkeCellPt(p);
+    const movable = hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token');
+    if(movable && dkeInGroup(hit)){                 // grab a grouped item → move the whole group
+      dkeGesture = { t:'gmove', sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false, start: u };
+    } else if(movable){                             // single movable item
+      dkeGroup = []; dkeGesture = { t:'move', hit, sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false };
+    } else if(hit){                                 // structural item (wall/floor/door) → single select
+      dkeGroup = []; dkeSel = hit; dkeRenderContent(); dkeRenderSub(); dkeGesture = { t:'tapped' };
+    } else {                                        // empty space → rubber-band marquee
+      dkeSel = null; dkeGroup = [];
+      dkeGesture = { t:'marquee', x0: u.x, y0: u.y, x1: u.x, y1: u.y };
+      dkeRenderContent(); dkeRenderSub();
     }
   } else {
     dkeGesture = { t:'tap', sx: ev.clientX, sy: ev.clientY, cancel:false };
@@ -1471,6 +1504,22 @@ function dkePointerMove(ev){
     else { it.x = Math.floor(u.x); it.y = Math.floor(u.y); if(g.hit.kind === 'prop') dkeClampProp(d, it); }
     dkeSel = g.hit;
     dkeRenderContent();
+  } else if(g.t === 'marquee'){
+    const u = dkeCellPt(p); g.x1 = u.x; g.y1 = u.y;
+    const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
+    dkeGhost(`<rect x="${x}" y="${y}" width="${Math.abs(g.x1-g.x0)*C}" height="${Math.abs(g.y1-g.y0)*C}" fill="#5b8ef022" stroke="#5b8ef0" stroke-width="1.5" stroke-dasharray="5,3"/>`);
+  } else if(g.t === 'gmove'){
+    if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
+    g.moved = true;
+    const d = dkeD(), u = dkeCellPt(p);
+    if(!g.snapped){ dkeSnapshot(); g.snapped = true; g.orig = dkeGroup.map(s => { const it = (d[s.kind+'s']||[])[s.i]; return { s, ox: it ? it.x : 0, oy: it ? it.y : 0 }; }); }
+    const dxf = u.x - g.start.x, dyf = u.y - g.start.y;
+    g.orig.forEach(o => {
+      const it = (d[o.s.kind+'s']||[])[o.s.i]; if(!it) return;
+      if(o.s.kind === 'label'){ it.x = o.ox + dxf; it.y = o.oy + dyf; }
+      else { it.x = o.ox + Math.round(dxf); it.y = o.oy + Math.round(dyf); if(o.s.kind === 'prop') dkeClampProp(d, it); }
+    });
+    dkeRenderContent();
   } else if(g.t === 'tap'){
     if(Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) > 8) g.cancel = true;
   }
@@ -1528,6 +1577,13 @@ function dkePointerUp(ev){
     } else {
       dkeSel = g.hit; dkeRenderContent(); dkeRenderSub();
     }
+  } else if(g.t === 'marquee'){
+    dkeGhost('');
+    const ax = Math.min(g.x0,g.x1), ay = Math.min(g.y0,g.y1), bx = Math.max(g.x0,g.x1), by = Math.max(g.y0,g.y1);
+    dkeGroup = (bx - ax > .1 || by - ay > .1) ? dkeItemsInRect(d, ax, ay, bx, by) : [];
+    dkeSel = null; dkeRenderContent(); dkeRenderSub();
+  } else if(g.t === 'gmove'){
+    if(g.moved){ dkeCommit(); dkeRenderSub(); } else { dkeRenderSub(); }
   } else if(g.t === 'tap' && !g.cancel){
     dkeTapAction(p);
   }
@@ -1849,10 +1905,11 @@ function dkeKeyDown(ev){
   const k = (ev.key || '').toLowerCase();
   if(ev.key === 'Escape'){
     if(dkePoly) dkePolyEnd();
-    else if(dkeSel){ dkeSel = null; dkeRenderContent(); dkeRenderSub(); }
+    else if(dkeSel || dkeGroup.length){ dkeSel = null; dkeGroup = []; dkeRenderContent(); dkeRenderSub(); }
     ev.preventDefault();
-  } else if((ev.key === 'Delete' || ev.key === 'Backspace') && dkeSel){
-    dkeDeleteSel(); ev.preventDefault();
+  } else if((ev.key === 'Delete' || ev.key === 'Backspace') && (dkeSel || dkeGroup.length)){
+    if(dkeGroup.length) dkeDeleteGroup(); else dkeDeleteSel();
+    ev.preventDefault();
   } else if((ev.ctrlKey || ev.metaKey) && k === 'z'){
     if(ev.shiftKey) dkeRedoPop(); else dkeUndoPop();   // Ctrl+Shift+Z = redo
     ev.preventDefault();
