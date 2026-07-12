@@ -187,6 +187,33 @@ function dkeToggleFog(li){
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
 }
+// Auto-reveal: when the referee drops a PLAYER-CHARACTER token into a fogged room
+// on the station view, the party has entered it, so lift that room's fog. Only
+// PCs trigger it (names in the crew roster) — dropping a hidden NPC ambusher must
+// NOT give the room away. The referee gets a toast and can re-hide with the eye
+// toggle, so nothing reveals silently and they stay in charge (design philosophy:
+// the eye toggles keep sight referee-decided; this only saves the manual tap).
+function dkeTokenIsPC(name){
+  if(typeof crewRoster !== 'function') return false;
+  const k = String(name||'').trim().toLowerCase();
+  return crewRoster().some(n => String(n||'').trim().toLowerCase() === k);
+}
+function dkeFogAutoReveal(deck, token){
+  if(!deck || !token || !dkeTokenIsPC(token.n)) return false;
+  const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
+  let revealed = null;
+  (deck.links||[]).forEach(lk => {
+    if(!lk.hid) return;
+    const room = dkeRoomCells(deck, lk.x, lk.y);
+    if(room && room.some(c => c.x === token.x && c.y === token.y)){
+      delete lk.hid;
+      const a = areas[lk.a];
+      revealed = (a && a.label) || lk.a;
+    }
+  });
+  if(revealed && typeof showToast === 'function') showToast('Revealed ' + revealed + ' to players');
+  return !!revealed;
+}
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
@@ -1162,6 +1189,7 @@ function dkeMapUp(ev){
   if(deck && p && deck.tokens[g.i]){
     deck.tokens[g.i].x = Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL)));
     deck.tokens[g.i].y = Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL)));
+    dkeFogAutoReveal(deck, deck.tokens[g.i]);   // PC dropped into a fogged room → lift its fog
     if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   }
   dkeMapClickGuardUntil = Date.now() + 400;  // the drop's click must not open an area
