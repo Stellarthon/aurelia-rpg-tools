@@ -412,7 +412,7 @@ function dkeTokenSVG(t, opt, st, idx){
   // photo the <image> paints nothing (and onerror prunes it), so the initials
   // show through. No portraitVer cache-buster here — a changed photo may stay
   // stale until a reload, which is fine for a map counter.
-  const url = (typeof portraitUrlFor === 'function') ? portraitUrlFor(t.n) : '';
+  const url = (opt.noPortraits || typeof portraitUrlFor !== 'function') ? '' : portraitUrlFor(t.n);
   const down = !!(st && st.down);
   const disc = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="${col}" stroke-width="2"/>`
     + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(t.n))}</text>`
@@ -677,6 +677,49 @@ function dkeRangeRingsSVG(deck, tk){
   });
   return out + `</g>`;
 }
+// Rasterise the current deck to a JPEG and push it to players as a handout
+// (reuses the handouts bucket + list, js/50 & 85). The image underlay and token
+// PORTRAITS are excluded so the cross-origin bucket URLs can't taint the canvas.
+let dkePushBusy = false;
+function dkePushDeckHandout(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const deck = dkeD();
+  if(!deck || !deckHasContent(deck)){ if(typeof showToast === 'function') showToast('Nothing to push yet'); return; }
+  if(typeof uploadHandoutBlob !== 'function' || typeof handouts === 'undefined' || typeof saveHandouts !== 'function'){
+    if(typeof showToast === 'function') showToast('Handouts are not available here'); return;
+  }
+  if(dkePushBusy) return;
+  dkePushBusy = true; if(typeof showToast === 'function') showToast('Rendering deck…');
+  const vb = deckStationViewBox(deck), n = vb.split(' ').map(Number), W = Math.round(n[2]), H = Math.round(n[3]), K = 2;
+  const stn = (dkeTarget === 'ship' && typeof shipState !== 'undefined' && shipState.name) ? shipState.name
+    : ((typeof stationDef === 'function' && stationDef() && stationDef().name) || 'Deck');
+  const label = `${stn} — ${deck.name || 'deck plan'}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${W*K}" height="${H*K}">`
+    + `<rect x="${n[0]}" y="${n[1]}" width="${W}" height="${H}" fill="#0c0e14"/>`
+    + `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(label.toUpperCase())}</text>`
+    + dkeContentSVG(dkeNorm(deck), { idp:'push', noPortraits:true, layers:{ image:false } }) + `</svg>`;
+  const done = (msg) => { dkePushBusy = false; if(typeof showToast === 'function') showToast(msg); };
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const cv = document.createElement('canvas'); cv.width = W*K; cv.height = H*K;
+      cv.getContext('2d').drawImage(img, 0, 0, W*K, H*K);
+      cv.toBlob(blob => {
+        if(!blob){ done('Could not render deck'); return; }
+        const id = 'deck_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+        uploadHandoutBlob(camp, id, blob)
+          .then(() => { handouts.push({ id, name: label, ver: Date.now(), visibleTo:'all',
+              date: (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '' }); return saveHandouts(); })
+          .then(() => { done('Deck pushed to players as a handout');
+              if(typeof renderHandoutsPanel === 'function' && typeof handoutsPanelOpen !== 'undefined' && handoutsPanelOpen) renderHandoutsPanel(); })
+          .catch(err => { done('Push failed — is the handouts bucket set up? (migration 0004)'); console.error(err); });
+      }, 'image/jpeg', 0.9);
+    } catch(e){ done('Could not render deck'); console.error(e); }
+  };
+  img.onerror = () => done('Could not render deck');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
 
 // ── Range ruler (measure two cells → metres + Traveller range band) ──────────
 // Distance is straight-line (Euclidean) between the two tapped cell centres,
@@ -790,6 +833,7 @@ function dkeEnsureDom(){
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo (Ctrl+Z)">↶</button>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-redo" title="Redo (Ctrl+Shift+Z)">↷</button>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-fit" title="Fit deck to view">⊙</button>
+      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-push" title="Push this deck to players as a handout">📤</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
     <div class="dke-decks" id="dke-decks"></div>
@@ -807,6 +851,7 @@ function dkeEnsureDom(){
   document.getElementById('dke-undo').addEventListener('click', dkeUndoPop);
   document.getElementById('dke-redo').addEventListener('click', dkeRedoPop);
   document.getElementById('dke-fit').addEventListener('click', function(){ dkeFitView(); dkeApplyView(); });
+  document.getElementById('dke-push').addEventListener('click', dkePushDeckHandout);
   document.getElementById('dke-done').addEventListener('click', dkeClose);
   document.getElementById('dke-w').addEventListener('change', function(){ dkeResize('w', this.value); });
   document.getElementById('dke-h').addEventListener('change', function(){ dkeResize('h', this.value); });
