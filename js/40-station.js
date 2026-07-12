@@ -43,6 +43,7 @@ let _origStationMap = null;
 function renderStationMap(){
   const svg = document.getElementById('mapsvg'); if(!svg) return;
   if(_origStationMap == null) _origStationMap = svg.innerHTML;
+  if(typeof dkeRulerBtnSync === 'function') dkeRulerBtnSync();   // deck-plan range ruler toggle
   if(currentStationId === 'aurelia'){
     // A referee-drawn deck plan (stored under stationAdditions['aurelia'], a
     // deck-only holder — areas still come from MAIN) overrides the hand-drawn canon
