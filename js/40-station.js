@@ -43,14 +43,19 @@ let _origStationMap = null;
 function renderStationMap(){
   const svg = document.getElementById('mapsvg'); if(!svg) return;
   if(_origStationMap == null) _origStationMap = svg.innerHTML;
+  if(typeof dkeRulerBtnSync === 'function') dkeRulerBtnSync();   // deck-plan range ruler toggle
+  if(typeof dkeRenderMapDecks === 'function') dkeRenderMapDecks();   // multi-deck switcher
+  // The active deck comes from the deck collection (js/41 dkeCurrentDeck) — legacy
+  // single decks resolve through the same accessor, so this path is unchanged for them.
+  const deckOf = (s) => (typeof dkeCurrentDeck === 'function') ? dkeCurrentDeck(s) : (s && s.deck);
   if(currentStationId === 'aurelia'){
     // A referee-drawn deck plan (stored under stationAdditions['aurelia'], a
     // deck-only holder — areas still come from MAIN) overrides the hand-drawn canon
     // map once it has content; otherwise fall back to the original hand-drawn map.
-    const a = stationAdditions['aurelia'];
-    if(a && a.deck && typeof deckHasContent === 'function' && deckHasContent(a.deck)){
-      svg.setAttribute('viewBox', deckStationViewBox(a.deck));
-      svg.innerHTML = deckStationSVG(a.deck, stationDef());
+    const deck = deckOf(stationAdditions['aurelia']);
+    if(deck && typeof deckHasContent === 'function' && deckHasContent(deck)){
+      svg.setAttribute('viewBox', deckStationViewBox(deck));
+      svg.innerHTML = deckStationSVG(deck, stationDef());
       return;
     }
     svg.setAttribute('viewBox','0 0 400 500');
@@ -58,10 +63,10 @@ function renderStationMap(){
   }
   // A referee-drawn grid deck plan (js/41-deck-editor.js) beats the automatic
   // ring layout; the plan needs its own viewBox, so restore 400×500 otherwise.
-  const s = stationAdditions[currentStationId];
-  if(s && s.deck && typeof deckHasContent === 'function' && deckHasContent(s.deck)){
-    svg.setAttribute('viewBox', deckStationViewBox(s.deck));
-    svg.innerHTML = deckStationSVG(s.deck, stationDef());
+  const deck = deckOf(stationAdditions[currentStationId]);
+  if(deck && typeof deckHasContent === 'function' && deckHasContent(deck)){
+    svg.setAttribute('viewBox', deckStationViewBox(deck));
+    svg.innerHTML = deckStationSVG(deck, stationDef());
     return;
   }
   svg.setAttribute('viewBox','0 0 400 500');
