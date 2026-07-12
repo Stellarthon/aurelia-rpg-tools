@@ -871,10 +871,20 @@ function dkeRenderContent(){
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
 }
+// Tools grouped into labelled rows so the (bigger) toolbar stays scannable.
+const DKE_TOOL_GROUPS = [
+  ['Edit',     ['pan','select','erase']],
+  ['Draw',     ['room','floor','wall','poly']],
+  ['Build',    ['door','prop','template','image']],
+  ['Annotate', ['label','link','token','ruler']]
+];
 function dkeRenderTools(){
   const el = document.getElementById('dke-tools'); if(!el) return;
-  el.innerHTML = DKE_TOOLS.map(([k,l]) =>
-    `<button class="dke-tool${dkeTool===k?' on':''}" onclick="dkeSetTool('${k}')">${l}</button>`).join('');
+  const lbl = {}; DKE_TOOLS.forEach(([k, l]) => { lbl[k] = l; });
+  el.innerHTML = DKE_TOOL_GROUPS.map(([name, keys]) =>
+    `<div class="dke-tgroup"><span class="dke-tglabel">${name}</span>`
+    + keys.map(k => `<button class="dke-tool${dkeTool===k?' on':''}" onclick="dkeSetTool('${k}')">${lbl[k] || k}</button>`).join('')
+    + `</div>`).join('');
 }
 function dkeSetTool(t){
   dkeTool = t;
