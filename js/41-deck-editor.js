@@ -754,6 +754,7 @@ function dkeEnsureDom(){
       <div class="dke-title" id="dke-title">DECK PLAN</div>
       <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="96"></label>
       <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="96"></label>
+      <label class="dke-dim" title="Scale the drawn content when you resize the grid"><input id="dke-scale" type="checkbox" style="width:auto"> ⤢ scale</label>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo">↶ Undo</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
@@ -773,6 +774,7 @@ function dkeEnsureDom(){
   document.getElementById('dke-done').addEventListener('click', dkeClose);
   document.getElementById('dke-w').addEventListener('change', function(){ dkeResize('w', this.value); });
   document.getElementById('dke-h').addEventListener('change', function(){ dkeResize('h', this.value); });
+  document.getElementById('dke-scale').addEventListener('change', function(){ dkeScaleContent = this.checked; });
   window.addEventListener('resize', () => { if(dkeIsOpen) dkeApplyView(); });
   document.addEventListener('keydown', dkeKeyDown);
 }
@@ -790,6 +792,7 @@ function dkeBeginEdit(holder, titleName){
   document.getElementById('dke-title').textContent = (String(titleName || 'STATION').toUpperCase()) + ' — DECK PLAN';
   document.getElementById('dke-w').value = d.w;
   document.getElementById('dke-h').value = d.h;
+  const scEl = document.getElementById('dke-scale'); if(scEl) scEl.checked = dkeScaleContent;
   dkeFitView();
   dkeRenderAll();
 }
@@ -1239,11 +1242,31 @@ function dkeFlushSave(){
   dkeDirty = false;
   dkeSave();
 }
+let dkeScaleContent = false;   // resize toggle: scale drawn content WITH the grid
+// Rebuild d's content from a captured baseline, scaled by (fx,fy). Coords/sizes
+// snap to whole cells (labels stay fractional); degenerate walls are dropped.
+function dkeRescaleContent(d, base, fx, fy){
+  const rp = (v, f) => Math.round(v * f);
+  d.floors = (base.floors||[]).map(o => ({ x:rp(o.x,fx), y:rp(o.y,fy), w:Math.max(1,rp(o.w,fx)), h:Math.max(1,rp(o.h,fy)) }));
+  d.walls  = (base.walls||[]).map(o => ({ x1:rp(o.x1,fx), y1:rp(o.y1,fy), x2:rp(o.x2,fx), y2:rp(o.y2,fy) }))
+             .filter(w => w.x1 !== w.x2 || w.y1 !== w.y2);
+  d.doors  = (base.doors||[]).map(o => { const nd = { x:rp(o.x,fx), y:rp(o.y,fy), o:o.o }; if(o.t) nd.t = o.t; if(o.s) nd.s = o.s;
+             const L = Math.max(1, rp(o.len||1, o.o === 'h' ? fx : fy)); if(L > 1) nd.len = L; return nd; });
+  d.props  = (base.props||[]).map(o => { const np = { t:o.t, x:rp(o.x,fx), y:rp(o.y,fy), r:o.r||0 };
+             const s = Math.max(1, Math.min(3, Math.round((o.s||1) * Math.min(fx,fy)))); if(s > 1) np.s = s; dkeClampProp(d, np); return np; });
+  d.labels = (base.labels||[]).map(o => ({ t:o.t, x:o.x*fx, y:o.y*fy }));
+  d.links  = (base.links||[]).map(o => { const nl = { a:o.a, x:rp(o.x,fx), y:rp(o.y,fy) }; if(o.hid) nl.hid = o.hid;
+             if(o.mem) nl.mem = o.mem.map(m => ({ n:m.n, x:rp(m.x,fx), y:rp(m.y,fy) })); return nl; });
+  d.tokens = (base.tokens||[]).map(o => ({ n:o.n, x:rp(o.x,fx), y:rp(o.y,fy) }));
+}
 function dkeResize(dim, val){
   const d = dkeD(); if(!d) return;
   dkeSnapshot();
+  const base = dkeScaleContent ? JSON.parse(JSON.stringify(d)) : null;
+  const old = { w: d.w, h: d.h };
   d[dim] = Math.max(4, Math.min(DKE_MAXDIM, parseInt(val,10) || d[dim]));
   document.getElementById('dke-' + dim).value = d[dim];
+  if(base) dkeRescaleContent(d, base, d.w / old.w, d.h / old.h);
   dkeCommit();
 }
 // Which resize handle (if any) is under an svg-space point — E/S edges + SE corner.
@@ -1324,7 +1347,7 @@ function dkePointerDown(ev){
   if(dkePtrs.size > 2) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), d = dkeD(); if(!d) return;
   const rh = dkeResizeHandleAt(p);   // grid resize handles win over any tool
-  if(rh){ dkeGesture = { t:'resize', edge: rh, snapped:false }; return; }
+  if(rh){ dkeGesture = { t:'resize', edge: rh, snapped:false, base: dkeScaleContent ? JSON.parse(JSON.stringify(d)) : null }; return; }
   if(dkeTool === 'pan'){
     dkeGesture = { t:'pan', cx: ev.clientX, cy: ev.clientY };
   } else if(dkeTool === 'room' || dkeTool === 'wall'){
@@ -1379,6 +1402,8 @@ function dkePointerMove(ev){
     const dd = dkeD(), u = dkeCellPt(p);
     if(g.edge === 'e' || g.edge === 'se') dd.w = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.x)));
     if(g.edge === 's' || g.edge === 'se') dd.h = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.y)));
+    // Scale mode: rebuild content from the captured baseline each move (no drift).
+    if(g.base) dkeRescaleContent(dd, g.base, dd.w / g.base.w, dd.h / g.base.h);
     const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
     if(wEl) wEl.value = dd.w; if(hEl) hEl.value = dd.h;
     dkeRenderContent(); dkeDirty = true;
