@@ -73,6 +73,59 @@ function dkeClampProp(d, p){
   p.y = Math.max(0, Math.min(d.h - f.fh, p.y));
 }
 
+// ── Room templates & copy-paste ──────────────────────────────────────────────
+// A template is a deck fragment in local (0-based) cell coords: {w,h,floors,
+// walls,doors,props,labels}. Prefabs are fixed; the clipboard is captured from a
+// dragged region. Stamping translates the fragment to an anchor and appends it to
+// the live deck through the normal arrays, so rendering/hit-testing just work.
+// Links and tokens are deliberately NOT copied (area markers + live characters).
+function dkeRectWalls(w, h){
+  return [ { x1:0,y1:0,x2:w,y2:0 }, { x1:w,y1:0,x2:w,y2:h }, { x1:w,y1:h,x2:0,y2:h }, { x1:0,y1:h,x2:0,y2:0 } ];
+}
+function dkeMkRoom(w, h, doors, props){
+  return { w, h, floors:[{ x:0,y:0,w,h }], walls:dkeRectWalls(w,h), doors:doors||[], props:props||[], labels:[] };
+}
+const DKE_TEMPLATES = {
+  cabin:   { n:'Cabin',            t:dkeMkRoom(3,3,[{ x:1,y:3,o:'h' }],[{ t:'bunk',x:0,y:0 },{ t:'locker',x:2,y:0 }]) },
+  airlock: { n:'Airlock corridor', t:dkeMkRoom(2,5,[{ x:0,y:0,o:'h' },{ x:0,y:5,o:'h' }],[{ t:'airlock',x:0,y:0 },{ t:'airlock',x:1,y:4 }]) },
+  bridge:  { n:'Bridge',           t:dkeMkRoom(4,3,[{ x:1,y:3,o:'h' }],[{ t:'console',x:0,y:0 },{ t:'console',x:1,y:0 },{ t:'console',x:2,y:0 },{ t:'console',x:3,y:0 },{ t:'chair',x:1,y:1 },{ t:'chair',x:2,y:1 }]) }
+};
+function dkeStampTemplate(d, tpl, ax, ay){
+  if(!d || !tpl) return null;
+  const ox = Math.max(0, Math.min(d.w - tpl.w, ax)), oy = Math.max(0, Math.min(d.h - tpl.h, ay));
+  (tpl.floors||[]).forEach(f => d.floors.push({ x:f.x+ox, y:f.y+oy, w:f.w, h:f.h }));
+  (tpl.walls||[]).forEach(w => dkeAddWall(d, w.x1+ox, w.y1+oy, w.x2+ox, w.y2+oy));
+  (tpl.doors||[]).forEach(dr => { if(!d.doors.some(e => e.x===dr.x+ox && e.y===dr.y+oy && e.o===dr.o)){ const nd = { x:dr.x+ox, y:dr.y+oy, o:dr.o }; if(dr.s) nd.s = dr.s; d.doors.push(nd); } });
+  (tpl.props||[]).forEach(pr => d.props.push({ t:pr.t, x:pr.x+ox, y:pr.y+oy, r:pr.r||0 }));
+  (tpl.labels||[]).forEach(l => d.labels.push({ t:l.t, x:l.x+ox, y:l.y+oy }));
+  return { ox, oy };
+}
+// Build a template from everything inside a dragged vertex rectangle (floors are
+// clipped to the box; walls/doors kept if they lie on it; props by anchor cell).
+function dkeCaptureRegion(d, x0, y0, x1, y1){
+  const ax = Math.min(x0,x1), ay = Math.min(y0,y1), bx = Math.max(x0,x1), by = Math.max(y0,y1);
+  const w = bx - ax, h = by - ay;
+  if(w < 1 || h < 1) return null;
+  const tpl = { w, h, floors:[], walls:[], doors:[], props:[], labels:[] };
+  (d.floors||[]).forEach(f => {
+    const fx0 = Math.max(f.x,ax), fy0 = Math.max(f.y,ay), fx1 = Math.min(f.x+f.w,bx), fy1 = Math.min(f.y+f.h,by);
+    if(fx1 > fx0 && fy1 > fy0) tpl.floors.push({ x:fx0-ax, y:fy0-ay, w:fx1-fx0, h:fy1-fy0 });
+  });
+  (d.walls||[]).forEach(w2 => {
+    if(w2.x1>=ax && w2.x1<=bx && w2.x2>=ax && w2.x2<=bx && w2.y1>=ay && w2.y1<=by && w2.y2>=ay && w2.y2<=by)
+      tpl.walls.push({ x1:w2.x1-ax, y1:w2.y1-ay, x2:w2.x2-ax, y2:w2.y2-ay });
+  });
+  (d.doors||[]).forEach(dr => { if(dr.x>=ax && dr.x<=bx && dr.y>=ay && dr.y<=by){ const nd = { x:dr.x-ax, y:dr.y-ay, o:dr.o }; if(dr.s) nd.s = dr.s; tpl.doors.push(nd); } });
+  (d.props||[]).forEach(pr => { if(pr.x>=ax && pr.x<bx && pr.y>=ay && pr.y<by) tpl.props.push({ t:pr.t, x:pr.x-ax, y:pr.y-ay, r:pr.r||0 }); });
+  (d.labels||[]).forEach(l => { if(l.x>=ax && l.x<=bx && l.y>=ay && l.y<=by) tpl.labels.push({ t:l.t, x:l.x-ax, y:l.y-ay }); });
+  return tpl;
+}
+function dkeActiveTpl(){
+  if(dkeTplSel === '__clip') return dkeClipTpl;
+  const e = DKE_TEMPLATES[dkeTplSel];
+  return e ? e.t : null;
+}
+
 // ── Deck data helpers ────────────────────────────────────────────────────────
 function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
 function dkeNorm(d){
@@ -518,6 +571,9 @@ let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [];
 let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
 let dkeRuler = null;         // last completed editor measurement {a:{x,y}, b:{x,y}}
 let dkeRulerAnchor = null;   // pending first cell for a tap-tap measurement
+let dkeTplMode = 'stamp';    // Rooms tool: 'stamp' (place a template) | 'copy' (grab a region)
+let dkeTplSel = 'cabin';     // selected template key, or '__clip' for the clipboard
+let dkeClipTpl = null;       // template captured by Copy area
 let dkeView = { x:0, y:0, w:100, h:100 };
 let dkePoly = null;                 // active wall-run last vertex {x,y}
 let dkeGesture = null;              // single-pointer gesture state
@@ -528,7 +584,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
   ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Door'], ['prop','📦 Props'],
-  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['ruler','📏 Range'], ['erase','⌫ Erase']
+  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
@@ -671,8 +727,17 @@ function dkeSetDeckScale(key, val){
 }
 function dkeRenderHint(){
   const el = document.getElementById('dke-hint');
-  if(el) el.textContent = DKE_HINTS[dkeTool] || '';
+  if(!el) return;
+  if(dkeTool === 'template'){
+    el.textContent = dkeTplMode === 'copy'
+      ? 'Drag a box over the map to copy that area — it becomes a stamp you can paste.'
+      : 'Tap to stamp the selected room (grows right/down from the tap). Copy area duplicates part of the map.';
+    return;
+  }
+  el.textContent = DKE_HINTS[dkeTool] || '';
 }
+function dkeTplPick(key){ dkeTplSel = key; dkeTplMode = 'stamp'; dkeGhost(''); dkeRenderSub(); dkeRenderHint(); }
+function dkeTplCopyMode(){ dkeTplMode = 'copy'; dkeGhost(''); dkeRenderSub(); dkeRenderHint(); }
 function dkeRenderSub(){
   const el = document.getElementById('dke-sub'); if(!el) return;
   const eh = dkeEsc;
@@ -711,6 +776,12 @@ function dkeRenderSub(){
     html = `<label class="dke-dim">m/cell <input id="dke-mpc" type="number" min="0.1" max="100" step="0.1" value="${mpc}" style="width:60px"></label>`
       + `<label class="dke-dim">weapon range m <input id="dke-refrange" type="number" min="1" max="9999" step="1" value="${rr}" style="width:64px"></label>`
       + `<span class="dke-note" id="dke-ruler-out">📏 ${eh(readout)}</span>`;
+  } else if(dkeTool === 'template'){
+    const stampOn = k => dkeTplMode === 'stamp' && dkeTplSel === k;
+    html = Object.keys(DKE_TEMPLATES).map(k =>
+      `<button class="dke-tool${stampOn(k)?' on':''}" onclick="dkeTplPick('${k}')">${eh(DKE_TEMPLATES[k].n)}</button>`).join('')
+      + (dkeClipTpl ? `<button class="dke-tool${stampOn('__clip')?' on':''}" onclick="dkeTplPick('__clip')">📋 Paste ${dkeClipTpl.w}×${dkeClipTpl.h}</button>` : '')
+      + `<button class="dke-tool${dkeTplMode==='copy'?' on':''}" onclick="dkeTplCopyMode()">▭ Copy area</button>`;
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeSel){
@@ -938,6 +1009,9 @@ function dkePointerDown(ev){
     dkeEraseAt(p, dkeGesture);
   } else if(dkeTool === 'ruler'){
     dkeGesture = { t:'ruler', a: dkeCellClamped(p), moved:false };
+  } else if(dkeTool === 'template' && dkeTplMode === 'copy'){
+    const v = dkeVertex(p);
+    dkeGesture = { t:'tplcopy', x0: v.x, y0: v.y, x1: v.x, y1: v.y };
   } else if(dkeTool === 'select'){
     const hit = dkeHitTest(p);
     if(hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token')){
@@ -978,6 +1052,10 @@ function dkePointerMove(ev){
   } else if(g.t === 'wall'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
     dkeGhost(`<line x1="${g.x0*C}" y1="${g.y0*C}" x2="${g.x1*C}" y2="${g.y1*C}" stroke="#D4A843" stroke-width="2.5" stroke-dasharray="5,3"/>`);
+  } else if(g.t === 'tplcopy'){
+    const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
+    const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
+    dkeGhost(`<rect x="${x}" y="${y}" width="${Math.abs(g.x1-g.x0)*C}" height="${Math.abs(g.y1-g.y0)*C}" fill="#5b8ef022" stroke="#5b8ef0" stroke-width="1.5" stroke-dasharray="5,3"/>`);
   } else if(g.t === 'floor'){
     dkePaintFloor(p, g);
   } else if(g.t === 'erase'){
@@ -1032,6 +1110,14 @@ function dkePointerUp(ev){
       dkeAddWall(d, g.x0, g.y0, g.x1, g.y1);
       dkeCommit();
     }
+  } else if(g.t === 'tplcopy'){
+    dkeGhost('');
+    const tpl = dkeCaptureRegion(d, g.x0, g.y0, g.x1, g.y1);
+    if(tpl && (tpl.floors.length || tpl.walls.length || tpl.props.length || tpl.doors.length || tpl.labels.length)){
+      dkeClipTpl = tpl; dkeTplSel = '__clip'; dkeTplMode = 'stamp';
+      dkeRenderSub(); dkeRenderHint();
+      if(typeof showToast === 'function') showToast(`Copied ${tpl.w}×${tpl.h} — tap to paste`);
+    } else if(typeof showToast === 'function'){ showToast('Nothing to copy in that box'); }
   } else if(g.t === 'floor' || g.t === 'erase'){
     dkeFlushSave();
   } else if(g.t === 'ruler'){
@@ -1130,6 +1216,13 @@ function dkeTapAction(p){
     const c = dkeCell(p); if(!c) return;
     dkeSnapshot();
     d.links.push({ a: dkeLinkArea, x: c.x, y: c.y });
+    dkeCommit();
+  } else if(dkeTool === 'template'){
+    const tpl = dkeActiveTpl();
+    if(!tpl){ if(typeof showToast === 'function') showToast(dkeTplSel === '__clip' ? 'Copy an area first' : 'Pick a room first'); return; }
+    const c = dkeCell(p); if(!c) return;
+    dkeSnapshot();
+    dkeStampTemplate(d, tpl, c.x, c.y);
     dkeCommit();
   }
 }
