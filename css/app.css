@@ -638,6 +638,11 @@ textarea{font-family:var(--font)}
   padding:5px 9px;font-size:11px;font-weight:600;font-family:inherit;line-height:1;
   background:var(--bg1);color:var(--tx0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer}
 .deck-ruler-btn.on{background:#D4A843;color:#0f1117;border-color:#D4A843}
+/* Range-rings button, stacked under the ruler button (referee only). */
+.deck-ranges-btn{position:absolute;top:40px;right:8px;z-index:5;display:none;align-items:center;gap:4px;
+  padding:5px 9px;font-size:11px;font-weight:600;font-family:inherit;line-height:1;
+  background:var(--bg1);color:var(--tx0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer}
+.deck-ranges-btn.on{background:#5b8ef0;color:#0f1117;border-color:#5b8ef0}
 /* Multi-deck switcher, overlaid top-left of the station map (hidden until 2+ decks). */
 .deck-switcher{position:absolute;top:8px;left:8px;z-index:5;display:none;flex-wrap:wrap;gap:4px;max-width:60%}
 .deck-sw-btn{padding:4px 8px;font-size:11px;font-weight:600;font-family:inherit;line-height:1;
