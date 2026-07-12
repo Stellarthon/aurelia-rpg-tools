@@ -346,7 +346,10 @@ function dkeToggleFog(li){
   const st = dkeFogState(lk);
   if(st === 'revealed'){ lk.mem = dkeSnapshotRoomTokens(deck, lk); delete lk.hid; }   // → remembered (snapshot now)
   else if(st === 'remembered'){ delete lk.mem; lk.hid = 1; }                          // → hidden
-  else { delete lk.hid; delete lk.mem; }                                              // → revealed
+  else {                                                                              // → revealed
+    delete lk.hid; delete lk.mem;
+    if(typeof logEvent === 'function'){ const lbl = dkeLinkLabel(lk.a); logEvent('Referee revealed ' + lbl, dkeStationLabel()); }
+  }
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
@@ -389,8 +392,31 @@ function dkeFogAutoReveal(deck, token){
       revealed = (a && a.label) || lk.a;
     }
   });
-  if(revealed && typeof showToast === 'function') showToast('Revealed ' + revealed + ' to players');
+  if(revealed){
+    if(typeof showToast === 'function') showToast('Revealed ' + revealed + ' to players');
+    if(typeof logEvent === 'function') logEvent('Party entered ' + revealed, dkeStationLabel());   // deck moment → event log (js/40)
+  }
   return !!revealed;
+}
+// Small labels for the event log.
+function dkeLinkLabel(id){
+  const a = (typeof stationAreas === 'function') ? stationAreas()[id] : null;
+  return (a && a.label) || id;
+}
+function dkeStationLabel(){
+  return (typeof stationDef === 'function' && stationDef() && stationDef().name) || '';
+}
+// A room-link tap dispatches: 'wiki:<id>' opens that wiki article; anything else
+// opens the station area as before.
+function dkeOpenLink(id){
+  if(String(id).indexOf('wiki:') === 0){ dkeOpenWikiArticle(id.slice(5)); return; }
+  if(typeof selArea === 'function') selArea(id);
+}
+function dkeOpenWikiArticle(wid){
+  if(typeof wikiArticles === 'undefined' || !wikiArticles.some(w => w.id === wid)) return;
+  if(typeof wikiExpanded !== 'undefined') wikiExpanded[wid] = true;   // expand it in the list
+  if(typeof wikiPanelOpen !== 'undefined' && !wikiPanelOpen){ if(typeof toggleWikiPanel === 'function') toggleWikiPanel(); }
+  else if(typeof renderWikiPanel === 'function') renderWikiPanel();
 }
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
@@ -562,9 +588,15 @@ function dkeContentSVG(deck, opt){
   const isPlayer = !!opt.interactive && !refView;
   let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
   (deck.links||[]).forEach((lk, li) => {
-    const a = areas[lk.a]; if(!a) return;
+    let a = areas[lk.a];
+    // A room can link to a WIKI article ('wiki:<id>') → resolve its title + a purple accent.
+    if(!a && String(lk.a).indexOf('wiki:') === 0 && typeof wikiArticles !== 'undefined'){
+      const w = wikiArticles.find(x => x.id === lk.a.slice(5));
+      if(w) a = { label: w.title, ac: '#9B59B6', wiki: 1 };
+    }
+    if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
-    const open = opt.interactive ? ` style="cursor:pointer" onclick="selArea('${eh(lk.a)}')"` : '';
+    const open = opt.interactive ? ` style="cursor:pointer" onclick="dkeOpenLink('${eh(lk.a)}')"` : '';
     const room = dkeRoomCells(deck, lk.x, lk.y);
     const state = dkeFogState(lk);   // 'revealed' | 'remembered' | 'hidden'
     const hid = state === 'hidden';  // remembered rooms render normally; tokens frozen below
@@ -972,6 +1004,14 @@ function dkeShipDeckSVG(deck){
     const col = sev >= 3 ? '#c0506e' : '#D4A843';
     out += `<path d="${dkeRoomFillD(room)}" fill="${col}" opacity="${sev >= 3 ? .28 : .16}" style="pointer-events:none"/>`;
   });
+  // Cargo manifest: a room linked to the Cargo system shows the ship's live lot count + tonnage.
+  if(typeof tradeCargo !== 'undefined' && tradeCargo && Array.isArray(tradeCargo.lots)){
+    const lots = tradeCargo.lots, tons = lots.reduce((s, l) => s + (Number(l.tons) || 0), 0);
+    (deck.links||[]).forEach(lk => {
+      if(lk.a !== 'cargo') return;
+      out += `<text x="${(lk.x+.5)*DKE_CELL}" y="${(lk.y+.5)*DKE_CELL+31}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#4caf82" font-family="system-ui,sans-serif" style="pointer-events:none">${lots.length} lot${lots.length===1?'':'s'} · ${tons} t</text>`;
+    });
+  }
   if(dkeShipRuler){   // range-ruler overlay rides along on every ship-panel render
     if(dkeShipRulerState) out += dkeRulerOverlaySVG(deck, dkeShipRulerState.a, dkeShipRulerState.b);
     else if(dkeShipRulerAnchor) out += dkeAnchorDotSVG(dkeShipRulerAnchor);
@@ -1269,12 +1309,14 @@ function dkeRenderSub(){
     // station deck, to its Design-Studio areas (tap opens the area).
     const ship = dkeTarget === 'ship';
     const areas = ship ? dkeShipSystemAreas() : ((typeof stationAreas === 'function') ? stationAreas() : {});
-    const ids = Object.keys(areas);
-    html = ids.length
-      ? `<span class="dke-note" style="margin-right:4px">${ship ? 'system' : 'area'}</span><select class="hx-edit-in" style="max-width:240px" onchange="dkeLinkArea=this.value">`
-        + `<option value="">— pick ${ship ? 'a system' : 'an area'} —</option>`
-        + ids.map(id => `<option value="${eh(id)}"${dkeLinkArea===id?' selected':''}>${eh(areas[id].label||id)}</option>`).join('')
-        + `</select>`
+    // Station decks can also link a room to a WIKI article ('wiki:<id>' → opens the lore).
+    const wikiOpts = (!ship && typeof wikiArticles !== 'undefined' && wikiArticles.length)
+      ? wikiArticles.map(w => `<option value="wiki:${eh(w.id)}"${dkeLinkArea==='wiki:'+w.id?' selected':''}>📖 ${eh(w.title||'Untitled')}</option>`).join('')
+      : '';
+    const areaOpts = Object.keys(areas).map(id => `<option value="${eh(id)}"${dkeLinkArea===id?' selected':''}>${eh(areas[id].label||id)}</option>`).join('');
+    html = (areaOpts || wikiOpts)
+      ? `<span class="dke-note" style="margin-right:4px">${ship ? 'system' : 'link to'}</span><select class="hx-edit-in" style="max-width:240px" onchange="dkeLinkArea=this.value">`
+        + `<option value="">— pick ${ship ? 'a system' : 'an area / wiki page'} —</option>` + areaOpts + wikiOpts + `</select>`
       : `<span class="dke-note">No areas yet — add areas in the Design Studio first.</span>`;
   } else if(dkeTool === 'ruler'){
     const d = dkeD();
