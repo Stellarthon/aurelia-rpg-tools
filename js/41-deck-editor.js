@@ -9,7 +9,8 @@
 // so it syncs to players through the existing 'station-additions' poll with no
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
 // (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v'}] (edge from
-// vertex (x,y) rightward / downward), props:[{t,x,y,r}] (cell + rotation),
+// vertex (x,y) rightward / downward), props:[{t,x,y,r}] (top-left cell +
+// rotation; multi-cell footprint comes from the DKE_PROPS catalogue, not the datum),
 // labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1}] (areaId
 // marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
 // FOG OF WAR rides the link marker: hid hides the marker's whole claimed room
@@ -44,8 +45,32 @@ const DKE_PROPS = {
   locker  : { n:'Locker',   g:'<rect x="-7" y="-11" width="14" height="22" rx="1" fill="#0f1117" stroke="#7f93b8" stroke-width="1.5"/><path d="M0,-11 v22" stroke="#7f93b8" stroke-width=".7"/><path d="M-3,-2 v4 M3,-2 v4" stroke="#7f93b8" stroke-width="1.2"/>' },
   airlock : { n:'Airlock',  g:'<circle r="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><circle r="4" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-11,0 h22 M0,-11 v22" stroke="#D4A843" stroke-width=".7"/>' },
   plant   : { n:'Plant',    g:'<circle cy="5" r="4" fill="#0f1117" stroke="#4caf82" stroke-width="1.3"/><path d="M0,3 C-6,-2 -7,-8 -2,-9 M0,3 C6,-2 7,-8 2,-9 M0,3 v-10" stroke="#4caf82" stroke-width="1.1" fill="none"/>' },
-  stairs  : { n:'Stairs',   g:'<rect x="-11" y="-11" width="22" height="22" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-11,-5.5 h22 M-11,0 h22 M-11,5.5 h22" stroke="#a3a9bf" stroke-width="1"/>' }
+  stairs  : { n:'Stairs',   g:'<rect x="-11" y="-11" width="22" height="22" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-11,-5.5 h22 M-11,0 h22 M-11,5.5 h22" stroke="#a3a9bf" stroke-width="1"/>' },
+  // Multi-cell stamps (w/h in cells; glyph authored centred on origin, spanning
+  // ±w·16 × ±h·16). Rotation swaps the footprint for 2×1 shapes; see dkePropFootprint.
+  dblbunk : { n:'Double bunk', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><line x1="0" y1="-13" x2="0" y2="13" stroke="#4caf82" stroke-width=".8"/><rect x="-27" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><rect x="18" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/>' },
+  container:{ n:'Cargo container', w:2, h:1, g:'<rect x="-30" y="-12" width="60" height="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-18,-12 v24 M-6,-12 v24 M6,-12 v24 M18,-12 v24" stroke="#d4913a" stroke-width=".6"/><rect x="-30" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/><rect x="25" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/>' },
+  shuttle : { n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' }
 };
+// Prop footprint (in cells) at its current rotation — 90°/270° swap w↔h so a 2×1
+// stamp occupies two vertical cells when turned. Missing/1×1 defs stay 1×1, so
+// every pre-existing prop and every render path is unchanged for them.
+function dkePropFootprint(p){
+  const def = DKE_PROPS[p && p.t] || {}, w = def.w || 1, h = def.h || 1, r = ((p && p.r) || 0) % 360;
+  const swap = (r === 90 || r === 270);
+  return { fw: swap ? h : w, fh: swap ? w : h };
+}
+function dkePropCells(p){
+  const f = dkePropFootprint(p), out = [];
+  for(let i = 0; i < f.fw; i++) for(let j = 0; j < f.fh; j++) out.push({ x: p.x + i, y: p.y + j });
+  return out;
+}
+// Keep a prop's whole footprint on the grid (anchor is its top-left cell).
+function dkeClampProp(d, p){
+  const f = dkePropFootprint(p);
+  p.x = Math.max(0, Math.min(d.w - f.fw, p.x));
+  p.y = Math.max(0, Math.min(d.h - f.fh, p.y));
+}
 
 // ── Deck data helpers ────────────────────────────────────────────────────────
 function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
@@ -298,7 +323,8 @@ function dkeContentSVG(deck, opt){
   });
   (deck.props||[]).forEach(p => {
     const def = DKE_PROPS[p.t]; if(!def) return;
-    out += `<g transform="translate(${(p.x+.5)*C},${(p.y+.5)*C}) rotate(${p.r||0})"><title>${eh(def.n)}</title>${def.g}</g>`;
+    const f = dkePropFootprint(p);   // 1×1 → (x+.5,y+.5)·C, unchanged from before
+    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})"><title>${eh(def.n)}</title>${def.g}</g>`;
   });
   (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
@@ -364,7 +390,7 @@ function dkeSelHighlightSVG(deck, sel){
   if(sel.kind === 'door')  return it.o === 'h'
     ? `<rect x="${it.x*C}" y="${it.y*C-6}" width="${C}" height="12" ${S}/>`
     : `<rect x="${it.x*C-6}" y="${it.y*C}" width="12" height="${C}" ${S}/>`;
-  if(sel.kind === 'prop')  return `<rect x="${it.x*C+2}" y="${it.y*C+2}" width="${C-4}" height="${C-4}" rx="3" ${S}/>`;
+  if(sel.kind === 'prop'){ const f = dkePropFootprint(it); return `<rect x="${it.x*C+2}" y="${it.y*C+2}" width="${f.fw*C-4}" height="${f.fh*C-4}" rx="3" ${S}/>`; }
   if(sel.kind === 'link')  return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="13" ${S}/>`;
   if(sel.kind === 'token') return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="16" ${S}/>`;
   if(sel.kind === 'label'){
@@ -471,7 +497,7 @@ const DKE_HINTS = {
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
   poly:'Tap corner after corner to chain walls. End the run from the bar above.',
   door:'Tap a cell edge to place a door there. Tap again to remove it.',
-  prop:'Pick a stamp above, then tap a cell. Tap the same prop again to rotate it.',
+  prop:'Pick a stamp above, then tap a cell. Multi-cell stamps grow right/down from the tap. Tap the same prop again to rotate it.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
@@ -611,9 +637,12 @@ function dkeRenderSub(){
   const eh = dkeEsc;
   let html = '';
   if(dkeTool === 'prop'){
-    html = Object.keys(DKE_PROPS).map(k =>
-      `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(DKE_PROPS[k].n)}">`
-      + `<svg viewBox="-16 -16 32 32" width="20" height="20" style="vertical-align:middle">${DKE_PROPS[k].g}</svg> ${eh(DKE_PROPS[k].n)}</button>`).join('');
+    html = Object.keys(DKE_PROPS).map(k => {
+      const dp = DKE_PROPS[k], gw = dp.w || 1, gh = dp.h || 1, m = Math.max(gw, gh), half = m * 16;
+      const size = (gw > 1 || gh > 1) ? ` <span style="opacity:.55">${gw}×${gh}</span>` : '';
+      return `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(dp.n)}">`
+        + `<svg viewBox="${-half} ${-half} ${m*32} ${m*32}" width="20" height="20" style="vertical-align:middle">${dp.g}</svg> ${eh(dp.n)}${size}</button>`;
+    }).join('');
   } else if(dkeTool === 'token'){
     const crew = (typeof crewRoster === 'function') ? crewRoster() : [];
     if(!dkeTokenName && crew.length) dkeTokenName = crew[0];
@@ -756,7 +785,7 @@ function dkeHitTest(p){
   for(let i = d.tokens.length - 1; i >= 0; i--)
     if(Math.hypot(u.x - (d.tokens[i].x+.5), u.y - (d.tokens[i].y+.5)) < .5) return { kind:'token', i };
   for(let i = d.props.length - 1; i >= 0; i--)
-    if(Math.floor(u.x) === d.props[i].x && Math.floor(u.y) === d.props[i].y) return { kind:'prop', i };
+    if(dkePropCells(d.props[i]).some(cc => cc.x === Math.floor(u.x) && cc.y === Math.floor(u.y))) return { kind:'prop', i };
   for(let i = d.links.length - 1; i >= 0; i--)
     if(Math.hypot(u.x - (d.links[i].x+.5), u.y - (d.links[i].y+.5)) < .5) return { kind:'link', i };
   for(let i = d.labels.length - 1; i >= 0; i--){
@@ -819,7 +848,7 @@ function dkeDeleteSel(){
 function dkeRotateSel(){
   const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
   dkeSnapshot();
-  const p = d.props[dkeSel.i]; if(p) p.r = ((p.r||0) + 90) % 360;
+  const p = d.props[dkeSel.i]; if(p){ p.r = ((p.r||0) + 90) % 360; dkeClampProp(d, p); }
   dkeCommit();
 }
 function dkeEditLabelSel(v){
@@ -929,7 +958,7 @@ function dkePointerMove(ev){
     const d = dkeD(), it = (d[g.hit.kind + 's']||[])[g.hit.i]; if(!it) return;
     const u = dkeCellPt(p);
     if(g.hit.kind === 'label'){ it.x = u.x; it.y = u.y; }
-    else { it.x = Math.floor(u.x); it.y = Math.floor(u.y); }
+    else { it.x = Math.floor(u.x); it.y = Math.floor(u.y); if(g.hit.kind === 'prop') dkeClampProp(d, it); }
     dkeSel = g.hit;
     dkeRenderContent();
   } else if(g.t === 'tap'){
@@ -1027,11 +1056,12 @@ function dkeTapAction(p){
     dkeCommit();
   } else if(dkeTool === 'prop'){
     const c = dkeCell(p); if(!c) return;
-    const existing = d.props.find(pr => pr.x === c.x && pr.y === c.y);
+    // Match against whole footprints so a tap anywhere on a multi-cell prop hits it.
+    const existing = d.props.find(pr => dkePropCells(pr).some(cc => cc.x === c.x && cc.y === c.y));
     dkeSnapshot();
-    if(existing && existing.t === dkePropType) existing.r = ((existing.r||0) + 90) % 360;
-    else if(existing){ existing.t = dkePropType; existing.r = 0; }
-    else d.props.push({ t: dkePropType, x: c.x, y: c.y, r: 0 });
+    if(existing && existing.t === dkePropType){ existing.r = ((existing.r||0) + 90) % 360; dkeClampProp(d, existing); }
+    else if(existing){ existing.t = dkePropType; existing.r = 0; dkeClampProp(d, existing); }
+    else { const np = { t: dkePropType, x: c.x, y: c.y, r: 0 }; dkeClampProp(d, np); d.props.push(np); }
     dkeCommit();
   } else if(dkeTool === 'token'){
     const c = dkeCell(p); if(!c) return;
