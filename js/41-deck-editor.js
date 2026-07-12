@@ -439,11 +439,26 @@ function dkeDoorHitSVG(d){
     : `<rect x="${d.x*C-7}" y="${(d.y+.1)*C}" width="14" height="${.8*C}" fill="transparent"/>`;
 }
 
+// Public URL of a deck's floorplan-underlay image (stored in the handouts bucket,
+// js/50). '' when the deck has none. Different-origin, so the SW won't cache it —
+// offline the <image> just paints nothing and the traced walls/links still show.
+function dkeDeckImgUrl(deck){
+  if(!deck || !deck.img || !deck.img.id || typeof handoutUrlFor !== 'function') return '';
+  const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+  return handoutUrlFor(camp, deck.img.id, deck.img.ver);
+}
 function dkeContentSVG(deck, opt){
   opt = opt || {};
   const C = DKE_CELL, eh = dkeEsc;
   let out = '';
-  // Floors first, grid over them (Roll20-style), structure on top.
+  // Floorplan image UNDERLAY (bottom of the stack) — the referee traces walls,
+  // doors and links on top. Fit inside the grid box, aspect preserved.
+  const imgUrl = dkeDeckImgUrl(deck);
+  if(imgUrl){
+    const op = (deck.img && typeof deck.img.op === 'number') ? deck.img.op : 0.55;
+    out += `<image href="${eh(imgUrl)}" x="0" y="0" width="${deck.w*C}" height="${deck.h*C}" opacity="${op}" preserveAspectRatio="xMidYMid meet" style="pointer-events:none" onerror="this.remove()"/>`;
+  }
+  // Floors next, grid over them (Roll20-style), structure on top.
   (deck.floors||[]).forEach(f => {
     out += `<rect x="${f.x*C}" y="${f.y*C}" width="${f.w*C}" height="${f.h*C}" fill="#1a1f2e"/>`;
   });
@@ -630,7 +645,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
   ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Door'], ['prop','📦 Props'],
-  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['ruler','📏 Range'], ['erase','⌫ Erase']
+  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['image','🖼 Image'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
@@ -645,6 +660,7 @@ const DKE_HINTS = {
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
   ruler:'Tap two cells (or drag between them) to measure — distance in metres and the range band. Set the scale above.',
+  image:'Upload a floorplan to trace over — draw walls, doors and links on top. Adjust opacity above; paint floors only where you want tap-to-open rooms.',
   erase:'Tap or drag over anything to delete it.'
 };
 
@@ -862,6 +878,44 @@ function dkeSetDeckScale(key, val){
   dkeCommit();
   dkeRulerRedraw();
 }
+// ── Floorplan image underlay (reuses the handouts bucket + resizer, js/50 & 85) ─
+let dkeImgBusy = false;
+function dkeUploadDeckImage(input){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const file = input && input.files && input.files[0];
+  if(input) input.value = '';
+  if(!file) return;
+  if(typeof resizeHandoutImage !== 'function' || typeof uploadHandoutBlob !== 'function'){
+    if(typeof showToast === 'function') showToast('Image upload unavailable here'); return;
+  }
+  if(file.type && !/^image\/(jpeg|png|webp)$/.test(file.type)){ if(typeof showToast === 'function') showToast('Choose a JPG/PNG/WebP image'); return; }
+  if(file.size > 20 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 20 MB source)'); return; }
+  const d = dkeD(); if(!d || dkeImgBusy) return;
+  dkeImgBusy = true; if(typeof showToast === 'function') showToast('Preparing floorplan…');
+  const id = (d.img && d.img.id) || ('dkimg_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+  resizeHandoutImage(file, 1600)
+    .then(blob => uploadHandoutBlob(camp, id, blob))
+    .then(() => {
+      dkeSnapshot();
+      d.img = { id, ver: Date.now(), op: (d.img && typeof d.img.op === 'number') ? d.img.op : 0.55 };
+      dkeCommit(); dkeRenderSub();
+      if(typeof showToast === 'function') showToast('Floorplan added — trace walls on top');
+    })
+    .catch(err => { if(typeof showToast === 'function') showToast('Upload failed — is the handouts bucket set up? (migration 0004)'); console.error(err); })
+    .finally(() => { dkeImgBusy = false; });
+}
+function dkeSetDeckImgOpacity(v){
+  const d = dkeD(); if(!d || !d.img) return;
+  d.img.op = Math.max(0.05, Math.min(1, parseFloat(v) || 0.55));
+  dkeCommit();   // re-render + debounced save
+}
+function dkeRemoveDeckImage(){
+  const d = dkeD(); if(!d || !d.img) return;
+  dkeSnapshot();
+  delete d.img;   // the bucket object is left as a harmless orphan (like handouts)
+  dkeCommit(); dkeRenderSub();
+}
 function dkeRenderHint(){
   const el = document.getElementById('dke-hint');
   if(!el) return;
@@ -919,6 +973,14 @@ function dkeRenderSub(){
       `<button class="dke-tool${stampOn(k)?' on':''}" onclick="dkeTplPick('${k}')">${eh(DKE_TEMPLATES[k].n)}</button>`).join('')
       + (dkeClipTpl ? `<button class="dke-tool${stampOn('__clip')?' on':''}" onclick="dkeTplPick('__clip')">📋 Paste ${dkeClipTpl.w}×${dkeClipTpl.h}</button>` : '')
       + `<button class="dke-tool${dkeTplMode==='copy'?' on':''}" onclick="dkeTplCopyMode()">▭ Copy area</button>`;
+  } else if(dkeTool === 'image'){
+    const d = dkeD(), hasImg = !!(d && d.img && d.img.id);
+    const op = (d && d.img && typeof d.img.op === 'number') ? d.img.op : 0.55;
+    html = `<label class="dke-tool" style="cursor:pointer">⬆ ${hasImg ? 'Replace' : 'Upload'} floorplan<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="dkeUploadDeckImage(this)"></label>`;
+    if(hasImg){
+      html += `<label class="dke-dim">opacity <input type="range" min="0.05" max="1" step="0.05" value="${op}" oninput="dkeSetDeckImgOpacity(this.value)" style="width:90px"></label>`
+        + `<button class="dke-tool dke-danger" onclick="dkeRemoveDeckImage()">🗑 Remove image</button>`;
+    }
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeSel){
