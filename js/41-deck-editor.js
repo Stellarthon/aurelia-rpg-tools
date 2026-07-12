@@ -657,7 +657,25 @@ function deckStationSVG(deck, def){
     if(dkeMapRulerState) out += dkeRulerOverlaySVG(deck, dkeMapRulerState.a, dkeMapRulerState.b);
     else if(dkeMapRulerAnchor) out += dkeAnchorDotSVG(dkeMapRulerAnchor);
   }
+  if(dkeMapRanges && dkeRangeTokenIdx != null){   // weapon-range bands around a chosen token
+    const tk = (deck.tokens || [])[dkeRangeTokenIdx];
+    if(tk) out += dkeRangeRingsSVG(deck, tk);
+  }
   return out;
+}
+// Concentric weapon-range band rings (Short/Normal/Long/Extreme) around a token,
+// from the deck's reference weapon range + metres-per-cell. Visualisation only.
+function dkeRangeRingsSVG(deck, tk){
+  const C = DKE_CELL, mpc = dkeDeckMpc(deck), R = dkeDeckRefRange(deck);
+  const cx = (tk.x+.5)*C, cy = (tk.y+.5)*C;
+  const bands = [[R/4,'Short','#4caf82'],[R,'Normal','#a3a9bf'],[2*R,'Long','#d4913a'],[4*R,'Extreme','#c0506e']];
+  let out = `<g style="pointer-events:none">`;
+  bands.forEach(b => {
+    const r = (b[0] / mpc) * C;
+    out += `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="none" stroke="${b[2]}" stroke-width="1.2" stroke-dasharray="5,4" opacity=".5"/>`
+      + `<text x="${cx}" y="${(cy - r + 11).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="${b[2]}" opacity=".85" font-family="system-ui,sans-serif">${b[1]} · ${Math.round(b[0])}m</text>`;
+  });
+  return out + `</g>`;
 }
 
 // ── Range ruler (measure two cells → metres + Traveller range band) ──────────
@@ -1828,6 +1846,17 @@ let dkeMapRuler = false;        // ruler tool active on the station view
 let dkeMapRulerState = null;    // last completed measurement {a:{x,y}, b:{x,y}}
 let dkeMapRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeMapRulerG = null;        // active drag gesture {a, sx, sy, moved, b?}
+let dkeMapRanges = false;       // range-rings mode (referee): tap a token to ring it
+let dkeRangeTokenIdx = null;    // focused token index (local to the referee's view)
+function dkeMapToggleRanges(){
+  dkeMapRanges = !dkeMapRanges;
+  if(!dkeMapRanges) dkeRangeTokenIdx = null;
+  if(dkeMapRanges && dkeMapRuler) dkeMapToggleRuler(false);   // mutually exclusive with the ruler
+  const btn = document.getElementById('deck-ranges-btn'); if(btn) btn.classList.toggle('on', dkeMapRanges);
+  const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = dkeMapRanges ? 'none' : (dkeMapRuler ? 'none' : '');
+  if(dkeMapRanges && typeof showToast === 'function') showToast('Range rings — tap a token');
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
 
 function dkeMapCellAt(deck, p){
   return { x: Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL))),
@@ -1844,6 +1873,8 @@ function dkeMapToggleRuler(force){
   const on = (typeof force === 'boolean') ? force : !dkeMapRuler;
   dkeMapRuler = on;
   if(!on){ dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null; }
+  if(on && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null;   // exclusive with range rings
+    const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
   const btn = document.getElementById('deck-ruler-btn');
   if(btn) btn.classList.toggle('on', on);
   const svg = document.getElementById('mapsvg');
@@ -1863,6 +1894,14 @@ function dkeRulerBtnSync(){
   }
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
+  // Range-rings button — referee only (it's a positioning aid keyed to a token).
+  const rb = document.getElementById('deck-ranges-btn');
+  if(rb){
+    const showR = has && (typeof isReferee === 'function') && isReferee();
+    if(!showR && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
+    rb.style.display = showR ? 'flex' : 'none';
+    rb.classList.toggle('on', dkeMapRanges);
+  }
 }
 // Station-view deck switcher — shown only when the station has 2+ decks. The
 // referee's buttons set the SYNCED active deck (players follow via the poll);
@@ -1912,6 +1951,15 @@ function dkeMapDown(ev){
     dkeMapRulerG = { a: dkeMapCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
     const svg = document.getElementById('mapsvg');
     try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    return;
+  }
+  if(dkeMapRanges){   // tap a token to ring it (referee), tap elsewhere to clear
+    if(typeof isReferee !== 'function' || !isReferee()) return;
+    const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
+    dkeRangeTokenIdx = tg ? parseInt(tg.getAttribute('data-tk'), 10) : null;
+    dkeMapClickGuardUntil = Date.now() + 400;   // don't also open a room
+    if(typeof renderStationMap === 'function') renderStationMap();
+    ev.preventDefault();
     return;
   }
   if(typeof isReferee !== 'function' || !isReferee()) return;
