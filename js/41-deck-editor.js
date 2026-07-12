@@ -34,6 +34,7 @@
 // players get the read-only render via deckStationSVG() from renderStationMap.
 
 const DKE_CELL = 32;
+const DKE_MAXDIM = 96;   // max deck size in cells (raised from 64 for drag-resize headroom)
 function dkeEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ── Prop stamp catalogue (generic engine set — glyphs centred on origin) ─────
@@ -131,8 +132,8 @@ function dkeActiveTpl(){
 // ── Deck data helpers ────────────────────────────────────────────────────────
 function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
 function dkeNorm(d){
-  d.w = Math.max(4, Math.min(64, parseInt(d.w,10) || 24));
-  d.h = Math.max(4, Math.min(64, parseInt(d.h,10) || 16));
+  d.w = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.w,10) || 24));
+  d.h = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.h,10) || 16));
   // Range-ruler scale (js §Range ruler): metres per cell — Traveller personal
   // scale is 1.5 m/square (CRB 2022 p.73) — and the reference weapon Range (m)
   // the range bands are measured against (default 50 m, referee-editable).
@@ -557,6 +558,7 @@ function dkeContentSVG(deck, opt){
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
+  if(opt.editor) out += dkeResizeHandlesSVG(deck);   // drag to resize the grid
   return out;
 }
 function dkeSelHighlightSVG(deck, sel){
@@ -697,8 +699,8 @@ function dkeEnsureDom(){
   w.innerHTML = `
     <div class="dke-hdr">
       <div class="dke-title" id="dke-title">DECK PLAN</div>
-      <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="64"></label>
-      <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="64"></label>
+      <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="96"></label>
+      <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="96"></label>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo">↶ Undo</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
@@ -1177,9 +1179,29 @@ function dkeFlushSave(){
 function dkeResize(dim, val){
   const d = dkeD(); if(!d) return;
   dkeSnapshot();
-  d[dim] = Math.max(4, Math.min(64, parseInt(val,10) || d[dim]));
+  d[dim] = Math.max(4, Math.min(DKE_MAXDIM, parseInt(val,10) || d[dim]));
   document.getElementById('dke-' + dim).value = d[dim];
   dkeCommit();
+}
+// Which resize handle (if any) is under an svg-space point — E/S edges + SE corner.
+function dkeResizeHandleAt(p){
+  const d = dkeD(); if(!d) return null;
+  const C = DKE_CELL, W = d.w*C, H = d.h*C, t = C*0.7;
+  const near = (hx, hy) => Math.hypot(p.x - hx, p.y - hy) <= t;
+  if(near(W, H)) return 'se';
+  if(near(W, H/2)) return 'e';
+  if(near(W/2, H)) return 's';
+  return null;
+}
+// Handle glyphs, drawn at the deck's right/bottom edges + corner (editor only).
+function dkeResizeHandlesSVG(d){
+  const C = DKE_CELL, W = d.w*C, H = d.h*C, F = 'fill="#D4A843" stroke="#0f1117" stroke-width="1"';
+  return `<g style="pointer-events:none">`
+    + `<rect x="${W-7}" y="${H/2-11}" width="12" height="22" rx="2" ${F}/>`
+    + `<rect x="${W/2-11}" y="${H-7}" width="22" height="12" rx="2" ${F}/>`
+    + `<rect x="${W-8}" y="${H-8}" width="16" height="16" rx="2" ${F}/>`
+    + `<path d="M${W-4},${H+2} L${W+2},${H-4} M${W-1},${H+3} L${W+3},${H-1}" stroke="#0f1117" stroke-width="1.3"/>`
+    + `</g>`;
 }
 
 // ── Selection actions ────────────────────────────────────────────────────────
@@ -1238,6 +1260,8 @@ function dkePointerDown(ev){
   if(dkePtrs.size === 2){ dkeGesture = null; dkeGhost(''); dkePinch = dkePinchMetrics(); return; }
   if(dkePtrs.size > 2) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), d = dkeD(); if(!d) return;
+  const rh = dkeResizeHandleAt(p);   // grid resize handles win over any tool
+  if(rh){ dkeGesture = { t:'resize', edge: rh, snapped:false }; return; }
   if(dkeTool === 'pan'){
     dkeGesture = { t:'pan', cx: ev.clientX, cy: ev.clientY };
   } else if(dkeTool === 'room' || dkeTool === 'wall'){
@@ -1287,6 +1311,14 @@ function dkePointerMove(ev){
     dkeView.y -= (ev.clientY - g.cy) / R.height * dkeView.h;
     g.cx = ev.clientX; g.cy = ev.clientY;
     dkeApplyView();
+  } else if(g.t === 'resize'){
+    if(!g.snapped){ dkeSnapshot(); g.snapped = true; }
+    const dd = dkeD(), u = dkeCellPt(p);
+    if(g.edge === 'e' || g.edge === 'se') dd.w = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.x)));
+    if(g.edge === 's' || g.edge === 'se') dd.h = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.y)));
+    const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
+    if(wEl) wEl.value = dd.w; if(hEl) hEl.value = dd.h;
+    dkeRenderContent(); dkeDirty = true;
   } else if(g.t === 'room'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
     const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
@@ -1334,6 +1366,10 @@ function dkePointerUp(ev){
   dkeGesture = null;
   const d = dkeD(); if(!d) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), C = DKE_CELL;
+  if(g.t === 'resize'){
+    if(g.snapped) dkeFlushSave();
+    return;
+  }
   if(g.t === 'room'){
     dkeGhost('');
     const x = Math.min(g.x0, g.x1), y = Math.min(g.y0, g.y1);
