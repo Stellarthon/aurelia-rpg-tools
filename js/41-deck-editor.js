@@ -8,8 +8,9 @@
 // A deck plan lives INSIDE its authored station — stationAdditions[sid].deck —
 // so it syncs to players through the existing 'station-additions' poll with no
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
-// (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v'}] (edge from
-// vertex (x,y) rightward / downward), props:[{t,x,y,r}] (top-left cell +
+// (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v',s?}] (edge from
+// vertex (x,y) rightward for 'h' / downward for 'v'; optional s = 'open'|'locked',
+// absent = closed — referee-cycled), props:[{t,x,y,r}] (top-left cell +
 // rotation; multi-cell footprint comes from the DKE_PROPS catalogue, not the datum),
 // labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1}] (areaId
 // marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
@@ -212,6 +213,18 @@ function dkeToggleFog(li){
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
 }
+// Referee cycles a door's state straight on the live station view (players see
+// the result, can't change it). Closed is stored as no `s` field to keep decks lean.
+function dkeCycleDoor(i){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const deck = dkeMapDeck(); if(!deck || !(deck.doors||[])[i]) return;
+  const ns = dkeNextDoorState(deck.doors[i].s);
+  if(ns === 'closed') delete deck.doors[i].s; else deck.doors[i].s = ns;
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+  if(typeof showToast === 'function') showToast('Door ' + (deck.doors[i].s || 'closed'));
+}
 // Auto-reveal: when the referee drops a PLAYER-CHARACTER token into a fogged room
 // on the station view, the party has entered it, so lift that room's fog. Only
 // PCs trigger it (names in the crew roster) — dropping a hidden NPC ambusher must
@@ -296,6 +309,38 @@ function dkeTokenSVG(t, opt, st, idx){
 }
 
 // ── Shared SVG renderer (editor canvas + read-only station view) ─────────────
+// ── Door states ──────────────────────────────────────────────────────────────
+// A door's state rides on an optional `s` field ('open' | 'locked'); absent = the
+// default closed leaf, so every pre-existing door renders exactly as before and
+// no deck migration is needed. The referee cycles state by tapping a door (door
+// tool in the editor, or straight on the live station view); players only see it.
+const DKE_DOOR_STATES = ['closed', 'open', 'locked'];
+function dkeNextDoorState(s){
+  return DKE_DOOR_STATES[(DKE_DOOR_STATES.indexOf(s || 'closed') + 1) % DKE_DOOR_STATES.length];
+}
+// Door glyph by state: closed = gold leaf across the gap (as before); open = gold
+// leaf swung perpendicular into the doorway; locked = red leaf + a dark keyhole.
+function dkeDoorSVG(d){
+  const C = DKE_CELL, s = d.s || 'closed';
+  if(d.o === 'h'){
+    const y = d.y*C, gap = `<line x1="${(d.x+.12)*C}" y1="${y}" x2="${(d.x+.88)*C}" y2="${y}" stroke="#0f1117" stroke-width="5"/>`;
+    if(s === 'open')   return gap + `<rect x="${(d.x+.12)*C-1.5}" y="${y}" width="3" height="${.6*C}" rx="1.5" fill="#D4A843"/>`;
+    if(s === 'locked') return gap + `<rect x="${(d.x+.15)*C}" y="${y-3}" width="${.7*C}" height="6" rx="2" fill="#c0506e"/><circle cx="${(d.x+.5)*C}" cy="${y}" r="1.6" fill="#0f1117"/>`;
+    return gap + `<rect x="${(d.x+.15)*C}" y="${y-3}" width="${.7*C}" height="6" rx="2" fill="#D4A843"/>`;
+  }
+  const x = d.x*C, gap = `<line x1="${x}" y1="${(d.y+.12)*C}" x2="${x}" y2="${(d.y+.88)*C}" stroke="#0f1117" stroke-width="5"/>`;
+  if(s === 'open')   return gap + `<rect x="${x}" y="${(d.y+.12)*C-1.5}" width="${.6*C}" height="3" rx="1.5" fill="#D4A843"/>`;
+  if(s === 'locked') return gap + `<rect x="${x-3}" y="${(d.y+.15)*C}" width="6" height="${.7*C}" rx="2" fill="#c0506e"/><circle cx="${x}" cy="${(d.y+.5)*C}" r="1.6" fill="#0f1117"/>`;
+  return gap + `<rect x="${x-3}" y="${(d.y+.15)*C}" width="6" height="${.7*C}" rx="2" fill="#D4A843"/>`;
+}
+// Fat transparent tap target over a door (the leaf itself is too thin to hit).
+function dkeDoorHitSVG(d){
+  const C = DKE_CELL;
+  return d.o === 'h'
+    ? `<rect x="${(d.x+.1)*C}" y="${d.y*C-7}" width="${.8*C}" height="14" fill="transparent"/>`
+    : `<rect x="${d.x*C-7}" y="${(d.y+.1)*C}" width="14" height="${.8*C}" fill="transparent"/>`;
+}
+
 function dkeContentSVG(deck, opt){
   opt = opt || {};
   const C = DKE_CELL, eh = dkeEsc;
@@ -312,14 +357,11 @@ function dkeContentSVG(deck, opt){
   (deck.walls||[]).forEach(w => {
     out += `<line x1="${w.x1*C}" y1="${w.y1*C}" x2="${w.x2*C}" y2="${w.y2*C}" stroke="#9aa7c7" stroke-width="3" stroke-linecap="square"/>`;
   });
-  (deck.doors||[]).forEach(d => {
-    if(d.o === 'h'){
-      out += `<line x1="${(d.x+.12)*C}" y1="${d.y*C}" x2="${(d.x+.88)*C}" y2="${d.y*C}" stroke="#0f1117" stroke-width="5"/>`
-           + `<rect x="${(d.x+.15)*C}" y="${d.y*C-3}" width="${.7*C}" height="6" rx="2" fill="#D4A843"/>`;
-    } else {
-      out += `<line x1="${d.x*C}" y1="${(d.y+.12)*C}" x2="${d.x*C}" y2="${(d.y+.88)*C}" stroke="#0f1117" stroke-width="5"/>`
-           + `<rect x="${d.x*C-3}" y="${(d.y+.15)*C}" width="6" height="${.7*C}" rx="2" fill="#D4A843"/>`;
-    }
+  const refView = !!opt.interactive && (typeof isReferee === 'function') && isReferee();
+  let doorCtl = '';   // referee-only door tap targets, appended ABOVE the room taps
+  (deck.doors||[]).forEach((d, i) => {
+    out += dkeDoorSVG(d);
+    if(refView) doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeCycleDoor(${i})"><title>Door: ${eh(d.s||'closed')} — tap to cycle</title>${dkeDoorHitSVG(d)}</g>`;
   });
   (deck.props||[]).forEach(p => {
     const def = DKE_PROPS[p.t]; if(!def) return;
@@ -331,7 +373,6 @@ function dkeContentSVG(deck, opt){
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   const seenArea = {};
-  const refView = !!opt.interactive && (typeof isReferee === 'function') && isReferee();
   let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
   (deck.links||[]).forEach((lk, li) => {
     const a = areas[lk.a]; if(!a) return;
@@ -369,7 +410,7 @@ function dkeContentSVG(deck, opt){
   });
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
-  out += roomLayer + fogDim + markerLayer;
+  out += roomLayer + fogDim + markerLayer + doorCtl;
   if((deck.tokens||[]).length){
     // One shared circle clip for every portrait (objectBoundingBox = it fits
     // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
@@ -496,7 +537,7 @@ const DKE_HINTS = {
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
   poly:'Tap corner after corner to chain walls. End the run from the bar above.',
-  door:'Tap a cell edge to place a door there. Tap again to remove it.',
+  door:'Tap a cell edge to place a door; tap a door to cycle closed → open → locked. Erase or Select+Delete removes it. Players see the state.',
   prop:'Pick a stamp above, then tap a cell. Multi-cell stamps grow right/down from the tap. Tap the same prop again to rotate it.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
@@ -1051,8 +1092,13 @@ function dkeTapAction(p){
     const e = dkeNearestEdge(p, .4); if(!e) return;
     const i = d.doors.findIndex(dr => dr.x === e.x && dr.y === e.y && dr.o === e.o);
     dkeSnapshot();
-    if(i >= 0) d.doors.splice(i, 1);
-    else d.doors.push({ x: e.x, y: e.y, o: e.o });
+    if(i >= 0){
+      // Tap an existing door → cycle closed → open → locked (remove via Erase / Select).
+      const ns = dkeNextDoorState(d.doors[i].s);
+      if(ns === 'closed') delete d.doors[i].s; else d.doors[i].s = ns;
+    } else {
+      d.doors.push({ x: e.x, y: e.y, o: e.o });
+    }
     dkeCommit();
   } else if(dkeTool === 'prop'){
     const c = dkeCell(p); if(!c) return;
