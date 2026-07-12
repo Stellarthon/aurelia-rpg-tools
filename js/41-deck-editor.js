@@ -2122,6 +2122,26 @@ function dkeMapMove(ev){
   const el = svg && svg.querySelector('g[data-tk="' + g.i + '"]');
   if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
 }
+// Plain tap on a token (referee) opens that character's sheet (PC) or NPC roster
+// entry — the token already carries the name the rest of the app keys off.
+function dkeMapOpenToken(i){
+  const deck = dkeMapDeck(); const t = deck && (deck.tokens||[])[i]; if(!t) return;
+  const name = t.n, low = String(name||'').trim().toLowerCase();
+  if(typeof crewRoster === 'function' && crewRoster().some(n => String(n).trim().toLowerCase() === low)){
+    if(typeof openSheet === 'function') openSheet(name);   // player character → sheet
+    return;
+  }
+  if(typeof npcRoster !== 'undefined' && Array.isArray(npcRoster)){
+    const npc = npcRoster.find(n => String(n.name||'').trim().toLowerCase() === low);
+    if(npc){
+      npcEditingId = npc.id;
+      if(typeof npcPanelOpen !== 'undefined' && !npcPanelOpen){ if(typeof toggleNpcPanel === 'function') toggleNpcPanel(); }
+      else if(typeof renderNpcPanel === 'function') renderNpcPanel();
+      return;
+    }
+  }
+  if(typeof showToast === 'function') showToast('No sheet for ' + name);
+}
 function dkeMapUp(ev){
   if(dkeMapRuler){
     const rg = dkeMapRulerG; if(!rg) return;
@@ -2139,7 +2159,7 @@ function dkeMapUp(ev){
   }
   const g = dkeMapDrag; if(!g) return;
   dkeMapDrag = null;
-  if(!g.moved) return;                       // plain tap — let normal clicks run
+  if(!g.moved){ dkeMapOpenToken(g.i); return; }   // plain tap on a token → open its sheet / NPC block
   const deck = dkeMapDeck();
   const p = dkeMapPt(ev) || g.last;
   if(deck && p && deck.tokens[g.i]){
