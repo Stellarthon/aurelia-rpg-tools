@@ -8,11 +8,12 @@
 // A deck plan lives INSIDE its authored station — stationAdditions[sid].deck —
 // so it syncs to players through the existing 'station-additions' poll with no
 // new keys. Shape: { w,h (cells), floors:[{x,y,w,h}], walls:[{x1,y1,x2,y2}]
-// (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v',s?}] (edge from
-// vertex (x,y) rightward for 'h' / downward for 'v'; optional s = 'open'|'locked',
-// absent = closed — referee-cycled), props:[{t,x,y,r}] (top-left cell +
+// (grid-vertex coords, diagonals allowed), doors:[{x,y,o:'h'|'v',s?,t?,len?}]
+// (openings on a wall edge from vertex (x,y) rightward for 'h' / downward for 'v';
+// t = 'window' (else door), len = 1–3 cells, door s = 'open'|'locked' absent=closed
+// — referee-cycled), props:[{t,x,y,r}] (top-left cell +
 // rotation; multi-cell footprint comes from the DKE_PROPS catalogue, not the datum),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1}] (areaId
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1,mem?}] (areaId
 // marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
 // FOG OF WAR rides the link marker: hid hides the marker's whole claimed room
 // from players (opaque fog with the grid redrawn over it — only boundary walls
@@ -33,6 +34,7 @@
 // players get the read-only render via deckStationSVG() from renderStationMap.
 
 const DKE_CELL = 32;
+const DKE_MAXDIM = 96;   // max deck size in cells (raised from 64 for drag-resize headroom)
 function dkeEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ── Prop stamp catalogue (generic engine set — glyphs centred on origin) ─────
@@ -53,13 +55,14 @@ const DKE_PROPS = {
   container:{ n:'Cargo container', w:2, h:1, g:'<rect x="-30" y="-12" width="60" height="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-18,-12 v24 M-6,-12 v24 M6,-12 v24 M18,-12 v24" stroke="#d4913a" stroke-width=".6"/><rect x="-30" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/><rect x="25" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/>' },
   shuttle : { n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' }
 };
-// Prop footprint (in cells) at its current rotation — 90°/270° swap w↔h so a 2×1
-// stamp occupies two vertical cells when turned. Missing/1×1 defs stay 1×1, so
-// every pre-existing prop and every render path is unchanged for them.
+// Prop footprint (in cells) at its rotation AND scale — 90°/270° swap w↔h so a
+// 2×1 stamp turns; an optional `s` (1–3) multiplies both dimensions. Missing
+// def / s absent stays the catalogue size, so pre-existing props are unchanged.
+function dkePropScaleOf(p){ const s = (p && p.s) | 0; return s >= 1 && s <= 3 ? s : 1; }
 function dkePropFootprint(p){
   const def = DKE_PROPS[p && p.t] || {}, w = def.w || 1, h = def.h || 1, r = ((p && p.r) || 0) % 360;
-  const swap = (r === 90 || r === 270);
-  return { fw: swap ? h : w, fh: swap ? w : h };
+  const swap = (r === 90 || r === 270), sc = dkePropScaleOf(p);
+  return { fw: (swap ? h : w) * sc, fh: (swap ? w : h) * sc };
 }
 function dkePropCells(p){
   const f = dkePropFootprint(p), out = [];
@@ -129,8 +132,8 @@ function dkeActiveTpl(){
 // ── Deck data helpers ────────────────────────────────────────────────────────
 function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
 function dkeNorm(d){
-  d.w = Math.max(4, Math.min(64, parseInt(d.w,10) || 24));
-  d.h = Math.max(4, Math.min(64, parseInt(d.h,10) || 16));
+  d.w = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.w,10) || 24));
+  d.h = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.h,10) || 16));
   // Range-ruler scale (js §Range ruler): metres per cell — Traveller personal
   // scale is 1.5 m/square (CRB 2022 p.73) — and the reference weapon Range (m)
   // the range bands are measured against (default 50 m, referee-editable).
@@ -291,31 +294,64 @@ function dkePlayerFogSVG(cells){
   return `<g style="pointer-events:none"><path d="${d}" fill="#0f1117"/>`
     + `<path d="${d}" fill="none" stroke="#1e2333" stroke-width=".6"/></g>`;
 }
-// The referee's reveal toggle: open eye = players see the room, closed = fog.
-function dkeFogEyeSVG(cx, cy, li, hid){
-  const glyph = hid
-    ? `<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linecap="round"/>`
-      + `<path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#D4A843" stroke-width="1.1" stroke-linecap="round"/>`
-    : `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#a3a9bf" stroke-width="1.2"/>`
-      + `<circle r="1.8" fill="#a3a9bf"/>`;
+// A room link has three referee-set visibility states: 'revealed' (live),
+// 'remembered' (players see a frozen last-known snapshot of its NPCs while the
+// referee's live moves stay private) and 'hidden' (opaque fog). `mem` holds the
+// snapshot; `hid` = opaque fog; neither = revealed. This is visual-only, like the
+// existing fog (the live data still syncs — spoiler control, not security).
+function dkeFogState(lk){ return (lk && lk.mem) ? 'remembered' : ((lk && lk.hid) ? 'hidden' : 'revealed'); }
+// Freeze the tokens standing in a link's room at their current cells.
+function dkeSnapshotRoomTokens(deck, lk){
+  const room = dkeRoomCells(deck, lk.x, lk.y);
+  if(!room) return [];
+  const inRoom = new Set(room.map(c => c.x + ',' + c.y));
+  return (deck.tokens || []).filter(t => inRoom.has(t.x + ',' + t.y)).map(t => ({ n: t.n, x: t.x, y: t.y }));
+}
+// A dimmed, dashed "last seen here" ghost token for a remembered snapshot (players).
+function dkeMemTokenSVG(m){
+  const C = DKE_CELL, eh = dkeEsc, r = 13, cx = (m.x+.5)*C, cy = (m.y+.5)*C;
+  return `<g opacity=".5" style="pointer-events:none">`
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="#7f93b8" stroke-width="2" stroke-dasharray="3,2"/>`
+    + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#7f93b8" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(m.n))}</text>`
+    + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="6.5" font-weight="600" fill="#7f93b8" font-family="system-ui,sans-serif">${eh(m.n)} · last seen</text>`
+    + `</g>`;
+}
+// The referee's reveal toggle — cycles revealed → remembered → hidden.
+function dkeFogEyeSVG(cx, cy, li, state){
+  let glyph, title;
+  if(state === 'hidden'){
+    glyph = `<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linecap="round"/>`
+      + `<path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#D4A843" stroke-width="1.1" stroke-linecap="round"/>`;
+    title = 'Hidden from players — tap to reveal';
+  } else if(state === 'remembered'){
+    glyph = `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#5b8ef0" stroke-width="1.2"/>`
+      + `<circle r="1.7" fill="none" stroke="#5b8ef0" stroke-width="1"/><path d="M0,0 v-1.2 M0,0 h1" stroke="#5b8ef0" stroke-width=".8"/>`;
+    title = 'Players see last-known positions — tap to hide fully';
+  } else {
+    glyph = `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#a3a9bf" stroke-width="1.2"/><circle r="1.8" fill="#a3a9bf"/>`;
+    title = 'Revealed — tap to freeze last-known positions';
+  }
   return `<g transform="translate(${cx},${cy})" style="cursor:pointer" onclick="dkeToggleFog(${li})">`
-    + `<title>${hid ? 'Hidden from players — tap to reveal' : 'Revealed — tap to hide from players'}</title>`
-    + `<circle r="9" fill="transparent"/>${glyph}</g>`;
+    + `<title>${title}</title><circle r="9" fill="transparent"/>${glyph}</g>`;
 }
 function dkeToggleFog(li){
   if(typeof isReferee !== 'function' || !isReferee()) return;
-  const deck = dkeMapDeck(); if(!deck || !(deck.links||[])[li]) return;
-  if(deck.links[li].hid) delete deck.links[li].hid;
-  else deck.links[li].hid = 1;
+  const deck = dkeMapDeck(); const lk = deck && (deck.links||[])[li]; if(!lk) return;
+  const st = dkeFogState(lk);
+  if(st === 'revealed'){ lk.mem = dkeSnapshotRoomTokens(deck, lk); delete lk.hid; }   // → remembered (snapshot now)
+  else if(st === 'remembered'){ delete lk.mem; lk.hid = 1; }                          // → hidden
+  else { delete lk.hid; delete lk.mem; }                                              // → revealed
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
+  if(typeof showToast === 'function') showToast('Room ' + dkeFogState(lk));
 }
 // Referee cycles a door's state straight on the live station view (players see
 // the result, can't change it). Closed is stored as no `s` field to keep decks lean.
 function dkeCycleDoor(i){
   if(typeof isReferee !== 'function' || !isReferee()) return;
   const deck = dkeMapDeck(); if(!deck || !(deck.doors||[])[i]) return;
+  if((deck.doors[i].t || 'door') !== 'door') return;   // windows have no state
   const ns = dkeNextDoorState(deck.doors[i].s);
   if(ns === 'closed') delete deck.doors[i].s; else deck.doors[i].s = ns;
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
@@ -339,10 +375,10 @@ function dkeFogAutoReveal(deck, token){
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   let revealed = null;
   (deck.links||[]).forEach(lk => {
-    if(!lk.hid) return;
+    if(!lk.hid && !lk.mem) return;   // reveal hidden OR remembered rooms the party re-enters
     const room = dkeRoomCells(deck, lk.x, lk.y);
     if(room && room.some(c => c.x === token.x && c.y === token.y)){
-      delete lk.hid;
+      delete lk.hid; delete lk.mem;
       const a = areas[lk.a];
       revealed = (a && a.label) || lk.a;
     }
@@ -416,27 +452,46 @@ const DKE_DOOR_STATES = ['closed', 'open', 'locked'];
 function dkeNextDoorState(s){
   return DKE_DOOR_STATES[(DKE_DOOR_STATES.indexOf(s || 'closed') + 1) % DKE_DOOR_STATES.length];
 }
-// Door glyph by state: closed = gold leaf across the gap (as before); open = gold
-// leaf swung perpendicular into the doorway; locked = red leaf + a dark keyhole.
-function dkeDoorSVG(d){
-  const C = DKE_CELL, s = d.s || 'closed';
-  if(d.o === 'h'){
-    const y = d.y*C, gap = `<line x1="${(d.x+.12)*C}" y1="${y}" x2="${(d.x+.88)*C}" y2="${y}" stroke="#0f1117" stroke-width="5"/>`;
-    if(s === 'open')   return gap + `<rect x="${(d.x+.12)*C-1.5}" y="${y}" width="3" height="${.6*C}" rx="1.5" fill="#D4A843"/>`;
-    if(s === 'locked') return gap + `<rect x="${(d.x+.15)*C}" y="${y-3}" width="${.7*C}" height="6" rx="2" fill="#c0506e"/><circle cx="${(d.x+.5)*C}" cy="${y}" r="1.6" fill="#0f1117"/>`;
-    return gap + `<rect x="${(d.x+.15)*C}" y="${y-3}" width="${.7*C}" height="6" rx="2" fill="#D4A843"/>`;
-  }
-  const x = d.x*C, gap = `<line x1="${x}" y1="${(d.y+.12)*C}" x2="${x}" y2="${(d.y+.88)*C}" stroke="#0f1117" stroke-width="5"/>`;
-  if(s === 'open')   return gap + `<rect x="${x}" y="${(d.y+.12)*C-1.5}" width="${.6*C}" height="3" rx="1.5" fill="#D4A843"/>`;
-  if(s === 'locked') return gap + `<rect x="${x-3}" y="${(d.y+.15)*C}" width="6" height="${.7*C}" rx="2" fill="#c0506e"/><circle cx="${x}" cy="${(d.y+.5)*C}" r="1.6" fill="#0f1117"/>`;
-  return gap + `<rect x="${x-3}" y="${(d.y+.15)*C}" width="6" height="${.7*C}" rx="2" fill="#D4A843"/>`;
+// An OPENING sits on a wall edge: `t` = 'door' (default) | 'window', `len` = 1–3
+// cells along the edge, doors carry a state `s` ('open'|'locked', absent=closed).
+// Door glyph: closed = gold leaf across the gap; open = gold leaf swung
+// perpendicular; locked = red leaf + a dark keyhole. Window = pale-blue see-through
+// glass with a mullion at each cell. len=1 & no `t` renders exactly like the old door.
+function dkeOpeningCovers(op, e){
+  if(op.o !== e.o) return false;
+  const L = op.len || 1;
+  return op.o === 'h' ? (e.y === op.y && e.x >= op.x && e.x < op.x + L)
+                      : (e.x === op.x && e.y >= op.y && e.y < op.y + L);
 }
-// Fat transparent tap target over a door (the leaf itself is too thin to hit).
-function dkeDoorHitSVG(d){
-  const C = DKE_CELL;
-  return d.o === 'h'
-    ? `<rect x="${(d.x+.1)*C}" y="${d.y*C-7}" width="${.8*C}" height="14" fill="transparent"/>`
-    : `<rect x="${d.x*C-7}" y="${(d.y+.1)*C}" width="14" height="${.8*C}" fill="transparent"/>`;
+function dkeOpeningSVG(op){
+  const C = DKE_CELL, L = op.len || 1, type = op.t || 'door', s = op.s || 'closed';
+  if(op.o === 'h'){
+    const y = op.y*C, x0 = op.x*C;
+    const gap = `<line x1="${x0+.12*C}" y1="${y}" x2="${x0+(L-.12)*C}" y2="${y}" stroke="#0f1117" stroke-width="5"/>`;
+    if(type === 'window'){
+      let m = ''; for(let k = 1; k < L; k++) m += `<line x1="${x0+k*C}" y1="${y-2.5}" x2="${x0+k*C}" y2="${y+2.5}" stroke="#4a8f9c" stroke-width=".8"/>`;
+      return gap + `<rect x="${x0+.15*C}" y="${y-2.5}" width="${(L-.3)*C}" height="5" rx="1" fill="#7fd4e0" fill-opacity=".45" stroke="#7fd4e0" stroke-width=".9"/>${m}`;
+    }
+    if(s === 'open')   return gap + `<rect x="${x0+.12*C-1.5}" y="${y}" width="3" height="${.6*C}" rx="1.5" fill="#D4A843"/>`;
+    if(s === 'locked') return gap + `<rect x="${x0+.15*C}" y="${y-3}" width="${(L-.3)*C}" height="6" rx="2" fill="#c0506e"/><circle cx="${x0+L*C/2}" cy="${y}" r="1.6" fill="#0f1117"/>`;
+    return gap + `<rect x="${x0+.15*C}" y="${y-3}" width="${(L-.3)*C}" height="6" rx="2" fill="#D4A843"/>`;
+  }
+  const x = op.x*C, y0 = op.y*C;
+  const gap = `<line x1="${x}" y1="${y0+.12*C}" x2="${x}" y2="${y0+(L-.12)*C}" stroke="#0f1117" stroke-width="5"/>`;
+  if(type === 'window'){
+    let m = ''; for(let k = 1; k < L; k++) m += `<line x1="${x-2.5}" y1="${y0+k*C}" x2="${x+2.5}" y2="${y0+k*C}" stroke="#4a8f9c" stroke-width=".8"/>`;
+    return gap + `<rect x="${x-2.5}" y="${y0+.15*C}" width="5" height="${(L-.3)*C}" rx="1" fill="#7fd4e0" fill-opacity=".45" stroke="#7fd4e0" stroke-width=".9"/>${m}`;
+  }
+  if(s === 'open')   return gap + `<rect x="${x}" y="${y0+.12*C-1.5}" width="${.6*C}" height="3" rx="1.5" fill="#D4A843"/>`;
+  if(s === 'locked') return gap + `<rect x="${x-3}" y="${y0+.15*C}" width="6" height="${(L-.3)*C}" rx="2" fill="#c0506e"/><circle cx="${x}" cy="${y0+L*C/2}" r="1.6" fill="#0f1117"/>`;
+  return gap + `<rect x="${x-3}" y="${y0+.15*C}" width="6" height="${(L-.3)*C}" rx="2" fill="#D4A843"/>`;
+}
+// Fat transparent tap target over an opening (the leaf itself is too thin to hit).
+function dkeOpeningHitSVG(op){
+  const C = DKE_CELL, L = op.len || 1;
+  return op.o === 'h'
+    ? `<rect x="${(op.x+.1)*C}" y="${op.y*C-7}" width="${(L-.2)*C}" height="14" fill="transparent"/>`
+    : `<rect x="${op.x*C-7}" y="${(op.y+.1)*C}" width="14" height="${(L-.2)*C}" fill="transparent"/>`;
 }
 
 // Public URL of a deck's floorplan-underlay image (stored in the handouts bucket,
@@ -473,26 +528,29 @@ function dkeContentSVG(deck, opt){
   const refView = !!opt.interactive && (typeof isReferee === 'function') && isReferee();
   let doorCtl = '';   // referee-only door tap targets, appended ABOVE the room taps
   (deck.doors||[]).forEach((d, i) => {
-    out += dkeDoorSVG(d);
-    if(refView) doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeCycleDoor(${i})"><title>Door: ${eh(d.s||'closed')} — tap to cycle</title>${dkeDoorHitSVG(d)}</g>`;
+    out += dkeOpeningSVG(d);
+    if(refView && (d.t || 'door') === 'door') doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeCycleDoor(${i})"><title>Door: ${eh(d.s||'closed')} — tap to cycle</title>${dkeOpeningHitSVG(d)}</g>`;
   });
   (deck.props||[]).forEach(p => {
     const def = DKE_PROPS[p.t]; if(!def) return;
-    const f = dkePropFootprint(p);   // 1×1 → (x+.5,y+.5)·C, unchanged from before
-    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})"><title>${eh(def.n)}</title>${def.g}</g>`;
+    const f = dkePropFootprint(p), sc = dkePropScaleOf(p);   // s=1 → same transform as before
+    const scaleTx = sc !== 1 ? ` scale(${sc})` : '';
+    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(def.n)}</title>${def.g}</g>`;
   });
   (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   const seenArea = {};
+  const isPlayer = !!opt.interactive && !refView;
   let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
   (deck.links||[]).forEach((lk, li) => {
     const a = areas[lk.a]; if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
     const open = opt.interactive ? ` style="cursor:pointer" onclick="selArea('${eh(lk.a)}')"` : '';
     const room = dkeRoomCells(deck, lk.x, lk.y);
-    const hid = !!lk.hid;
+    const state = dkeFogState(lk);   // 'revealed' | 'remembered' | 'hidden'
+    const hid = state === 'hidden';  // remembered rooms render normally; tokens frozen below
     // Fog of war, player side: a hidden link renders NOTHING here — no marker,
     // no name, no tap target — just an opaque fog patch appended after the
     // token layer so it also covers whoever is standing inside.
@@ -512,28 +570,48 @@ function dkeContentSVG(deck, opt){
     } else if(room && opt.editor){
       roomLayer += `<path d="${dkeRoomOutlineD(room)}" fill="none" stroke="${eh(ac)}" stroke-width="1.2" stroke-dasharray="4,4" opacity=".4"/>`;
     }
-    // Fog of war, referee side (station view AND editor): hidden rooms stay
-    // readable under a dim wash drawn below the markers.
-    if(hid && room) fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
+    // Referee/editor indicators (never shown to players): hidden rooms stay
+    // readable under a dim wash; remembered rooms get a blue dashed outline.
+    if(room && !isPlayer){
+      if(state === 'hidden') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
+      else if(state === 'remembered') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#5b8ef0" opacity=".1" style="pointer-events:none"/><path d="${dkeRoomOutlineD(room)}" fill="none" stroke="#5b8ef0" stroke-width="1.5" stroke-dasharray="5,4" opacity=".6" style="pointer-events:none"/>`;
+    }
     markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
          + `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`
          + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}</text></g>`;
     // Referee reveal toggle — an eye under the marker name on the station view.
-    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, hid);
+    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, state);
   });
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
   out += roomLayer + fogDim + markerLayer + doorCtl;
-  if((deck.tokens||[]).length){
+  // Remembered rooms (player side): the snapshotted NPCs are FROZEN — hide their
+  // live tokens and draw last-known ghosts instead, until the referee re-reveals.
+  let frozen = null, memGhosts = '';
+  if(isPlayer){
+    (deck.links||[]).forEach(lk => {
+      if(Array.isArray(lk.mem) && lk.mem.length){
+        frozen = frozen || {};
+        lk.mem.forEach(m => { frozen[String(m.n||'').trim().toLowerCase()] = m; });
+      }
+    });
+    if(frozen) Object.keys(frozen).forEach(k => { memGhosts += dkeMemTokenSVG(frozen[k]); });
+  }
+  if((deck.tokens||[]).length || memGhosts){
     // One shared circle clip for every portrait (objectBoundingBox = it fits
     // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
     // because the editor canvas and the station map can be in the DOM at once.
     out += `<defs><clipPath id="${eh(opt.idp||'sta')}-tkclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>`;
     const initRows = dkeInitRows();
-    deck.tokens.forEach((t, i) => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i); });
+    (deck.tokens||[]).forEach((t, i) => {
+      if(frozen && frozen[String(t.n||'').trim().toLowerCase()]) return;   // frozen NPC → live token hidden
+      out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i);
+    });
+    out += memGhosts;
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
+  if(opt.editor) out += dkeResizeHandlesSVG(deck);   // drag to resize the grid
   return out;
 }
 function dkeSelHighlightSVG(deck, sel){
@@ -541,9 +619,9 @@ function dkeSelHighlightSVG(deck, sel){
   const it = (deck[sel.kind + 's']||[])[sel.i]; if(!it) return '';
   if(sel.kind === 'floor') return `<rect x="${it.x*C}" y="${it.y*C}" width="${it.w*C}" height="${it.h*C}" ${S}/>`;
   if(sel.kind === 'wall')  return `<line x1="${it.x1*C}" y1="${it.y1*C}" x2="${it.x2*C}" y2="${it.y2*C}" stroke="#D4A843" stroke-width="6" opacity=".45"/>`;
-  if(sel.kind === 'door')  return it.o === 'h'
-    ? `<rect x="${it.x*C}" y="${it.y*C-6}" width="${C}" height="12" ${S}/>`
-    : `<rect x="${it.x*C-6}" y="${it.y*C}" width="12" height="${C}" ${S}/>`;
+  if(sel.kind === 'door'){ const L = it.len || 1; return it.o === 'h'
+    ? `<rect x="${it.x*C}" y="${it.y*C-6}" width="${L*C}" height="12" ${S}/>`
+    : `<rect x="${it.x*C-6}" y="${it.y*C}" width="12" height="${L*C}" ${S}/>`; }
   if(sel.kind === 'prop'){ const f = dkePropFootprint(it); return `<rect x="${it.x*C+2}" y="${it.y*C+2}" width="${f.fw*C-4}" height="${f.fh*C-4}" rx="3" ${S}/>`; }
   if(sel.kind === 'link')  return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="13" ${S}/>`;
   if(sel.kind === 'token') return `<circle cx="${(it.x+.5)*C}" cy="${(it.y+.5)*C}" r="16" ${S}/>`;
@@ -635,6 +713,9 @@ let dkeRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeTplMode = 'stamp';    // Rooms tool: 'stamp' (place a template) | 'copy' (grab a region)
 let dkeTplSel = 'cabin';     // selected template key, or '__clip' for the clipboard
 let dkeClipTpl = null;       // template captured by Copy area
+let dkeOpenType = 'door';    // Openings tool: 'door' | 'window'
+let dkeOpenLen = 1;          // Openings tool: length in cells (1–3)
+let dkePropScale = 1;        // Props tool: placement scale (1–3), incl. shuttles
 let dkeView = { x:0, y:0, w:100, h:100 };
 let dkePoly = null;                 // active wall-run last vertex {x,y}
 let dkeGesture = null;              // single-pointer gesture state
@@ -644,7 +725,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
-  ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Door'], ['prop','📦 Props'],
+  ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Openings'], ['prop','📦 Props'],
   ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['image','🖼 Image'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
@@ -653,9 +734,9 @@ const DKE_HINTS = {
   room:'Drag a rectangle — floor and perimeter walls are placed in one go.',
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
-  poly:'Tap corner after corner to chain walls. End the run from the bar above.',
-  door:'Tap a cell edge to place a door; tap a door to cycle closed → open → locked. Erase or Select+Delete removes it. Players see the state.',
-  prop:'Pick a stamp above, then tap a cell. Multi-cell stamps grow right/down from the tap. Tap the same prop again to rotate it.',
+  poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
+  door:'Pick door or window + a length above, then tap a wall edge to place it. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
+  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell. Stamps grow right/down from the tap. Tap the same prop again to rotate it; Select → ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
@@ -671,8 +752,8 @@ function dkeEnsureDom(){
   w.innerHTML = `
     <div class="dke-hdr">
       <div class="dke-title" id="dke-title">DECK PLAN</div>
-      <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="64"></label>
-      <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="64"></label>
+      <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="96"></label>
+      <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="96"></label>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo">↶ Undo</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
@@ -843,10 +924,20 @@ function dkeRenderContent(){
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
 }
+// Tools grouped into labelled rows so the (bigger) toolbar stays scannable.
+const DKE_TOOL_GROUPS = [
+  ['Edit',     ['pan','select','erase']],
+  ['Draw',     ['room','floor','wall','poly']],
+  ['Build',    ['door','prop','template','image']],
+  ['Annotate', ['label','link','token','ruler']]
+];
 function dkeRenderTools(){
   const el = document.getElementById('dke-tools'); if(!el) return;
-  el.innerHTML = DKE_TOOLS.map(([k,l]) =>
-    `<button class="dke-tool${dkeTool===k?' on':''}" onclick="dkeSetTool('${k}')">${l}</button>`).join('');
+  const lbl = {}; DKE_TOOLS.forEach(([k, l]) => { lbl[k] = l; });
+  el.innerHTML = DKE_TOOL_GROUPS.map(([name, keys]) =>
+    `<div class="dke-tgroup"><span class="dke-tglabel">${name}</span>`
+    + keys.map(k => `<button class="dke-tool${dkeTool===k?' on':''}" onclick="dkeSetTool('${k}')">${lbl[k] || k}</button>`).join('')
+    + `</div>`).join('');
 }
 function dkeSetTool(t){
   dkeTool = t;
@@ -933,13 +1024,20 @@ function dkeRenderSub(){
   const el = document.getElementById('dke-sub'); if(!el) return;
   const eh = dkeEsc;
   let html = '';
-  if(dkeTool === 'prop'){
+  if(dkeTool === 'door'){
+    const ty = (k, l) => `<button class="dke-tool${dkeOpenType===k?' on':''}" onclick="dkeOpenType='${k}';dkeRenderSub()">${l}</button>`;
+    const ln = n => `<button class="dke-tool${dkeOpenLen===n?' on':''}" onclick="dkeOpenLen=${n};dkeRenderSub()">${n}</button>`;
+    html = ty('door','🚪 Door') + ty('window','⊟ Window')
+      + `<span class="dke-note" style="margin:0 2px 0 8px">length</span>` + ln(1) + ln(2) + ln(3);
+  } else if(dkeTool === 'prop'){
     html = Object.keys(DKE_PROPS).map(k => {
       const dp = DKE_PROPS[k], gw = dp.w || 1, gh = dp.h || 1, m = Math.max(gw, gh), half = m * 16;
       const size = (gw > 1 || gh > 1) ? ` <span style="opacity:.55">${gw}×${gh}</span>` : '';
       return `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(dp.n)}">`
         + `<svg viewBox="${-half} ${-half} ${m*32} ${m*32}" width="20" height="20" style="vertical-align:middle">${dp.g}</svg> ${eh(dp.n)}${size}</button>`;
-    }).join('');
+    }).join('')
+      + `<span class="dke-note" style="margin:0 2px 0 8px">size</span>`
+      + [1,2,3].map(n => `<button class="dke-tool${dkePropScale===n?' on':''}" onclick="dkePropScale=${n};dkeRenderSub()">${n}×</button>`).join('');
   } else if(dkeTool === 'token'){
     const crew = (typeof crewRoster === 'function') ? crewRoster() : [];
     if(!dkeTokenName && crew.length) dkeTokenName = crew[0];
@@ -986,7 +1084,7 @@ function dkeRenderSub(){
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
-      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button>`;
+      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button>`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
       if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
       html += `<button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
@@ -1090,7 +1188,7 @@ function dkeHitTest(p){
   const u = dkeCellPt(p);
   const e = dkeNearestEdge(p, .3);
   if(e){
-    const i = d.doors.findIndex(dr => dr.x === e.x && dr.y === e.y && dr.o === e.o);
+    const i = d.doors.findIndex(op => dkeOpeningCovers(op, e));
     if(i >= 0) return { kind:'door', i };
   }
   for(let i = d.tokens.length - 1; i >= 0; i--)
@@ -1144,9 +1242,29 @@ function dkeFlushSave(){
 function dkeResize(dim, val){
   const d = dkeD(); if(!d) return;
   dkeSnapshot();
-  d[dim] = Math.max(4, Math.min(64, parseInt(val,10) || d[dim]));
+  d[dim] = Math.max(4, Math.min(DKE_MAXDIM, parseInt(val,10) || d[dim]));
   document.getElementById('dke-' + dim).value = d[dim];
   dkeCommit();
+}
+// Which resize handle (if any) is under an svg-space point — E/S edges + SE corner.
+function dkeResizeHandleAt(p){
+  const d = dkeD(); if(!d) return null;
+  const C = DKE_CELL, W = d.w*C, H = d.h*C, t = C*0.7;
+  const near = (hx, hy) => Math.hypot(p.x - hx, p.y - hy) <= t;
+  if(near(W, H)) return 'se';
+  if(near(W, H/2)) return 'e';
+  if(near(W/2, H)) return 's';
+  return null;
+}
+// Handle glyphs, drawn at the deck's right/bottom edges + corner (editor only).
+function dkeResizeHandlesSVG(d){
+  const C = DKE_CELL, W = d.w*C, H = d.h*C, F = 'fill="#D4A843" stroke="#0f1117" stroke-width="1"';
+  return `<g style="pointer-events:none">`
+    + `<rect x="${W-7}" y="${H/2-11}" width="12" height="22" rx="2" ${F}/>`
+    + `<rect x="${W/2-11}" y="${H-7}" width="22" height="12" rx="2" ${F}/>`
+    + `<rect x="${W-8}" y="${H-8}" width="16" height="16" rx="2" ${F}/>`
+    + `<path d="M${W-4},${H+2} L${W+2},${H-4} M${W-1},${H+3} L${W+3},${H-1}" stroke="#0f1117" stroke-width="1.3"/>`
+    + `</g>`;
 }
 
 // ── Selection actions ────────────────────────────────────────────────────────
@@ -1162,6 +1280,15 @@ function dkeRotateSel(){
   dkeSnapshot();
   const p = d.props[dkeSel.i]; if(p){ p.r = ((p.r||0) + 90) % 360; dkeClampProp(d, p); }
   dkeCommit();
+}
+function dkeCyclePropSize(){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
+  const p = d.props[dkeSel.i]; if(!p) return;
+  dkeSnapshot();
+  const ns = dkePropScaleOf(p) % 3 + 1;   // 1→2→3→1
+  if(ns > 1) p.s = ns; else delete p.s;
+  dkeClampProp(d, p);
+  dkeCommit(); dkeRenderSub();
 }
 function dkeEditLabelSel(v){
   const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'label') return;
@@ -1196,6 +1323,8 @@ function dkePointerDown(ev){
   if(dkePtrs.size === 2){ dkeGesture = null; dkeGhost(''); dkePinch = dkePinchMetrics(); return; }
   if(dkePtrs.size > 2) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), d = dkeD(); if(!d) return;
+  const rh = dkeResizeHandleAt(p);   // grid resize handles win over any tool
+  if(rh){ dkeGesture = { t:'resize', edge: rh, snapped:false }; return; }
   if(dkeTool === 'pan'){
     dkeGesture = { t:'pan', cx: ev.clientX, cy: ev.clientY };
   } else if(dkeTool === 'room' || dkeTool === 'wall'){
@@ -1245,6 +1374,14 @@ function dkePointerMove(ev){
     dkeView.y -= (ev.clientY - g.cy) / R.height * dkeView.h;
     g.cx = ev.clientX; g.cy = ev.clientY;
     dkeApplyView();
+  } else if(g.t === 'resize'){
+    if(!g.snapped){ dkeSnapshot(); g.snapped = true; }
+    const dd = dkeD(), u = dkeCellPt(p);
+    if(g.edge === 'e' || g.edge === 'se') dd.w = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.x)));
+    if(g.edge === 's' || g.edge === 'se') dd.h = Math.max(4, Math.min(DKE_MAXDIM, Math.round(u.y)));
+    const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
+    if(wEl) wEl.value = dd.w; if(hEl) hEl.value = dd.h;
+    dkeRenderContent(); dkeDirty = true;
   } else if(g.t === 'room'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
     const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
@@ -1292,6 +1429,10 @@ function dkePointerUp(ev){
   dkeGesture = null;
   const d = dkeD(); if(!d) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), C = DKE_CELL;
+  if(g.t === 'resize'){
+    if(g.snapped) dkeFlushSave();
+    return;
+  }
   if(g.t === 'room'){
     dkeGhost('');
     const x = Math.min(g.x0, g.x1), y = Math.min(g.y0, g.y1);
@@ -1342,6 +1483,21 @@ function dkeAddWall(d, x1, y1, x2, y2){
                              || (w.x1===x2 && w.y1===y2 && w.x2===x1 && w.y2===y1));
   if(!dup) d.walls.push({ x1, y1, x2, y2 });
 }
+// Ray-cast point-in-polygon (vertices in grid coords) — handles diagonal runs.
+function dkePointInPoly(px, py, poly){
+  let inside = false;
+  for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if(((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+// Fill every grid cell whose centre lies inside the closed wall-run with floor.
+function dkeFillPolygon(d, poly){
+  const covered = (cx, cy) => (d.floors || []).some(f => cx >= f.x && cx < f.x + f.w && cy >= f.y && cy < f.y + f.h);
+  for(let cy = 0; cy < d.h; cy++) for(let cx = 0; cx < d.w; cx++)
+    if(dkePointInPoly(cx + 0.5, cy + 0.5, poly) && !covered(cx, cy)) d.floors.push({ x: cx, y: cy, w: 1, h: 1 });
+}
 function dkePaintFloor(p, g){
   const d = dkeD(), c = dkeCell(p);
   if(!d || !c) return;
@@ -1365,25 +1521,47 @@ function dkeTapAction(p){
   if(dkeTool === 'poly'){
     const v = dkeVertex(p);
     if(!dkePoly){
-      dkePoly = { x: v.x, y: v.y };
+      dkePoly = { x: v.x, y: v.y, start: { x: v.x, y: v.y }, path: [{ x: v.x, y: v.y }] };
       dkeRenderSub();
+    } else if(v.x === dkePoly.start.x && v.y === dkePoly.start.y && dkePoly.path.length >= 3){
+      // Closed the loop back at the start → seal it and fill the room.
+      dkeSnapshot();
+      dkeAddWall(d, dkePoly.x, dkePoly.y, v.x, v.y);
+      dkeFillPolygon(d, dkePoly.path);
+      dkeCommit();
+      dkePolyEnd();
+      if(typeof showToast === 'function') showToast('Room closed');
+      return;
     } else if(v.x !== dkePoly.x || v.y !== dkePoly.y){
       dkeSnapshot();
       dkeAddWall(d, dkePoly.x, dkePoly.y, v.x, v.y);
-      dkePoly = { x: v.x, y: v.y };
+      dkePoly.x = v.x; dkePoly.y = v.y; dkePoly.path.push({ x: v.x, y: v.y });
       dkeCommit();
     }
-    dkeGhost(`<circle cx="${dkePoly.x*C}" cy="${dkePoly.y*C}" r="5" fill="none" stroke="#D4A843" stroke-width="2"/>`);
+    // Ghost: last vertex + a highlighted start ring you can tap to close.
+    const st = dkePoly.start;
+    dkeGhost(`<circle cx="${dkePoly.x*C}" cy="${dkePoly.y*C}" r="5" fill="none" stroke="#D4A843" stroke-width="2"/>`
+      + (dkePoly.path.length >= 3 ? `<circle cx="${st.x*C}" cy="${st.y*C}" r="7" fill="#4caf8233" stroke="#4caf82" stroke-width="2"><animate attributeName="r" values="6;9;6" dur="1.4s" repeatCount="indefinite"/></circle>` : `<circle cx="${st.x*C}" cy="${st.y*C}" r="4" fill="#D4A843"/>`));
   } else if(dkeTool === 'door'){
     const e = dkeNearestEdge(p, .4); if(!e) return;
-    const i = d.doors.findIndex(dr => dr.x === e.x && dr.y === e.y && dr.o === e.o);
+    const i = d.doors.findIndex(op => dkeOpeningCovers(op, e));
     dkeSnapshot();
     if(i >= 0){
-      // Tap an existing door → cycle closed → open → locked (remove via Erase / Select).
-      const ns = dkeNextDoorState(d.doors[i].s);
-      if(ns === 'closed') delete d.doors[i].s; else d.doors[i].s = ns;
+      const op = d.doors[i];
+      if((op.t || 'door') === 'door' && dkeOpenType === 'door'){
+        const ns = dkeNextDoorState(op.s);   // tap a door → cycle its state
+        if(ns === 'closed') delete op.s; else op.s = ns;
+      } else {
+        d.doors.splice(i, 1);   // tap a window (or door with window selected) → remove
+      }
     } else {
-      d.doors.push({ x: e.x, y: e.y, o: e.o });
+      // Place the selected type + length, clamped so it stays on the grid.
+      let len = Math.max(1, Math.min(3, dkeOpenLen | 0 || 1));
+      len = Math.max(1, Math.min(len, e.o === 'h' ? d.w - e.x : d.h - e.y));
+      const op = { x: e.x, y: e.y, o: e.o };
+      if(dkeOpenType === 'window') op.t = 'window';
+      if(len > 1) op.len = len;
+      d.doors.push(op);
     }
     dkeCommit();
   } else if(dkeTool === 'prop'){
@@ -1393,7 +1571,7 @@ function dkeTapAction(p){
     dkeSnapshot();
     if(existing && existing.t === dkePropType){ existing.r = ((existing.r||0) + 90) % 360; dkeClampProp(d, existing); }
     else if(existing){ existing.t = dkePropType; existing.r = 0; dkeClampProp(d, existing); }
-    else { const np = { t: dkePropType, x: c.x, y: c.y, r: 0 }; dkeClampProp(d, np); d.props.push(np); }
+    else { const np = { t: dkePropType, x: c.x, y: c.y, r: 0 }; if(dkePropScale > 1) np.s = dkePropScale; dkeClampProp(d, np); d.props.push(np); }
     dkeCommit();
   } else if(dkeTool === 'token'){
     const c = dkeCell(p); if(!c) return;

@@ -4393,17 +4393,20 @@ html.is-phone #hx-pbody{
 /* ── Deck plan editor (js/41-deck-editor.js) ── */
 #dke-wrap{position:fixed;inset:0;z-index:10500;background:#0c0e14f5;display:none;flex-direction:column}
 #dke-wrap.open{display:flex}
-.dke-hdr{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:.5px solid var(--bd0);background:var(--bg1)}
-.dke-title{font-size:12px;font-weight:700;color:var(--tx0);letter-spacing:1px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dke-dim{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--tx1)}
-.dke-dim input{width:44px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:5px;color:var(--tx0);font-size:11px;padding:4px 5px}
-.dke-tools,.dke-sub{display:flex;gap:4px;padding:6px 8px;border-bottom:.5px solid var(--bd0);background:var(--bg1);overflow-x:auto;align-items:center;flex:0 0 auto}
-.dke-sub{background:var(--bg0)}
-.dke-tool{background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;color:var(--tx1);font-size:10.5px;padding:6px 9px;cursor:pointer;white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;gap:4px}
+/* Toolbar sized ~1.5x with tools grouped into labelled rows (bigger tap targets). */
+.dke-hdr{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:.5px solid var(--bd0);background:var(--bg1)}
+.dke-title{font-size:16px;font-weight:700;color:var(--tx0);letter-spacing:1px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dke-dim{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--tx1)}
+.dke-dim input{width:54px;background:var(--bg0);border:.5px solid var(--bd0);border-radius:6px;color:var(--tx0);font-size:14px;padding:6px 7px}
+.dke-tools{display:flex;flex-wrap:wrap;gap:7px 16px;padding:9px 12px;border-bottom:.5px solid var(--bd0);background:var(--bg1);align-items:center;flex:0 0 auto}
+.dke-sub{display:flex;gap:6px;padding:9px 12px;border-bottom:.5px solid var(--bd0);background:var(--bg0);overflow-x:auto;align-items:center;flex:0 0 auto}
+.dke-tgroup{display:inline-flex;align-items:center;gap:6px}
+.dke-tglabel{font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--tx1);opacity:.65;margin-right:1px}
+.dke-tool{background:var(--bg0);border:.5px solid var(--bd0);border-radius:7px;color:var(--tx1);font-size:14px;padding:9px 13px;cursor:pointer;white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;gap:5px}
 .dke-tool.on{border-color:var(--accentGold);color:var(--accentGold);background:#2a221055}
 .dke-tool.dke-danger{border-color:#c0506e;color:#ff9bb6}
-.dke-note{font-size:10.5px;color:var(--tx1);font-style:italic}
+.dke-note{font-size:13px;color:var(--tx1);font-style:italic}
 #dke-canvas{flex:1;min-height:0;touch-action:none;background:var(--bg0);overscroll-behavior:contain}
 #dke-svg{width:100%;height:100%;display:block}
-.dke-hint{font-size:10px;color:var(--tx1);padding:5px 10px;background:var(--bg1);border-top:.5px solid var(--bd0)}
-.dke-tk-chip{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1.5px solid;font-size:8px;font-weight:700;flex:0 0 auto}
+.dke-hint{font-size:13px;color:var(--tx1);padding:8px 13px;background:var(--bg1);border-top:.5px solid var(--bd0)}
+.dke-tk-chip{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1.5px solid;font-size:10px;font-weight:700;flex:0 0 auto}
