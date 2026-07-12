@@ -506,9 +506,10 @@ function dkeContentSVG(deck, opt){
   opt = opt || {};
   const C = DKE_CELL, eh = dkeEsc;
   let out = '';
+  const L = opt.layers || {};   // editor-only per-layer visibility (all on elsewhere)
   // Floorplan image UNDERLAY (bottom of the stack) — the referee traces walls,
   // doors and links on top. Fit inside the grid box, aspect preserved.
-  const imgUrl = dkeDeckImgUrl(deck);
+  const imgUrl = L.image === false ? '' : dkeDeckImgUrl(deck);
   if(imgUrl){
     const op = (deck.img && typeof deck.img.op === 'number') ? deck.img.op : 0.55;
     out += `<image href="${eh(imgUrl)}" x="0" y="0" width="${deck.w*C}" height="${deck.h*C}" opacity="${op}" preserveAspectRatio="xMidYMid meet" style="pointer-events:none" onerror="this.remove()"/>`;
@@ -517,10 +518,12 @@ function dkeContentSVG(deck, opt){
   (deck.floors||[]).forEach(f => {
     out += `<rect x="${f.x*C}" y="${f.y*C}" width="${f.w*C}" height="${f.h*C}" fill="#1a1f2e"/>`;
   });
-  let grid = '';
-  for(let i = 0; i <= deck.w; i++) grid += `M${i*C},0 V${deck.h*C} `;
-  for(let j = 0; j <= deck.h; j++) grid += `M0,${j*C} H${deck.w*C} `;
-  out += `<path d="${grid}" stroke="#1e2333" stroke-width="${opt.editor ? .8 : .6}" fill="none"/>`;
+  if(L.grid !== false){
+    let grid = '';
+    for(let i = 0; i <= deck.w; i++) grid += `M${i*C},0 V${deck.h*C} `;
+    for(let j = 0; j <= deck.h; j++) grid += `M0,${j*C} H${deck.w*C} `;
+    out += `<path d="${grid}" stroke="#1e2333" stroke-width="${opt.editor ? .8 : .6}" fill="none"/>`;
+  }
   out += `<rect x="0" y="0" width="${deck.w*C}" height="${deck.h*C}" fill="none" stroke="#2e3347" stroke-width="1.4"/>`;
   (deck.walls||[]).forEach(w => {
     out += `<line x1="${w.x1*C}" y1="${w.y1*C}" x2="${w.x2*C}" y2="${w.y2*C}" stroke="#9aa7c7" stroke-width="3" stroke-linecap="square"/>`;
@@ -537,7 +540,7 @@ function dkeContentSVG(deck, opt){
     const scaleTx = sc !== 1 ? ` scale(${sc})` : '';
     out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(def.n)}</title>${def.g}</g>`;
   });
-  (deck.labels||[]).forEach(l => {
+  if(L.labels !== false) (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
@@ -706,7 +709,9 @@ function dkeRulerOverlaySVG(deck, a, b){
 }
 
 // ═══ EDITOR ══════════════════════════════════════════════════════════════════
-let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [];
+let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [], dkeRedoStack = [];
+let dkeLayers = { grid:true, image:true, labels:true };   // editor-only layer visibility
+function dkeToggleLayer(k){ dkeLayers[k] = dkeLayers[k] === false; dkeRenderTools(); dkeRenderContent(); }
 let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
 let dkeRuler = null;         // last completed editor measurement {a:{x,y}, b:{x,y}}
 let dkeRulerAnchor = null;   // pending first cell for a tap-tap measurement
@@ -755,7 +760,9 @@ function dkeEnsureDom(){
       <label class="dke-dim">W <input id="dke-w" type="number" min="4" max="96"></label>
       <label class="dke-dim">H <input id="dke-h" type="number" min="4" max="96"></label>
       <label class="dke-dim" title="Scale the drawn content when you resize the grid"><input id="dke-scale" type="checkbox" style="width:auto"> ⤢ scale</label>
-      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo">↶ Undo</button>
+      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo (Ctrl+Z)">↶</button>
+      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-fit" title="Fit deck to view">⊙</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
     <div class="dke-decks" id="dke-decks"></div>
@@ -771,6 +778,8 @@ function dkeEnsureDom(){
   svg.addEventListener('pointercancel', dkePointerUp);
   document.getElementById('dke-canvas').addEventListener('wheel', dkeWheel, { passive:false });
   document.getElementById('dke-undo').addEventListener('click', dkeUndoPop);
+  document.getElementById('dke-redo').addEventListener('click', dkeRedoPop);
+  document.getElementById('dke-fit').addEventListener('click', function(){ dkeFitView(); dkeApplyView(); });
   document.getElementById('dke-done').addEventListener('click', dkeClose);
   document.getElementById('dke-w').addEventListener('change', function(){ dkeResize('w', this.value); });
   document.getElementById('dke-h').addEventListener('change', function(){ dkeResize('h', this.value); });
@@ -787,7 +796,7 @@ function dkeBeginEdit(holder, titleName){
   dkeNorm(d);
   dkeEnsureDom();
   dkeIsOpen = true; dkeTool = deckHasContent(d) ? 'select' : 'room';
-  dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkePtrs.clear(); dkePinch = null;
+  dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkeRedoStack = []; dkePtrs.clear(); dkePinch = null;
   document.getElementById('dke-wrap').classList.add('open');
   document.getElementById('dke-title').textContent = (String(titleName || 'STATION').toUpperCase()) + ' — DECK PLAN';
   document.getElementById('dke-w').value = d.w;
@@ -834,7 +843,7 @@ function dkeRemove(){
   s.decks.splice(dkeDeckIndex(s), 1);
   s.deckIdx = Math.max(0, Math.min(s.decks.length - 1, dkeDeckIndex(s)));
   if(!s.decks.length){ delete s.decks; delete s.deckIdx; }
-  dkeUndoStack = [];
+  dkeUndoStack = []; dkeRedoStack = [];
   dkeSave();
   if(dkeIsOpen){ if(dkeDeckList(s).length){ dkeSel = null; dkeFitView(); dkeRenderAll(); dkeRenderDecks(); } else { dkeClose(); } }
   dkeAfterChange();
@@ -892,7 +901,7 @@ function dkeSwitchDeck(i){
   dkeFlushSave();
   const decks = dkeEnsureDecks(s);
   s.deckIdx = Math.max(0, Math.min(decks.length - 1, i));
-  dkeSel = null; dkePoly = null; dkeUndoStack = [];   // undo is per-deck
+  dkeSel = null; dkePoly = null; dkeUndoStack = []; dkeRedoStack = [];   // undo is per-deck
   const d = dkeCurrentDeck(s); if(d){ dkeNorm(d);
     const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
     if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
@@ -922,7 +931,7 @@ function dkeRenameDeck(i){
 function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeRenderDecks(); dkeApplyView(); }
 function dkeRenderContent(){
   const d = dkeD(), g = document.getElementById('dke-content');
-  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, idp:'dke' }) : '';
+  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, idp:'dke', layers: dkeLayers }) : '';
 }
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
@@ -940,7 +949,11 @@ function dkeRenderTools(){
   el.innerHTML = DKE_TOOL_GROUPS.map(([name, keys]) =>
     `<div class="dke-tgroup"><span class="dke-tglabel">${name}</span>`
     + keys.map(k => `<button class="dke-tool${dkeTool===k?' on':''}" onclick="dkeSetTool('${k}')">${lbl[k] || k}</button>`).join('')
-    + `</div>`).join('');
+    + `</div>`).join('')
+    + `<div class="dke-tgroup"><span class="dke-tglabel">View</span>`
+    + [['grid','▦ Grid'],['image','🖼 Image'],['labels','🏷 Labels']].map(([k, g]) =>
+        `<button class="dke-tool${dkeLayers[k]!==false?' on':''}" onclick="dkeToggleLayer('${k}')" title="Show/hide ${k}">${g}</button>`).join('')
+    + `</div>`;
 }
 function dkeSetTool(t){
   dkeTool = t;
@@ -1219,17 +1232,23 @@ function dkeSnapshot(){
   const d = dkeD(); if(!d) return;
   dkeUndoStack.push(JSON.stringify(d));
   if(dkeUndoStack.length > 40) dkeUndoStack.shift();
+  dkeRedoStack = [];   // a fresh edit invalidates the redo branch
 }
-function dkeUndoPop(){
+// Restore the active deck from `from`, saving the current state onto `onto` first.
+function dkeHistoryStep(from, onto){
   const s = dkeHolder();
-  if(!s || !dkeUndoStack.length) return;
-  const decks = dkeEnsureDecks(s), d = dkeNorm(JSON.parse(dkeUndoStack.pop()));
-  decks[dkeDeckIndex(s)] = d;            // undo applies to the active deck (stack cleared on switch)
+  if(!s || !from.length) return;
+  const decks = dkeEnsureDecks(s), cur = dkeCurrentDeck(s);
+  if(cur) onto.push(JSON.stringify(cur));
+  const d = dkeNorm(JSON.parse(from.pop()));
+  decks[dkeDeckIndex(s)] = d;
   dkeSel = null; dkePoly = null;
-  document.getElementById('dke-w').value = d.w;
-  document.getElementById('dke-h').value = d.h;
+  const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
+  if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
   dkeCommit(); dkeRenderSub();
 }
+function dkeUndoPop(){ dkeHistoryStep(dkeUndoStack, dkeRedoStack); }
+function dkeRedoPop(){ dkeHistoryStep(dkeRedoStack, dkeUndoStack); }
 function dkeCommit(){
   dkeRenderContent();
   dkeDirty = true;
@@ -1258,6 +1277,12 @@ function dkeRescaleContent(d, base, fx, fy){
   d.links  = (base.links||[]).map(o => { const nl = { a:o.a, x:rp(o.x,fx), y:rp(o.y,fy) }; if(o.hid) nl.hid = o.hid;
              if(o.mem) nl.mem = o.mem.map(m => ({ n:m.n, x:rp(m.x,fx), y:rp(m.y,fy) })); return nl; });
   d.tokens = (base.tokens||[]).map(o => ({ n:o.n, x:rp(o.x,fx), y:rp(o.y,fy) }));
+}
+// A small gold readout pill (live length/size while drawing).
+function dkeDimPill(cx, cy, text){
+  const w = String(text).length * 5.6 + 10;
+  return `<g style="pointer-events:none"><rect x="${(cx-w/2).toFixed(1)}" y="${(cy-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="3" fill="#0f1117" stroke="#D4A843" stroke-width=".8" opacity=".96"/>`
+    + `<text x="${cx.toFixed(1)}" y="${(cy+3.5).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#D4A843" font-family="system-ui,sans-serif">${dkeEsc(text)}</text></g>`;
 }
 function dkeResize(dim, val){
   const d = dkeD(); if(!d) return;
@@ -1409,11 +1434,15 @@ function dkePointerMove(ev){
     dkeRenderContent(); dkeDirty = true;
   } else if(g.t === 'room'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
+    const mpc = dkeDeckMpc(dkeD()), wc = Math.abs(g.x1-g.x0), hc = Math.abs(g.y1-g.y0);
     const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
-    dkeGhost(`<rect x="${x}" y="${y}" width="${Math.abs(g.x1-g.x0)*C}" height="${Math.abs(g.y1-g.y0)*C}" fill="#D4A84318" stroke="#D4A843" stroke-width="1.5" stroke-dasharray="5,3"/>`);
+    dkeGhost(`<rect x="${x}" y="${y}" width="${wc*C}" height="${hc*C}" fill="#D4A84318" stroke="#D4A843" stroke-width="1.5" stroke-dasharray="5,3"/>`
+      + ((wc || hc) ? dkeDimPill(x + wc*C/2, y - 10, `${(wc*mpc).toFixed(1)}×${(hc*mpc).toFixed(1)} m`) : ''));
   } else if(g.t === 'wall'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
-    dkeGhost(`<line x1="${g.x0*C}" y1="${g.y0*C}" x2="${g.x1*C}" y2="${g.y1*C}" stroke="#D4A843" stroke-width="2.5" stroke-dasharray="5,3"/>`);
+    const len = Math.hypot(g.x1-g.x0, g.y1-g.y0) * dkeDeckMpc(dkeD());
+    dkeGhost(`<line x1="${g.x0*C}" y1="${g.y0*C}" x2="${g.x1*C}" y2="${g.y1*C}" stroke="#D4A843" stroke-width="2.5" stroke-dasharray="5,3"/>`
+      + (len > 0 ? dkeDimPill((g.x0+g.x1)/2*C, (g.y0+g.y1)/2*C - 9, `${len.toFixed(1)} m`) : ''));
   } else if(g.t === 'tplcopy'){
     const v = dkeVertex(p); g.x1 = v.x; g.y1 = v.y;
     const x = Math.min(g.x0, g.x1)*C, y = Math.min(g.y0, g.y1)*C;
@@ -1810,17 +1839,26 @@ function dkeMapClickGuard(ev){
   svg.addEventListener('click', dkeMapClickGuard, true);
 })();
 
+// Single-key tool shortcuts (no modifier) — desktop convenience.
+const DKE_KEYS = { v:'select', h:'pan', r:'room', f:'floor', w:'wall', q:'poly',
+  d:'door', p:'prop', o:'template', i:'image', t:'token', l:'label', a:'link', m:'ruler', e:'erase' };
 function dkeKeyDown(ev){
   if(!dkeIsOpen) return;
   const tag = (ev.target && ev.target.tagName) || '';
   if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  const k = (ev.key || '').toLowerCase();
   if(ev.key === 'Escape'){
     if(dkePoly) dkePolyEnd();
     else if(dkeSel){ dkeSel = null; dkeRenderContent(); dkeRenderSub(); }
     ev.preventDefault();
   } else if((ev.key === 'Delete' || ev.key === 'Backspace') && dkeSel){
     dkeDeleteSel(); ev.preventDefault();
-  } else if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){
-    dkeUndoPop(); ev.preventDefault();
+  } else if((ev.ctrlKey || ev.metaKey) && k === 'z'){
+    if(ev.shiftKey) dkeRedoPop(); else dkeUndoPop();   // Ctrl+Shift+Z = redo
+    ev.preventDefault();
+  } else if((ev.ctrlKey || ev.metaKey) && k === 'y'){
+    dkeRedoPop(); ev.preventDefault();
+  } else if(!ev.ctrlKey && !ev.metaKey && !ev.altKey && DKE_KEYS[k]){
+    dkeSetTool(DKE_KEYS[k]); ev.preventDefault();
   }
 }
