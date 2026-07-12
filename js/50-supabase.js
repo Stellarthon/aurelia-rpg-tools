@@ -155,6 +155,32 @@ async function uploadHandoutBlob(campaignId, id, blob){
   return true;
 }
 
+// ── Deck-plan floorplan underlays (Supabase Storage 'deck-maps' bucket) ───────
+// The images a referee uploads to trace a deck plan over. Own bucket (migration
+// 0012) so they don't share the handouts namespace; same public-read / anon-key
+// model, referee-only upload gated client-side. One object per image, keyed per
+// campaign: deck-maps/<campaignSlug>/<id>.jpg. (Deck data stores just {id,ver};
+// js/41 builds the URL. Legacy images uploaded before 0012 still resolve via
+// handoutUrlFor — see dkeDeckImgUrl.)
+const DECKMAP_BASE = SUPABASE_URL + '/storage/v1/object/public/deck-maps/';
+function deckMapObjectPath(campaignId, id){
+  return rulebookSlug(campaignId) + '/' + String(id || '').replace(/[^a-z0-9_-]/gi, '') + '.jpg';
+}
+function deckMapUrlFor(campaignId, id, ver){
+  const url = DECKMAP_BASE + deckMapObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadDeckMapBlob(campaignId, id, blob){
+  const path = deckMapObjectPath(campaignId, id).split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/deck-maps/' + path, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('Deck map upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+
 // ── Session-planner reference docs (Supabase Storage 'session-docs' bucket) ───
 // Referee-only prep PDFs attached to a session plan (js/97). One object per
 // uploaded doc: session-docs/<campaignSlug>/<id>.pdf, overwritten on re-upload;
