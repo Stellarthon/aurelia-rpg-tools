@@ -1176,14 +1176,14 @@ function dkeRenderSub(){
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeGroup.length){
-    html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
+    html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
       if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button>`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
       if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
-      html += `<button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
+      html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
   }
   el.innerHTML = html;
@@ -1423,6 +1423,26 @@ function dkeDeleteGroup(){
   // splice each kind in descending index order so earlier removals don't shift the rest
   Object.keys(byKind).forEach(kind => byKind[kind].sort((a,b) => b - a).forEach(i => (d[kind + 's']||[]).splice(i, 1)));
   dkeGroup = [];
+  dkeCommit(); dkeRenderSub();
+}
+// Clone the selection (single dkeSel or the marquee group) offset one cell down-right.
+function dkeDuplicate(){
+  const d = dkeD(); if(!d) return;
+  const sels = dkeGroup.length ? dkeGroup.slice() : (dkeSel ? [dkeSel] : []);
+  if(!sels.length) return;
+  dkeSnapshot();
+  const made = [];
+  sels.forEach(s => {
+    const arr = d[s.kind + 's'], it = arr && arr[s.i]; if(!it) return;
+    const copy = JSON.parse(JSON.stringify(it));
+    if(s.kind === 'wall'){ copy.x1++; copy.y1++; copy.x2++; copy.y2++; }
+    else { copy.x = (copy.x || 0) + 1; copy.y = (copy.y || 0) + 1; }
+    arr.push(copy);
+    if(s.kind === 'prop') dkeClampProp(d, copy);
+    made.push({ kind: s.kind, i: arr.length - 1 });
+  });
+  if(dkeGroup.length){ dkeGroup = made; dkeSel = null; }
+  else { dkeSel = made[0] || null; dkeGroup = []; }
   dkeCommit(); dkeRenderSub();
 }
 function dkeRotateSel(){
@@ -1990,6 +2010,8 @@ function dkeKeyDown(ev){
     ev.preventDefault();
   } else if((ev.ctrlKey || ev.metaKey) && k === 'y'){
     dkeRedoPop(); ev.preventDefault();
+  } else if((ev.ctrlKey || ev.metaKey) && k === 'd'){
+    dkeDuplicate(); ev.preventDefault();
   } else if(!ev.ctrlKey && !ev.metaKey && !ev.altKey && DKE_KEYS[k]){
     dkeSetTool(DKE_KEYS[k]); ev.preventDefault();
   }
