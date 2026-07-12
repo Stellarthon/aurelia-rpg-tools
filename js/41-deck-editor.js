@@ -346,7 +346,10 @@ function dkeToggleFog(li){
   const st = dkeFogState(lk);
   if(st === 'revealed'){ lk.mem = dkeSnapshotRoomTokens(deck, lk); delete lk.hid; }   // → remembered (snapshot now)
   else if(st === 'remembered'){ delete lk.mem; lk.hid = 1; }                          // → hidden
-  else { delete lk.hid; delete lk.mem; }                                              // → revealed
+  else {                                                                              // → revealed
+    delete lk.hid; delete lk.mem;
+    if(typeof logEvent === 'function'){ const lbl = dkeLinkLabel(lk.a); logEvent('Referee revealed ' + lbl, dkeStationLabel()); }
+  }
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
@@ -389,8 +392,19 @@ function dkeFogAutoReveal(deck, token){
       revealed = (a && a.label) || lk.a;
     }
   });
-  if(revealed && typeof showToast === 'function') showToast('Revealed ' + revealed + ' to players');
+  if(revealed){
+    if(typeof showToast === 'function') showToast('Revealed ' + revealed + ' to players');
+    if(typeof logEvent === 'function') logEvent('Party entered ' + revealed, dkeStationLabel());   // deck moment → event log (js/40)
+  }
   return !!revealed;
+}
+// Small labels for the event log.
+function dkeLinkLabel(id){
+  const a = (typeof stationAreas === 'function') ? stationAreas()[id] : null;
+  return (a && a.label) || id;
+}
+function dkeStationLabel(){
+  return (typeof stationDef === 'function' && stationDef() && stationDef().name) || '';
 }
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
