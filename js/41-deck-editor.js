@@ -2142,6 +2142,19 @@ function dkeMapOpenToken(i){
   }
   if(typeof showToast === 'function') showToast('No sheet for ' + name);
 }
+// Seed the initiative tracker (js/45) from the tokens on the current deck plan —
+// they're already placed on the map, so combat starts from the board (referee).
+function dkeSeedCombatFromMap(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const deck = dkeMapDeck();
+  if(!deck || !(deck.tokens||[]).length){ if(typeof showToast === 'function') showToast('No tokens on the current map'); return; }
+  if(typeof quickAddNPC !== 'function' || typeof combatants === 'undefined'){ if(typeof showToast === 'function') showToast('Initiative tracker unavailable'); return; }
+  const have = new Set(combatants.map(c => String(c.name||'').trim().toLowerCase()));
+  let added = 0;
+  deck.tokens.forEach(t => { const k = String(t.n||'').trim().toLowerCase(); if(k && !have.has(k)){ quickAddNPC(t.n, 0, 0); have.add(k); added++; } });
+  if(added && typeof saveCombatants === 'function') saveCombatants();
+  if(typeof showToast === 'function') showToast(added ? `Added ${added} combatant${added > 1 ? 's' : ''} from the map` : 'All map tokens are already in initiative');
+}
 function dkeMapUp(ev){
   if(dkeMapRuler){
     const rg = dkeMapRulerG; if(!rg) return;
