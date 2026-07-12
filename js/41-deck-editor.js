@@ -1050,7 +1050,33 @@ function dkeRenderDecks(){
     `<button class="dke-deck${i===cur?' on':''}" onclick="dkeSwitchDeck(${i})">${dkeEsc(dkeDeckName(dk, i))}</button>`).join('')
     + `<button class="dke-deck dke-deck-add" onclick="dkeAddDeck()" title="Add a deck">＋ Deck</button>`
     + `<button class="dke-deck" onclick="dkeRenameDeck(${cur})" title="Rename this deck">✎</button>`
+    + `<button class="dke-deck" onclick="dkeExportDeck()" title="Copy this deck as JSON">⤓</button>`
+    + `<button class="dke-deck" onclick="dkeImportDeck()" title="Import a deck from JSON">⤒</button>`
     + (decks.length > 1 ? `<button class="dke-deck dke-danger" onclick="dkeRemove()" title="Remove this deck">🗑</button>` : '');
+}
+// Export the active deck to the clipboard as JSON (fallback: a copyable prompt).
+function dkeExportDeck(){
+  const d = dkeD(); if(!d) return;
+  const json = JSON.stringify(d);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(json)
+      .then(() => { if(typeof showToast === 'function') showToast('Deck JSON copied to clipboard'); })
+      .catch(() => { if(typeof prompt === 'function') prompt('Copy this deck JSON:', json); });
+  } else if(typeof prompt === 'function') prompt('Copy this deck JSON:', json);
+}
+// Import a pasted deck as a NEW deck on the current holder (never overwrites).
+function dkeImportDeck(){
+  const s = dkeHolder(); if(!s) return;
+  const json = (typeof prompt === 'function') ? prompt('Paste deck JSON to import as a new deck:') : null;
+  if(!json) return;
+  let nd; try { nd = JSON.parse(json); } catch(e){ if(typeof showToast === 'function') showToast('Invalid deck JSON'); return; }
+  if(!nd || typeof nd !== 'object' || (!('w' in nd) && !Array.isArray(nd.floors))){ if(typeof showToast === 'function') showToast('That does not look like a deck'); return; }
+  dkeNorm(nd);
+  const decks = dkeEnsureDecks(s);
+  if(!nd.name) nd.name = 'Deck ' + (decks.length + 1);
+  decks.push(nd);
+  dkeSwitchDeck(decks.length - 1);
+  if(typeof showToast === 'function') showToast('Deck imported');
 }
 function dkeSwitchDeck(i){
   const s = dkeHolder(); if(!s) return;
