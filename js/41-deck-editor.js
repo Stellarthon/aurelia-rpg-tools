@@ -627,6 +627,13 @@ function dkeContentSVG(deck, opt){
     out += memGhosts;
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
+  if(deck.ping){   // referee attention ping — a pulsing "look here" ring for everyone
+    const px = (deck.ping.x+.5)*C, py = (deck.ping.y+.5)*C;
+    out += `<g style="pointer-events:none"><circle cx="${px}" cy="${py}" r="12" fill="none" stroke="#D4A843" stroke-width="2.5">`
+      + `<animate attributeName="r" values="7;20;7" dur="1.2s" repeatCount="indefinite"/>`
+      + `<animate attributeName="stroke-opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite"/></circle>`
+      + `<circle cx="${px}" cy="${py}" r="2.5" fill="#D4A843"/></g>`;
+  }
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
   if(opt.group) opt.group.forEach(s => { out += dkeSelHighlightSVG(deck, s); });
   if(opt.editor) out += dkeResizeHandlesSVG(deck);   // drag to resize the grid
@@ -1917,10 +1924,21 @@ let dkeMapRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeMapRulerG = null;        // active drag gesture {a, sx, sy, moved, b?}
 let dkeMapRanges = false;       // range-rings mode (referee): tap a token to ring it
 let dkeRangeTokenIdx = null;    // focused token index (local to the referee's view)
+let dkeMapPing = false;         // ping mode (referee): tap a cell to drop a shared "look here"
+function dkeMapTogglePing(){
+  dkeMapPing = !dkeMapPing;
+  if(dkeMapPing){ if(dkeMapRuler) dkeMapToggleRuler(false); if(dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); } }
+  else { const deck = dkeMapDeck(); if(deck && deck.ping){ delete deck.ping; if(typeof saveAuthoredStations === 'function') saveAuthoredStations(); } }   // exiting clears the ping
+  const btn = document.getElementById('deck-ping-btn'); if(btn) btn.classList.toggle('on', dkeMapPing);
+  const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = (dkeMapPing || dkeMapRuler || dkeMapRanges) ? 'none' : '';
+  if(dkeMapPing && typeof showToast === 'function') showToast('Ping — tap to point players at a spot');
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
 function dkeMapToggleRanges(){
   dkeMapRanges = !dkeMapRanges;
   if(!dkeMapRanges) dkeRangeTokenIdx = null;
   if(dkeMapRanges && dkeMapRuler) dkeMapToggleRuler(false);   // mutually exclusive with the ruler
+  if(dkeMapRanges && dkeMapPing){ dkeMapPing = false; const pb = document.getElementById('deck-ping-btn'); if(pb) pb.classList.remove('on'); }
   const btn = document.getElementById('deck-ranges-btn'); if(btn) btn.classList.toggle('on', dkeMapRanges);
   const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = dkeMapRanges ? 'none' : (dkeMapRuler ? 'none' : '');
   if(dkeMapRanges && typeof showToast === 'function') showToast('Range rings — tap a token');
@@ -1942,8 +1960,10 @@ function dkeMapToggleRuler(force){
   const on = (typeof force === 'boolean') ? force : !dkeMapRuler;
   dkeMapRuler = on;
   if(!on){ dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null; }
-  if(on && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null;   // exclusive with range rings
-    const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
+  if(on){   // ruler is exclusive with range rings + ping
+    if(dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
+    if(dkeMapPing){ dkeMapPing = false; const pb = document.getElementById('deck-ping-btn'); if(pb) pb.classList.remove('on'); }
+  }
   const btn = document.getElementById('deck-ruler-btn');
   if(btn) btn.classList.toggle('on', on);
   const svg = document.getElementById('mapsvg');
@@ -1963,13 +1983,19 @@ function dkeRulerBtnSync(){
   }
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
-  // Range-rings button — referee only (it's a positioning aid keyed to a token).
+  // Range-rings + ping buttons — referee only.
+  const ref = has && (typeof isReferee === 'function') && isReferee();
   const rb = document.getElementById('deck-ranges-btn');
   if(rb){
-    const showR = has && (typeof isReferee === 'function') && isReferee();
-    if(!showR && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
-    rb.style.display = showR ? 'flex' : 'none';
+    if(!ref && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
+    rb.style.display = ref ? 'flex' : 'none';
     rb.classList.toggle('on', dkeMapRanges);
+  }
+  const pb = document.getElementById('deck-ping-btn');
+  if(pb){
+    if(!ref && dkeMapPing) dkeMapPing = false;
+    pb.style.display = ref ? 'flex' : 'none';
+    pb.classList.toggle('on', dkeMapPing);
   }
 }
 // Station-view deck switcher — shown only when the station has 2+ decks. The
@@ -2027,6 +2053,15 @@ function dkeMapDown(ev){
     const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
     dkeRangeTokenIdx = tg ? parseInt(tg.getAttribute('data-tk'), 10) : null;
     dkeMapClickGuardUntil = Date.now() + 400;   // don't also open a room
+    if(typeof renderStationMap === 'function') renderStationMap();
+    ev.preventDefault();
+    return;
+  }
+  if(dkeMapPing){   // tap a cell to drop a shared attention ping (referee)
+    if(typeof isReferee !== 'function' || !isReferee()) return;
+    const p = dkeMapPt(ev);
+    if(p){ deck.ping = dkeMapCellAt(deck, p); if(typeof saveAuthoredStations === 'function') saveAuthoredStations(); }
+    dkeMapClickGuardUntil = Date.now() + 400;
     if(typeof renderStationMap === 'function') renderStationMap();
     ev.preventDefault();
     return;
