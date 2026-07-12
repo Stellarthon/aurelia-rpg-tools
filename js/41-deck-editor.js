@@ -986,6 +986,14 @@ function dkeShipDeckSVG(deck){
     const col = sev >= 3 ? '#c0506e' : '#D4A843';
     out += `<path d="${dkeRoomFillD(room)}" fill="${col}" opacity="${sev >= 3 ? .28 : .16}" style="pointer-events:none"/>`;
   });
+  // Cargo manifest: a room linked to the Cargo system shows the ship's live lot count + tonnage.
+  if(typeof tradeCargo !== 'undefined' && tradeCargo && Array.isArray(tradeCargo.lots)){
+    const lots = tradeCargo.lots, tons = lots.reduce((s, l) => s + (Number(l.tons) || 0), 0);
+    (deck.links||[]).forEach(lk => {
+      if(lk.a !== 'cargo') return;
+      out += `<text x="${(lk.x+.5)*DKE_CELL}" y="${(lk.y+.5)*DKE_CELL+31}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#4caf82" font-family="system-ui,sans-serif" style="pointer-events:none">${lots.length} lot${lots.length===1?'':'s'} · ${tons} t</text>`;
+    });
+  }
   if(dkeShipRuler){   // range-ruler overlay rides along on every ship-panel render
     if(dkeShipRulerState) out += dkeRulerOverlaySVG(deck, dkeShipRulerState.a, dkeShipRulerState.b);
     else if(dkeShipRulerAnchor) out += dkeAnchorDotSVG(dkeShipRulerAnchor);
