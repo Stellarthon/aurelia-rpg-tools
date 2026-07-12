@@ -368,6 +368,9 @@ function renderShipPanel(){
     </div>
   </div>`);
 
+  // ── DECK PLAN ── (grid deck map attached to the ship; js/41-deck-editor.js)
+  if(typeof dkeShipStudioRowHTML === 'function'){ const dh = dkeShipStudioRowHTML(); if(dh) sec.push(dh); }
+
   // Combat loadout — referee opens the shared ship editor on this ship (sets
   // Thrust, power, armour rating, sensor DM, crew-skill DMs, Structure, weapons).
   if(ref){
