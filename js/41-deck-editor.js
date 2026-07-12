@@ -13,7 +13,7 @@
 // t = 'window' (else door), len = 1–3 cells, door s = 'open'|'locked' absent=closed
 // — referee-cycled), props:[{t,x,y,r}] (top-left cell +
 // rotation; multi-cell footprint comes from the DKE_PROPS catalogue, not the datum),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1}] (areaId
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1,mem?}] (areaId
 // marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
 // FOG OF WAR rides the link marker: hid hides the marker's whole claimed room
 // from players (opaque fog with the grid redrawn over it — only boundary walls
@@ -294,25 +294,57 @@ function dkePlayerFogSVG(cells){
   return `<g style="pointer-events:none"><path d="${d}" fill="#0f1117"/>`
     + `<path d="${d}" fill="none" stroke="#1e2333" stroke-width=".6"/></g>`;
 }
-// The referee's reveal toggle: open eye = players see the room, closed = fog.
-function dkeFogEyeSVG(cx, cy, li, hid){
-  const glyph = hid
-    ? `<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linecap="round"/>`
-      + `<path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#D4A843" stroke-width="1.1" stroke-linecap="round"/>`
-    : `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#a3a9bf" stroke-width="1.2"/>`
-      + `<circle r="1.8" fill="#a3a9bf"/>`;
+// A room link has three referee-set visibility states: 'revealed' (live),
+// 'remembered' (players see a frozen last-known snapshot of its NPCs while the
+// referee's live moves stay private) and 'hidden' (opaque fog). `mem` holds the
+// snapshot; `hid` = opaque fog; neither = revealed. This is visual-only, like the
+// existing fog (the live data still syncs — spoiler control, not security).
+function dkeFogState(lk){ return (lk && lk.mem) ? 'remembered' : ((lk && lk.hid) ? 'hidden' : 'revealed'); }
+// Freeze the tokens standing in a link's room at their current cells.
+function dkeSnapshotRoomTokens(deck, lk){
+  const room = dkeRoomCells(deck, lk.x, lk.y);
+  if(!room) return [];
+  const inRoom = new Set(room.map(c => c.x + ',' + c.y));
+  return (deck.tokens || []).filter(t => inRoom.has(t.x + ',' + t.y)).map(t => ({ n: t.n, x: t.x, y: t.y }));
+}
+// A dimmed, dashed "last seen here" ghost token for a remembered snapshot (players).
+function dkeMemTokenSVG(m){
+  const C = DKE_CELL, eh = dkeEsc, r = 13, cx = (m.x+.5)*C, cy = (m.y+.5)*C;
+  return `<g opacity=".5" style="pointer-events:none">`
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="#7f93b8" stroke-width="2" stroke-dasharray="3,2"/>`
+    + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#7f93b8" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(m.n))}</text>`
+    + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="6.5" font-weight="600" fill="#7f93b8" font-family="system-ui,sans-serif">${eh(m.n)} · last seen</text>`
+    + `</g>`;
+}
+// The referee's reveal toggle — cycles revealed → remembered → hidden.
+function dkeFogEyeSVG(cx, cy, li, state){
+  let glyph, title;
+  if(state === 'hidden'){
+    glyph = `<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linecap="round"/>`
+      + `<path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#D4A843" stroke-width="1.1" stroke-linecap="round"/>`;
+    title = 'Hidden from players — tap to reveal';
+  } else if(state === 'remembered'){
+    glyph = `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#5b8ef0" stroke-width="1.2"/>`
+      + `<circle r="1.7" fill="none" stroke="#5b8ef0" stroke-width="1"/><path d="M0,0 v-1.2 M0,0 h1" stroke="#5b8ef0" stroke-width=".8"/>`;
+    title = 'Players see last-known positions — tap to hide fully';
+  } else {
+    glyph = `<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#a3a9bf" stroke-width="1.2"/><circle r="1.8" fill="#a3a9bf"/>`;
+    title = 'Revealed — tap to freeze last-known positions';
+  }
   return `<g transform="translate(${cx},${cy})" style="cursor:pointer" onclick="dkeToggleFog(${li})">`
-    + `<title>${hid ? 'Hidden from players — tap to reveal' : 'Revealed — tap to hide from players'}</title>`
-    + `<circle r="9" fill="transparent"/>${glyph}</g>`;
+    + `<title>${title}</title><circle r="9" fill="transparent"/>${glyph}</g>`;
 }
 function dkeToggleFog(li){
   if(typeof isReferee !== 'function' || !isReferee()) return;
-  const deck = dkeMapDeck(); if(!deck || !(deck.links||[])[li]) return;
-  if(deck.links[li].hid) delete deck.links[li].hid;
-  else deck.links[li].hid = 1;
+  const deck = dkeMapDeck(); const lk = deck && (deck.links||[])[li]; if(!lk) return;
+  const st = dkeFogState(lk);
+  if(st === 'revealed'){ lk.mem = dkeSnapshotRoomTokens(deck, lk); delete lk.hid; }   // → remembered (snapshot now)
+  else if(st === 'remembered'){ delete lk.mem; lk.hid = 1; }                          // → hidden
+  else { delete lk.hid; delete lk.mem; }                                              // → revealed
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
+  if(typeof showToast === 'function') showToast('Room ' + dkeFogState(lk));
 }
 // Referee cycles a door's state straight on the live station view (players see
 // the result, can't change it). Closed is stored as no `s` field to keep decks lean.
@@ -343,10 +375,10 @@ function dkeFogAutoReveal(deck, token){
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   let revealed = null;
   (deck.links||[]).forEach(lk => {
-    if(!lk.hid) return;
+    if(!lk.hid && !lk.mem) return;   // reveal hidden OR remembered rooms the party re-enters
     const room = dkeRoomCells(deck, lk.x, lk.y);
     if(room && room.some(c => c.x === token.x && c.y === token.y)){
-      delete lk.hid;
+      delete lk.hid; delete lk.mem;
       const a = areas[lk.a];
       revealed = (a && a.label) || lk.a;
     }
@@ -510,13 +542,15 @@ function dkeContentSVG(deck, opt){
   });
   const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   const seenArea = {};
+  const isPlayer = !!opt.interactive && !refView;
   let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
   (deck.links||[]).forEach((lk, li) => {
     const a = areas[lk.a]; if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
     const open = opt.interactive ? ` style="cursor:pointer" onclick="selArea('${eh(lk.a)}')"` : '';
     const room = dkeRoomCells(deck, lk.x, lk.y);
-    const hid = !!lk.hid;
+    const state = dkeFogState(lk);   // 'revealed' | 'remembered' | 'hidden'
+    const hid = state === 'hidden';  // remembered rooms render normally; tokens frozen below
     // Fog of war, player side: a hidden link renders NOTHING here — no marker,
     // no name, no tap target — just an opaque fog patch appended after the
     // token layer so it also covers whoever is standing inside.
@@ -536,25 +570,44 @@ function dkeContentSVG(deck, opt){
     } else if(room && opt.editor){
       roomLayer += `<path d="${dkeRoomOutlineD(room)}" fill="none" stroke="${eh(ac)}" stroke-width="1.2" stroke-dasharray="4,4" opacity=".4"/>`;
     }
-    // Fog of war, referee side (station view AND editor): hidden rooms stay
-    // readable under a dim wash drawn below the markers.
-    if(hid && room) fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
+    // Referee/editor indicators (never shown to players): hidden rooms stay
+    // readable under a dim wash; remembered rooms get a blue dashed outline.
+    if(room && !isPlayer){
+      if(state === 'hidden') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
+      else if(state === 'remembered') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#5b8ef0" opacity=".1" style="pointer-events:none"/><path d="${dkeRoomOutlineD(room)}" fill="none" stroke="#5b8ef0" stroke-width="1.5" stroke-dasharray="5,4" opacity=".6" style="pointer-events:none"/>`;
+    }
     markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
          + `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`
          + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}</text></g>`;
     // Referee reveal toggle — an eye under the marker name on the station view.
-    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, hid);
+    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, state);
   });
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
   out += roomLayer + fogDim + markerLayer + doorCtl;
-  if((deck.tokens||[]).length){
+  // Remembered rooms (player side): the snapshotted NPCs are FROZEN — hide their
+  // live tokens and draw last-known ghosts instead, until the referee re-reveals.
+  let frozen = null, memGhosts = '';
+  if(isPlayer){
+    (deck.links||[]).forEach(lk => {
+      if(Array.isArray(lk.mem) && lk.mem.length){
+        frozen = frozen || {};
+        lk.mem.forEach(m => { frozen[String(m.n||'').trim().toLowerCase()] = m; });
+      }
+    });
+    if(frozen) Object.keys(frozen).forEach(k => { memGhosts += dkeMemTokenSVG(frozen[k]); });
+  }
+  if((deck.tokens||[]).length || memGhosts){
     // One shared circle clip for every portrait (objectBoundingBox = it fits
     // each <image> wherever it sits). The id is prefixed per surface (opt.idp)
     // because the editor canvas and the station map can be in the DOM at once.
     out += `<defs><clipPath id="${eh(opt.idp||'sta')}-tkclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>`;
     const initRows = dkeInitRows();
-    deck.tokens.forEach((t, i) => { out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i); });
+    (deck.tokens||[]).forEach((t, i) => {
+      if(frozen && frozen[String(t.n||'').trim().toLowerCase()]) return;   // frozen NPC → live token hidden
+      out += dkeTokenSVG(t, opt, dkeInitFor(initRows, t.n), i);
+    });
+    out += memGhosts;
   }
   out += fogPlayer;   // player fog last — it must cover tokens inside hidden rooms
   if(opt.sel) out += dkeSelHighlightSVG(deck, opt.sel);
