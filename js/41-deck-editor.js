@@ -869,8 +869,13 @@ function dkeStudioRowHTML(){
 function dkeShipDeckSVG(deck){
   const nm = (typeof shipState !== 'undefined' && shipState.name) ? String(shipState.name).toUpperCase() : 'SHIP';
   const title = (deck && deck.name) ? `${nm} — ${String(deck.name).toUpperCase()}` : `${nm} — DECK PLAN`;
-  return `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(title)}</text>`
+  let out = `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(title)}</text>`
     + dkeContentSVG(dkeNorm(deck), { idp:'ship' });
+  if(dkeShipRuler){   // range-ruler overlay rides along on every ship-panel render
+    if(dkeShipRulerState) out += dkeRulerOverlaySVG(deck, dkeShipRulerState.a, dkeShipRulerState.b);
+    else if(dkeShipRulerAnchor) out += dkeAnchorDotSVG(dkeShipRulerAnchor);
+  }
+  return out;
 }
 // Ship Status section (called from renderShipPanel in js/75-ship.js).
 function dkeShipStudioRowHTML(){
@@ -879,7 +884,8 @@ function dkeShipStudioRowHTML(){
   const has = deck && deckHasContent(deck);
   let inner = '';
   if(has){
-    inner += `<svg viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block">${dkeShipDeckSVG(deck)}</svg>`;
+    inner += `<button class="cbt-btn${dkeShipRuler?' on':''}" style="margin-bottom:6px;padding:5px 10px" onclick="dkeShipToggleRuler()">📏 Range ruler</button>`
+      + `<svg id="ship-deck-svg" viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block${dkeShipRuler?';touch-action:none':''}">${dkeShipDeckSVG(deck)}</svg>`;
   }
   if(ref){   // players with no deck see nothing (no empty section clutter)
     inner += `<button class="cbt-btn" style="width:100%;margin-top:${has ? '8px' : '0'}" onclick="dkeOpenShip()">🗺 ${has ? 'Edit' : 'Draw'} ship deck plan</button>`;
@@ -887,6 +893,69 @@ function dkeShipStudioRowHTML(){
   if(!inner) return '';
   return `<div class="sf-sec"><div class="sf-tab">Deck Plan</div><div class="sf-card">${inner}</div></div>`;
 }
+// ── Ship-deck range ruler (measurement, so referee AND players) ───────────────
+// The ship deck renders read-only in Ship Status; a toggle turns the whole SVG
+// into a two-tap tape measure. Handlers are delegated on the stable #ship-body so
+// they survive renderShipPanel's innerHTML rebuilds; the overlay rides on the SVG.
+let dkeShipRuler = false, dkeShipRulerState = null, dkeShipRulerAnchor = null, dkeShipRulerG = null;
+function dkeShipToggleRuler(){
+  dkeShipRuler = !dkeShipRuler;
+  if(!dkeShipRuler){ dkeShipRulerState = null; dkeShipRulerAnchor = null; dkeShipRulerG = null; }
+  if(typeof renderShipPanel === 'function') renderShipPanel();
+}
+function dkeShipDeck(){
+  const deck = (typeof shipState !== 'undefined') ? dkeCurrentDeck(shipState) : null;
+  return (deck && deckHasContent(deck)) ? deck : null;
+}
+function dkeShipRulerPt(ev){
+  const svg = document.getElementById('ship-deck-svg');
+  const m = svg && svg.getScreenCTM(); if(!m) return null;
+  const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
+  return { x: p.x, y: p.y };
+}
+function dkeShipCellAt(deck, p){
+  return { x: Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL))),
+           y: Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL))) };
+}
+function dkeShipRulerDown(ev){
+  if(!dkeShipRuler) return;
+  if(!(ev.target && ev.target.closest && ev.target.closest('#ship-deck-svg'))) return;
+  const deck = dkeShipDeck(), p = dkeShipRulerPt(ev); if(!deck || !p) return;
+  dkeShipRulerG = { a: dkeShipCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
+  const svg = document.getElementById('ship-deck-svg');
+  try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+  ev.preventDefault();
+}
+function dkeShipRulerMove(ev){
+  const g = dkeShipRulerG; if(!g) return;
+  if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
+  g.moved = true; ev.preventDefault();
+  const deck = dkeShipDeck(), p = dkeShipRulerPt(ev); if(!deck || !p) return;
+  g.b = dkeShipCellAt(deck, p);
+  const svg = document.getElementById('ship-deck-svg');
+  if(svg){ const old = svg.querySelector('#ship-ruler-live'); if(old) old.remove();
+    svg.insertAdjacentHTML('beforeend', `<g id="ship-ruler-live">${dkeRulerOverlaySVG(deck, g.a, g.b)}</g>`); }
+}
+function dkeShipRulerUp(ev){
+  const g = dkeShipRulerG; if(!g) return;
+  dkeShipRulerG = null;
+  const deck = dkeShipDeck(); if(!deck) return;
+  const p = dkeShipRulerPt(ev);
+  if(g.moved && p){ dkeShipRulerState = { a: g.a, b: dkeShipCellAt(deck, p) }; dkeShipRulerAnchor = null; }
+  else if(!g.moved){
+    if(!dkeShipRulerAnchor){ dkeShipRulerAnchor = g.a; dkeShipRulerState = null; }
+    else { dkeShipRulerState = { a: dkeShipRulerAnchor, b: g.a }; dkeShipRulerAnchor = null; }
+  }
+  if(typeof renderShipPanel === 'function') renderShipPanel();
+}
+(function dkeShipRulerInit(){
+  const body = document.getElementById('ship-body');
+  if(!body) return;
+  body.addEventListener('pointerdown', dkeShipRulerDown);
+  body.addEventListener('pointermove', dkeShipRulerMove);
+  body.addEventListener('pointerup', dkeShipRulerUp);
+  body.addEventListener('pointercancel', dkeShipRulerUp);
+})();
 
 // ── Deck switcher (editor: add / rename / delete / switch the active deck) ────
 function dkeRenderDecks(){
