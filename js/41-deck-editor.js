@@ -557,7 +557,7 @@ function dkeContentSVG(deck, opt){
   if(L.labels !== false) (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
   });
-  const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
+  const areas = opt.areas || ((typeof stationAreas === 'function') ? stationAreas() : {});
   const seenArea = {};
   const isPlayer = !!opt.interactive && !refView;
   let roomLayer = '', markerLayer = '', fogDim = '', fogPlayer = '';
@@ -950,11 +950,28 @@ function dkeStudioRowHTML(){
 // ── Ship deck plan (rendered into the Ship Status panel; edited via dkeOpenShip) ─
 // Read-only, NON-interactive render (own idp so its token clip-path can't collide
 // with the station map's). The referee authors it in the same editor overlay.
+// Ship-deck area links target SHIP SYSTEMS (from js/75) rather than station areas,
+// so a room can be tagged Bridge / Engineering / etc.
+function dkeShipSystemAreas(){
+  if(typeof SHIP_CRIT_SYSTEMS === 'undefined') return {};
+  const out = {};
+  SHIP_CRIT_SYSTEMS.forEach(kv => { out[kv[0]] = { label: kv[1], ac: '#7f93b8' }; });
+  return out;
+}
 function dkeShipDeckSVG(deck){
   const nm = (typeof shipState !== 'undefined' && shipState.name) ? String(shipState.name).toUpperCase() : 'SHIP';
   const title = (deck && deck.name) ? `${nm} — ${String(deck.name).toUpperCase()}` : `${nm} — DECK PLAN`;
+  const sysAreas = dkeShipSystemAreas();
   let out = `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(title)}</text>`
-    + dkeContentSVG(dkeNorm(deck), { idp:'ship' });
+    + dkeContentSVG(dkeNorm(deck), { idp:'ship', areas: sysAreas });
+  // Live damage map: tint a room whose linked ship system has taken crit hits.
+  const crits = (typeof shipState !== 'undefined' && shipState.crits) ? shipState.crits : null;
+  if(crits) (deck.links||[]).forEach(lk => {
+    const sev = Number(crits[lk.a]) || 0; if(sev <= 0 || !sysAreas[lk.a]) return;
+    const room = dkeRoomCells(deck, lk.x, lk.y); if(!room) return;
+    const col = sev >= 3 ? '#c0506e' : '#D4A843';
+    out += `<path d="${dkeRoomFillD(room)}" fill="${col}" opacity="${sev >= 3 ? .28 : .16}" style="pointer-events:none"/>`;
+  });
   if(dkeShipRuler){   // range-ruler overlay rides along on every ship-panel render
     if(dkeShipRulerState) out += dkeRulerOverlaySVG(deck, dkeShipRulerState.a, dkeShipRulerState.b);
     else if(dkeShipRulerAnchor) out += dkeAnchorDotSVG(dkeShipRulerAnchor);
@@ -1113,7 +1130,7 @@ function dkeRenameDeck(i){
 function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeRenderDecks(); dkeApplyView(); }
 function dkeRenderContent(){
   const d = dkeD(), g = document.getElementById('dke-content');
-  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, group: dkeGroup, idp:'dke', layers: dkeLayers }) : '';
+  if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, group: dkeGroup, idp:'dke', layers: dkeLayers, areas: dkeTarget === 'ship' ? dkeShipSystemAreas() : undefined }) : '';
 }
 function dkeGhost(markup){
   const g = document.getElementById('dke-ghost'); if(g) g.innerHTML = markup || '';
@@ -1248,11 +1265,14 @@ function dkeRenderSub(){
   } else if(dkeTool === 'label'){
     html = `<input class="hx-edit-in" id="dke-label-text" placeholder="Label text — then tap the map…" style="max-width:260px">`;
   } else if(dkeTool === 'link'){
-    const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
+    // On a ship deck, link rooms to SHIP SYSTEMS (they tint by damage); on a
+    // station deck, to its Design-Studio areas (tap opens the area).
+    const ship = dkeTarget === 'ship';
+    const areas = ship ? dkeShipSystemAreas() : ((typeof stationAreas === 'function') ? stationAreas() : {});
     const ids = Object.keys(areas);
     html = ids.length
-      ? `<select class="hx-edit-in" style="max-width:240px" onchange="dkeLinkArea=this.value">`
-        + `<option value="">— pick an area —</option>`
+      ? `<span class="dke-note" style="margin-right:4px">${ship ? 'system' : 'area'}</span><select class="hx-edit-in" style="max-width:240px" onchange="dkeLinkArea=this.value">`
+        + `<option value="">— pick ${ship ? 'a system' : 'an area'} —</option>`
         + ids.map(id => `<option value="${eh(id)}"${dkeLinkArea===id?' selected':''}>${eh(areas[id].label||id)}</option>`).join('')
         + `</select>`
       : `<span class="dke-note">No areas yet — add areas in the Design Studio first.</span>`;
@@ -2122,6 +2142,39 @@ function dkeMapMove(ev){
   const el = svg && svg.querySelector('g[data-tk="' + g.i + '"]');
   if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
 }
+// Plain tap on a token (referee) opens that character's sheet (PC) or NPC roster
+// entry — the token already carries the name the rest of the app keys off.
+function dkeMapOpenToken(i){
+  const deck = dkeMapDeck(); const t = deck && (deck.tokens||[])[i]; if(!t) return;
+  const name = t.n, low = String(name||'').trim().toLowerCase();
+  if(typeof crewRoster === 'function' && crewRoster().some(n => String(n).trim().toLowerCase() === low)){
+    if(typeof openSheet === 'function') openSheet(name);   // player character → sheet
+    return;
+  }
+  if(typeof npcRoster !== 'undefined' && Array.isArray(npcRoster)){
+    const npc = npcRoster.find(n => String(n.name||'').trim().toLowerCase() === low);
+    if(npc){
+      npcEditingId = npc.id;
+      if(typeof npcPanelOpen !== 'undefined' && !npcPanelOpen){ if(typeof toggleNpcPanel === 'function') toggleNpcPanel(); }
+      else if(typeof renderNpcPanel === 'function') renderNpcPanel();
+      return;
+    }
+  }
+  if(typeof showToast === 'function') showToast('No sheet for ' + name);
+}
+// Seed the initiative tracker (js/45) from the tokens on the current deck plan —
+// they're already placed on the map, so combat starts from the board (referee).
+function dkeSeedCombatFromMap(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const deck = dkeMapDeck();
+  if(!deck || !(deck.tokens||[]).length){ if(typeof showToast === 'function') showToast('No tokens on the current map'); return; }
+  if(typeof quickAddNPC !== 'function' || typeof combatants === 'undefined'){ if(typeof showToast === 'function') showToast('Initiative tracker unavailable'); return; }
+  const have = new Set(combatants.map(c => String(c.name||'').trim().toLowerCase()));
+  let added = 0;
+  deck.tokens.forEach(t => { const k = String(t.n||'').trim().toLowerCase(); if(k && !have.has(k)){ quickAddNPC(t.n, 0, 0); have.add(k); added++; } });
+  if(added && typeof saveCombatants === 'function') saveCombatants();
+  if(typeof showToast === 'function') showToast(added ? `Added ${added} combatant${added > 1 ? 's' : ''} from the map` : 'All map tokens are already in initiative');
+}
 function dkeMapUp(ev){
   if(dkeMapRuler){
     const rg = dkeMapRulerG; if(!rg) return;
@@ -2139,7 +2192,7 @@ function dkeMapUp(ev){
   }
   const g = dkeMapDrag; if(!g) return;
   dkeMapDrag = null;
-  if(!g.moved) return;                       // plain tap — let normal clicks run
+  if(!g.moved){ dkeMapOpenToken(g.i); return; }   // plain tap on a token → open its sheet / NPC block
   const deck = dkeMapDeck();
   const p = dkeMapPt(ev) || g.last;
   if(deck && p && deck.tokens[g.i]){
