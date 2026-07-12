@@ -53,7 +53,13 @@ const DKE_PROPS = {
   // ±w·16 × ±h·16). Rotation swaps the footprint for 2×1 shapes; see dkePropFootprint.
   dblbunk : { n:'Double bunk', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><line x1="0" y1="-13" x2="0" y2="13" stroke="#4caf82" stroke-width=".8"/><rect x="-27" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><rect x="18" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/>' },
   container:{ n:'Cargo container', w:2, h:1, g:'<rect x="-30" y="-12" width="60" height="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-18,-12 v24 M-6,-12 v24 M6,-12 v24 M18,-12 v24" stroke="#d4913a" stroke-width=".6"/><rect x="-30" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/><rect x="25" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/>' },
-  shuttle : { n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' }
+  shuttle : { n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' },
+  medbay  : { n:'Medbay bed', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><rect x="-27" y="-10" width="11" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><path d="M16,-6 h10 M21,-11 v10" stroke="#c0506e" stroke-width="2.6" stroke-linecap="round"/>' },
+  wlocker : { n:'Weapons locker', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#c0506e" stroke-width="1.5"/><circle r="4.5" fill="none" stroke="#c0506e" stroke-width="1.2"/><path d="M0,-8 v3 M0,8 v-3 M-8,0 h3 M8,0 h-3" stroke="#c0506e" stroke-width="1.2"/>' },
+  reactor : { n:'Reactor', w:2, h:2, g:'<circle r="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.6"/><circle r="10" fill="none" stroke="#d4913a" stroke-width="1.3"/><circle r="3" fill="#d4913a"/><path d="M0,-24 v6 M0,24 v-6 M-24,0 h6 M24,0 h-6 M-17,-17 l4.2,4.2 M17,17 l-4.2,-4.2 M17,-17 l-4.2,4.2 M-17,17 l4.2,-4.2" stroke="#d4913a" stroke-width="1.1"/>' },
+  turret  : { n:'Turret', g:'<circle r="8" fill="#0f1117" stroke="#9aa7c7" stroke-width="1.5"/><rect x="-2" y="-15" width="4" height="9" rx="1" fill="#9aa7c7"/><circle r="3" fill="none" stroke="#9aa7c7" stroke-width="1"/>' },
+  computer: { n:'Computer core', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><path d="M-6,-8 h12 M-6,-4 h12 M-6,0 h12 M-6,4 h8" stroke="#5b8ef0" stroke-width=".9"/><circle cx="5" cy="7" r="1.4" fill="#5b8ef0"/>' },
+  pod     : { n:'Escape pod', g:'<ellipse rx="8" ry="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><ellipse cy="-2" rx="4" ry="5" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-8,6 h16" stroke="#D4A843" stroke-width=".9"/>' }
 };
 // Prop footprint (in cells) at its rotation AND scale — 90°/270° swap w↔h so a
 // 2×1 stamp turns; an optional `s` (1–3) multiplies both dimensions. Missing
@@ -406,7 +412,7 @@ function dkeTokenSVG(t, opt, st, idx){
   // photo the <image> paints nothing (and onerror prunes it), so the initials
   // show through. No portraitVer cache-buster here — a changed photo may stay
   // stale until a reload, which is fine for a map counter.
-  const url = (typeof portraitUrlFor === 'function') ? portraitUrlFor(t.n) : '';
+  const url = (opt.noPortraits || typeof portraitUrlFor !== 'function') ? '' : portraitUrlFor(t.n);
   const down = !!(st && st.down);
   const disc = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#10131c" stroke="${col}" stroke-width="2"/>`
     + `<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}" font-family="system-ui,sans-serif">${eh(dkeTokenInitials(t.n))}</text>`
@@ -651,7 +657,68 @@ function deckStationSVG(deck, def){
     if(dkeMapRulerState) out += dkeRulerOverlaySVG(deck, dkeMapRulerState.a, dkeMapRulerState.b);
     else if(dkeMapRulerAnchor) out += dkeAnchorDotSVG(dkeMapRulerAnchor);
   }
+  if(dkeMapRanges && dkeRangeTokenIdx != null){   // weapon-range bands around a chosen token
+    const tk = (deck.tokens || [])[dkeRangeTokenIdx];
+    if(tk) out += dkeRangeRingsSVG(deck, tk);
+  }
   return out;
+}
+// Concentric weapon-range band rings (Short/Normal/Long/Extreme) around a token,
+// from the deck's reference weapon range + metres-per-cell. Visualisation only.
+function dkeRangeRingsSVG(deck, tk){
+  const C = DKE_CELL, mpc = dkeDeckMpc(deck), R = dkeDeckRefRange(deck);
+  const cx = (tk.x+.5)*C, cy = (tk.y+.5)*C;
+  const bands = [[R/4,'Short','#4caf82'],[R,'Normal','#a3a9bf'],[2*R,'Long','#d4913a'],[4*R,'Extreme','#c0506e']];
+  let out = `<g style="pointer-events:none">`;
+  bands.forEach(b => {
+    const r = (b[0] / mpc) * C;
+    out += `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="none" stroke="${b[2]}" stroke-width="1.2" stroke-dasharray="5,4" opacity=".5"/>`
+      + `<text x="${cx}" y="${(cy - r + 11).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="${b[2]}" opacity=".85" font-family="system-ui,sans-serif">${b[1]} · ${Math.round(b[0])}m</text>`;
+  });
+  return out + `</g>`;
+}
+// Rasterise the current deck to a JPEG and push it to players as a handout
+// (reuses the handouts bucket + list, js/50 & 85). The image underlay and token
+// PORTRAITS are excluded so the cross-origin bucket URLs can't taint the canvas.
+let dkePushBusy = false;
+function dkePushDeckHandout(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  const deck = dkeD();
+  if(!deck || !deckHasContent(deck)){ if(typeof showToast === 'function') showToast('Nothing to push yet'); return; }
+  if(typeof uploadHandoutBlob !== 'function' || typeof handouts === 'undefined' || typeof saveHandouts !== 'function'){
+    if(typeof showToast === 'function') showToast('Handouts are not available here'); return;
+  }
+  if(dkePushBusy) return;
+  dkePushBusy = true; if(typeof showToast === 'function') showToast('Rendering deck…');
+  const vb = deckStationViewBox(deck), n = vb.split(' ').map(Number), W = Math.round(n[2]), H = Math.round(n[3]), K = 2;
+  const stn = (dkeTarget === 'ship' && typeof shipState !== 'undefined' && shipState.name) ? shipState.name
+    : ((typeof stationDef === 'function' && stationDef() && stationDef().name) || 'Deck');
+  const label = `${stn} — ${deck.name || 'deck plan'}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${W*K}" height="${H*K}">`
+    + `<rect x="${n[0]}" y="${n[1]}" width="${W}" height="${H}" fill="#0c0e14"/>`
+    + `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(label.toUpperCase())}</text>`
+    + dkeContentSVG(dkeNorm(deck), { idp:'push', noPortraits:true, layers:{ image:false } }) + `</svg>`;
+  const done = (msg) => { dkePushBusy = false; if(typeof showToast === 'function') showToast(msg); };
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const cv = document.createElement('canvas'); cv.width = W*K; cv.height = H*K;
+      cv.getContext('2d').drawImage(img, 0, 0, W*K, H*K);
+      cv.toBlob(blob => {
+        if(!blob){ done('Could not render deck'); return; }
+        const id = 'deck_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+        uploadHandoutBlob(camp, id, blob)
+          .then(() => { handouts.push({ id, name: label, ver: Date.now(), visibleTo:'all',
+              date: (typeof imperialNow === 'function' && typeof formatImperial === 'function') ? formatImperial(imperialNow()) : '' }); return saveHandouts(); })
+          .then(() => { done('Deck pushed to players as a handout');
+              if(typeof renderHandoutsPanel === 'function' && typeof handoutsPanelOpen !== 'undefined' && handoutsPanelOpen) renderHandoutsPanel(); })
+          .catch(err => { done('Push failed — is the handouts bucket set up? (migration 0004)'); console.error(err); });
+      }, 'image/jpeg', 0.9);
+    } catch(e){ done('Could not render deck'); console.error(e); }
+  };
+  img.onerror = () => done('Could not render deck');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
 // ── Range ruler (measure two cells → metres + Traveller range band) ──────────
@@ -766,6 +833,7 @@ function dkeEnsureDom(){
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo (Ctrl+Z)">↶</button>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-redo" title="Redo (Ctrl+Shift+Z)">↷</button>
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-fit" title="Fit deck to view">⊙</button>
+      <button class="hx-act-btn" style="flex:0 0 auto" id="dke-push" title="Push this deck to players as a handout">📤</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
     <div class="dke-decks" id="dke-decks"></div>
@@ -783,6 +851,7 @@ function dkeEnsureDom(){
   document.getElementById('dke-undo').addEventListener('click', dkeUndoPop);
   document.getElementById('dke-redo').addEventListener('click', dkeRedoPop);
   document.getElementById('dke-fit').addEventListener('click', function(){ dkeFitView(); dkeApplyView(); });
+  document.getElementById('dke-push').addEventListener('click', dkePushDeckHandout);
   document.getElementById('dke-done').addEventListener('click', dkeClose);
   document.getElementById('dke-w').addEventListener('change', function(){ dkeResize('w', this.value); });
   document.getElementById('dke-h').addEventListener('change', function(){ dkeResize('h', this.value); });
@@ -1170,14 +1239,14 @@ function dkeRenderSub(){
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeGroup.length){
-    html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
+    html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
       if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button>`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
       if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
-      html += `<button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
+      html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
   }
   el.innerHTML = html;
@@ -1417,6 +1486,26 @@ function dkeDeleteGroup(){
   // splice each kind in descending index order so earlier removals don't shift the rest
   Object.keys(byKind).forEach(kind => byKind[kind].sort((a,b) => b - a).forEach(i => (d[kind + 's']||[]).splice(i, 1)));
   dkeGroup = [];
+  dkeCommit(); dkeRenderSub();
+}
+// Clone the selection (single dkeSel or the marquee group) offset one cell down-right.
+function dkeDuplicate(){
+  const d = dkeD(); if(!d) return;
+  const sels = dkeGroup.length ? dkeGroup.slice() : (dkeSel ? [dkeSel] : []);
+  if(!sels.length) return;
+  dkeSnapshot();
+  const made = [];
+  sels.forEach(s => {
+    const arr = d[s.kind + 's'], it = arr && arr[s.i]; if(!it) return;
+    const copy = JSON.parse(JSON.stringify(it));
+    if(s.kind === 'wall'){ copy.x1++; copy.y1++; copy.x2++; copy.y2++; }
+    else { copy.x = (copy.x || 0) + 1; copy.y = (copy.y || 0) + 1; }
+    arr.push(copy);
+    if(s.kind === 'prop') dkeClampProp(d, copy);
+    made.push({ kind: s.kind, i: arr.length - 1 });
+  });
+  if(dkeGroup.length){ dkeGroup = made; dkeSel = null; }
+  else { dkeSel = made[0] || null; dkeGroup = []; }
   dkeCommit(); dkeRenderSub();
 }
 function dkeRotateSel(){
@@ -1802,6 +1891,17 @@ let dkeMapRuler = false;        // ruler tool active on the station view
 let dkeMapRulerState = null;    // last completed measurement {a:{x,y}, b:{x,y}}
 let dkeMapRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeMapRulerG = null;        // active drag gesture {a, sx, sy, moved, b?}
+let dkeMapRanges = false;       // range-rings mode (referee): tap a token to ring it
+let dkeRangeTokenIdx = null;    // focused token index (local to the referee's view)
+function dkeMapToggleRanges(){
+  dkeMapRanges = !dkeMapRanges;
+  if(!dkeMapRanges) dkeRangeTokenIdx = null;
+  if(dkeMapRanges && dkeMapRuler) dkeMapToggleRuler(false);   // mutually exclusive with the ruler
+  const btn = document.getElementById('deck-ranges-btn'); if(btn) btn.classList.toggle('on', dkeMapRanges);
+  const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = dkeMapRanges ? 'none' : (dkeMapRuler ? 'none' : '');
+  if(dkeMapRanges && typeof showToast === 'function') showToast('Range rings — tap a token');
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
 
 function dkeMapCellAt(deck, p){
   return { x: Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL))),
@@ -1818,6 +1918,8 @@ function dkeMapToggleRuler(force){
   const on = (typeof force === 'boolean') ? force : !dkeMapRuler;
   dkeMapRuler = on;
   if(!on){ dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null; }
+  if(on && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null;   // exclusive with range rings
+    const rb = document.getElementById('deck-ranges-btn'); if(rb) rb.classList.remove('on'); }
   const btn = document.getElementById('deck-ruler-btn');
   if(btn) btn.classList.toggle('on', on);
   const svg = document.getElementById('mapsvg');
@@ -1837,6 +1939,14 @@ function dkeRulerBtnSync(){
   }
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
+  // Range-rings button — referee only (it's a positioning aid keyed to a token).
+  const rb = document.getElementById('deck-ranges-btn');
+  if(rb){
+    const showR = has && (typeof isReferee === 'function') && isReferee();
+    if(!showR && dkeMapRanges){ dkeMapRanges = false; dkeRangeTokenIdx = null; }
+    rb.style.display = showR ? 'flex' : 'none';
+    rb.classList.toggle('on', dkeMapRanges);
+  }
 }
 // Station-view deck switcher — shown only when the station has 2+ decks. The
 // referee's buttons set the SYNCED active deck (players follow via the poll);
@@ -1886,6 +1996,15 @@ function dkeMapDown(ev){
     dkeMapRulerG = { a: dkeMapCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
     const svg = document.getElementById('mapsvg');
     try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    return;
+  }
+  if(dkeMapRanges){   // tap a token to ring it (referee), tap elsewhere to clear
+    if(typeof isReferee !== 'function' || !isReferee()) return;
+    const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
+    dkeRangeTokenIdx = tg ? parseInt(tg.getAttribute('data-tk'), 10) : null;
+    dkeMapClickGuardUntil = Date.now() + 400;   // don't also open a room
+    if(typeof renderStationMap === 'function') renderStationMap();
+    ev.preventDefault();
     return;
   }
   if(typeof isReferee !== 'function' || !isReferee()) return;
@@ -1984,6 +2103,8 @@ function dkeKeyDown(ev){
     ev.preventDefault();
   } else if((ev.ctrlKey || ev.metaKey) && k === 'y'){
     dkeRedoPop(); ev.preventDefault();
+  } else if((ev.ctrlKey || ev.metaKey) && k === 'd'){
+    dkeDuplicate(); ev.preventDefault();
   } else if(!ev.ctrlKey && !ev.metaKey && !ev.altKey && DKE_KEYS[k]){
     dkeSetTool(DKE_KEYS[k]); ev.preventDefault();
   }
