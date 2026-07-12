@@ -395,6 +395,9 @@ function dkeFogAutoReveal(deck, token){
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
 const DKE_TOKEN_COLS = ['#5b8ef0','#d4913a','#4caf82','#D4A843','#9B59B6','#2AABB8','#c0506e','#7f93b8'];
+// Referee-set token conditions → pip colour (bookkeeping shown on the map, not automated).
+const DKE_TOKEN_STATUS = { bloodied:'#c0506e', stunned:'#D4A843', prone:'#5b8ef0' };
+const DKE_STATUS_ORDER = ['', 'bloodied', 'stunned', 'prone'];
 function dkeTokenColour(name){
   let h = 0; const s = String(name||'');
   for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -432,6 +435,10 @@ function dkeTokenSVG(t, opt, st, idx){
     ? `<circle cx="${cx+10}" cy="${cy-10}" r="6.5" fill="#10131c" stroke="${st.cur ? '#D4A843' : '#7f93b8'}" stroke-width="1.2"/>`
       + `<text x="${cx+10}" y="${cy-7.5}" text-anchor="middle" font-size="7" font-weight="700" fill="${st.cur ? '#D4A843' : '#a3a9bf'}" font-family="system-ui,sans-serif">${st.ord}</text>`
     : '';
+  // Referee-set condition pip (bottom-left of the disc).
+  const stPip = (t.st && DKE_TOKEN_STATUS[t.st])
+    ? `<circle cx="${cx-10}" cy="${cy+10}" r="4.5" fill="${DKE_TOKEN_STATUS[t.st]}" stroke="#0f1117" stroke-width="1.2"><title>${eh(t.st)}</title></circle>`
+    : '';
   // Station view: for PLAYERS tokens are tap-transparent so a tap on one still
   // opens the room beneath. For the REFEREE they are grab targets — data-tk
   // marks the group for the map-drag handlers below, and touch-action:none is
@@ -443,7 +450,7 @@ function dkeTokenSVG(t, opt, st, idx){
     : '';
   return `<g${gAttrs}><title>${eh(t.n)}</title>`
     + (down ? `<g opacity=".45">${disc}</g>` : disc)
-    + pulse + strike + badge
+    + pulse + strike + badge + stPip
     + `<text x="${cx}" y="${cy+r+9}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(t.n)}</text>`
     + `</g>`;
 }
@@ -544,7 +551,8 @@ function dkeContentSVG(deck, opt){
     const def = DKE_PROPS[p.t]; if(!def) return;
     const f = dkePropFootprint(p), sc = dkePropScaleOf(p);   // s=1 → same transform as before
     const scaleTx = sc !== 1 ? ` scale(${sc})` : '';
-    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(def.n)}</title>${def.g}</g>`;
+    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(p.label || def.n)}</title>${def.g}</g>`;
+    if(p.label && L.labels !== false) out += `<text x="${(p.x+f.fw/2)*C}" y="${(p.y+f.fh)*C-2}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(p.label)}</text>`;
   });
   if(L.labels !== false) (deck.labels||[]).forEach(l => {
     out += `<text x="${l.x*C}" y="${l.y*C}" text-anchor="middle" font-size="11" font-weight="600" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing=".5" style="pointer-events:none">${eh(l.t)}</text>`;
@@ -1243,9 +1251,10 @@ function dkeRenderSub(){
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
-      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button>`;
+      if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button><input class="hx-edit-in" style="max-width:150px" placeholder="name…" value="${eh(it.label||'')}" onchange="dkeEditPropLabel(this.value)">`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
-      if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)">`;
+      if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:180px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)"><button class="dke-tool" onclick="dkeCycleTokenStatus()">◍ ${it.st || 'status'}</button>`;
+      if(dkeSel.kind === 'floor'){ const room = dkeRoomCells(d, it.x, it.y), mpc = dkeDeckMpc(d), cells = room ? room.length : it.w*it.h; html += `<span class="dke-note">Room ≈ ${Math.round(cells*mpc*mpc)} m² (${cells} cells)</span>`; }
       html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
   }
@@ -1536,6 +1545,21 @@ function dkeEditTokenSel(v){
   dkeSnapshot();
   d.tokens[dkeSel.i].n = n;
   dkeCommit();
+}
+function dkeEditPropLabel(v){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
+  const t = String(v||'').trim().slice(0, 30);
+  dkeSnapshot();
+  if(t) d.props[dkeSel.i].label = t; else delete d.props[dkeSel.i].label;
+  dkeCommit();
+}
+function dkeCycleTokenStatus(){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'token') return;
+  const t = d.tokens[dkeSel.i]; if(!t) return;
+  dkeSnapshot();
+  const ni = (DKE_STATUS_ORDER.indexOf(t.st || '') + 1) % DKE_STATUS_ORDER.length;
+  if(DKE_STATUS_ORDER[ni]) t.st = DKE_STATUS_ORDER[ni]; else delete t.st;
+  dkeCommit(); dkeRenderSub();
 }
 function dkePolyEnd(silent){
   if(dkePoly){ dkePoly = null; dkeGhost(''); if(!silent) dkeRenderSub(); }
