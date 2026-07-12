@@ -5,7 +5,7 @@
 // → always fetch fresh and refresh the cache; offline → fall back to the last
 // cached copy (and to the cached shell for navigations). Same-origin GETs only —
 // Supabase / get-content / Anthropic calls are never intercepted.
-const CACHE = 'orion-shell-v71';
+const CACHE = 'orion-shell-v72';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-180.png',
