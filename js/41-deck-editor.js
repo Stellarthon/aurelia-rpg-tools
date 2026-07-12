@@ -52,6 +52,11 @@ function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[
 function dkeNorm(d){
   d.w = Math.max(4, Math.min(64, parseInt(d.w,10) || 24));
   d.h = Math.max(4, Math.min(64, parseInt(d.h,10) || 16));
+  // Range-ruler scale (js §Range ruler): metres per cell — Traveller personal
+  // scale is 1.5 m/square (CRB 2022 p.73) — and the reference weapon Range (m)
+  // the range bands are measured against (default 50 m, referee-editable).
+  d.mpc = Math.max(0.1, Math.min(100, parseFloat(d.mpc) || 1.5));
+  d.refRange = Math.max(1, Math.min(9999, parseInt(d.refRange,10) || 50));
   ['floors','walls','doors','props','labels','links','tokens'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
   return d;
 }
@@ -348,13 +353,77 @@ function deckStationViewBox(deck){
 }
 function deckStationSVG(deck, def){
   const name = ((def && def.name) || 'STATION').toUpperCase();
-  return `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(name)} — DECK PLAN</text>`
+  let out = `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(name)} — DECK PLAN</text>`
     + dkeContentSVG(dkeNorm(deck), { interactive:true, idp:'sta' });
+  // Range-ruler overlay rides along on every render so it survives poll redraws
+  // (the ruler is transient measurement state, never saved into the deck).
+  if(dkeMapRuler){
+    if(dkeMapRulerState) out += dkeRulerOverlaySVG(deck, dkeMapRulerState.a, dkeMapRulerState.b);
+    else if(dkeMapRulerAnchor) out += dkeAnchorDotSVG(dkeMapRulerAnchor);
+  }
+  return out;
+}
+
+// ── Range ruler (measure two cells → metres + Traveller range band) ──────────
+// Distance is straight-line (Euclidean) between the two tapped cell centres,
+// scaled by the deck's metres-per-cell (Traveller personal scale = 1.5 m/square).
+// Range bands follow the Core Rulebook Update 2022 weapon-relative model,
+// measured against the deck's reference weapon Range R (m): Short ≤¼R (DM +1),
+// Normal ≤R (0), Long ≤2R (−2), Extreme ≤4R (−4); past 4R is out of range. RAW
+// also makes any shot beyond 100 m Extreme without a Scope — flagged as a note.
+// This is measurement, not information, so referee AND players get the tool.
+function dkeDeckMpc(deck){ const v = parseFloat(deck && deck.mpc); return (v > 0 && isFinite(v)) ? v : 1.5; }
+function dkeDeckRefRange(deck){ const v = parseInt(deck && deck.refRange, 10); return (v > 0) ? v : 50; }
+function dkeRangeBand(distM, refRange){
+  const R = refRange > 0 ? refRange : 50;
+  let band, dm;
+  if(distM <= R/4){ band = 'Short'; dm = '+1'; }
+  else if(distM <= R){ band = 'Normal'; dm = '0'; }
+  else if(distM <= 2*R){ band = 'Long'; dm = '−2'; }
+  else if(distM <= 4*R){ band = 'Extreme'; dm = '−4'; }
+  else return { band:'Out of range', dm:'—', note:'past 4× weapon range' };
+  const note = (distM > 100 && band !== 'Extreme') ? '>100 m ⇒ Extreme without a Scope (DM −4)' : '';
+  return { band, dm, note };
+}
+function dkeMeasureParts(deck, a, b){
+  const cells = Math.hypot(b.x - a.x, b.y - a.y), m = cells * dkeDeckMpc(deck);
+  return { cells, m, mText: (m < 10 ? m.toFixed(1) : Math.round(m).toString()), band: dkeRangeBand(m, dkeDeckRefRange(deck)) };
+}
+function dkeMeasureText(deck, a, b){
+  const p = dkeMeasureParts(deck, a, b);
+  return `${p.mText} m · ${p.band.band}${p.band.dm !== '—' ? ` (DM ${p.band.dm})` : ''}${p.band.note ? ' · ' + p.band.note : ''}`;
+}
+// A small dot marking the pending first cell of a tap-tap measurement.
+function dkeAnchorDotSVG(c){
+  const C = DKE_CELL, ax = (c.x+.5)*C, ay = (c.y+.5)*C;
+  return `<g style="pointer-events:none"><circle cx="${ax}" cy="${ay}" r="4.5" fill="#0f1117" stroke="#D4A843" stroke-width="1.8"/>`
+    + `<circle cx="${ax}" cy="${ay}" r="1.6" fill="#D4A843"/></g>`;
+}
+// Line + endpoint dots + a readout pill; shared by the editor ghost layer and
+// the read-only station view (same C-unit coordinate space in both).
+function dkeRulerOverlaySVG(deck, a, b){
+  const C = DKE_CELL, eh = dkeEsc;
+  const ax = (a.x+.5)*C, ay = (a.y+.5)*C, bx = (b.x+.5)*C, by = (b.y+.5)*C;
+  const mx = (ax+bx)/2, my = (ay+by)/2;
+  const p = dkeMeasureParts(deck, a, b);
+  const label = `${p.mText} m · ${p.band.band}${p.band.dm !== '—' ? ` ${p.band.dm}` : ''}`;
+  const w = label.length * 5.7 + 14;
+  const dot = (x,y) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0f1117" stroke="#D4A843" stroke-width="1.6"/>`;
+  return `<g style="pointer-events:none">`
+    + `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#D4A843" stroke-width="1.8" stroke-dasharray="6,4"/>`
+    + dot(ax, ay) + dot(bx, by)
+    + `<g transform="translate(${mx.toFixed(1)},${(my-13).toFixed(1)})">`
+    + `<rect x="${(-w/2).toFixed(1)}" y="-9" width="${w.toFixed(1)}" height="18" rx="4" fill="#0f1117" stroke="#D4A843" stroke-width="1" opacity=".96"/>`
+    + `<text x="0" y="4" text-anchor="middle" font-size="10.5" font-weight="700" fill="#D4A843" font-family="system-ui,sans-serif">${eh(label)}</text></g>`
+    + (p.band.note ? `<text x="${mx.toFixed(1)}" y="${(my+8).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="#c9a24a" font-family="system-ui,sans-serif">${eh(p.band.note)}</text>` : '')
+    + `</g>`;
 }
 
 // ═══ EDITOR ══════════════════════════════════════════════════════════════════
 let dkeIsOpen = false, dkeTool = 'room', dkeSel = null, dkeUndoStack = [];
 let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
+let dkeRuler = null;         // last completed editor measurement {a:{x,y}, b:{x,y}}
+let dkeRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeView = { x:0, y:0, w:100, h:100 };
 let dkePoly = null;                 // active wall-run last vertex {x,y}
 let dkeGesture = null;              // single-pointer gesture state
@@ -365,7 +434,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
   ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Door'], ['prop','📦 Props'],
-  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['erase','⌫ Erase']
+  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
@@ -379,6 +448,7 @@ const DKE_HINTS = {
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
+  ruler:'Tap two cells (or drag between them) to measure — distance in metres and the range band. Set the scale above.',
   erase:'Tap or drag over anything to delete it.'
 };
 
@@ -478,8 +548,32 @@ function dkeRenderTools(){
 function dkeSetTool(t){
   dkeTool = t;
   if(t !== 'poly') dkePolyEnd(true);
+  if(t !== 'ruler'){ dkeRuler = null; dkeRulerAnchor = null; dkeGhost(''); }
   if(t !== 'select'){ dkeSel = null; dkeRenderContent(); }
   dkeRenderTools(); dkeRenderSub(); dkeRenderHint();
+}
+// Editor ruler overlay + readout for the current state (measurement / pending
+// anchor / idle). Overlay lives in the ghost layer so content re-renders keep it.
+function dkeRulerRedraw(){
+  const d = dkeD(), out = document.getElementById('dke-ruler-out');
+  if(dkeRuler && d){
+    dkeGhost(dkeRulerOverlaySVG(d, dkeRuler.a, dkeRuler.b));
+    if(out) out.textContent = '📏 ' + dkeMeasureText(d, dkeRuler.a, dkeRuler.b);
+  } else if(dkeRulerAnchor){
+    dkeGhost(dkeAnchorDotSVG(dkeRulerAnchor));
+    if(out) out.textContent = '📏 tap the second cell…';
+  } else {
+    dkeGhost('');
+    if(out) out.textContent = '📏 tap two cells';
+  }
+}
+function dkeSetDeckScale(key, val){
+  const d = dkeD(); if(!d) return;
+  dkeSnapshot();
+  if(key === 'mpc'){ d.mpc = Math.max(0.1, Math.min(100, parseFloat(val) || 1.5)); const el = document.getElementById('dke-mpc'); if(el) el.value = d.mpc; }
+  else { d.refRange = Math.max(1, Math.min(9999, parseInt(val,10) || 50)); const el = document.getElementById('dke-refrange'); if(el) el.value = d.refRange; }
+  dkeCommit();
+  dkeRulerRedraw();
 }
 function dkeRenderHint(){
   const el = document.getElementById('dke-hint');
@@ -513,6 +607,13 @@ function dkeRenderSub(){
         + ids.map(id => `<option value="${eh(id)}"${dkeLinkArea===id?' selected':''}>${eh(areas[id].label||id)}</option>`).join('')
         + `</select>`
       : `<span class="dke-note">No areas yet — add areas in the Design Studio first.</span>`;
+  } else if(dkeTool === 'ruler'){
+    const d = dkeD();
+    const mpc = d ? dkeDeckMpc(d) : 1.5, rr = d ? dkeDeckRefRange(d) : 50;
+    const readout = (dkeRuler && d) ? dkeMeasureText(d, dkeRuler.a, dkeRuler.b) : (dkeRulerAnchor ? 'tap the second cell…' : 'tap two cells');
+    html = `<label class="dke-dim">m/cell <input id="dke-mpc" type="number" min="0.1" max="100" step="0.1" value="${mpc}" style="width:60px"></label>`
+      + `<label class="dke-dim">weapon range m <input id="dke-refrange" type="number" min="1" max="9999" step="1" value="${rr}" style="width:64px"></label>`
+      + `<span class="dke-note" id="dke-ruler-out">📏 ${eh(readout)}</span>`;
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeSel){
@@ -533,6 +634,12 @@ function dkeRenderSub(){
   if(dkeTool === 'token'){
     const inp = document.getElementById('dke-token-custom');
     if(inp) inp.addEventListener('input', function(){ dkeTokenName = this.value.trim(); });
+  }
+  if(dkeTool === 'ruler'){
+    const mi = document.getElementById('dke-mpc');
+    if(mi) mi.addEventListener('change', function(){ dkeSetDeckScale('mpc', this.value); });
+    const ri = document.getElementById('dke-refrange');
+    if(ri) ri.addEventListener('change', function(){ dkeSetDeckScale('refRange', this.value); });
   }
 }
 let dkeLabelTextVal = '';
@@ -585,6 +692,12 @@ function dkeCell(p){
   const x = Math.floor(u.x), y = Math.floor(u.y);
   if(x < 0 || y < 0 || x >= d.w || y >= d.h) return null;
   return { x, y };
+}
+// Like dkeCell but clamps into the grid — the ruler always resolves a cell even
+// when the tap lands in the canvas padding around the deck.
+function dkeCellClamped(p){
+  const d = dkeD(), u = dkeCellPt(p);
+  return { x: Math.max(0, Math.min(d.w - 1, Math.floor(u.x))), y: Math.max(0, Math.min(d.h - 1, Math.floor(u.y))) };
 }
 function dkeNearestEdge(p, maxDist){
   const u = dkeCellPt(p), cx = Math.floor(u.x), cy = Math.floor(u.y);
@@ -726,6 +839,8 @@ function dkePointerDown(ev){
   } else if(dkeTool === 'erase'){
     dkeGesture = { t:'erase', snapped:false };
     dkeEraseAt(p, dkeGesture);
+  } else if(dkeTool === 'ruler'){
+    dkeGesture = { t:'ruler', a: dkeCellClamped(p), moved:false };
   } else if(dkeTool === 'select'){
     const hit = dkeHitTest(p);
     if(hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token')){
@@ -770,6 +885,16 @@ function dkePointerMove(ev){
     dkePaintFloor(p, g);
   } else if(g.t === 'erase'){
     dkeEraseAt(p, g);
+  } else if(g.t === 'ruler'){
+    const c = dkeCellClamped(p);
+    if(!g.moved && (c.x !== g.a.x || c.y !== g.a.y)) g.moved = true;
+    g.b = c;
+    const d = dkeD();
+    if(d && g.moved){
+      dkeGhost(dkeRulerOverlaySVG(d, g.a, c));
+      const out = document.getElementById('dke-ruler-out');
+      if(out) out.textContent = '📏 ' + dkeMeasureText(d, g.a, c);
+    }
   } else if(g.t === 'move'){
     if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
     g.moved = true;
@@ -812,6 +937,11 @@ function dkePointerUp(ev){
     }
   } else if(g.t === 'floor' || g.t === 'erase'){
     dkeFlushSave();
+  } else if(g.t === 'ruler'){
+    if(g.moved && g.b){ dkeRuler = { a: g.a, b: g.b }; dkeRulerAnchor = null; }
+    else if(!dkeRulerAnchor){ dkeRulerAnchor = g.a; dkeRuler = null; }   // first tap
+    else { dkeRuler = { a: dkeRulerAnchor, b: g.a }; dkeRulerAnchor = null; }  // second tap
+    dkeRulerRedraw();
   } else if(g.t === 'move'){
     if(g.moved){
       const it = (d[g.hit.kind + 's']||[])[g.hit.i];
@@ -910,6 +1040,52 @@ function dkeTapAction(p){
 let dkeMapDrag = null;          // {i, sx, sy, p0:{x,y}, last:{x,y}|null, moved}
 let dkeMapClickGuardUntil = 0;  // swallow clicks until this timestamp after a drag
 
+// ── Station-view range ruler (referee AND players — it's measurement) ─────────
+// A floating #deck-ruler-btn toggles the tool; while on, the #mapsvg pointer
+// handlers below measure between two cells instead of dragging tokens / opening
+// rooms. The measurement is transient module state re-drawn by deckStationSVG on
+// every render, so it survives the poll's innerHTML replacement.
+let dkeMapRuler = false;        // ruler tool active on the station view
+let dkeMapRulerState = null;    // last completed measurement {a:{x,y}, b:{x,y}}
+let dkeMapRulerAnchor = null;   // pending first cell for a tap-tap measurement
+let dkeMapRulerG = null;        // active drag gesture {a, sx, sy, moved, b?}
+
+function dkeMapCellAt(deck, p){
+  return { x: Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL))),
+           y: Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL))) };
+}
+// Live overlay during a drag — inject a single throwaway node so we don't rebuild
+// the whole map SVG on every pointermove (the next full render replaces it).
+function dkeMapRulerLive(deck, a, b){
+  const svg = document.getElementById('mapsvg'); if(!svg) return;
+  const old = svg.querySelector('#deck-ruler-live'); if(old) old.remove();
+  svg.insertAdjacentHTML('beforeend', `<g id="deck-ruler-live">${dkeRulerOverlaySVG(deck, a, b)}</g>`);
+}
+function dkeMapToggleRuler(force){
+  const on = (typeof force === 'boolean') ? force : !dkeMapRuler;
+  dkeMapRuler = on;
+  if(!on){ dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null; }
+  const btn = document.getElementById('deck-ruler-btn');
+  if(btn) btn.classList.toggle('on', on);
+  const svg = document.getElementById('mapsvg');
+  if(svg) svg.style.touchAction = on ? 'none' : '';   // let touch drags measure, not scroll
+  if(on && typeof showToast === 'function') showToast('Range ruler on — tap two cells to measure');
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+}
+// Called from renderStationMap: show the button only when a deck plan is on
+// screen, and force the tool off if the deck went away.
+function dkeRulerBtnSync(){
+  const btn = document.getElementById('deck-ruler-btn'); if(!btn) return;
+  const has = !!dkeMapDeck();
+  if(!has && dkeMapRuler){
+    dkeMapRuler = false; dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null;
+    const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = '';
+  }
+  btn.style.display = has ? 'flex' : 'none';
+  btn.classList.toggle('on', dkeMapRuler);
+}
+
 function dkeMapDeck(){
   if(typeof currentStationId === 'undefined') return null;
   const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
@@ -924,8 +1100,16 @@ function dkeMapPt(ev){
   return { x: p.x, y: p.y };
 }
 function dkeMapDown(ev){
-  if(dkeIsOpen || typeof isReferee !== 'function' || !isReferee()) return;
+  if(dkeIsOpen) return;
   const deck = dkeMapDeck(); if(!deck) return;
+  if(dkeMapRuler){
+    const p = dkeMapPt(ev); if(!p) return;
+    dkeMapRulerG = { a: dkeMapCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
+    const svg = document.getElementById('mapsvg');
+    try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    return;
+  }
+  if(typeof isReferee !== 'function' || !isReferee()) return;
   const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
   if(!tg) return;
   const i = parseInt(tg.getAttribute('data-tk'), 10);
@@ -936,6 +1120,15 @@ function dkeMapDown(ev){
   try { svg.setPointerCapture(ev.pointerId); } catch(e){}
 }
 function dkeMapMove(ev){
+  if(dkeMapRuler){
+    const rg = dkeMapRulerG; if(!rg) return;
+    if(!rg.moved && Math.hypot(ev.clientX - rg.sx, ev.clientY - rg.sy) < 5) return;
+    rg.moved = true; ev.preventDefault();
+    const p = dkeMapPt(ev), deck = dkeMapDeck(); if(!p || !deck) return;
+    rg.b = dkeMapCellAt(deck, p);
+    dkeMapRulerLive(deck, rg.a, rg.b);
+    return;
+  }
   const g = dkeMapDrag; if(!g) return;
   if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
   g.moved = true;
@@ -947,6 +1140,20 @@ function dkeMapMove(ev){
   if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
 }
 function dkeMapUp(ev){
+  if(dkeMapRuler){
+    const rg = dkeMapRulerG; if(!rg) return;
+    dkeMapRulerG = null;
+    const deck = dkeMapDeck(); if(!deck) return;
+    const p = dkeMapPt(ev);
+    if(rg.moved && p){ dkeMapRulerState = { a: rg.a, b: dkeMapCellAt(deck, p) }; dkeMapRulerAnchor = null; }
+    else if(!rg.moved){
+      if(!dkeMapRulerAnchor){ dkeMapRulerAnchor = rg.a; dkeMapRulerState = null; }   // first tap
+      else { dkeMapRulerState = { a: dkeMapRulerAnchor, b: rg.a }; dkeMapRulerAnchor = null; }  // second tap
+    }
+    dkeMapClickGuardUntil = Date.now() + 400;   // a measuring tap must not open an area
+    if(typeof renderStationMap === 'function') renderStationMap();
+    return;
+  }
   const g = dkeMapDrag; if(!g) return;
   dkeMapDrag = null;
   if(!g.moved) return;                       // plain tap — let normal clicks run
