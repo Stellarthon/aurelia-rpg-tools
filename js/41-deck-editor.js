@@ -175,12 +175,29 @@ function dkeEnsureDecks(s){
   }
   return s.decks;
 }
-// Current station's active deck (editor always mutates through here so undo/redo
-// and the poll's stationAdditions replacement can never leave a stale reference).
-function dkeD(){
-  if(typeof currentStationId === 'undefined') return null;
-  return dkeCurrentDeck(stationAdditions[currentStationId]);
+// ── Edit target: a station (default) OR the party ship ───────────────────────
+// The editor is the same overlay either way; only the deck HOLDER and its save
+// differ. dkeHolder() returns the object whose `.decks` we edit, dkeSave() writes
+// it back, dkeAfterChange() refreshes the right surface. The ship deck lives on
+// the shared shipState (synced via saveShipState), displayed read-only in Ship
+// Status; stations keep syncing through stationAdditions as before.
+let dkeTarget = 'station';   // 'station' | 'ship'
+function dkeHolder(){
+  if(dkeTarget === 'ship') return (typeof shipState !== 'undefined') ? shipState : null;
+  return (typeof currentStationId !== 'undefined') ? stationAdditions[currentStationId] : null;
 }
+function dkeSave(){
+  if(dkeTarget === 'ship'){ if(typeof saveShipState === 'function') saveShipState(); }
+  else if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+}
+function dkeAfterChange(){
+  if(dkeTarget === 'ship'){ if(typeof renderShipPanel === 'function') renderShipPanel(); return; }
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+}
+// Current edit target's active deck (editor mutates through here so undo/redo and
+// a poll's holder replacement can never leave a stale reference).
+function dkeD(){ return dkeCurrentDeck(dkeHolder()); }
 
 // ── Room detection (tap-the-room area links) ─────────────────────────────────
 // Is the unit grid edge starting at vertex (x,y) — rightward for 'h', downward
@@ -663,41 +680,53 @@ function dkeEnsureDom(){
   document.addEventListener('keydown', dkeKeyDown);
 }
 
-function dkeOpen(){
-  if(typeof isReferee === 'function' && !isReferee()) return;
-  if(typeof currentStationId === 'undefined') return;
-  // The built-in Aurelia station has no stationAdditions entry (its areas come from
-  // MAIN), so seed a deck-only holder for it — that lets the canon station carry a
-  // drawable deck like authored stations, overriding the hand-drawn map once drawn.
-  let s = stationAdditions[currentStationId];
-  if(!s){ if(currentStationId === 'aurelia'){ s = stationAdditions['aurelia'] = {}; } else { return; } }
-  const decks = dkeEnsureDecks(s);
-  if(!decks.length){ decks.push(dkeBlank()); s.deckIdx = 0; }
-  const d = dkeCurrentDeck(s);
+// Shared editor bring-up once the holder is resolved (station or ship).
+function dkeBeginEdit(holder, titleName){
+  const decks = dkeEnsureDecks(holder);
+  if(!decks.length){ decks.push(dkeBlank()); holder.deckIdx = 0; }
+  const d = dkeCurrentDeck(holder);
   dkeNorm(d);
   dkeEnsureDom();
   dkeIsOpen = true; dkeTool = deckHasContent(d) ? 'select' : 'room';
   dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkePtrs.clear(); dkePinch = null;
   document.getElementById('dke-wrap').classList.add('open');
-  const stnName = (typeof stationDef === 'function' && stationDef() && stationDef().name) || s.name || 'STATION';
-  document.getElementById('dke-title').textContent = (stnName.toUpperCase()) + ' — DECK PLAN';
+  document.getElementById('dke-title').textContent = (String(titleName || 'STATION').toUpperCase()) + ' — DECK PLAN';
   document.getElementById('dke-w').value = d.w;
   document.getElementById('dke-h').value = d.h;
   dkeFitView();
   dkeRenderAll();
+}
+function dkeOpen(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  if(typeof currentStationId === 'undefined') return;
+  dkeTarget = 'station';
+  // The built-in Aurelia station has no stationAdditions entry (its areas come from
+  // MAIN), so seed a deck-only holder for it — that lets the canon station carry a
+  // drawable deck like authored stations, overriding the hand-drawn map once drawn.
+  let s = stationAdditions[currentStationId];
+  if(!s){ if(currentStationId === 'aurelia'){ s = stationAdditions['aurelia'] = {}; } else { return; } }
+  const stnName = (typeof stationDef === 'function' && stationDef() && stationDef().name) || s.name || 'STATION';
+  dkeBeginEdit(s, stnName);
+}
+function dkeOpenShip(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  if(typeof shipState === 'undefined') return;
+  dkeTarget = 'ship';
+  dkeBeginEdit(shipState, shipState.name || 'SHIP');
 }
 function dkeClose(){
   if(!dkeIsOpen) return;
   dkeIsOpen = false; dkePoly = null; dkeGesture = null; dkePtrs.clear(); dkePinch = null;
   const w = document.getElementById('dke-wrap'); if(w) w.classList.remove('open');
   dkeFlushSave();
-  if(typeof renderStationMap === 'function') renderStationMap();
-  if(typeof updateNodes === 'function') updateNodes();
-  if(typeof renderDesignPanel === 'function') renderDesignPanel();
+  const wasShip = dkeTarget === 'ship';
+  dkeAfterChange();
+  if(!wasShip && typeof renderDesignPanel === 'function') renderDesignPanel();
+  dkeTarget = 'station';   // reset to the default target after closing
 }
 function dkeRemove(){
   if(typeof isReferee === 'function' && !isReferee()) return;
-  const s = stationAdditions[currentStationId]; if(!s) return;
+  const s = dkeHolder(); if(!s) return;
   const decks = dkeDeckList(s); if(!decks.length) return;
   const multi = decks.length > 1;
   if(!confirm(multi ? 'Remove this deck? Other decks stay.' : 'Remove this deck plan? The map goes back to the automatic layout.')) return;
@@ -706,24 +735,51 @@ function dkeRemove(){
   s.deckIdx = Math.max(0, Math.min(s.decks.length - 1, dkeDeckIndex(s)));
   if(!s.decks.length){ delete s.decks; delete s.deckIdx; }
   dkeUndoStack = [];
-  saveAuthoredStations();
+  dkeSave();
   if(dkeIsOpen){ if(dkeDeckList(s).length){ dkeSel = null; dkeFitView(); dkeRenderAll(); dkeRenderDecks(); } else { dkeClose(); } }
-  if(typeof renderStationMap === 'function') renderStationMap();
-  if(typeof renderDesignPanel === 'function') renderDesignPanel();
+  dkeAfterChange();
+  if(dkeTarget === 'station' && typeof renderDesignPanel === 'function') renderDesignPanel();
 }
 // Design Studio row (called from designStationViewHTML in js/40-station.js).
+// Explicitly the STATION deck (dkeD() follows dkeTarget, which may be 'ship').
 function dkeStudioRowHTML(){
-  const has = deckHasContent(dkeD()) || !!dkeD();
+  const sd = (typeof currentStationId !== 'undefined') ? dkeCurrentDeck(stationAdditions[currentStationId]) : null;
+  const has = !!sd;
   return `<div class="hx-edit-row"><span>Deck plan</span><div style="flex:1;display:flex;gap:6px">
     <button class="hx-act-btn primary" onclick="dkeOpen()">🗺 ${has ? 'Edit' : 'Draw'} deck plan</button>
     ${has ? `<button class="hx-act-btn" style="flex:0 0 auto;border-color:#c0506e;color:#ff9bb6" onclick="dkeRemove()" title="Remove deck plan">🗑</button>` : ''}
   </div></div>`;
 }
 
+// ── Ship deck plan (rendered into the Ship Status panel; edited via dkeOpenShip) ─
+// Read-only, NON-interactive render (own idp so its token clip-path can't collide
+// with the station map's). The referee authors it in the same editor overlay.
+function dkeShipDeckSVG(deck){
+  const nm = (typeof shipState !== 'undefined' && shipState.name) ? String(shipState.name).toUpperCase() : 'SHIP';
+  const title = (deck && deck.name) ? `${nm} — ${String(deck.name).toUpperCase()}` : `${nm} — DECK PLAN`;
+  return `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(title)}</text>`
+    + dkeContentSVG(dkeNorm(deck), { idp:'ship' });
+}
+// Ship Status section (called from renderShipPanel in js/75-ship.js).
+function dkeShipStudioRowHTML(){
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const deck = (typeof shipState !== 'undefined') ? dkeCurrentDeck(shipState) : null;
+  const has = deck && deckHasContent(deck);
+  let inner = '';
+  if(has){
+    inner += `<svg viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block">${dkeShipDeckSVG(deck)}</svg>`;
+  }
+  if(ref){   // players with no deck see nothing (no empty section clutter)
+    inner += `<button class="cbt-btn" style="width:100%;margin-top:${has ? '8px' : '0'}" onclick="dkeOpenShip()">🗺 ${has ? 'Edit' : 'Draw'} ship deck plan</button>`;
+  }
+  if(!inner) return '';
+  return `<div class="sf-sec"><div class="sf-tab">Deck Plan</div><div class="sf-card">${inner}</div></div>`;
+}
+
 // ── Deck switcher (editor: add / rename / delete / switch the active deck) ────
 function dkeRenderDecks(){
   const el = document.getElementById('dke-decks'); if(!el) return;
-  const s = stationAdditions[currentStationId];
+  const s = dkeHolder();
   const decks = dkeDeckList(s), cur = dkeDeckIndex(s);
   el.innerHTML = decks.map((dk, i) =>
     `<button class="dke-deck${i===cur?' on':''}" onclick="dkeSwitchDeck(${i})">${dkeEsc(dkeDeckName(dk, i))}</button>`).join('')
@@ -732,7 +788,7 @@ function dkeRenderDecks(){
     + (decks.length > 1 ? `<button class="dke-deck dke-danger" onclick="dkeRemove()" title="Remove this deck">🗑</button>` : '');
 }
 function dkeSwitchDeck(i){
-  const s = stationAdditions[currentStationId]; if(!s) return;
+  const s = dkeHolder(); if(!s) return;
   dkeFlushSave();
   const decks = dkeEnsureDecks(s);
   s.deckIdx = Math.max(0, Math.min(decks.length - 1, i));
@@ -741,25 +797,25 @@ function dkeSwitchDeck(i){
     const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
     if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
   }
-  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();   // deckIdx syncs
+  dkeSave();   // deckIdx syncs
   dkeFitView(); dkeRenderAll(); dkeRenderDecks();
 }
 function dkeAddDeck(){
-  const s = stationAdditions[currentStationId]; if(!s) return;
+  const s = dkeHolder(); if(!s) return;
   const decks = dkeEnsureDecks(s);
   const nd = dkeBlank(); nd.name = 'Deck ' + (decks.length + 1);
   decks.push(nd);
   dkeSwitchDeck(decks.length - 1);   // jump to the new deck
 }
 function dkeRenameDeck(i){
-  const s = stationAdditions[currentStationId]; const decks = dkeDeckList(s); if(!decks[i]) return;
+  const s = dkeHolder(); const decks = dkeDeckList(s); if(!decks[i]) return;
   const name = (typeof prompt === 'function') ? prompt('Deck name:', dkeDeckName(decks[i], i)) : null;
   if(name == null) return;
   dkeEnsureDecks(s);
   s.decks[i].name = String(name).trim().slice(0, 24) || ('Deck ' + (i + 1));
-  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  dkeSave();
   dkeRenderDecks();
-  if(typeof renderStationMap === 'function') renderStationMap();
+  dkeAfterChange();
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -1002,7 +1058,7 @@ function dkeSnapshot(){
   if(dkeUndoStack.length > 40) dkeUndoStack.shift();
 }
 function dkeUndoPop(){
-  const s = stationAdditions[currentStationId];
+  const s = dkeHolder();
   if(!s || !dkeUndoStack.length) return;
   const decks = dkeEnsureDecks(s), d = dkeNorm(JSON.parse(dkeUndoStack.pop()));
   decks[dkeDeckIndex(s)] = d;            // undo applies to the active deck (stack cleared on switch)
@@ -1021,7 +1077,7 @@ function dkeFlushSave(){
   if(dkeSaveTimer){ clearTimeout(dkeSaveTimer); dkeSaveTimer = null; }
   if(!dkeDirty) return;
   dkeDirty = false;
-  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  dkeSave();
 }
 function dkeResize(dim, val){
   const d = dkeD(); if(!d) return;
