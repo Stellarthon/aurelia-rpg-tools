@@ -143,15 +143,43 @@ function deckHasContent(d){
   return !!(d && ((d.floors||[]).length || (d.walls||[]).length || (d.doors||[]).length
     || (d.props||[]).length || (d.labels||[]).length || (d.links||[]).length || (d.tokens||[]).length));
 }
-// Current station's deck (editor always mutates through here so undo/redo and
-// the poll's stationAdditions replacement can never leave a stale reference).
+// ── Multiple decks per station ───────────────────────────────────────────────
+// A station-additions entry holds its decks under `.decks` (array) with `.deckIdx`
+// = the referee's active deck (synced; players follow it). LEGACY single decks
+// live at `.deck`; reads below support both, and the first structural edit
+// migrates `.deck` → `.decks[0]` (dkeEnsureDecks) so old maps keep working
+// untouched until the referee adds a second deck. Each deck is a full deck object
+// (own floors/walls/tokens/fog/scale), so decks are independent and all sync.
+function dkeDeckList(s){
+  if(!s) return [];
+  if(Array.isArray(s.decks)) return s.decks;
+  return s.deck ? [s.deck] : [];
+}
+function dkeDeckIndex(s){
+  const n = dkeDeckList(s).length; if(!n) return 0;
+  const i = (s && typeof s.deckIdx === 'number') ? s.deckIdx : 0;
+  return Math.max(0, Math.min(n - 1, i));
+}
+function dkeCurrentDeck(s){
+  const list = dkeDeckList(s);
+  return list.length ? list[dkeDeckIndex(s)] : null;
+}
+function dkeDeckName(deck, i){ return (deck && deck.name) || ('Deck ' + (i + 1)); }
+// Migrate legacy `.deck` → `.decks[]` in place (mutates; caller saves).
+function dkeEnsureDecks(s){
+  if(!s) return [];
+  if(!Array.isArray(s.decks)){
+    s.decks = s.deck ? [s.deck] : [];
+    delete s.deck;
+    if(typeof s.deckIdx !== 'number') s.deckIdx = 0;
+  }
+  return s.decks;
+}
+// Current station's active deck (editor always mutates through here so undo/redo
+// and the poll's stationAdditions replacement can never leave a stale reference).
 function dkeD(){
   if(typeof currentStationId === 'undefined') return null;
-  // The built-in Aurelia station carries its deck under stationAdditions['aurelia']
-  // too (a deck-only holder — its areas still come from MAIN); when it has content
-  // the deck overrides the hand-drawn canon map (see renderStationMap, js/40).
-  const s = stationAdditions[currentStationId];
-  return (s && s.deck) ? s.deck : null;
+  return dkeCurrentDeck(stationAdditions[currentStationId]);
 }
 
 // ── Room detection (tap-the-room area links) ─────────────────────────────────
@@ -500,7 +528,8 @@ function deckStationViewBox(deck){
 }
 function deckStationSVG(deck, def){
   const name = ((def && def.name) || 'STATION').toUpperCase();
-  let out = `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(name)} — DECK PLAN</text>`
+  const title = (deck && deck.name) ? `${name} — ${String(deck.name).toUpperCase()}` : `${name} — DECK PLAN`;
+  let out = `<text x="0" y="-10" font-size="12" font-weight="700" fill="#e8eaf0" font-family="system-ui,sans-serif" letter-spacing="1">${dkeEsc(title)}</text>`
     + dkeContentSVG(dkeNorm(deck), { interactive:true, idp:'sta' });
   // Range-ruler overlay rides along on every render so it survives poll redraws
   // (the ruler is transient measurement state, never saved into the deck).
@@ -614,6 +643,7 @@ function dkeEnsureDom(){
       <button class="hx-act-btn" style="flex:0 0 auto" id="dke-undo" title="Undo">↶ Undo</button>
       <button class="hx-act-btn primary" style="flex:0 0 auto" id="dke-done">✓ Done</button>
     </div>
+    <div class="dke-decks" id="dke-decks"></div>
     <div class="dke-tools" id="dke-tools"></div>
     <div class="dke-sub" id="dke-sub"></div>
     <div id="dke-canvas"><svg id="dke-svg" xmlns="http://www.w3.org/2000/svg"><g id="dke-content"></g><g id="dke-ghost"></g></svg></div>
@@ -641,16 +671,18 @@ function dkeOpen(){
   // drawable deck like authored stations, overriding the hand-drawn map once drawn.
   let s = stationAdditions[currentStationId];
   if(!s){ if(currentStationId === 'aurelia'){ s = stationAdditions['aurelia'] = {}; } else { return; } }
-  if(!s.deck) s.deck = dkeBlank();
-  dkeNorm(s.deck);
+  const decks = dkeEnsureDecks(s);
+  if(!decks.length){ decks.push(dkeBlank()); s.deckIdx = 0; }
+  const d = dkeCurrentDeck(s);
+  dkeNorm(d);
   dkeEnsureDom();
-  dkeIsOpen = true; dkeTool = deckHasContent(s.deck) ? 'select' : 'room';
+  dkeIsOpen = true; dkeTool = deckHasContent(d) ? 'select' : 'room';
   dkeSel = null; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkePtrs.clear(); dkePinch = null;
   document.getElementById('dke-wrap').classList.add('open');
   const stnName = (typeof stationDef === 'function' && stationDef() && stationDef().name) || s.name || 'STATION';
   document.getElementById('dke-title').textContent = (stnName.toUpperCase()) + ' — DECK PLAN';
-  document.getElementById('dke-w').value = s.deck.w;
-  document.getElementById('dke-h').value = s.deck.h;
+  document.getElementById('dke-w').value = d.w;
+  document.getElementById('dke-h').value = d.h;
   dkeFitView();
   dkeRenderAll();
 }
@@ -665,10 +697,17 @@ function dkeClose(){
 }
 function dkeRemove(){
   if(typeof isReferee === 'function' && !isReferee()) return;
-  const s = stationAdditions[currentStationId]; if(!s || !s.deck) return;
-  if(!confirm('Remove this deck plan? The map goes back to the automatic layout.')) return;
-  delete s.deck;
+  const s = stationAdditions[currentStationId]; if(!s) return;
+  const decks = dkeDeckList(s); if(!decks.length) return;
+  const multi = decks.length > 1;
+  if(!confirm(multi ? 'Remove this deck? Other decks stay.' : 'Remove this deck plan? The map goes back to the automatic layout.')) return;
+  dkeEnsureDecks(s);
+  s.decks.splice(dkeDeckIndex(s), 1);
+  s.deckIdx = Math.max(0, Math.min(s.decks.length - 1, dkeDeckIndex(s)));
+  if(!s.decks.length){ delete s.decks; delete s.deckIdx; }
+  dkeUndoStack = [];
   saveAuthoredStations();
+  if(dkeIsOpen){ if(dkeDeckList(s).length){ dkeSel = null; dkeFitView(); dkeRenderAll(); dkeRenderDecks(); } else { dkeClose(); } }
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof renderDesignPanel === 'function') renderDesignPanel();
 }
@@ -681,8 +720,50 @@ function dkeStudioRowHTML(){
   </div></div>`;
 }
 
+// ── Deck switcher (editor: add / rename / delete / switch the active deck) ────
+function dkeRenderDecks(){
+  const el = document.getElementById('dke-decks'); if(!el) return;
+  const s = stationAdditions[currentStationId];
+  const decks = dkeDeckList(s), cur = dkeDeckIndex(s);
+  el.innerHTML = decks.map((dk, i) =>
+    `<button class="dke-deck${i===cur?' on':''}" onclick="dkeSwitchDeck(${i})">${dkeEsc(dkeDeckName(dk, i))}</button>`).join('')
+    + `<button class="dke-deck dke-deck-add" onclick="dkeAddDeck()" title="Add a deck">＋ Deck</button>`
+    + `<button class="dke-deck" onclick="dkeRenameDeck(${cur})" title="Rename this deck">✎</button>`
+    + (decks.length > 1 ? `<button class="dke-deck dke-danger" onclick="dkeRemove()" title="Remove this deck">🗑</button>` : '');
+}
+function dkeSwitchDeck(i){
+  const s = stationAdditions[currentStationId]; if(!s) return;
+  dkeFlushSave();
+  const decks = dkeEnsureDecks(s);
+  s.deckIdx = Math.max(0, Math.min(decks.length - 1, i));
+  dkeSel = null; dkePoly = null; dkeUndoStack = [];   // undo is per-deck
+  const d = dkeCurrentDeck(s); if(d){ dkeNorm(d);
+    const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
+    if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
+  }
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();   // deckIdx syncs
+  dkeFitView(); dkeRenderAll(); dkeRenderDecks();
+}
+function dkeAddDeck(){
+  const s = stationAdditions[currentStationId]; if(!s) return;
+  const decks = dkeEnsureDecks(s);
+  const nd = dkeBlank(); nd.name = 'Deck ' + (decks.length + 1);
+  decks.push(nd);
+  dkeSwitchDeck(decks.length - 1);   // jump to the new deck
+}
+function dkeRenameDeck(i){
+  const s = stationAdditions[currentStationId]; const decks = dkeDeckList(s); if(!decks[i]) return;
+  const name = (typeof prompt === 'function') ? prompt('Deck name:', dkeDeckName(decks[i], i)) : null;
+  if(name == null) return;
+  dkeEnsureDecks(s);
+  s.decks[i].name = String(name).trim().slice(0, 24) || ('Deck ' + (i + 1));
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  dkeRenderDecks();
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
+
 // ── Rendering ────────────────────────────────────────────────────────────────
-function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeApplyView(); }
+function dkeRenderAll(){ dkeRenderContent(); dkeRenderTools(); dkeRenderSub(); dkeRenderHint(); dkeRenderDecks(); dkeApplyView(); }
 function dkeRenderContent(){
   const d = dkeD(), g = document.getElementById('dke-content');
   if(g) g.innerHTML = d ? dkeContentSVG(d, { editor:true, sel:dkeSel, idp:'dke' }) : '';
@@ -923,10 +1004,11 @@ function dkeSnapshot(){
 function dkeUndoPop(){
   const s = stationAdditions[currentStationId];
   if(!s || !dkeUndoStack.length) return;
-  s.deck = dkeNorm(JSON.parse(dkeUndoStack.pop()));
+  const decks = dkeEnsureDecks(s), d = dkeNorm(JSON.parse(dkeUndoStack.pop()));
+  decks[dkeDeckIndex(s)] = d;            // undo applies to the active deck (stack cleared on switch)
   dkeSel = null; dkePoly = null;
-  document.getElementById('dke-w').value = s.deck.w;
-  document.getElementById('dke-h').value = s.deck.h;
+  document.getElementById('dke-w').value = d.w;
+  document.getElementById('dke-h').value = d.h;
   dkeCommit(); dkeRenderSub();
 }
 function dkeCommit(){
@@ -1281,11 +1363,37 @@ function dkeRulerBtnSync(){
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
 }
+// Station-view deck switcher — shown only when the station has 2+ decks. The
+// referee's buttons set the SYNCED active deck (players follow via the poll);
+// players get a read-only "name · n/total" label. Called from renderStationMap.
+function dkeRenderMapDecks(){
+  const el = document.getElementById('deck-switcher'); if(!el) return;
+  const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
+  const decks = dkeDeckList(s);
+  if(!dkeMapDeck() || decks.length < 2){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  const cur = dkeDeckIndex(s);
+  const ref = (typeof isReferee === 'function') && isReferee();
+  el.innerHTML = ref
+    ? decks.map((dk, i) => `<button class="deck-sw-btn${i===cur?' on':''}" onclick="dkeMapSwitchDeck(${i})">${dkeEsc(dkeDeckName(dk, i))}</button>`).join('')
+    : `<span class="deck-sw-label">${dkeEsc(dkeDeckName(decks[cur], cur))} · ${cur+1}/${decks.length}</span>`;
+}
+function dkeMapSwitchDeck(i){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const s = stationAdditions[currentStationId]; if(!s) return;
+  const decks = dkeEnsureDecks(s);
+  s.deckIdx = Math.max(0, Math.min(decks.length - 1, i));
+  if(dkeMapRuler){ dkeMapRulerState = null; dkeMapRulerAnchor = null; }   // clear a stale measurement across decks
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+}
 
 function dkeMapDeck(){
   if(typeof currentStationId === 'undefined') return null;
   const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
-  return (s && s.deck && deckHasContent(s.deck)) ? s.deck : null;
+  const deck = dkeCurrentDeck(s);
+  return (deck && deckHasContent(deck)) ? deck : null;
 }
 // Client → svg user coords. The station map is letterboxed (preserveAspectRatio
 // default), so unlike the editor's aspect-managed viewBox this needs the CTM.
