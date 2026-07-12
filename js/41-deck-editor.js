@@ -653,7 +653,7 @@ const DKE_HINTS = {
   room:'Drag a rectangle — floor and perimeter walls are placed in one go.',
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
-  poly:'Tap corner after corner to chain walls. End the run from the bar above.',
+  poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
   door:'Tap a cell edge to place a door; tap a door to cycle closed → open → locked. Erase or Select+Delete removes it. Players see the state.',
   prop:'Pick a stamp above, then tap a cell. Multi-cell stamps grow right/down from the tap. Tap the same prop again to rotate it.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
@@ -1342,6 +1342,21 @@ function dkeAddWall(d, x1, y1, x2, y2){
                              || (w.x1===x2 && w.y1===y2 && w.x2===x1 && w.y2===y1));
   if(!dup) d.walls.push({ x1, y1, x2, y2 });
 }
+// Ray-cast point-in-polygon (vertices in grid coords) — handles diagonal runs.
+function dkePointInPoly(px, py, poly){
+  let inside = false;
+  for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if(((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+// Fill every grid cell whose centre lies inside the closed wall-run with floor.
+function dkeFillPolygon(d, poly){
+  const covered = (cx, cy) => (d.floors || []).some(f => cx >= f.x && cx < f.x + f.w && cy >= f.y && cy < f.y + f.h);
+  for(let cy = 0; cy < d.h; cy++) for(let cx = 0; cx < d.w; cx++)
+    if(dkePointInPoly(cx + 0.5, cy + 0.5, poly) && !covered(cx, cy)) d.floors.push({ x: cx, y: cy, w: 1, h: 1 });
+}
 function dkePaintFloor(p, g){
   const d = dkeD(), c = dkeCell(p);
   if(!d || !c) return;
@@ -1365,15 +1380,27 @@ function dkeTapAction(p){
   if(dkeTool === 'poly'){
     const v = dkeVertex(p);
     if(!dkePoly){
-      dkePoly = { x: v.x, y: v.y };
+      dkePoly = { x: v.x, y: v.y, start: { x: v.x, y: v.y }, path: [{ x: v.x, y: v.y }] };
       dkeRenderSub();
+    } else if(v.x === dkePoly.start.x && v.y === dkePoly.start.y && dkePoly.path.length >= 3){
+      // Closed the loop back at the start → seal it and fill the room.
+      dkeSnapshot();
+      dkeAddWall(d, dkePoly.x, dkePoly.y, v.x, v.y);
+      dkeFillPolygon(d, dkePoly.path);
+      dkeCommit();
+      dkePolyEnd();
+      if(typeof showToast === 'function') showToast('Room closed');
+      return;
     } else if(v.x !== dkePoly.x || v.y !== dkePoly.y){
       dkeSnapshot();
       dkeAddWall(d, dkePoly.x, dkePoly.y, v.x, v.y);
-      dkePoly = { x: v.x, y: v.y };
+      dkePoly.x = v.x; dkePoly.y = v.y; dkePoly.path.push({ x: v.x, y: v.y });
       dkeCommit();
     }
-    dkeGhost(`<circle cx="${dkePoly.x*C}" cy="${dkePoly.y*C}" r="5" fill="none" stroke="#D4A843" stroke-width="2"/>`);
+    // Ghost: last vertex + a highlighted start ring you can tap to close.
+    const st = dkePoly.start;
+    dkeGhost(`<circle cx="${dkePoly.x*C}" cy="${dkePoly.y*C}" r="5" fill="none" stroke="#D4A843" stroke-width="2"/>`
+      + (dkePoly.path.length >= 3 ? `<circle cx="${st.x*C}" cy="${st.y*C}" r="7" fill="#4caf8233" stroke="#4caf82" stroke-width="2"><animate attributeName="r" values="6;9;6" dur="1.4s" repeatCount="indefinite"/></circle>` : `<circle cx="${st.x*C}" cy="${st.y*C}" r="4" fill="#D4A843"/>`));
   } else if(dkeTool === 'door'){
     const e = dkeNearestEdge(p, .4); if(!e) return;
     const i = d.doors.findIndex(dr => dr.x === e.x && dr.y === e.y && dr.o === e.o);
