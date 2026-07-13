@@ -981,7 +981,20 @@ function buildBodyView(id){
 
   const svg = document.getElementById('body-disc-svg');
   if(svg){
-    attachPinchZoom(svg);                      // bind pan/zoom BEFORE the disc-tap handler so its swallow wins registration order
+    attachPinchZoom(svg, (cx, cy) => {         // bind pan/zoom BEFORE the disc-tap handler so its swallow wins registration order
+      // Tap-to-select is driven from here, not the per-node listeners in
+      // wireLocationNodes/wireMoonNodes: pointerdown setPointerCapture's this SVG,
+      // so click/pointerup retarget to the SVG and never reach a child node —
+      // that left on-planet icons unclickable (only the sidebar list worked).
+      // Hit-test the element under the release point instead (mirrors the orrery).
+      if(placingLocation) return;              // a tap mid-placement is a pin drop — handleDiscTap owns it
+      const el = document.elementFromPoint(cx, cy);
+      if(!el || !el.closest) return;
+      const locNode = el.closest('.loc-node');
+      if(locNode){ selectBodyLocation(locNode.getAttribute('data-loc')); return; }
+      const moonNode = el.closest('.moon-node');
+      if(moonNode){ goBodyView(moonNode.getAttribute('data-moon')); }
+    });
     if(svg.dataset.pzBody !== body.id){ pzReset(svg); svg.dataset.pzBody = body.id; }   // fresh body → start un-zoomed
     const PR = bodyDiscPR(body);
     svg.innerHTML = renderBodyDisc(body) + renderElevators(body, 400, 300, PR)
