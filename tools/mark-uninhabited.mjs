@@ -33,7 +33,7 @@ const NO_FRONTIER = new Set(['vast', 'archon']);  // special polities, never "em
 const src = readFileSync(file, 'utf8');
 const m = /const GALAXY_NODES = (\[[\s\S]*?\n\]);/.exec(src);
 if (!m) throw new Error('GALAXY_NODES literal not found');
-const nodes = eval(m[1]);
+const nodes = JSON.parse(m[1]);  // literal is JSON-clean (same as gen-galaxy.mjs)
 
 // Deterministic PRNG (mulberry32) → stable shuffle of the eligible pool.
 function mulberry(seed) {

@@ -35,8 +35,9 @@ const econSrc   = fs.readFileSync(path.join(ROOT, 'js/90-economy.js'), 'utf8').s
 const _gStart = galaxySrc.findIndex(l => l.includes('const GALAXY_FACTIONS'));
 const _gEnd   = galaxySrc.findIndex(l => l.startsWith('const GALAXY_NODES_BASE'));
 const galaxyData = galaxySrc.slice(_gStart, _gEnd).join('\n');
-// The window.ECON IIFE: lines 1 .. its close at `})();` (line 1219). Everything
-// after is referee-console UI (DOM), which we don't load.
+// The window.ECON IIFE: from line 1 to its close at `})();` (located
+// dynamically below). Everything after is referee-console UI (DOM), which we
+// don't load.
 const iifeClose = econSrc.findIndex((l, i) => i > 0 && l === '})();');
 const econIIFE = econSrc.slice(0, iifeClose + 1).join('\n');
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generates themed PWA icons (no image libs) — a gold orrery ring + star on the
 // app's dark navy, drawn per-pixel and PNG-encoded with Node's zlib. Plain by
-// design; replace supabase/.. no — replace icons/icon-*.png with real art anytime.
+// design; replace icons/icon-*.png with real art anytime.
 //   node tools/gen-icons.mjs   → icons/icon-192.png, icon-512.png, apple-touch-180.png
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
