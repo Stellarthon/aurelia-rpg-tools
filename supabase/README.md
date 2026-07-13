@@ -18,11 +18,19 @@ supabase/
   functions/put-state/index.ts               referee-gated aurelia_state writes (Stage 4)
   functions/private-notes/index.ts           per-identity private notes (token-gated)
   functions/upload-object/index.ts           token-gated storage uploads
-  seed/                                       generated — DO regenerate, don't hand-edit
-    campaign_content.json                     the audience-tagged fragments
-    campaign_content.seed.sql                 ready-to-run seed (SQL editor)
-    classification-report.md                  ← REVIEW THIS FIRST
+  seed/                                       generated LOCALLY — DO regenerate, don't hand-edit
+    campaign_content.json                     (gitignored — GM content; never commit to this public repo)
+    campaign_content.seed.sql                 (gitignored — GM content; regenerate & run in the SQL editor)
+    classification-report.md                  structural report, no secrets ← REVIEW THIS FIRST
 ```
+
+> ⚠️ **The seed DATA files are gitignored on purpose.** `campaign_content.json`
+> and `campaign_content.seed.sql` hold referee-only campaign content in cleartext.
+> This repo is **public** (GitHub Pages), so they must never be committed — the
+> redaction architecture (de-baked bundle + token-gated `get-content` + RLS) is
+> what keeps GM content away from players. Regenerate them locally when you need
+> to (re)seed; the live content already sits in Supabase. `classification-report.md`
+> holds only field paths/counts (no secret prose) and stays committed.
 
 ## Step 1 — Regenerate & review the content (Stage 0)
 

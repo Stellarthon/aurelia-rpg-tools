@@ -6,3 +6,9 @@
 
 # Self-contained local-viewing bundle (built by tools/build-local.mjs; the modular index.html is the source of truth)
 index.local.html
+
+# Supabase seed DATA — carries referee (GM-only) campaign content in cleartext.
+# Regenerated locally by tools/extract-content.mjs; must NOT be committed to this
+# public repo. (classification-report.md is structural metadata — safe to keep.)
+supabase/seed/campaign_content.json
+supabase/seed/campaign_content.seed.sql
