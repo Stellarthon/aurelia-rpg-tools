@@ -104,7 +104,14 @@ function dkeStampTemplate(d, tpl, ax, ay){
   const ox = Math.max(0, Math.min(d.w - tpl.w, ax)), oy = Math.max(0, Math.min(d.h - tpl.h, ay));
   (tpl.floors||[]).forEach(f => d.floors.push({ x:f.x+ox, y:f.y+oy, w:f.w, h:f.h }));
   (tpl.walls||[]).forEach(w => dkeAddWall(d, w.x1+ox, w.y1+oy, w.x2+ox, w.y2+oy));
-  (tpl.doors||[]).forEach(dr => { if(!d.doors.some(e => e.x===dr.x+ox && e.y===dr.y+oy && e.o===dr.o)){ const nd = { x:dr.x+ox, y:dr.y+oy, o:dr.o }; if(dr.s) nd.s = dr.s; d.doors.push(nd); } });
+  (tpl.doors||[]).forEach(dr => {
+    if(dr.o === 'd'){
+      const nd = { o:'d', x1:dr.x1+ox, y1:dr.y1+oy, x2:dr.x2+ox, y2:dr.y2+oy }; if(dr.t) nd.t = dr.t; if(dr.s) nd.s = dr.s;
+      if(!d.doors.some(e => e.o==='d' && e.x1===nd.x1 && e.y1===nd.y1 && e.x2===nd.x2 && e.y2===nd.y2)) d.doors.push(nd);
+    } else if(!d.doors.some(e => e.x===dr.x+ox && e.y===dr.y+oy && e.o===dr.o)){
+      const nd = { x:dr.x+ox, y:dr.y+oy, o:dr.o }; if(dr.t) nd.t = dr.t; if(dr.len) nd.len = dr.len; if(dr.s) nd.s = dr.s; d.doors.push(nd);
+    }
+  });
   (tpl.props||[]).forEach(pr => d.props.push({ t:pr.t, x:pr.x+ox, y:pr.y+oy, r:pr.r||0 }));
   (tpl.labels||[]).forEach(l => d.labels.push({ t:l.t, x:l.x+ox, y:l.y+oy }));
   return { ox, oy };
@@ -124,7 +131,14 @@ function dkeCaptureRegion(d, x0, y0, x1, y1){
     if(w2.x1>=ax && w2.x1<=bx && w2.x2>=ax && w2.x2<=bx && w2.y1>=ay && w2.y1<=by && w2.y2>=ay && w2.y2<=by)
       tpl.walls.push({ x1:w2.x1-ax, y1:w2.y1-ay, x2:w2.x2-ax, y2:w2.y2-ay });
   });
-  (d.doors||[]).forEach(dr => { if(dr.x>=ax && dr.x<=bx && dr.y>=ay && dr.y<=by){ const nd = { x:dr.x-ax, y:dr.y-ay, o:dr.o }; if(dr.s) nd.s = dr.s; tpl.doors.push(nd); } });
+  (d.doors||[]).forEach(dr => {
+    if(dr.o === 'd'){
+      const inBox = (x,y) => x>=ax && x<=bx && y>=ay && y<=by;
+      if(inBox(dr.x1,dr.y1) && inBox(dr.x2,dr.y2)){ const nd = { o:'d', x1:dr.x1-ax, y1:dr.y1-ay, x2:dr.x2-ax, y2:dr.y2-ay }; if(dr.t) nd.t = dr.t; if(dr.s) nd.s = dr.s; tpl.doors.push(nd); }
+    } else if(dr.x>=ax && dr.x<=bx && dr.y>=ay && dr.y<=by){
+      const nd = { x:dr.x-ax, y:dr.y-ay, o:dr.o }; if(dr.t) nd.t = dr.t; if(dr.len) nd.len = dr.len; if(dr.s) nd.s = dr.s; tpl.doors.push(nd);
+    }
+  });
   (d.props||[]).forEach(pr => { if(pr.x>=ax && pr.x<bx && pr.y>=ay && pr.y<by) tpl.props.push({ t:pr.t, x:pr.x-ax, y:pr.y-ay, r:pr.r||0 }); });
   (d.labels||[]).forEach(l => { if(l.x>=ax && l.x<=bx && l.y>=ay && l.y<=by) tpl.labels.push({ t:l.t, x:l.x-ax, y:l.y-ay }); });
   return tpl;
