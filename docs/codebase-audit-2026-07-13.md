@@ -28,6 +28,32 @@ The codebase is **well-maintained and disciplined**: excellent resource-teardown
 
 ---
 
+---
+
+## Execution status — 2026-07-13 (autonomous pass)
+
+Worked through the safe, reversible items that need no decision from you and do **not** break the partition-equivalence invariant. Everything else is held with a reason below.
+
+### ✅ Done (committed to `claude/codebase-audit-cleanup-36brxp`)
+| Item | Commit | Notes |
+|------|--------|-------|
+| Delete orphaned prototypes (`hex_jump_prototype.html`, `setup_prototype.html`) | `c9ee0a1` | Zero code refs; not in SW SHELL; app reads none of the wizard's keys. |
+| `tools/` hygiene + new `tools/README.md` | `335fdd5` | `gen-icons` comment fragment; `econ-corp-harness` stale line ref; `mark-uninhabited` `eval`→`JSON.parse` (verified 183 nodes). `node --check` + deck-harness 67/67 still pass. |
+| Docs refresh (`ARCHITECTURE.md` 25 scripts + 7 module rows + version-agnostic cache; `supabase/README.md` 0012; historical banners ×4) | `75c3012` | Left the living `feature-gap-analysis.md` roadmap untouched. |
+| `error_log` retention migration `0013` (finding **B1**) | `01bc79d` | **Proposed, not applied.** SECURITY DEFINER prune (>30 days) + guarded pg_cron. Validated end-to-end on an ephemeral Postgres 16. Apply via SQL editor after review. |
+
+### ⏸ Held — needs your decision or in-browser testing (not done autonomously)
+| Item | Why held |
+|------|----------|
+| **R1 — referee secrets in public seed** (High) | Fundamentally a disclosure decision: **make the repo private** vs **remove seed + purge git history**. Removing the file *without* a history purge doesn't fix exposure, so a half-measure is worse than none. Needs your call. (**B4**, the redundant `.json`, is entangled with this — held too.) |
+| **R2 — rotate `ilovetwix2012!`** (Medium) | Changing `DESIGN_MODE_CODE` edits `js/65-*` → breaks byte-for-byte partition-equivalence (see Tier 3); and rotating the password on *your other accounts* is outside the repo. The audit flags it; the rotation is yours. |
+| **D1 — pdf.js upgrade** (Medium) | v3→v4 has breaking build/API changes; a blind swap of a dependency the rulebook-import feature relies on, with no way to verify in-browser unattended, is too risky. Do it together so we can test import. |
+| **Tier 2 — `upload-object` / bucket RLS** | A design decision (route uploads through the function + tighten RLS, or delete the dead function) that also mutates production RLS. |
+| **Tier 3 — in-code cleanup** (escape-HTML consolidation, dead-symbol removal, risky-catch fixes) | Every item edits `js/*.js` and breaks `verify-split.mjs` Gate 1 until re-baselined. Should be **one** batched PR with an explicit re-baseline decision. |
+| **Tier 4 — SW cache prune (`L2`), whisper-queue cap (`L1`)** | `L2` touches the live service worker all installed PWAs run (needs a `CACHE` bump + offline-flow testing); `L1` edits `js/50-*` (invariant). Both Low value — deferred rather than risk offline breakage unattended. |
+
+---
+
 # Category 1 — Leaks & Resource Management
 
 **Verdict: excellent. No Critical/High leaks.** Teardown hygiene is strong across the board — stop-first pollers, clear-before-re-arm debounces, `built`/`_wired`/`pzBound` idempotency guards on listener binding, `innerHTML=''` render-rebuilds (per-render nodes GC with their listeners), and hard caps on every log/history/queue.
