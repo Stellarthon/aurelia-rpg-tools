@@ -520,6 +520,14 @@ function renderSettingsMenu(showArchon){
       </div>
     </div>`;
 
+  // ── Help — replay the walkthrough (role-aware: referee or player) ──
+  html += `
+    <div class="settings-section-lbl">Help</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeSettingsMenu();startWalkthrough()">
+      <span class="settings-row-label">🧭 Take the tour</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">walkthrough →</span>
+    </div>`;
+
   // Phone-only: re-enable referee mode on this handset. Phones default to the
   // player view (the map lives on the table display, referee chrome is hidden).
   if(document.documentElement.classList.contains('is-phone')){
@@ -871,6 +879,10 @@ function renderRefereeMenu(){
     <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupWizard()">
       <span class="settings-row-label">⚙ Campaign Setup</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">wizard →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupHealth()">
+      <span class="settings-row-label">🩺 Setup health</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">check →</span>
     </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();startRefereeWelcome()">
       <span class="settings-row-label">🧭 Take the tour</span>
