@@ -159,6 +159,10 @@ details.adv .sub{font-size:11px;color:var(--tx1);margin:4px 0 0}
   .kv{grid-template-columns:1fr}
 }
 </style>
+<!-- Optional: the deployed campaign config, if this copy already has one. Lets
+     "edit setup" pre-fill from the live config.js when this device never ran the
+     wizard locally. 404s harmless on a fresh, unconfigured copy. -->
+<script src="config.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -192,6 +196,19 @@ const K = {
    Pre-loaded from any prior save so re-running the wizard is non-destructive. */
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem(K.config) || '{}') || {}; } catch(e){ saved = {}; }
+// Editing a deployed campaign on a device that never ran the wizard locally:
+// seed the editable fields from config.js (window.AURELIA_CONFIG) so the form
+// starts from the live values rather than blank. A local save always wins.
+if(!saved.campaign && !saved.supabase && !saved.access && window.AURELIA_CONFIG){
+  const c = window.AURELIA_CONFIG || {};
+  saved = {
+    campaign: { name: c.campaignName || '',
+                impDay:  c.imperialStart && c.imperialStart.day,
+                impYear: c.imperialStart && c.imperialStart.year },
+    supabase: { url: c.supabaseUrl || '', key: c.supabaseKey || '' },
+    access:   { playerCode: c.accessCode || '', designCode: c.designCode || '' },
+  };
+}
 
 const state = {
   step: 0,

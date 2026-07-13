@@ -867,8 +867,20 @@ function renderRefereeMenu(){
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Campaign Setup</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupWizard()">
+      <span class="settings-row-label">⚙ Campaign Setup</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">wizard →</span>
+    </div>
+    <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
 }
+
+// Re-run the first-run setup wizard (setup.html) to edit this campaign's backend,
+// access codes, players and the deployable config.js. A deliberate full navigation
+// — the wizard's "Enter the app" button returns here. Non-destructive: the wizard
+// pre-loads saved answers (and, on a deployed device, seeds from config.js).
+function openSetupWizard(){ location.href = 'setup.html'; }
 
 // ── Design menu (shown only while Design Mode is ON) ───────────────────────
 // Campaign-editing tools: removed items, full reset, and the dynamic
