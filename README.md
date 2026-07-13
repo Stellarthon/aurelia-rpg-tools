@@ -96,4 +96,5 @@ Standalone checks (dependency-free, `node <file>`):
 CI (`.github/workflows/ci.yml`) runs `node --check` on every js file, the deck harness, a
 headless boot smoke test (`tools/smoke.mjs`), and a headless setup + walkthrough integration
 test (`tools/onboarding-harness.mjs` — first-run referee/player walkthroughs, the setup health
-check, and the misconfig banner, including every hand-off back to the setup wizard).
+check, the misconfig banner including every hand-off back to the setup wizard, and the wizard's
+connection test rejecting anything that isn't a real Supabase project).

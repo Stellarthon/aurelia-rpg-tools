@@ -241,6 +241,28 @@ try {
     check('replay auto-detects the referee role', /Welcome, Referee/i.test(t), t);
     await ctx.close();
   }
+
+  // ── 6) Wizard "Test connection" must not call a non-Supabase URL valid (regression) ──
+  console.log('\n=== 6 · setup wizard rejects URLs that are not a Supabase project ===');
+  {
+    const ctx = await context();
+    const page = await ctx.newPage();
+    await page.goto(base + '/setup.html', { waitUntil: 'load', timeout: 30000 });
+    // Jump to the Connect step so #conn-result exists, then drive testConnection directly.
+    const probe = url => page.evaluate(async u => {
+      state.step = STEPS.findIndex(s => s.id === 'supabase'); render();
+      state.supabase.url = u; state.supabase.key = 'sb_publishable_TEST';
+      await testConnection();
+      return { html: document.querySelector('#conn-result').innerHTML, tested: state.supabase.tested };
+    }, url);
+
+    const noScheme = await probe('my-project');           // no https:// → would resolve against our own origin
+    check('a value with no scheme is not called valid', !/valid/i.test(noScheme.html) && noScheme.tested === false, noScheme.html);
+
+    const wrongHost = await probe(base);                  // absolute, but our static host → 404 that is not PostgREST
+    check('an absolute non-Supabase 404 is not called valid', !/valid/i.test(wrongHost.html) && wrongHost.tested === false, wrongHost.html);
+    await ctx.close();
+  }
 } finally {
   await browser.close();
   server.close();

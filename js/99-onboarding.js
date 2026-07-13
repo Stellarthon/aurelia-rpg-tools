@@ -306,20 +306,39 @@
     if(v != null && v !== '') return 'this device';
     return 'built-in default';
   }
+  // A backend only counts as reachable when it answers like PostgREST — a JSON
+  // row array, or a coded "table not found" error. A bare status code is not
+  // enough: a non-URL config value makes fetch() resolve against this page's own
+  // origin, and that host's stray 404 must NOT read as "backend ok, table missing".
+  function isHttpUrl(u){
+    try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:'; }
+    catch(e){ return false; }
+  }
+  const PGRST_MISSING = /PGRST|could not find the table|schema cache|does not exist|relation .* does not exist/i;
+  function classifyProbe(status, contentType, body){
+    const json = /\bjson\b/i.test(contentType || '');
+    if(status === 401 || status === 403) return 'badkey';
+    if(status >= 200 && status < 300 && json){
+      try { if(Array.isArray(JSON.parse(body))) return 'creds-ok'; } catch(e){}
+      return 'not-supabase';
+    }
+    if(json && PGRST_MISSING.test(body || '')) return 'table-missing';
+    return 'not-supabase';
+  }
   async function probeBackend(){
     const url = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/+$/, '');
     const key = (typeof SUPABASE_KEY === 'string' ? SUPABASE_KEY : '');
     const out = { url, backend: 'unknown', table: 'unknown', getcontent: 'unknown' };
     if(!url || !key){ out.backend = 'unset'; return out; }
+    if(!isHttpUrl(url)){ out.backend = 'unreachable'; return out; }   // a non-URL can't be a backend
     try {
       const r = await fetch(url + '/rest/v1/aurelia_state?select=key&limit=1', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
-      if(r.status === 401 || r.status === 403){ out.backend = 'badkey'; }
-      else if(r.ok){ out.backend = 'ok'; out.table = 'ok'; }
-      else if(r.status === 404){ out.backend = 'ok'; out.table = 'missing'; }
-      else {
-        const t = await r.text().catch(() => '');
-        out.backend = 'ok'; out.table = /does not exist|PGRST205|find the table/i.test(t) ? 'missing' : 'unknown';
-      }
+      const body = await r.text().catch(() => '');
+      const verdict = classifyProbe(r.status, r.headers.get('content-type'), body);
+      if(verdict === 'badkey')             out.backend = 'badkey';
+      else if(verdict === 'creds-ok')     { out.backend = 'ok'; out.table = 'ok'; }
+      else if(verdict === 'table-missing'){ out.backend = 'ok'; out.table = 'missing'; }
+      else                                  out.backend = 'unreachable'; // answered, but not like Supabase
     } catch(e){ out.backend = 'unreachable'; }
     if(out.backend === 'ok'){
       try {
