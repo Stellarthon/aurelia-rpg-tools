@@ -42,7 +42,7 @@ const NAMES = [
   'dkeIsDiagWall','dkeNearestDiagWall','dkeDiagOpeningSpan','dkeDiagOpeningHit','dkeDiagOpeningSVG',
   'dkeClipCellHalfPlane','dkeDiagFloorCuts',
   'dkeSharedEdges','dkeRemoveEdgeWall','dkeOpeningCovers','dkeRoomCells','dkeEdgeWalled','dkeWallBlocks',
-  'dkeIsDiagWall','dkeSegProperCross','dkeDiagWallBetween','dkeFillPolygon','dkePointInPoly',
+  'dkeIsDiagWall','dkeSegsIntersect','dkeCenterOnDiag','dkeDiagWallBetween','dkeFloorSet','dkeFillPolygon','dkePointInPoly',
   // room records + auto-detection + window see-through
   'dkeNewRoomId','dkeRoomEnclosed','dkeEnclosedRegions','dkeRoomForCell','dkeRoomById','dkeRoomLiveCells',
   'dkeSyncRooms','dkeRoomName','dkeRoomPending','dkeOpeningSides','dkeIsWindow','dkeIsClearWindow',
@@ -348,16 +348,19 @@ const find = (arr, p) => arr.find(p);
 
 // ═══ GROUP 7 — angled walls bound rooms (detection + selection) ══════════════
 (() => {
-  // Strict crossing: a proper interior crossing counts, a shared endpoint doesn't.
-  ok(M.dkeSegProperCross({x:0,y:0},{x:2,y:0},{x:1,y:-1},{x:1,y:1}) === true, 'proper crossing detected');
-  ok(M.dkeSegProperCross({x:0,y:0},{x:2,y:0},{x:1,y:0},{x:1,y:1}) === false, 'endpoint-only touch is not a crossing');
+  // Inclusive intersection: a proper crossing AND a 45° endpoint-touch both count.
+  ok(M.dkeSegsIntersect({x:0,y:0},{x:2,y:0},{x:1,y:-1},{x:1,y:1}) === true, 'proper crossing detected');
+  ok(M.dkeSegsIntersect({x:0.5,y:0.5},{x:1.5,y:0.5},{x:0,y:1},{x:2,y:-1}) === true, '45° wall touching a centre counts as intersecting');
+  ok(M.dkeSegsIntersect({x:0,y:0},{x:1,y:0},{x:2,y:2},{x:3,y:4}) === false, 'a far diagonal does not intersect');
 
   // A diagonal wall running between two floored cells blocks flood-fill.
   const d = { w:4, h:4, floors:[{x:0,y:0,w:2,h:1}], walls:[{x1:0,y1:1,x2:2,y2:0}], doors:[], rooms:[] };
   ok(M.dkeWallBlocks(d, 0, 0, 1, 0) === true, 'a diagonal wall between two cells blocks passage');
   ok(M.dkeRoomCells(d, 0, 0).length === 1, 'flood-fill stops at the diagonal (1-cell room)');
-  // A 45° wall that only grazes cell centres must NOT spuriously fragment the grid.
-  ok(M.dkeWallBlocks({ w:4,h:4, floors:[{x:0,y:0,w:2,h:1}], walls:[{x1:0,y1:0,x2:2,y2:2}] }, 0,0,1,0) === false, '45° wall grazing a centre does not block');
+  // A cell whose centre the diagonal bisects is dropped from the floor (no stray rooms).
+  const bis = { w:4, h:4, floors:[{x:0,y:0,w:2,h:2}], walls:[{x1:0,y1:0,x2:2,y2:2}], doors:[], rooms:[] };
+  ok(M.dkeCenterOnDiag(bis, 0, 0) === true && M.dkeCenterOnDiag(bis, 1, 1) === true, '45° wall bisects the cells on its line');
+  ok(!M.dkeFloorSet(bis).has('0,0') && !M.dkeFloorSet(bis).has('1,1'), 'bisected cells are excluded from the floor set');
 
   // A diagonal PARTITION splits one floored rectangle into two detected rooms.
   const split = M.dkeNorm({ w:4, h:4,
@@ -366,22 +369,29 @@ const find = (arr, p) => arr.find(p);
             { x1:0,y1:1,x2:4,y2:3 } ]   // a shallow diagonal partition across the room
   });
   const rTop = M.dkeRoomCells(split, 0, 0), rBot = M.dkeRoomCells(split, 0, 3);
-  ok(rTop.length + rBot.length === 16 && rTop.length > 0 && rBot.length > 0, 'diagonal partition splits the rectangle into two floods');
-  ok(!new Set(rTop.map(c=>c.x+','+c.y)).has('0,3'), 'the two sides of the partition are separate rooms');
+  ok(rTop.length > 0 && rBot.length > 0 && !new Set(rTop.map(c=>c.x+','+c.y)).has('0,3'), 'diagonal partition splits the rectangle into two rooms');
 
-  // A room whose perimeter INCLUDES a diagonal is detected as enclosed + selectable.
+  // A room whose perimeter INCLUDES a non-axis diagonal is detected + selectable.
   const room = M.dkeNorm({ w:8, h:8, floors:[], walls:[], doors:[], rooms:[] });
-  const poly = [{x:1,y:1},{x:4,y:1},{x:5,y:3},{x:5,y:5},{x:1,y:5}];   // pentagon w/ one diagonal edge
-  M.dkeFillPolygon(room, poly);
-  ok(room.floors.length > 0, 'diagonal room got floored');
+  M.dkeFillPolygon(room, [{x:1,y:1},{x:4,y:1},{x:5,y:3},{x:5,y:5},{x:1,y:5}]);
   M.dkeAddWall(room,1,1,4,1); M.dkeAddWall(room,5,3,5,5); M.dkeAddWall(room,5,5,1,5); M.dkeAddWall(room,1,5,1,1);
-  room.walls.push({ x1:4, y1:1, x2:5, y2:3 });   // the diagonal edge
-  const regs = M.dkeEnclosedRegions(room);
-  ok(regs.length === 1, 'the diagonally-bounded room is exactly one enclosed region');
-  ok(M.dkeRoomEnclosed(room, M.dkeRoomCells(room, 2, 2)) === true, 'diagonal room reports enclosed');
+  room.walls.push({ x1:4, y1:1, x2:5, y2:3 });
+  ok(M.dkeEnclosedRegions(room).length === 1, 'the diagonally-bounded room is one enclosed region');
   M.dkeSyncRooms(room, true);
-  ok(room.rooms.length === 1, 'sync auto-creates a record for the diagonal room');
-  ok(M.dkeRoomForCell(room, 2, 2) === room.rooms[0], 'the diagonal room is selectable from an interior cell');
+  ok(room.rooms.length === 1 && M.dkeRoomForCell(room, 2, 2) === room.rooms[0], 'diagonal room auto-detected + selectable');
+
+  // THE REPORTED CASE — an OCTAGON (four 45° chamfered corners).
+  const oct = M.dkeNorm({ w:8, h:8, floors:[], walls:[], doors:[], rooms:[] });
+  const V = [{x:2,y:0},{x:6,y:0},{x:8,y:2},{x:8,y:6},{x:6,y:8},{x:2,y:8},{x:0,y:6},{x:0,y:2}];
+  M.dkeFillPolygon(oct, V);
+  M.dkeAddWall(oct,2,0,6,0); M.dkeAddWall(oct,8,2,8,6); M.dkeAddWall(oct,6,8,2,8); M.dkeAddWall(oct,0,6,0,2);   // 4 flat sides
+  oct.walls.push({x1:6,y1:0,x2:8,y2:2},{x1:8,y1:6,x2:6,y2:8},{x1:2,y1:8,x2:0,y2:6},{x1:0,y1:2,x2:2,y2:0});      // 4 chamfers
+  const oregs = M.dkeEnclosedRegions(oct);
+  ok(oregs.length === 1, 'the octagon is a single enclosed room ('+oregs.length+' regions)');
+  ok(M.dkeRoomEnclosed(oct, M.dkeRoomCells(oct, 4, 4)) === true, 'octagon interior reports enclosed');
+  M.dkeSyncRooms(oct, true);
+  ok(oct.rooms.length === 1, 'octagon auto-detected as one room ('+oct.rooms.length+')');
+  ok(M.dkeRoomForCell(oct, 4, 4) === oct.rooms[0], 'octagon selectable from its centre');
 })();
 
 // ── report ───────────────────────────────────────────────────────────────────
