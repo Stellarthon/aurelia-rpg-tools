@@ -636,6 +636,25 @@ function dkeDiagOpeningSVG(op){
   }
   return gap + leaf('#D4A843');
 }
+// Live target preview for the Openings tool — a faint ghost of exactly where the
+// opening will land, in the selected type's colour, so axis-edge vs angled-wall
+// placement is never a surprise. Shown on hover (desktop) and while pressing.
+function dkeDoorPreview(p){
+  const d = dkeD(); if(!d){ dkeGhost(''); return; }
+  const C = DKE_CELL, col = dkeOpenType === 'window' ? '#7fd4e0' : '#D4A843';
+  const ln = (x1,y1,x2,y2) => `<line x1="${(x1).toFixed(2)}" y1="${(y1).toFixed(2)}" x2="${(x2).toFixed(2)}" y2="${(y2).toFixed(2)}" stroke="${col}" stroke-width="5" stroke-linecap="round" opacity=".7"/>`;
+  const e = dkeNearestEdge(p, .4);
+  if(e){
+    let len = Math.max(1, Math.min(3, dkeOpenLen | 0 || 1));
+    len = Math.max(1, Math.min(len, e.o === 'h' ? d.w - e.x : d.h - e.y));
+    if(e.o === 'h') dkeGhost(ln(e.x*C, e.y*C, (e.x+len)*C, e.y*C));
+    else            dkeGhost(ln(e.x*C, e.y*C, e.x*C, (e.y+len)*C));
+    return;
+  }
+  const dw = dkeNearestDiagWall(p, .4);
+  if(dw){ const s = dkeDiagOpeningSpan(dw, dkeOpenLen); dkeGhost(ln(s.x1*C, s.y1*C, s.x2*C, s.y2*C)); return; }
+  dkeGhost('');
+}
 
 // Public URL of a deck's floorplan-underlay image. '' when the deck has none.
 // Different-origin, so the SW won't cache it — offline the <image> just paints
@@ -1022,7 +1041,7 @@ const DKE_HINTS = {
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
   poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
   merge:'Tap one room, then tap an adjacent room — the wall between them is removed so they become a single room.',
-  door:'Pick door or window + a length above, then tap a wall edge — or an angled wall — to place it. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
+  door:'Pick door or window + a length above, then tap a wall edge — or an angled wall — to place it; a coloured ghost shows exactly where it lands. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
   prop:'Pick a stamp + a size (1×–3×) above, then tap a cell. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
@@ -1059,6 +1078,7 @@ function dkeEnsureDom(){
   svg.addEventListener('pointermove', dkePointerMove);
   svg.addEventListener('pointerup', dkePointerUp);
   svg.addEventListener('pointercancel', dkePointerUp);
+  svg.addEventListener('pointerleave', function(){ if(dkeTool === 'door' && !dkePtrs.size && !dkeGesture) dkeGhost(''); });
   document.getElementById('dke-canvas').addEventListener('wheel', dkeWheel, { passive:false });
   document.getElementById('dke-undo').addEventListener('click', dkeUndoPop);
   document.getElementById('dke-redo').addEventListener('click', dkeRedoPop);
@@ -1879,12 +1899,18 @@ function dkePointerDown(ev){
       dkeGesture = { t:'marquee', x0: u.x, y0: u.y, x1: u.x, y1: u.y };
       dkeRenderContent(); dkeRenderSub();
     }
+  } else if(dkeTool === 'door'){
+    dkeGesture = { t:'door' };   // press shows the target ghost, slide adjusts, release places
+    dkeDoorPreview(p);
   } else {
     dkeGesture = { t:'tap', sx: ev.clientX, sy: ev.clientY, cancel:false };
   }
 }
 function dkePointerMove(ev){
-  if(!dkeIsOpen || !dkePtrs.has(ev.pointerId)) return;
+  if(!dkeIsOpen) return;
+  // Openings tool: hover preview of where the opening lands (desktop; no button held).
+  if(dkeTool === 'door' && !dkePtrs.size && !dkeGesture){ dkeDoorPreview(dkeToSvg(ev.clientX, ev.clientY)); return; }
+  if(!dkePtrs.has(ev.pointerId)) return;
   ev.preventDefault();
   dkePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
   if(dkePtrs.size === 2 && dkePinch){
@@ -1969,6 +1995,8 @@ function dkePointerMove(ev){
       else { it.x = o.ox + Math.round(dxf); it.y = o.oy + Math.round(dyf); if(o.s.kind === 'prop') dkeClampProp(d, it); }
     });
     dkeRenderContent();
+  } else if(g.t === 'door'){
+    dkeDoorPreview(p);
   } else if(g.t === 'tap'){
     if(Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) > 8) g.cancel = true;
   }
@@ -2033,6 +2061,8 @@ function dkePointerUp(ev){
     dkeSel = null; dkeRenderContent(); dkeRenderSub();
   } else if(g.t === 'gmove'){
     if(g.moved){ dkeCommit(); dkeRenderSub(); } else { dkeRenderSub(); }
+  } else if(g.t === 'door'){
+    dkeGhost(''); dkeTapAction(p);
   } else if(g.t === 'tap' && !g.cancel){
     dkeTapAction(p);
   }
