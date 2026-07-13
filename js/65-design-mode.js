@@ -415,7 +415,9 @@ function resolveContent(key, originalText){
   return Object.prototype.hasOwnProperty.call(contentOverrides, key) ? contentOverrides[key] : originalText;
 }
 
-const DESIGN_MODE_CODE = 'ilovetwix2012!';
+// Resolved from the deployed campaign config (config.js → window.AURELIA_CONFIG)
+// or a per-device setup, falling back to the reference campaign's code.
+const DESIGN_MODE_CODE = (typeof aureliaCfg === 'function' && aureliaCfg('designCode')) || 'ilovetwix2012!';
 
 // Player Mode and Design Mode are mutually exclusive — a referee should
 // never be able to switch into Player Mode (to preview what players see)

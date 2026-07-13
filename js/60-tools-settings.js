@@ -520,6 +520,14 @@ function renderSettingsMenu(showArchon){
       </div>
     </div>`;
 
+  // ── Help — replay the walkthrough (role-aware: referee or player) ──
+  html += `
+    <div class="settings-section-lbl">Help</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeSettingsMenu();startWalkthrough()">
+      <span class="settings-row-label">🧭 Take the tour</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">walkthrough →</span>
+    </div>`;
+
   // Phone-only: re-enable referee mode on this handset. Phones default to the
   // player view (the map lives on the table display, referee chrome is hidden).
   if(document.documentElement.classList.contains('is-phone')){
@@ -841,8 +849,15 @@ function renderRefereeMenu(){
         <button onclick="submitDesignPasscode()" style="font-size:10px;font-family:monospace;background:#9B59B6;border:none;border-radius:4px;padding:4px 10px;color:#fff;cursor:pointer">Unlock</button>
       </div>
     </div>` : '';
+  // Referee handle from setup (per-device, never shared) — shown for orientation.
+  let refName = ''; try { refName = localStorage.getItem('aurelia_referee_name') || ''; } catch(e){}
+  const refNameRow = refName ? `
+    <div class="settings-row" style="pointer-events:none;padding-bottom:2px">
+      <span class="settings-row-label" style="color:var(--tx1);font-weight:400">Signed in as <b style="color:var(--accentGold)">${escHtml(refName)}</b></span>
+    </div>` : '';
   card.innerHTML = `
     <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Tools</div>
+    ${refNameRow}
     <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
       <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
       <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>
@@ -867,8 +882,28 @@ function renderRefereeMenu(){
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
     </div>
     <div class="archon-divider"></div>
+    <div class="settings-section-lbl">Setup &amp; Help</div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupWizard()">
+      <span class="settings-row-label">⚙ Campaign Setup</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">wizard →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupHealth()">
+      <span class="settings-row-label">🩺 Setup health</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">check →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();startRefereeWelcome()">
+      <span class="settings-row-label">🧭 Take the tour</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">walkthrough →</span>
+    </div>
+    <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
 }
+
+// Re-run the first-run setup wizard (setup.html) to edit this campaign's backend,
+// access codes, players and the deployable config.js. A deliberate full navigation
+// — the wizard's "Enter the app" button returns here. Non-destructive: the wizard
+// pre-loads saved answers (and, on a deployed device, seeds from config.js).
+function openSetupWizard(){ location.href = 'setup.html'; }
 
 // ── Design menu (shown only while Design Mode is ON) ───────────────────────
 // Campaign-editing tools: removed items, full reset, and the dynamic

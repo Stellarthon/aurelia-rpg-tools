@@ -6,22 +6,25 @@
 <title>Aurelia RPG Tools — Campaign Setup</title>
 <!--
   ════════════════════════════════════════════════════════════════════════════
-  FIRST-RUN SETUP WIZARD  ·  standalone prototype
+  FIRST-RUN SETUP WIZARD  ·  setup.html
   ────────────────────────────────────────────────────────────────────────────
   A new referee runs this once to stand up their own copy of the Aurelia RPG
   Tools for the Traveller community. It collects everything the main app needs
-  that is currently HARD-CODED in index.html, and writes it to localStorage
-  under the keys the app will read (with the same `aurelia_*` namespace).
+  that is otherwise hard-coded, writes it to localStorage (the `aurelia_*`
+  namespace) for the referee's own device, and produces a deployable config.js.
 
-  This is a PROTOTYPE — test the flow here, then fold the wizard into index.html
-  (gated on `localStorage.aurelia_setup_done !== '1'`) and make the app read the
-  config keys with the old hard-coded values as fallbacks:
+  Integration (live): index.html loads config.js → window.AURELIA_CONFIG and
+  resolves each setting via aureliaCfg() with the old hard-coded values as
+  fallbacks. An unconfigured copy (no config.js AND aurelia_setup_done !== '1'
+  AND never past the access gate) redirects here automatically before the app
+  boots. The keys the app reads:
 
-    SUPABASE_URL   ← localStorage.aurelia_supabase_url  || '<old default>'
-    SUPABASE_KEY   ← localStorage.aurelia_supabase_key  || '<old default>'
-    ACCESS_CODE    ← localStorage.aurelia_access_code   || 'Traveller2E!'
-    DESIGN_MODE_CODE ← localStorage.aurelia_design_code || 'ilovetwix2012!'
-    campaign name  ← localStorage.aurelia_campaign_name
+    SUPABASE_URL     ← window.AURELIA_CONFIG.supabaseUrl / aurelia_supabase_url
+    SUPABASE_KEY     ← window.AURELIA_CONFIG.supabaseKey / aurelia_supabase_key
+    ACCESS_CODE      ← window.AURELIA_CONFIG.accessCode  / aurelia_access_code
+    DESIGN_MODE_CODE ← window.AURELIA_CONFIG.designCode  / aurelia_design_code
+    campaign name    ← window.AURELIA_CONFIG.campaignName / aurelia_campaign_name
+    imperial start   ← window.AURELIA_CONFIG.imperialStart
 
   Nothing here talks to a server except the optional "Test connection" button.
   Tokens are generated client-side with crypto.randomUUID().
@@ -155,7 +158,23 @@ details.adv .sub{font-size:11px;color:var(--tx1);margin:4px 0 0}
   .players .ph,.players .pr{grid-template-columns:1fr 1fr 78px 30px}
   .kv{grid-template-columns:1fr}
 }
+
+/* ── Invite QR modal ── */
+#qr-modal{position:fixed;inset:0;z-index:1000;background:rgba(8,10,16,.74);display:flex;align-items:center;justify-content:center;padding:20px}
+#qr-modal .qr-card{position:relative;background:linear-gradient(180deg,var(--bg1),#141824);border:.5px solid var(--bd0);border-radius:var(--rad);padding:22px 22px 18px;max-width:340px;width:100%;text-align:center;box-shadow:0 24px 60px -24px #000}
+#qr-modal .qr-x{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--tx1);font-size:20px;line-height:1;cursor:pointer}
+#qr-modal .qr-x:hover{color:var(--tx0)}
+#qr-modal .qr-who{font-size:13px;font-weight:600;margin-bottom:12px}
+#qr-modal .qr-img{width:240px;height:240px;image-rendering:pixelated;background:#fff;padding:10px;border-radius:8px}
+#qr-modal .qr-link{font-family:var(--mono);font-size:10.5px;color:var(--txI);word-break:break-all;margin:12px 0 0}
+#qr-modal .qr-hint{font-size:11px;color:var(--tx1);margin:8px 0 0;line-height:1.5}
 </style>
+<!-- Optional: the deployed campaign config, if this copy already has one. Lets
+     "edit setup" pre-fill from the live config.js when this device never ran the
+     wizard locally. 404s harmless on a fresh, unconfigured copy. -->
+<script src="config.js"></script>
+<!-- Offline QR generator (vendored, MIT) — renders invite-link QR codes in the Players step. -->
+<script src="vendor/qrcode.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -189,13 +208,26 @@ const K = {
    Pre-loaded from any prior save so re-running the wizard is non-destructive. */
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem(K.config) || '{}') || {}; } catch(e){ saved = {}; }
+// Editing a deployed campaign on a device that never ran the wizard locally:
+// seed the editable fields from config.js (window.AURELIA_CONFIG) so the form
+// starts from the live values rather than blank. A local save always wins.
+if(!saved.campaign && !saved.supabase && !saved.access && window.AURELIA_CONFIG){
+  const c = window.AURELIA_CONFIG || {};
+  saved = {
+    campaign: { name: c.campaignName || '',
+                impDay:  c.imperialStart && c.imperialStart.day,
+                impYear: c.imperialStart && c.imperialStart.year },
+    supabase: { url: c.supabaseUrl || '', key: c.supabaseKey || '' },
+    access:   { playerCode: c.accessCode || '', designCode: c.designCode || '' },
+  };
+}
 
 const state = {
   step: 0,
   campaign: {
     name:    saved.campaign?.name    ?? '',
     referee: saved.campaign?.referee ?? '',
-    appUrl:  saved.campaign?.appUrl  ?? (location.origin + location.pathname.replace(/setup_prototype\.html$/,'index.html')),
+    appUrl:  saved.campaign?.appUrl  ?? (location.origin + location.pathname.replace(/setup\.html$/,'index.html')),
     impDay:  saved.campaign?.impDay  ?? 1,
     impYear: saved.campaign?.impYear ?? 1105,
   },
@@ -541,11 +573,11 @@ const VIEWS = {
         <button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button>
         <button class="btn sm ghost" onclick="previewConfigJs()">Preview</button>
       </div></div>
-    <div class="note"><b>One more wiring step.</b> These settings also save to <i>this</i> browser for your own device.
-      But the published app only picks up <span class="kbd">config.js</span> once <span class="kbd">index.html</span> is
-      updated to read <span class="kbd">window.AURELIA_CONFIG</span> (the integration step). Until then it uses its
-      built-in defaults — your invite links route correctly, but the access-code/backend swap lands when that wiring
-      and your <span class="kbd">config.js</span> are both in place.</div>
+    <div class="note"><b>How this reaches your table.</b> Saving writes these settings to <i>this</i> browser, so your
+      own device is ready to go immediately. For your <b>players</b>, deploy <span class="kbd">config.js</span> (below)
+      next to <span class="kbd">index.html</span> on your host — <span class="kbd">index.html</span> already reads
+      <span class="kbd">window.AURELIA_CONFIG</span>, so every device that opens your link picks up your backend and
+      access codes instead of the built-in defaults.</div>
     <div class="nav">
       <button class="btn ghost" onclick="goBack()">‹ Back</button>
       <div class="spacer"></div>
@@ -579,7 +611,7 @@ function inviteLinkFor(p){
   return base + '#token=' + encodeURIComponent(p.token);
 }
 function inviteList(){
-  const cols = 'grid-template-columns:1fr 1.6fr 158px';
+  const cols = 'grid-template-columns:1fr 1.4fr 250px';
   return `<div class="players"><div class="ph" style="${cols}">
       <span>Player</span><span>Invite link</span><span></span></div>` +
     state.players.map((p,i) => {
@@ -590,12 +622,37 @@ function inviteList(){
         <span class="tokchip" style="color:var(--txI)">${esc(link||'— set App URL —')}</span>
         <span style="display:flex;gap:6px;justify-content:flex-end">
           <button class="btn sm" onclick="copyText(inviteLinkFor(state.players[${i}]),this)" ${link?'':'disabled'}>Copy</button>
+          <button class="btn sm ghost" onclick="showInviteQR(${i})" ${link?'':'disabled'} title="Show a QR code to scan on a phone">QR</button>
           <button class="btn sm ghost" onclick="openInvite(${i})" ${link?'':'disabled'} title="Open this link in a new tab">Open ↗</button>
         </span>
       </div>`;
     }).join('') + `</div>`;
 }
 function openInvite(i){ const l = inviteLinkFor(state.players[i]); if(l) window.open(l, '_blank', 'noopener'); }
+
+// Show a scannable QR of a player's invite link (rendered offline by vendor/qrcode.js).
+function showInviteQR(i){
+  const p = state.players[i], link = inviteLinkFor(p);
+  if(!link) return;
+  closeInviteQR();
+  const who = p.role==='referee' ? `${esc(p.identity||'Referee')} <span class="tag">ref</span>` : esc(p.identity||'(unnamed)');
+  let img = '';
+  try { const qr = qrcode(0, 'M'); qr.addData(link); qr.make(); img = qr.createDataURL(8, 4); }
+  catch(e){ img = ''; }
+  const ov = document.createElement('div');
+  ov.id = 'qr-modal';
+  ov.onclick = e => { if(e.target === ov) closeInviteQR(); };
+  ov.innerHTML = `<div class="qr-card">
+      <button class="qr-x" onclick="closeInviteQR()" aria-label="Close">×</button>
+      <div class="qr-who">${who}</div>
+      ${img ? `<img class="qr-img" src="${img}" alt="Invite QR code" width="240" height="240">`
+            : `<div class="note warn" style="margin:12px 0">Couldn’t render the QR code.</div>`}
+      <div class="qr-link">${esc(link)}</div>
+      <p class="qr-hint">Have the player scan this to open their invite link on their phone.</p>
+    </div>`;
+  document.body.appendChild(ov);
+}
+function closeInviteQR(){ const ov = document.getElementById('qr-modal'); if(ov) ov.remove(); }
 function refreshInvites(){ const el = $('#invite-list'); if(el) el.innerHTML = inviteList(); }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -868,16 +925,20 @@ function finishSetup(){
     localStorage.setItem(K.access,   state.access.playerCode);
     localStorage.setItem(K.design,   state.access.designCode);
     localStorage.setItem(K.done,     '1');
-    toast('finish-result', `<div class="note ok"><b>Saved to this browser.</b> Re-run the wizard any time to edit —
-      your answers are remembered. <b>Last step:</b> download <span class="kbd">config.js</span> above and upload it
-      next to <span class="kbd">index.html</span> on your host, so your players get these settings too.
-      <div style="margin-top:10px"><button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button></div></div>`);
+    toast('finish-result', `<div class="note ok"><b>Saved to this browser.</b> Your own device is ready — open the app
+      below. Re-run the wizard any time to edit; your answers are remembered. <b>To include your players:</b> download
+      <span class="kbd">config.js</span> and upload it next to <span class="kbd">index.html</span> on your host.
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary sm" onclick="enterApp()">Enter the app →</button><button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button></div></div>`);
   } catch(e){
     toast('finish-result', `<div class="note warn"><b>Couldn't save</b> — ${esc(e.message||e)}.
       Your browser may be blocking storage (private mode?). Use “Download config” instead.</div>`);
   }
 }
 function toast(id, html){ const el = $('#'+id); if(el) el.innerHTML = html; }
+
+// Setup is complete on this device (aurelia_setup_done='1'), so index.html no
+// longer redirects back here — open the app.
+function enterApp(){ location.href = 'index.html'; }
 
 /* live-update the imperial preview as the date fields change */
 document.addEventListener('input', e => {

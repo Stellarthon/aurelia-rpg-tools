@@ -11,8 +11,11 @@
 // This is acceptable here since the table only ever holds reveal flags and
 // notes text — never referee-only content (see note above).
 
-const SUPABASE_URL = 'https://rarxefzcqvgqvxutprcq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
+// Backend endpoint + publishable key. Resolved from the deployed campaign
+// config (config.js → window.AURELIA_CONFIG) or a per-device setup, falling
+// back to the reference campaign's values. See aureliaCfg() in index.html.
+const SUPABASE_URL = (typeof aureliaCfg === 'function' && aureliaCfg('supabaseUrl')) || 'https://rarxefzcqvgqvxutprcq.supabase.co';
+const SUPABASE_KEY = (typeof aureliaCfg === 'function' && aureliaCfg('supabaseKey')) || 'sb_publishable_KZ773h9ML7-e2jfyH2a9Lg_v-sREJIM';
 const SUPABASE_REST = SUPABASE_URL + '/rest/v1/aurelia_state';
 
 // ── Hosted planet-surface globe textures ────────────────────────────────────
