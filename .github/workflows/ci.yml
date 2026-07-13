@@ -41,3 +41,5 @@ jobs:
           npx playwright install --with-deps chromium
       - name: run smoke test
         run: node tools/smoke.mjs
+      - name: run setup + walkthrough integration test
+        run: node tools/onboarding-harness.mjs

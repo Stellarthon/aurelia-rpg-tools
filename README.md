@@ -93,5 +93,7 @@ Standalone checks (dependency-free, `node <file>`):
 - `tools/verify-split.mjs <pre-split-index.html>` — proves the css/js split is a
   behaviour-preserving partition (needs the pre-split monolith as an argument).
 
-CI (`.github/workflows/ci.yml`) runs `node --check` on every js file, the deck harness, and a
-headless boot smoke test (`tools/smoke.mjs`).
+CI (`.github/workflows/ci.yml`) runs `node --check` on every js file, the deck harness, a
+headless boot smoke test (`tools/smoke.mjs`), and a headless setup + walkthrough integration
+test (`tools/onboarding-harness.mjs` — first-run referee/player walkthroughs, the setup health
+check, and the misconfig banner, including every hand-off back to the setup wizard).
