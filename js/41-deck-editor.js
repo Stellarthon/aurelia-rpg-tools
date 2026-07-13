@@ -264,21 +264,30 @@ function dkeEdgeWalled(deck, x, y, o){
     ? (w.x1 === x && w.x2 === x && Math.min(w.y1,w.y2) <= y && Math.max(w.y1,w.y2) >= y+1)
     : (w.y1 === y && w.y2 === y && Math.min(w.x1,w.x2) <= x && Math.max(w.x1,w.x2) >= x+1));
 }
-// Do segments a–b and c–d PROPERLY cross (interior intersection; shared endpoints
-// or mere touches don't count)? Used to test whether a diagonal wall passes
-// between two cell centres. Strict crossing keeps 45° walls that only graze a
-// centre from spuriously fragmenting the grid.
-function dkeSegProperCross(a, b, c, d){
-  const o = (p,q,r) => (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x);
+// Do segments a–b and c–d intersect, INCLUSIVE of endpoint touches? A 45° wall
+// runs corner-to-corner through cell centres, so it never crosses a cell edge or
+// the interior of a centre-to-centre segment — it only *touches* a centre. Blocking
+// on touch is what lets 45° chamfers (octagons, angled rooms) seal.
+function dkeSegsIntersect(a, b, c, d){
+  const o = (p,q,r) => { const v = (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x); return v > 1e-9 ? 1 : (v < -1e-9 ? -1 : 0); };
+  const onSeg = (p,q,r) => Math.min(p.x,q.x)-1e-9 <= r.x && r.x <= Math.max(p.x,q.x)+1e-9 && Math.min(p.y,q.y)-1e-9 <= r.y && r.y <= Math.max(p.y,q.y)+1e-9;
   const d1 = o(c,d,a), d2 = o(c,d,b), d3 = o(a,b,c), d4 = o(a,b,d);
-  return ((d1>0 && d2<0) || (d1<0 && d2>0)) && ((d3>0 && d4<0) || (d3<0 && d4>0));
+  if(d1 !== d2 && d3 !== d4) return true;
+  return (d1 === 0 && onSeg(c,d,a)) || (d2 === 0 && onSeg(c,d,b)) || (d3 === 0 && onSeg(a,b,c)) || (d4 === 0 && onSeg(a,b,d));
+}
+// Is the cell centre bisected by a diagonal wall (the wall runs through it)? Such a
+// cell is half in / half out, so it's dropped from the room rather than fragmenting
+// it — this is what keeps 45° chamfer cells from spawning stray one-cell rooms.
+function dkeCenterOnDiag(deck, cx, cy){
+  const u = { x: cx+.5, y: cy+.5 };
+  return (deck.walls||[]).some(w => dkeIsDiagWall(w) && dkeSegDist(u, w) < 1e-6);
 }
 // A diagonal wall bounds a room when it runs between two adjacent cells: it blocks
-// passage if it crosses the segment joining their centres. This is what makes
-// angled-walled rooms detectable and selectable (flood-fill was cell-edge only).
+// passage if it touches/crosses the segment joining their centres. This is what
+// makes angled-walled rooms detectable and selectable (flood-fill was cell-edge only).
 function dkeDiagWallBetween(deck, ax, ay, bx, by){
   const a = { x: ax+.5, y: ay+.5 }, b = { x: bx+.5, y: by+.5 };
-  return (deck.walls||[]).some(w => dkeIsDiagWall(w) && dkeSegProperCross(a, b, { x:w.x1, y:w.y1 }, { x:w.x2, y:w.y2 }));
+  return (deck.walls||[]).some(w => dkeIsDiagWall(w) && dkeSegsIntersect(a, b, { x:w.x1, y:w.y1 }, { x:w.x2, y:w.y2 }));
 }
 function dkeWallBlocks(deck, cx, cy, dx, dy){
   const axis = dx === 1 ? dkeEdgeWalled(deck, cx+1, cy, 'v')
@@ -287,13 +296,24 @@ function dkeWallBlocks(deck, cx, cy, dx, dy){
     : dkeEdgeWalled(deck, cx, cy, 'h');
   return axis || dkeDiagWallBetween(deck, cx, cy, cx+dx, cy+dy);
 }
+// The set of room-eligible floor cells ("x,y" keys) — painted floor minus any cell
+// a diagonal wall bisects. Shared by the flood-fill and the enclosed-region scan so
+// they always agree on what counts as floor.
+function dkeFloorSet(deck){
+  const floor = new Set();
+  const hasDiag = (deck.walls||[]).some(dkeIsDiagWall);
+  (deck.floors||[]).forEach(f => {
+    for(let i = 0; i < f.w; i++) for(let j = 0; j < f.h; j++){
+      const cx = f.x+i, cy = f.y+j;
+      if(!hasDiag || !dkeCenterOnDiag(deck, cx, cy)) floor.add(cx+','+cy);
+    }
+  });
+  return floor;
+}
 // Flood-fill from a cell across floor cells, bounded by walls (doors sit ON a
 // wall segment, so doorways bound rooms too). Null if the start cell isn't floor.
 function dkeRoomCells(deck, sx, sy){
-  const floor = new Set();
-  (deck.floors||[]).forEach(f => {
-    for(let i = 0; i < f.w; i++) for(let j = 0; j < f.h; j++) floor.add((f.x+i)+','+(f.y+j));
-  });
+  const floor = dkeFloorSet(deck);
   if(!floor.has(sx+','+sy)) return null;
   const seen = new Set([sx+','+sy]), queue = [[sx,sy]], out = [];
   while(queue.length){
@@ -384,8 +404,7 @@ function dkeRoomEnclosed(deck, cells){
 // All distinct enclosed regions, each { cells, anchor:{x,y} }. The anchor is the
 // canonical (min-y, then min-x) cell so it's stable no matter which cell was tapped.
 function dkeEnclosedRegions(deck){
-  const floor = new Set();
-  (deck.floors||[]).forEach(f => { for(let i=0;i<f.w;i++) for(let j=0;j<f.h;j++) floor.add((f.x+i)+','+(f.y+j)); });
+  const floor = dkeFloorSet(deck);
   const seen = new Set(), regions = [];
   floor.forEach(key => {
     if(seen.has(key)) return;
