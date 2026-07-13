@@ -867,10 +867,14 @@ function renderRefereeMenu(){
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
     </div>
     <div class="archon-divider"></div>
-    <div class="settings-section-lbl">Campaign Setup</div>
+    <div class="settings-section-lbl">Setup &amp; Help</div>
     <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openSetupWizard()">
       <span class="settings-row-label">⚙ Campaign Setup</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">wizard →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();startRefereeWelcome()">
+      <span class="settings-row-label">🧭 Take the tour</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">walkthrough →</span>
     </div>
     <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
