@@ -154,7 +154,9 @@ function showIntroSplash(){
 // page source can find the code below. It exists to stop a stray link click
 // or idle curiosity from landing someone in the middle of an active
 // campaign — not to protect genuinely sensitive information.
-const ACCESS_CODE = 'Traveller2E!';
+// Resolved from the deployed campaign config (config.js → window.AURELIA_CONFIG)
+// or a per-device setup, falling back to the reference campaign's code.
+const ACCESS_CODE = (typeof aureliaCfg === 'function' && aureliaCfg('accessCode')) || 'Traveller2E!';
 
 function checkPassword(){
   const input = document.getElementById('pw-input');

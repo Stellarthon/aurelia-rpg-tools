@@ -6,22 +6,25 @@
 <title>Aurelia RPG Tools — Campaign Setup</title>
 <!--
   ════════════════════════════════════════════════════════════════════════════
-  FIRST-RUN SETUP WIZARD  ·  standalone prototype
+  FIRST-RUN SETUP WIZARD  ·  setup.html
   ────────────────────────────────────────────────────────────────────────────
   A new referee runs this once to stand up their own copy of the Aurelia RPG
   Tools for the Traveller community. It collects everything the main app needs
-  that is currently HARD-CODED in index.html, and writes it to localStorage
-  under the keys the app will read (with the same `aurelia_*` namespace).
+  that is otherwise hard-coded, writes it to localStorage (the `aurelia_*`
+  namespace) for the referee's own device, and produces a deployable config.js.
 
-  This is a PROTOTYPE — test the flow here, then fold the wizard into index.html
-  (gated on `localStorage.aurelia_setup_done !== '1'`) and make the app read the
-  config keys with the old hard-coded values as fallbacks:
+  Integration (live): index.html loads config.js → window.AURELIA_CONFIG and
+  resolves each setting via aureliaCfg() with the old hard-coded values as
+  fallbacks. An unconfigured copy (no config.js AND aurelia_setup_done !== '1'
+  AND never past the access gate) redirects here automatically before the app
+  boots. The keys the app reads:
 
-    SUPABASE_URL   ← localStorage.aurelia_supabase_url  || '<old default>'
-    SUPABASE_KEY   ← localStorage.aurelia_supabase_key  || '<old default>'
-    ACCESS_CODE    ← localStorage.aurelia_access_code   || 'Traveller2E!'
-    DESIGN_MODE_CODE ← localStorage.aurelia_design_code || 'ilovetwix2012!'
-    campaign name  ← localStorage.aurelia_campaign_name
+    SUPABASE_URL     ← window.AURELIA_CONFIG.supabaseUrl / aurelia_supabase_url
+    SUPABASE_KEY     ← window.AURELIA_CONFIG.supabaseKey / aurelia_supabase_key
+    ACCESS_CODE      ← window.AURELIA_CONFIG.accessCode  / aurelia_access_code
+    DESIGN_MODE_CODE ← window.AURELIA_CONFIG.designCode  / aurelia_design_code
+    campaign name    ← window.AURELIA_CONFIG.campaignName / aurelia_campaign_name
+    imperial start   ← window.AURELIA_CONFIG.imperialStart
 
   Nothing here talks to a server except the optional "Test connection" button.
   Tokens are generated client-side with crypto.randomUUID().
@@ -195,7 +198,7 @@ const state = {
   campaign: {
     name:    saved.campaign?.name    ?? '',
     referee: saved.campaign?.referee ?? '',
-    appUrl:  saved.campaign?.appUrl  ?? (location.origin + location.pathname.replace(/setup_prototype\.html$/,'index.html')),
+    appUrl:  saved.campaign?.appUrl  ?? (location.origin + location.pathname.replace(/setup\.html$/,'index.html')),
     impDay:  saved.campaign?.impDay  ?? 1,
     impYear: saved.campaign?.impYear ?? 1105,
   },
@@ -541,11 +544,11 @@ const VIEWS = {
         <button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button>
         <button class="btn sm ghost" onclick="previewConfigJs()">Preview</button>
       </div></div>
-    <div class="note"><b>One more wiring step.</b> These settings also save to <i>this</i> browser for your own device.
-      But the published app only picks up <span class="kbd">config.js</span> once <span class="kbd">index.html</span> is
-      updated to read <span class="kbd">window.AURELIA_CONFIG</span> (the integration step). Until then it uses its
-      built-in defaults — your invite links route correctly, but the access-code/backend swap lands when that wiring
-      and your <span class="kbd">config.js</span> are both in place.</div>
+    <div class="note"><b>How this reaches your table.</b> Saving writes these settings to <i>this</i> browser, so your
+      own device is ready to go immediately. For your <b>players</b>, deploy <span class="kbd">config.js</span> (below)
+      next to <span class="kbd">index.html</span> on your host — <span class="kbd">index.html</span> already reads
+      <span class="kbd">window.AURELIA_CONFIG</span>, so every device that opens your link picks up your backend and
+      access codes instead of the built-in defaults.</div>
     <div class="nav">
       <button class="btn ghost" onclick="goBack()">‹ Back</button>
       <div class="spacer"></div>
@@ -868,16 +871,20 @@ function finishSetup(){
     localStorage.setItem(K.access,   state.access.playerCode);
     localStorage.setItem(K.design,   state.access.designCode);
     localStorage.setItem(K.done,     '1');
-    toast('finish-result', `<div class="note ok"><b>Saved to this browser.</b> Re-run the wizard any time to edit —
-      your answers are remembered. <b>Last step:</b> download <span class="kbd">config.js</span> above and upload it
-      next to <span class="kbd">index.html</span> on your host, so your players get these settings too.
-      <div style="margin-top:10px"><button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button></div></div>`);
+    toast('finish-result', `<div class="note ok"><b>Saved to this browser.</b> Your own device is ready — open the app
+      below. Re-run the wizard any time to edit; your answers are remembered. <b>To include your players:</b> download
+      <span class="kbd">config.js</span> and upload it next to <span class="kbd">index.html</span> on your host.
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary sm" onclick="enterApp()">Enter the app →</button><button class="btn sm" onclick="downloadConfigJs()">⬇ Download config.js</button></div></div>`);
   } catch(e){
     toast('finish-result', `<div class="note warn"><b>Couldn't save</b> — ${esc(e.message||e)}.
       Your browser may be blocking storage (private mode?). Use “Download config” instead.</div>`);
   }
 }
 function toast(id, html){ const el = $('#'+id); if(el) el.innerHTML = html; }
+
+// Setup is complete on this device (aurelia_setup_done='1'), so index.html no
+// longer redirects back here — open the app.
+function enterApp(){ location.href = 'index.html'; }
 
 /* live-update the imperial preview as the date fields change */
 document.addEventListener('input', e => {

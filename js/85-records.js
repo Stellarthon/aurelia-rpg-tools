@@ -16,7 +16,18 @@
 const IMPERIAL_YEAR_DAYS = 365;
 const IMPERIAL_WEEKDAYS = ['Wonday','Tuday','Thirday','Forday','Fiveday','Sixday','Senday'];
 
-let imperialDate = { day: 1, year: 1105 };
+// Starting Imperial date. The deployed campaign config (config.js →
+// window.AURELIA_CONFIG.imperialStart) sets the initial value; the shared
+// 'imperial-date' row in Supabase still overrides it via loadImperialDate()
+// once a campaign is under way.
+let imperialDate = (function(){
+  const d = { day: 1, year: 1105 };
+  try {
+    const s = (typeof window !== 'undefined' && window.AURELIA_CONFIG && window.AURELIA_CONFIG.imperialStart) || null;
+    if(s && Number.isFinite(+s.day) && Number.isFinite(+s.year)){ d.day = +s.day; d.year = +s.year; }
+  } catch(e){}
+  return d;
+})();
 let campaignEvents = [];
 let calPanelOpen = false;
 let calCollapsed = false;
