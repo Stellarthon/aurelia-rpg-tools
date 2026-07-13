@@ -1,5 +1,7 @@
 # Archon Gambit — Phase 2 Feasibility Study & Design Brief
 
+> **Historical — point-in-time study.** Feasibility brief for work that has since largely shipped; references to a single ~12k-line `index.html` predate the css/js split. See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`codebase-audit-2026-07-13.md`](codebase-audit-2026-07-13.md) for current state.
+
 > Companion app for a Traveller campaign set in the Orion Arm. Single-file
 > build (`index.html`, ~12k lines), Supabase-backed shared state
 > (`aurelia_state` key/value rows), 4-second player poll loop.

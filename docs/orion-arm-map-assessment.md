@@ -1,5 +1,7 @@
 # Orion Arm Map — Comprehensive Program Assessment
 
+> **Historical — point-in-time assessment.** Written against the pre-split single-`index.html` architecture; structural details below (file layout, module counts) are superseded. See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`codebase-audit-2026-07-13.md`](codebase-audit-2026-07-13.md) for current state.
+
 > **Scope:** Durability, Accessibility, Scalability, Resilience, and Cross-Platform
 > behaviour (iPad + laptop), plus security/privacy and future potential.
 > **Method:** Static evidence-based audit of the shipped artifact (`index.html`,

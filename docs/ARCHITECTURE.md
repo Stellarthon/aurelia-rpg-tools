@@ -18,7 +18,7 @@ would break every inline handler and every forward reference.
 ## Layout
 
 ```
-index.html        markup + <link> (css) + 18 ordered <script src> (js) + trailing SW <script>
+index.html        markup + <link> (css) + 25 ordered <script src> (js) + trailing SW <script>
 css/  tokens.css  the :root design tokens
       app.css     the rest of the stylesheet
 js/   00-core-data … 98-trackers-boot   (numeric prefix = load order, see below)
@@ -29,22 +29,29 @@ js/   00-core-data … 98-trackers-boot   (numeric prefix = load order, see belo
 | File | Orig lines | Holds |
 |------|-----------|-------|
 | `00-core-data.js` | 3349–3558 | `BASE_BODIES_AUROS`, `SYSTEMS`, system/body data model |
+| `05-campaign-pack.js` | *added post-split* | Campaign-pack config + `pk*` accessors (crew / calendar / active config) |
 | `10-galaxy.js` | 3559–5922 | Galaxy data + registry, `gx*` engine, system/region/route overlays, `WGEN`, the `HX` hex-jump engine, system-overview helpers |
+| `15-real-map.js` | *added post-split* | REAL map — SVG "globe" view, texture preloading, trade-path overlay |
 | `20-station-data.js` | 5923–6121 | `MAIN` station data object |
 | `30-system-body.js` | 6122–7615 | Shared state & player mode, system map, orrery, body close-up view, location layer, view switching |
 | `40-station.js` | 7616–8263 | Station view, station clock, RSR found state, event log, `BASE_LOCATIONS`, `TIMED_EVENTS`, Aurelia navigation |
+| `41-deck-editor.js` | *added post-split* | Deck / map editor (`dke*`) — rooms, doors, walls, tokens, fog, image props |
 | `45-initiative.js` | 8264–8652 | Initiative / health tracker (referee) |
 | `50-supabase.js` | 8653–8900 | **Data layer** — `supaStorage` façade, KV contract, offline write-through cache + outbound queue, texture catalog. Holds `SUPABASE_KEY`. |
 | `55-auth-gating.js` | 8901–9691 | **Role gating** — access gate, reveal/visibility, `isReferee` / `canSee` / `viewerKey` / `secureRole`, `get-content` token path, shared-state poll |
 | `60-tools-settings.js` | 9692–10852 | Character sheets, settings, search, settings menu (Archon morality, design toggle, campaign export/reset, box-type registry) |
+| `62-campaign-studio.js` | *added post-split* | Campaign Studio — pack import / export |
 | `65-design-mode.js` | 10853–11619 | Design-Mode stage-1 overrides, body stores, location stores, structured editors |
 | `70-panels-quest.js` | 11620–11894 | Draggable/resizable floating panels, quest log |
 | `75-ship.js` | 11895–12359 | Ship data file, red-alert state |
 | `80-combat.js` | 12360–13646 | Space combat phases 1–5 |
 | `85-records.js` | 13647–14701 | Imperial calendar, discovery log, reputation, party funds, oracle, **the main boot/init block** + secure-content wiring |
 | `90-economy.js` | 14702–15704 | `window.ECON` living-economy engine + economy design editors |
+| `91-trade.js` | *added post-split* | Trade & cargo helper — shared manifest, star board, contracts |
 | `92-tools-misc.js` | 15705–16068 | Quick-reference sidebar, session tools, `showToast` |
+| `93-display.js` | *added post-split* | Table Display Mode (`BroadcastChannel`), scene ambience beats |
 | `96-creators.js` | 16069–16833 | NPC creator, body creator (Design Mode) |
+| `97-session-planner.js` | *added post-split* | Session planner, oracle, PDF session docs |
 | `98-trackers-boot.js` | 16834–17369 (+1 reloc) | NPC location tracker, keyboard shortcuts, a11y init (final boot tail), **+ relocated player-mode polling start** (`start*Polling`, moved from `30`) |
 
 ## The load-order rule (the one rule that makes the split safe)
@@ -104,9 +111,10 @@ last-loaded file** (the only sanctioned reordering), and declare it in the
    calls, `30`→`98`); `tools/verify-split.mjs` Gate 1 proves it.
 2. **Role-gating** (`50`/`55` ownership above) moved verbatim.
 3. **Supabase contract** — one `supaStorage` façade, identical KV keys + patterns.
-4. **PWA offline** — `sw.js` precaches *every* css/js file and its cache version is
-   bumped (`orion-shell-v1` → `v2`). Adding/renaming/removing a css/js file means
-   updating the `SHELL` list **and** bumping `CACHE`, or installed PWAs break offline.
+4. **PWA offline** — `sw.js` precaches *every* css/js file and its cache version
+   (`CACHE = 'orion-shell-vNN'`) is bumped once per release (currently `v88`).
+   Adding/renaming/removing a css/js file means updating the `SHELL` list **and**
+   bumping `CACHE`, or installed PWAs break offline.
 5. **De-bake** — `tools/strip-secrets.mjs` removes referee fields from the campaign
    literals at deploy time. Those literals moved out of `index.html` into js modules,
    so the tool was repointed (`LITERAL_FILE` map): `BASE_BODIES_AUROS`→`00`,

@@ -1,5 +1,7 @@
 # Archon Gambit — Phase 3: Space Combat (MgT2e core)
 
+> **Historical — point-in-time audit.** Some details are superseded — notably, `aurelia_state` RLS described here as blanket `USING (true)` / `WITH CHECK (true)` has since been locked down (migrations `0010`/`0011`; writes are now referee-gated via the `put-state` edge function). See [`codebase-audit-2026-07-13.md`](codebase-audit-2026-07-13.md) for current state.
+
 > Audit, decisions, and build plan for the space-combat module. Companion to
 > `phase-2-feasibility-study.md`. Single-file build (`index.html`), Supabase
 > single-key/value backend (`aurelia_state`), honour-system client-side gating.

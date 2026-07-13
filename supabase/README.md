@@ -13,6 +13,7 @@ session's dashboard-side deploys had to be back-filled into git).
 supabase/
   migrations/0001_per_player_redaction.sql   players + campaign_content tables, RLS
   migrations/0009_private_notes.sql          private_notes table (record of live schema)
+  migrations/0012_deckmaps_bucket.sql        deck-maps storage bucket (referee deck/map uploads)
   functions/get-content/index.ts             authenticated, per-identity content API
   functions/put-state/index.ts               referee-gated aurelia_state writes (Stage 4)
   functions/private-notes/index.ts           per-identity private notes (token-gated)

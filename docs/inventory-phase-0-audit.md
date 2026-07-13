@@ -1,5 +1,7 @@
 # Phase 0 — Grid Inventory & Equipment: Audit, Decisions & Design
 
+> **Historical — point-in-time audit.** Written against the pre-split single-`index.html` architecture; layout/line-count references are superseded. See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`codebase-audit-2026-07-13.md`](codebase-audit-2026-07-13.md) for current state.
+
 Status: **Phase 0 complete — awaiting sign-off to begin Phase 1.**
 Scope: adds a grid-based inventory + equipment system to the character sheet of
 *Archon Gambit* (Mongoose Traveller 2e companion). This document is the read-before-write
