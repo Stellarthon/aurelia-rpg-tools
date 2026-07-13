@@ -73,6 +73,16 @@
   .arw-pill.bad{color:#d45050;border-color:#5c2b2b}
   .arw-pill.mut{color:#8890a6}
   .arw-hsrc{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#a3a9bf}
+  /* not-configured banner (referee-only, dismissible) */
+  #arw-banner{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:${Z - 10};
+    max-width:min(720px,calc(100vw - 24px));display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    background:linear-gradient(180deg,#2a2015,#231a10);border:.5px solid #5c4726;border-radius:10px;
+    padding:11px 12px 11px 16px;box-shadow:0 18px 50px -20px #000;color:#f0d8ad;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  #arw-banner .arw-bmsg{font-size:12.5px;line-height:1.45;flex:1;min-width:200px}
+  #arw-banner .arw-bacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .arw-bx{background:none;border:none;color:#c8b48a;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+  .arw-bx:hover{color:#fff}
   @media(max-width:520px){ .arw-grid{grid-template-columns:1fr} }
   `;
   function injectCss(){
@@ -383,6 +393,48 @@
     });
   }
 
+  // ══ "Not fully configured" banner (referee-only, dismissible) ═══════════════
+  // Conservative: fires only on unmistakable misconfiguration — placeholder/unset
+  // config, a rejected key (401), or missing tables — never on a transient offline
+  // blip (that's the conn-pill's job), so the live deploy never sees a false alarm.
+  let bannerDismissed = false;
+  function showConfigBanner(msg){
+    injectCss();
+    if(bannerDismissed || document.getElementById('arw-banner')) return;
+    const el = document.createElement('div');
+    el.id = 'arw-banner'; el.setAttribute('role', 'status');
+    el.innerHTML = `<span class="arw-bmsg">⚠ ${msg}</span>
+      <span class="arw-bacts">
+        <button class="arw-btn primary sm" data-arw="bsetup">Campaign Setup ›</button>
+        <button class="arw-btn ghost sm" data-arw="bhealth">Setup health</button>
+        <button class="arw-bx" data-arw="bclose" aria-label="Dismiss">×</button>
+      </span>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('[data-arw]'); if(!b) return;
+      const a = b.getAttribute('data-arw');
+      if(a === 'bclose'){ bannerDismissed = true; el.remove(); }
+      else if(a === 'bsetup'){ location.href = 'setup.html'; }
+      else if(a === 'bhealth'){ el.remove(); openSetupHealth(); }
+    });
+  }
+  async function maybeConfigBanner(){
+    if(bannerDismissed) return;
+    const url = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '');
+    const key = (typeof SUPABASE_KEY === 'string' ? SUPABASE_KEY : '');
+    const acc = (typeof ACCESS_CODE === 'string' ? ACCESS_CODE : '');
+    const dsg = (typeof DESIGN_MODE_CODE === 'string' ? DESIGN_MODE_CODE : '');
+    const placeholder = /YOUR-PROJECT|YOUR_KEY|change-me-/i.test([url, key, acc, dsg].join(' '));
+    if(!url || !key || placeholder){
+      showConfigBanner('This copy isn’t connected to a campaign backend yet — run Campaign Setup to finish.');
+      return;
+    }
+    const res = await probeBackend();
+    if(bannerDismissed) return;
+    if(res.backend === 'badkey')       showConfigBanner('Your backend key was rejected — re-check it in Campaign Setup.');
+    else if(res.table === 'missing')   showConfigBanner('Your database tables are missing — run the schema SQL from Campaign Setup ▸ Database.');
+  }
+
   // ── Public entry points (referee menu + settings menu) ──────────────────────
   window.startRefereeWelcome = () => startWelcome('referee');
   window.startRefereeTour = () => startTour('referee');
@@ -392,31 +444,33 @@
   window.startWalkthrough = () => startWelcome((typeof isReferee === 'function' && !isReferee()) ? 'player' : 'referee');
 
   // ── Auto-run once, after the app has settled ────────────────────────────────
+  function isSettled(){
+    if(ls('aurelia_access') !== '1') return false;                   // still at the gate
+    const sp = document.getElementById('app-splash');
+    if(sp && sp.classList.contains('show')) return false;            // intro splash still up
+    const gate = document.getElementById('pw-gate');
+    if(gate && !gate.classList.contains('hidden') && gate.offsetParent !== null) return false;
+    if(!document.getElementById('hdr')) return false;                // header not built yet
+    if(typeof DISPLAY_MODE !== 'undefined' && DISPLAY_MODE) return false; // table-display window
+    return true;
+  }
   function viewerRole(){
-    if(typeof DISPLAY_MODE !== 'undefined' && DISPLAY_MODE) return null; // table-display window
     if(typeof isReferee !== 'function') return null;
     if(isReferee()) return ls(DONE.referee) === '1' ? null : 'referee';
-    // player: only genuine players (identity/token present), once.
-    if(ls(DONE.player) === '1') return null;
-    if(playerName() || ls('aurelia_token')) return 'player';
+    if(ls(DONE.player) === '1') return null;                         // player: only once
+    if(playerName() || ls('aurelia_token')) return 'player';         // …and only genuine players
     return null;
-  }
-  function ready(){
-    if(ls('aurelia_access') !== '1') return null;                    // still at the gate
-    const sp = document.getElementById('app-splash');
-    if(sp && sp.classList.contains('show')) return null;             // intro splash still up
-    const gate = document.getElementById('pw-gate');
-    if(gate && !gate.classList.contains('hidden') && gate.offsetParent !== null) return null;
-    if(!document.getElementById('hdr')) return null;                 // header not built yet
-    return viewerRole();
   }
   function schedule(){
     let tries = 0;
     const t = setInterval(() => {
       tries++;
-      const r = ready();
-      if(r){ clearInterval(t); startWelcome(r); }
-      else if(tries > 50){ clearInterval(t); }                       // ~20s ceiling; give up quietly
+      if(isSettled()){
+        clearInterval(t);
+        const r = viewerRole();
+        if(r) startWelcome(r);                                       // first-run walkthrough
+        if(typeof isReferee === 'function' && isReferee()) maybeConfigBanner(); // misconfig nudge
+      } else if(tries > 50){ clearInterval(t); }                     // ~20s ceiling; give up quietly
     }, 400);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);

@@ -849,8 +849,15 @@ function renderRefereeMenu(){
         <button onclick="submitDesignPasscode()" style="font-size:10px;font-family:monospace;background:#9B59B6;border:none;border-radius:4px;padding:4px 10px;color:#fff;cursor:pointer">Unlock</button>
       </div>
     </div>` : '';
+  // Referee handle from setup (per-device, never shared) — shown for orientation.
+  let refName = ''; try { refName = localStorage.getItem('aurelia_referee_name') || ''; } catch(e){}
+  const refNameRow = refName ? `
+    <div class="settings-row" style="pointer-events:none;padding-bottom:2px">
+      <span class="settings-row-label" style="color:var(--tx1);font-weight:400">Signed in as <b style="color:var(--accentGold)">${escHtml(refName)}</b></span>
+    </div>` : '';
   card.innerHTML = `
     <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Tools</div>
+    ${refNameRow}
     <div class="settings-row" style="cursor:pointer" onclick="toggleDesignMode()">
       <span class="settings-row-label" style="${dmOn ? 'color:#9B59B6;font-weight:700' : ''}">✏ Design Mode${dmOn ? ' — ON' : ''}</span>
       <div class="theme-toggle ${dmOn?'on':''}" style="${dmOn ? 'background:#2A1A3B;border-color:#9B59B6' : ''}"><div class="theme-toggle-knob" style="${dmOn ? 'transform:translateX(28px);background:#9B59B6' : ''}"></div></div>

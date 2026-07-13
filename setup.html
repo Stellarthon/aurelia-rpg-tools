@@ -158,11 +158,23 @@ details.adv .sub{font-size:11px;color:var(--tx1);margin:4px 0 0}
   .players .ph,.players .pr{grid-template-columns:1fr 1fr 78px 30px}
   .kv{grid-template-columns:1fr}
 }
+
+/* ── Invite QR modal ── */
+#qr-modal{position:fixed;inset:0;z-index:1000;background:rgba(8,10,16,.74);display:flex;align-items:center;justify-content:center;padding:20px}
+#qr-modal .qr-card{position:relative;background:linear-gradient(180deg,var(--bg1),#141824);border:.5px solid var(--bd0);border-radius:var(--rad);padding:22px 22px 18px;max-width:340px;width:100%;text-align:center;box-shadow:0 24px 60px -24px #000}
+#qr-modal .qr-x{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--tx1);font-size:20px;line-height:1;cursor:pointer}
+#qr-modal .qr-x:hover{color:var(--tx0)}
+#qr-modal .qr-who{font-size:13px;font-weight:600;margin-bottom:12px}
+#qr-modal .qr-img{width:240px;height:240px;image-rendering:pixelated;background:#fff;padding:10px;border-radius:8px}
+#qr-modal .qr-link{font-family:var(--mono);font-size:10.5px;color:var(--txI);word-break:break-all;margin:12px 0 0}
+#qr-modal .qr-hint{font-size:11px;color:var(--tx1);margin:8px 0 0;line-height:1.5}
 </style>
 <!-- Optional: the deployed campaign config, if this copy already has one. Lets
      "edit setup" pre-fill from the live config.js when this device never ran the
      wizard locally. 404s harmless on a fresh, unconfigured copy. -->
 <script src="config.js"></script>
+<!-- Offline QR generator (vendored, MIT) — renders invite-link QR codes in the Players step. -->
+<script src="vendor/qrcode.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -599,7 +611,7 @@ function inviteLinkFor(p){
   return base + '#token=' + encodeURIComponent(p.token);
 }
 function inviteList(){
-  const cols = 'grid-template-columns:1fr 1.6fr 158px';
+  const cols = 'grid-template-columns:1fr 1.4fr 250px';
   return `<div class="players"><div class="ph" style="${cols}">
       <span>Player</span><span>Invite link</span><span></span></div>` +
     state.players.map((p,i) => {
@@ -610,12 +622,37 @@ function inviteList(){
         <span class="tokchip" style="color:var(--txI)">${esc(link||'— set App URL —')}</span>
         <span style="display:flex;gap:6px;justify-content:flex-end">
           <button class="btn sm" onclick="copyText(inviteLinkFor(state.players[${i}]),this)" ${link?'':'disabled'}>Copy</button>
+          <button class="btn sm ghost" onclick="showInviteQR(${i})" ${link?'':'disabled'} title="Show a QR code to scan on a phone">QR</button>
           <button class="btn sm ghost" onclick="openInvite(${i})" ${link?'':'disabled'} title="Open this link in a new tab">Open ↗</button>
         </span>
       </div>`;
     }).join('') + `</div>`;
 }
 function openInvite(i){ const l = inviteLinkFor(state.players[i]); if(l) window.open(l, '_blank', 'noopener'); }
+
+// Show a scannable QR of a player's invite link (rendered offline by vendor/qrcode.js).
+function showInviteQR(i){
+  const p = state.players[i], link = inviteLinkFor(p);
+  if(!link) return;
+  closeInviteQR();
+  const who = p.role==='referee' ? `${esc(p.identity||'Referee')} <span class="tag">ref</span>` : esc(p.identity||'(unnamed)');
+  let img = '';
+  try { const qr = qrcode(0, 'M'); qr.addData(link); qr.make(); img = qr.createDataURL(8, 4); }
+  catch(e){ img = ''; }
+  const ov = document.createElement('div');
+  ov.id = 'qr-modal';
+  ov.onclick = e => { if(e.target === ov) closeInviteQR(); };
+  ov.innerHTML = `<div class="qr-card">
+      <button class="qr-x" onclick="closeInviteQR()" aria-label="Close">×</button>
+      <div class="qr-who">${who}</div>
+      ${img ? `<img class="qr-img" src="${img}" alt="Invite QR code" width="240" height="240">`
+            : `<div class="note warn" style="margin:12px 0">Couldn’t render the QR code.</div>`}
+      <div class="qr-link">${esc(link)}</div>
+      <p class="qr-hint">Have the player scan this to open their invite link on their phone.</p>
+    </div>`;
+  document.body.appendChild(ov);
+}
+function closeInviteQR(){ const ov = document.getElementById('qr-modal'); if(ov) ov.remove(); }
 function refreshInvites(){ const el = $('#invite-list'); if(el) el.innerHTML = inviteList(); }
 
 /* ════════════════════════════════════════════════════════════════════════════
