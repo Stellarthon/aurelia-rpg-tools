@@ -83,6 +83,18 @@
   #arw-banner .arw-bacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .arw-bx{background:none;border:none;color:#c8b48a;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
   .arw-bx:hover{color:#fff}
+  /* deeper-dive help hub + topic cards */
+  .arw-topics{display:grid;gap:8px;margin:16px 0 4px}
+  .arw-topic{appearance:none;display:block;width:100%;text-align:left;cursor:pointer;font:inherit;
+    background:#1e2333;border:.5px solid #2e3347;border-radius:9px;padding:11px 13px;transition:.15s}
+  .arw-topic:hover{border-color:#D4A843;background:#232a3c}
+  .arw-topic-t{display:block;font-size:13.5px;font-weight:600;color:#e8eaf0}
+  .arw-topic-d{display:block;font-size:12px;color:#a3a9bf;margin-top:2px;line-height:1.45}
+  .arw-sh{margin:17px 0 5px;font-size:13px;font-weight:650;color:#D4A843}
+  .arw-sh:first-of-type{margin-top:10px}
+  .arw-card .arw-ul{margin:4px 0 0;padding-left:18px}
+  .arw-card .arw-ul li{font-size:12.5px;color:#c9cee0;line-height:1.5;margin:4px 0}
+  .arw-card .arw-ul li b{color:#e8eaf0}
   @media(max-width:520px){ .arw-grid{grid-template-columns:1fr} }
   `;
   function injectCss(){
@@ -145,7 +157,7 @@
       { sel:'#settings-btn', title:'Settings ⚙',
         body:'Themes, keyboard shortcuts, and per-device display options.' },
       { sel:null, title:'Invite your players',
-        body:'Open Campaign Setup (in 🛡 Referee tools) to hand each player a personal invite link — they join and see only what’s theirs. That’s it — you’re ready to run. Reopen this any time from Referee tools ▸ Take the tour.' },
+        body:'Open Campaign Setup (in 🛡 Referee tools) to hand each player a personal invite link — they join and see only what’s theirs. That’s the essentials — next, pick anything you’d like a closer look at, or jump straight in.' },
     ],
     player: () => [
       { sel:'#breadcrumb,#hdr-title,#hdr-locus', title:'Where you are',
@@ -228,14 +240,14 @@
          <button class="arw-btn ghost sm" data-arw="skip">Skip</button>
          <div class="sp"></div>
          <button class="arw-btn sm" data-arw="back"${idx === 0 ? ' disabled' : ''}>‹ Back</button>
-         <button class="arw-btn primary sm" data-arw="next">${last ? 'Finish ✓' : 'Next ›'}</button>
+         <button class="arw-btn primary sm" data-arw="next">${last ? (role === 'referee' ? 'More help ›' : 'Finish ✓') : 'Next ›'}</button>
        </div>`;
     place();
   }
   function go(delta){
     const n = idx + delta;
     if(n < 0) return;
-    if(n >= steps.length){ finish(); return; }
+    if(n >= steps.length){ if(role === 'referee') openHelpHub(); else finish(); return; }
     idx = n; renderStep();
   }
   function startTour(r){
@@ -295,6 +307,172 @@
       if(e.key === 'Escape'){ e.preventDefault(); finish(); }
       else if(e.key === 'Enter'){ e.preventDefault(); startTour(role); }
     };
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  // ══ Deeper-dive help hub (referee) — offered at the end of the tour ══════════
+  // A menu of closer looks at the systems a new referee won't meet on the header
+  // tour: the ⋯ More tools, Design Mode, the deck builder, the star maps, the
+  // economy, combat, and character sheets. Pure content cards (no spotlight), so
+  // they never depend on which panel happens to be open.
+  const TOPICS = [
+    { id:'more', tab:'🧰 The ⋯ More toolbox', blurb:'Every tab in the More menu — what’s shared with players, and what’s yours.',
+      title:'The ⋯ More toolbox', sections:[
+        { h:'What it is', html:`<p class="arw-p">The <b>⋯ More</b> button (top-right) is your toolbox — everything that isn’t a map, the clock, or combat. Player-facing tabs show for everyone; your referee-only tools are hidden from players automatically.</p>` },
+        { h:'Shared with the table', html:`<ul class="arw-ul">
+          <li><b>🗂 Library Data</b> — lore &amp; intel the party has uncovered.</li>
+          <li><b>📚 Wiki</b> — your curated campaign lore and factions.</li>
+          <li><b>🤝 Contacts</b> — patrons, informants and rivals.</li>
+          <li><b>🤫 Whispers</b> — players send you private notes (watch the unread badge).</li>
+          <li><b>⚖ Standing</b> · <b>🕗 Clocks</b> — faction reputation, and schemes/threats ticking down.</li>
+          <li><b>⏳ Downtime</b> — between-jump actions: train, repair, work contacts.</li>
+          <li><b>📅 Imperial Calendar</b> · <b>🖼 Handouts</b> · <b>📦 Starport Board</b> — the timeline, shared maps &amp; clues, and freight/passengers at this port.</li>
+          <li><b>🎯 Turns</b> — combat turn order, shown once a fight begins.</li>
+        </ul>` },
+        { h:'Your referee-only tools', html:`<ul class="arw-ul">
+          <li><b>🗓 Session Planner</b> — prep &amp; run a session; links Oracle, Missions and NPCs.</li>
+          <li><b>👥 NPCs</b> — author and browse the roster.</li>
+          <li><b>📈 Economy</b> · <b>🛒 Station Trade</b> — the living market and the buy/sell desk (its own topic below).</li>
+          <li><b>🎬 Session</b> · <b>🎵 Scenes</b> — export/recap, and one-tap ambience audio.</li>
+          <li><b>📡 Send players to this view</b> / <b>🔓 Release players</b> — pull every screen to follow you, then let them roam again.</li>
+        </ul>` },
+        { h:'Tip', html:`<p class="arw-p">Handouts, Whispers and “Send players to this view” are your live-table levers — keep them within reach during play.</p>` },
+      ] },
+    { id:'design', tab:'✏ Design Mode', blurb:'Turn it on to edit systems, stations, NPCs and text in place.',
+      title:'Design Mode — editing your world', sections:[
+        { h:'Turning it on (and off)', html:`<p class="arw-p">Open <b>🛡 Referee tools ▸ ✏ Design Mode</b>, type your <b>design passcode</b> (the <code>designCode</code> from setup) and Unlock. A purple <b>✎</b> appears in the header. Tap the toggle again to switch it off — no code needed. It can’t be on at the same time as Player Mode.</p>` },
+        { h:'What it unlocks', html:`<p class="arw-p">Little <b>✏ pencils</b> appear on every editable piece of text, and the header <b>✎</b> opens Design tools:</p>
+          <ul class="arw-ul">
+            <li><b>🌐 Campaign Studio</b> — the campaign-level editor.</li>
+            <li><b>↶ / ↷ Undo / Redo</b> · <b>🎒 Item Catalogue</b> · <b>🌠 Splash Screens</b> (the welcome players see).</li>
+            <li><b>🗑 Show Removed Items</b> — restore anything deleted · <b>Referee Boxes</b> · <b>⟲ Reset Campaign</b>.</li>
+          </ul>
+          <p class="arw-p">Edit in place: read-aloud text, descriptions, referee notes, skill checks, timed events, NPCs, planets, moons &amp; belts, locations, whole star systems and regions.</p>` },
+        { h:'Safe by design', html:`<p class="arw-p">Edits are <b>additive</b> — originals are never lost. Every field keeps its <b>History</b> and a <b>Revert to original</b>, and deletions are restorable from <b>Show Removed Items</b>.</p>` },
+        { h:'One thing to know', html:`<p class="arw-p">Design edits save to the <b>shared backend</b>, so the whole table sees them. And <b>⟲ Reset Campaign</b> wipes reveals, the clock, initiative <i>and</i> all your edits for everyone — it can’t be undone. Treat it as a fresh start, not an undo.</p>` },
+      ] },
+    { id:'decks', tab:'🗺 The deck builder', blurb:'Draw a ship or station’s interior; players get a clean read-only copy.',
+      title:'The deck builder', sections:[
+        { h:'What it’s for', html:`<p class="arw-p">A square-grid editor for drawing a ship’s or station’s interior deck plan. A plan you draw <b>replaces</b> the app’s auto-generated station map, and players see a tidy read-only version.</p>` },
+        { h:'Getting there', html:`<p class="arw-p">It’s a referee tool — turn on <b>Design Mode</b> first. Then on a <b>station</b>, the Design Studio panel shows <b>🗺 Draw deck plan</b>; on a <b>ship</b>, the <b>🚀 Ship</b> panel has <b>🗺 Draw ship deck plan</b>. Either opens the full-screen editor.</p>` },
+        { h:'The tools', html:`<ul class="arw-ul">
+          <li><b>Edit</b> — ✋ Pan · ➤ Select · ⌫ Erase.</li>
+          <li><b>Draw</b> — ▭ Room · ▦ Floor · ─ Wall · ⟋ Wall run · ⋈ Merge.</li>
+          <li><b>🚪 Openings</b> — doors &amp; windows; a live ghost shows exactly where it lands, and a tap cycles closed → open → locked.</li>
+          <li><b>📦 Props</b> — stamp furniture; <b>＋ Custom</b> uploads your own image as a prop.</li>
+          <li><b>⧉ Rooms</b> — prefab templates, plus <b>▭ Copy area</b> to copy/paste a whole region.</li>
+          <li><b>Annotate</b> — 🏷 Label · <b>⊕ Area link</b> · ⬤ Tokens · 📏 Range.</li>
+        </ul>` },
+        { h:'Decks, saving &amp; players', html:`<p class="arw-p">Add levels with <b>＋ Deck</b>, rename/reorder, and export/import JSON. There’s <b>no Save button</b> — it auto-saves and syncs to players; <b>✓ Done</b> closes. <b>⊕ Area link</b> markers make rooms tap-to-open and power <b>fog-of-war</b> (rooms stay hidden until the party arrives), and <b>📤</b> renders the deck as a PNG handout.</p>` },
+      ] },
+    { id:'maps', tab:'🌌 The star maps (Hex &amp; Real)', blurb:'Plan jumps on the hex grid; go cinematic with the real view.',
+      title:'The star maps — Hex &amp; Real', sections:[
+        { h:'Two views, one toggle', html:`<p class="arw-p">In the galaxy view, <b>Hex / Real</b> switches between the two maps (remembered per device, and mirrored on the table display). Use <b>Hex</b> to plan, <b>Real</b> for a cinematic view.</p>` },
+        { h:'The Hex map — your working map', html:`<p class="arw-p"><b>1 hex = 1 parsec</b> on a Traveller-style grid. (The layout is clustered by faction for clarity, not to real distance.)</p>
+          <ul class="arw-ul">
+            <li><b>Jump range</b> — <b>J1–J6</b> light every system a Jump-N drive reaches in one ~week-long jump (cyan = in range, gold = fuel range).</li>
+            <li><b>Jump routes</b> — surveyed lanes cost less fuel and the plotter prefers them; you can add, remove, or <b>block a lane</b> with a reason.</li>
+            <li><b>Reveal to players</b> — <b>Mark visited</b> opens a world’s market (unvisited worlds are fogged with no price intel; jumping there reveals it). The <b>👁 / 🙈</b> per-faction toggle can redact a whole region to “Uncharted.”</li>
+          </ul>` },
+        { h:'Drilling in', html:`<p class="arw-p">Click a star to select it (the <b>Jump Plotter</b> opens), then <b>⊙ View close up</b> drops into that system’s orrery.</p>` },
+        { h:'The Real map', html:`<p class="arw-p">One seamless zoom from <b>Galaxy → Approach → System</b>; zoom a star to open its live orrery. It’s stylised, not real astronomy, and it never changes your system data — ideal on a table screen while you plan on Hex.</p>` },
+      ] },
+    { id:'economy', tab:'📈 The economy (simple &amp; realistic)', blurb:'From plain trade-good prices to a full simulated market with corporations.',
+      title:'The economy — Simple &amp; Living', sections:[
+        { h:'Where it lives', html:`<p class="arw-p">Under <b>⋯ More</b>: <b>📈 Economy</b> opens the <b>Living Economy</b> console (referee-only), and <b>🛒 Station Trade</b> is the buy/sell desk. Players never get a trade UI — prices are <b>fog-of-price</b>: a world shows a sealed “?” until the party has actually called there.</p>` },
+        { h:'Simple mode (the default)', html:`<p class="arw-p">The header toggle reads <b>◐ Simple</b>. Prices come straight from each world’s <b>Produces / Demands</b> profile — producers sell their good cheaper, importers pay more. No stockpiles, no logistics. The <b>Station Trade</b> desk shows the trade-code DMs as reference and records the deals you roll with dice at the table (updating funds and cargo). This is all most tables ever need.</p>` },
+        { h:'Full / Living simulation', html:`<p class="arw-p">Flip the toggle to <b>⚙ Full simulation</b> and it becomes a real stocks-and-flows economy: goods are made along supply chains (ore → electronics → advanced; fuel; food → pharma), worlds hold stockpiles, and trade moves goods producer → consumer with a <b>lead time equal to jump distance</b>, so shocks ripple outward. It layers on price drift, black markets, faction AI, pirates, and a <b>corporation layer</b> — trading houses (including the <b>OmniSynth</b> megacorp) with treasuries and fleets that advance each turn.</p>` },
+        { h:'Running it', html:`<p class="arw-p">A tick is <b>one Imperial week</b>. It auto-advances when you move the campaign calendar; the console’s <b>+1 day / Step +1 wk / +4 wks / Reset</b> buttons let you <b>preview</b> cascades without moving the campaign date. Fire disruptions with the preset <b>Duration + Severity</b> controls, let <b>◇ Auto-fire events</b> run the market for you, or reach into the corporation controls.</p>` },
+        { h:'Tip', html:`<p class="arw-p">Start in Simple. Switch to Full only when you want the market to feel alive between sessions — every device stays in sync, and if the engine ever hiccups, nothing changes for players.</p>` },
+      ] },
+    { id:'combat', tab:'⚔ Running combat', blurb:'Traveller 2e ship combat, plus an initiative tracker for boarding &amp; ground fights.',
+      title:'Running combat', sections:[
+        { h:'Two tools', html:`<p class="arw-p"><b>⚔ Combat</b> in the header runs <b>Traveller 2e ship combat</b>. For boarding actions and ground fights, use the <b>⚔ Initiative</b> tracker. Your device is the authority; players’ screens follow read-only, and hidden enemies stay hidden until you reveal them.</p>` },
+        { h:'Setting up a space fight', html:`<p class="arw-p"><b>⚔ Begin Encounter</b> seeds the party ship. Type an enemy name ▸ <b>＋ Add ship</b> (foes start at <b>Long</b> range and hidden); <b>👁 Reveal</b> or <b>🔒 Hide stats</b> control what players see. Then <b>🎲 Roll Initiative &amp; Begin</b> (2D + Pilot + Thrust).</p>` },
+        { h:'The round', html:`<p class="arw-p">Each round runs three phases in order, and <b>Next ▸</b> walks you through every ship in initiative order:</p>
+          <ul class="arw-ul">
+            <li><b>Manoeuvre</b> — allocate thrust, <b>Evade</b>, and <b>▸ Close / ◂ Open</b> range across the bands (Adjacent … Distant).</li>
+            <li><b>Attack</b> — pick a target + weapon and <b>🔥 Fire</b> (2D + Gunnery vs 8+); missiles support salvos, locks and point-defence.</li>
+            <li><b>Action</b> — Sensor Lock, Leadership, and other once-per-round moves.</li>
+          </ul>` },
+        { h:'Damage &amp; tips', html:`<p class="arw-p">Armour subtracts from damage, then Hull drops; a big Effect or every 10% of Hull lost triggers a critical. Add at least one enemy before rolling, keep foes hidden until they matter, and use <b>Quick-resolve</b> for minor skirmishes. Boarding? Switch to the Initiative tracker and <b>⚔ From map</b> to pull in the deck tokens.</p>` },
+      ] },
+    { id:'sheets', tab:'📋 Character sheets', blurb:'Open, edit and share PC sheets; the ship has its own panel.',
+      title:'Character sheets', sections:[
+        { h:'Opening them', html:`<p class="arw-p"><b>📋 Sheets</b> in the header. As referee you get a <b>character-picker</b> at the top to flip between everyone’s sheets; a player opens <b>their own</b> (and is asked who they’re “Playing as” if they haven’t chosen yet).</p>` },
+        { h:'What’s on a sheet', html:`<p class="arw-p">Name &amp; age, the six characteristics (<b>STR / DEX / END / INT / EDU / SOC</b>) with live DMs, skills, a task-check helper, inventory with encumbrance, notes, a <b>💰 Funds</b> aside (personal purse + party fund) and <b>Status effect</b> chips. <b>🖨 Print / save as PDF</b> makes a paper or backup copy.</p>` },
+        { h:'The ship is separate', html:`<p class="arw-p">The crew’s vessel lives on its own <b>🚀 Ship</b> panel — a shared “Ship Data File” with fuel, jump range and critical hits. You edit it; players read it (some readouts, like jump distance, show only to the pilots).</p>` },
+        { h:'Saving &amp; visibility', html:`<p class="arw-p">Sheets save to the <b>shared backend</b> under each character’s name, so they sync across devices. You see and edit every sheet; players reach only their own. It’s honour-system visibility for spoilers, <i>not</i> security — data still ships to every device.</p>` },
+      ] },
+  ];
+
+  function topicCard(i){
+    const t = TOPICS[i], last = i === TOPICS.length - 1;
+    const secs = t.sections.map(s => `<h3 class="arw-sh">${s.h}</h3>${s.html}`).join('');
+    return `<div id="arw-back"><div class="arw-card">
+        <button class="arw-x" data-arw="close" aria-label="Close">×</button>
+        <div class="arw-kick">Referee guide · ${i + 1} of ${TOPICS.length}</div>
+        <h2 class="arw-h" style="font-size:20px">${t.title}</h2>
+        ${secs}
+        <div class="arw-nav">
+          <button class="arw-btn ghost sm" data-arw="hub">‹ All topics</button>
+          <div class="sp"></div>
+          <button class="arw-btn sm" data-arw="tprev"${i === 0 ? ' disabled' : ''}>‹ Prev</button>
+          <button class="arw-btn primary sm" data-arw="tnext">${last ? 'Done ✓' : 'Next ›'}</button>
+        </div>
+      </div></div>`;
+  }
+  function openTopic(i){
+    injectCss(); teardown(); role = 'referee';
+    root = document.createElement('div');
+    root.id = 'arw-root'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', TOPICS[i].title);
+    root.innerHTML = topicCard(i);
+    document.body.appendChild(root);
+    const card = root.querySelector('.arw-card'); if(card) card.scrollTop = 0;
+    root.addEventListener('click', e => {
+      const b = e.target.closest('[data-arw]'); if(!b) return;
+      const a = b.getAttribute('data-arw');
+      if(a === 'close') finish();
+      else if(a === 'hub') openHelpHub();
+      else if(a === 'tprev'){ if(i > 0) openTopic(i - 1); }
+      else if(a === 'tnext'){ (i < TOPICS.length - 1) ? openTopic(i + 1) : finish(); }
+    });
+    onKey = e => {
+      if(e.key === 'Escape'){ e.preventDefault(); finish(); }
+      else if(e.key === 'ArrowRight'){ e.preventDefault(); (i < TOPICS.length - 1) ? openTopic(i + 1) : finish(); }
+      else if(e.key === 'ArrowLeft'){ e.preventDefault(); if(i > 0) openTopic(i - 1); }
+    };
+    document.addEventListener('keydown', onKey, true);
+  }
+  function openHelpHub(){
+    injectCss(); teardown(); role = 'referee';
+    const list = TOPICS.map((t, i) =>
+      `<button class="arw-topic" data-topic="${i}">
+         <span class="arw-topic-t">${t.tab}</span>
+         <span class="arw-topic-d">${t.blurb}</span>
+       </button>`).join('');
+    root = document.createElement('div');
+    root.id = 'arw-root'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'More help');
+    root.innerHTML =
+      `<div id="arw-back"><div class="arw-card">
+        <button class="arw-x" data-arw="close" aria-label="Close">×</button>
+        <div class="arw-kick">Aurelia RPG Tools</div>
+        <h2 class="arw-h">Want to go deeper?</h2>
+        <p class="arw-p">You’ve got the basics. Pick anything you’d like a closer look at — or jump straight in. You can reopen this any time from 🛡 Referee tools ▸ 📖 Referee guide.</p>
+        <div class="arw-topics">${list}</div>
+        <div class="arw-nav">
+          <div class="sp"></div>
+          <button class="arw-btn primary" data-arw="close">I’m all set ✓</button>
+        </div>
+      </div></div>`;
+    document.body.appendChild(root);
+    const card = root.querySelector('.arw-card'); if(card) card.scrollTop = 0;
+    root.addEventListener('click', e => {
+      if(e.target.closest('[data-arw="close"]')){ finish(); return; }
+      const b = e.target.closest('[data-topic]'); if(!b) return;
+      openTopic(parseInt(b.getAttribute('data-topic'), 10) || 0);
+    });
+    onKey = e => { if(e.key === 'Escape'){ e.preventDefault(); finish(); } };
     document.addEventListener('keydown', onKey, true);
   }
 
@@ -459,6 +637,7 @@
   window.startRefereeTour = () => startTour('referee');
   window.startPlayerWelcome = () => startWelcome('player');
   window.openSetupHealth = openSetupHealth;
+  window.openHelpTopics = openHelpHub;   // referee deep-dive hub (also offered at the end of the tour)
   // Auto-detect the viewer's role — used by the shared "Take the tour" menu entry.
   window.startWalkthrough = () => startWelcome((typeof isReferee === 'function' && !isReferee()) ? 'player' : 'referee');
 

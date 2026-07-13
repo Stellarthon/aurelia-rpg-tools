@@ -132,7 +132,29 @@ try {
     const counter = tip ? await tip.$eval('.arw-count', el => el.textContent).catch(() => '') : '';
     check('tour opens on step 1', /Step 1 of/i.test(counter), counter);
 
-    check('tour runs to completion (overlay torn down)', await runTourToEnd(page));
+    // Step through the spotlight tour; the referee tour then hands off to the help hub.
+    let guard = 0;
+    while (await q(page, '.arw-tip') && guard++ < 40){
+      await page.click('[data-arw="next"]').catch(() => {});
+      await page.waitForTimeout(120);
+    }
+    const hub = await waitFor(page, '.arw-topics', 5000);
+    check('tour hands off to the "go deeper" help hub', !!hub);
+    check('onboarded flag not set until the hub is dismissed',
+      await page.evaluate(() => localStorage.getItem('aurelia_ref_onboarded')) !== '1');
+
+    // Open a deep-dive topic, confirm it has real detail, then return to the hub.
+    await page.click('[data-topic="0"]');
+    check('a deep-dive topic opens with detail', await waitFor(page, '.arw-sh', 5000) !== null);
+    check('topic card labels itself one of the seven guides',
+      /of 7/i.test(await page.$eval('.arw-kick', el => el.textContent).catch(() => '')));
+    await page.click('[data-arw="hub"]');
+    check('"All topics" returns to the hub', await waitFor(page, '.arw-topics', 3000) !== null);
+
+    // Finish from the hub.
+    await page.click('[data-arw="close"]');
+    await page.waitForTimeout(200);
+    check('dismissing the hub tears down the overlay', await q(page, '#arw-root') === null);
     check('referee onboarded flag set after finishing',
       await page.evaluate(() => localStorage.getItem('aurelia_ref_onboarded')) === '1');
 
@@ -261,6 +283,29 @@ try {
 
     const wrongHost = await probe(base);                  // absolute, but our static host → 404 that is not PostgREST
     check('an absolute non-Supabase 404 is not called valid', !/valid/i.test(wrongHost.html) && wrongHost.tested === false, wrongHost.html);
+    await ctx.close();
+  }
+
+  // ── 7) The "Referee guide" deep-dive hub and its topic content ──
+  console.log('\n=== 7 · referee guide hub + deep-dive topics ===');
+  {
+    const ctx = await context({
+      aurelia_access: '1', aurelia_ref_onboarded: '1', 'aurelia_cache_splash-config': NO_SPLASH,
+    });
+    const page = await ctx.newPage();
+    await page.goto(base + '/index.html', { waitUntil: 'load', timeout: 30000 });
+    await page.waitForTimeout(1000);
+
+    await page.evaluate(() => window.openHelpTopics());
+    check('📖 Referee guide opens the hub', await waitFor(page, '.arw-topics', 5000) !== null);
+    check('hub offers all seven deep-dive topics', await page.$$eval('.arw-topic', els => els.length) === 7);
+
+    // The economy topic must cover BOTH the simple and the realistic/living modes.
+    await page.click('[data-topic="4"]');
+    await waitFor(page, '.arw-sh', 5000);
+    const econ = await page.$eval('#arw-root .arw-card', el => el.textContent).catch(() => '');
+    check('economy topic covers the simple mode', /simple/i.test(econ), econ.slice(0, 60));
+    check('economy topic covers the realistic/living mode', /full simulation|living/i.test(econ), '');
     await ctx.close();
   }
 } finally {

@@ -895,6 +895,10 @@ function renderRefereeMenu(){
       <span class="settings-row-label">🧭 Take the tour</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">walkthrough →</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();openHelpTopics()">
+      <span class="settings-row-label">📖 Referee guide</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">deep dives →</span>
+    </div>
     <div class="archon-divider"></div>
     ${renderArchonSectionHTML()}`;
 }
