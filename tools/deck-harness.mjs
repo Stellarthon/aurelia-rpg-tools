@@ -42,6 +42,7 @@ const NAMES = [
   'dkeIsDiagWall','dkeNearestDiagWall','dkeDiagOpeningSpan','dkeDiagOpeningHit','dkeDiagOpeningSVG',
   'dkeClipCellHalfPlane','dkeDiagFloorCuts',
   'dkeSharedEdges','dkeRemoveEdgeWall','dkeOpeningCovers','dkeRoomCells','dkeEdgeWalled','dkeWallBlocks',
+  'dkeIsDiagWall','dkeSegProperCross','dkeDiagWallBetween','dkeFillPolygon','dkePointInPoly',
   // room records + auto-detection + window see-through
   'dkeNewRoomId','dkeRoomEnclosed','dkeEnclosedRegions','dkeRoomForCell','dkeRoomById','dkeRoomLiveCells',
   'dkeSyncRooms','dkeRoomName','dkeRoomPending','dkeOpeningSides','dkeIsWindow','dkeIsClearWindow',
@@ -343,6 +344,44 @@ const find = (arr, p) => arr.find(p);
   ok(M.dkeIsClearWindow(w.doors[0]) === false, 'a frosted window is no longer clear');
   ok(M.dkeRoomVisibleToPlayers(w, B) === false, 'frosted glass hides B again');
   ok(M.dkeRoomVisibleToPlayers(w, A) === true, 'A stays visible — it is directly revealed');
+})();
+
+// ═══ GROUP 7 — angled walls bound rooms (detection + selection) ══════════════
+(() => {
+  // Strict crossing: a proper interior crossing counts, a shared endpoint doesn't.
+  ok(M.dkeSegProperCross({x:0,y:0},{x:2,y:0},{x:1,y:-1},{x:1,y:1}) === true, 'proper crossing detected');
+  ok(M.dkeSegProperCross({x:0,y:0},{x:2,y:0},{x:1,y:0},{x:1,y:1}) === false, 'endpoint-only touch is not a crossing');
+
+  // A diagonal wall running between two floored cells blocks flood-fill.
+  const d = { w:4, h:4, floors:[{x:0,y:0,w:2,h:1}], walls:[{x1:0,y1:1,x2:2,y2:0}], doors:[], rooms:[] };
+  ok(M.dkeWallBlocks(d, 0, 0, 1, 0) === true, 'a diagonal wall between two cells blocks passage');
+  ok(M.dkeRoomCells(d, 0, 0).length === 1, 'flood-fill stops at the diagonal (1-cell room)');
+  // A 45° wall that only grazes cell centres must NOT spuriously fragment the grid.
+  ok(M.dkeWallBlocks({ w:4,h:4, floors:[{x:0,y:0,w:2,h:1}], walls:[{x1:0,y1:0,x2:2,y2:2}] }, 0,0,1,0) === false, '45° wall grazing a centre does not block');
+
+  // A diagonal PARTITION splits one floored rectangle into two detected rooms.
+  const split = M.dkeNorm({ w:4, h:4,
+    floors:[{ x:0,y:0,w:4,h:4 }],
+    walls:[ { x1:0,y1:0,x2:4,y2:0 }, { x1:4,y1:0,x2:4,y2:4 }, { x1:4,y1:4,x2:0,y2:4 }, { x1:0,y1:4,x2:0,y2:0 },
+            { x1:0,y1:1,x2:4,y2:3 } ]   // a shallow diagonal partition across the room
+  });
+  const rTop = M.dkeRoomCells(split, 0, 0), rBot = M.dkeRoomCells(split, 0, 3);
+  ok(rTop.length + rBot.length === 16 && rTop.length > 0 && rBot.length > 0, 'diagonal partition splits the rectangle into two floods');
+  ok(!new Set(rTop.map(c=>c.x+','+c.y)).has('0,3'), 'the two sides of the partition are separate rooms');
+
+  // A room whose perimeter INCLUDES a diagonal is detected as enclosed + selectable.
+  const room = M.dkeNorm({ w:8, h:8, floors:[], walls:[], doors:[], rooms:[] });
+  const poly = [{x:1,y:1},{x:4,y:1},{x:5,y:3},{x:5,y:5},{x:1,y:5}];   // pentagon w/ one diagonal edge
+  M.dkeFillPolygon(room, poly);
+  ok(room.floors.length > 0, 'diagonal room got floored');
+  M.dkeAddWall(room,1,1,4,1); M.dkeAddWall(room,5,3,5,5); M.dkeAddWall(room,5,5,1,5); M.dkeAddWall(room,1,5,1,1);
+  room.walls.push({ x1:4, y1:1, x2:5, y2:3 });   // the diagonal edge
+  const regs = M.dkeEnclosedRegions(room);
+  ok(regs.length === 1, 'the diagonally-bounded room is exactly one enclosed region');
+  ok(M.dkeRoomEnclosed(room, M.dkeRoomCells(room, 2, 2)) === true, 'diagonal room reports enclosed');
+  M.dkeSyncRooms(room, true);
+  ok(room.rooms.length === 1, 'sync auto-creates a record for the diagonal room');
+  ok(M.dkeRoomForCell(room, 2, 2) === room.rooms[0], 'the diagonal room is selectable from an interior cell');
 })();
 
 // ── report ───────────────────────────────────────────────────────────────────

@@ -258,17 +258,34 @@ function dkeD(){ return dkeCurrentDeck(dkeHolder()); }
 
 // ── Room detection (tap-the-room area links) ─────────────────────────────────
 // Is the unit grid edge starting at vertex (x,y) — rightward for 'h', downward
-// for 'v' — covered by an axis-aligned wall segment? Diagonal walls never block.
+// for 'v' — covered by an axis-aligned wall segment?
 function dkeEdgeWalled(deck, x, y, o){
   return (deck.walls||[]).some(w => o === 'v'
     ? (w.x1 === x && w.x2 === x && Math.min(w.y1,w.y2) <= y && Math.max(w.y1,w.y2) >= y+1)
     : (w.y1 === y && w.y2 === y && Math.min(w.x1,w.x2) <= x && Math.max(w.x1,w.x2) >= x+1));
 }
+// Do segments a–b and c–d PROPERLY cross (interior intersection; shared endpoints
+// or mere touches don't count)? Used to test whether a diagonal wall passes
+// between two cell centres. Strict crossing keeps 45° walls that only graze a
+// centre from spuriously fragmenting the grid.
+function dkeSegProperCross(a, b, c, d){
+  const o = (p,q,r) => (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x);
+  const d1 = o(c,d,a), d2 = o(c,d,b), d3 = o(a,b,c), d4 = o(a,b,d);
+  return ((d1>0 && d2<0) || (d1<0 && d2>0)) && ((d3>0 && d4<0) || (d3<0 && d4>0));
+}
+// A diagonal wall bounds a room when it runs between two adjacent cells: it blocks
+// passage if it crosses the segment joining their centres. This is what makes
+// angled-walled rooms detectable and selectable (flood-fill was cell-edge only).
+function dkeDiagWallBetween(deck, ax, ay, bx, by){
+  const a = { x: ax+.5, y: ay+.5 }, b = { x: bx+.5, y: by+.5 };
+  return (deck.walls||[]).some(w => dkeIsDiagWall(w) && dkeSegProperCross(a, b, { x:w.x1, y:w.y1 }, { x:w.x2, y:w.y2 }));
+}
 function dkeWallBlocks(deck, cx, cy, dx, dy){
-  if(dx === 1)  return dkeEdgeWalled(deck, cx+1, cy, 'v');
-  if(dx === -1) return dkeEdgeWalled(deck, cx, cy, 'v');
-  if(dy === 1)  return dkeEdgeWalled(deck, cx, cy+1, 'h');
-  return dkeEdgeWalled(deck, cx, cy, 'h');
+  const axis = dx === 1 ? dkeEdgeWalled(deck, cx+1, cy, 'v')
+    : dx === -1 ? dkeEdgeWalled(deck, cx, cy, 'v')
+    : dy === 1 ? dkeEdgeWalled(deck, cx, cy+1, 'h')
+    : dkeEdgeWalled(deck, cx, cy, 'h');
+  return axis || dkeDiagWallBetween(deck, cx, cy, cx+dx, cy+dy);
 }
 // Flood-fill from a cell across floor cells, bounded by walls (doors sit ON a
 // wall segment, so doorways bound rooms too). Null if the start cell isn't floor.
@@ -1006,8 +1023,9 @@ function dkeDeckImgUrl(deck){
 // A diagonal wall that bounds a room should cut the stair-stepped floor cells so
 // the floor edge follows the wall. For each diagonal wall we find its EXTERIOR
 // side (the side with fewer floor cells) and carve the exterior sliver out of
-// each floor cell the wall crosses. Presentation only — flood-fill/room detection
-// is unchanged (angled walls remain cell-transparent for tap-the-room).
+// each floor cell the wall crosses. Presentation only — the flood-fill treats a
+// diagonal as blocking whenever it runs between two cell centres (dkeWallBlocks),
+// so angled-walled rooms are detected and selectable like axis ones.
 function dkeClipCellHalfPlane(cx, cy, side){   // Sutherland–Hodgman, keep side()>=0
   const poly = [{ x:cx, y:cy }, { x:cx+1, y:cy }, { x:cx+1, y:cy+1 }, { x:cx, y:cy+1 }], out = [];
   for(let i = 0; i < poly.length; i++){
