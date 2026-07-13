@@ -259,6 +259,38 @@ function dkeRoomOutlineD(cells){
   return d;
 }
 
+// ── Merge rooms (remove the wall between two adjacent rooms) ──────────────────
+// The referee taps two adjacent rooms; every walled unit-edge on their shared
+// boundary is removed — walls split around the edge, openings on it dropped — so
+// the two flood-fill into one room. Axis walls only (angled walls don't bound
+// rooms). Unwalled shared edges are no-ops, so a partly-open boundary is safe.
+function dkeSharedEdges(A, B){
+  const sb = new Set(B.map(c => c.x + ',' + c.y)), seen = new Set(), out = [];
+  const add = (x, y, o) => { const k = o + x + ',' + y; if(!seen.has(k)){ seen.add(k); out.push({ x, y, o }); } };
+  A.forEach(a => {
+    if(sb.has((a.x+1) + ',' + a.y)) add(a.x+1, a.y,   'v');
+    if(sb.has((a.x-1) + ',' + a.y)) add(a.x,   a.y,   'v');
+    if(sb.has(a.x + ',' + (a.y+1))) add(a.x,   a.y+1, 'h');
+    if(sb.has(a.x + ',' + (a.y-1))) add(a.x,   a.y,   'h');
+  });
+  return out;
+}
+function dkeRemoveEdgeWall(d, x, y, o){
+  const keep = [];
+  (d.walls || []).forEach(w => {
+    if(o === 'h' && w.y1 === y && w.y2 === y){
+      const a = Math.min(w.x1,w.x2), b = Math.max(w.x1,w.x2);
+      if(a <= x && b >= x+1){ if(a < x) keep.push({ x1:a, y1:y, x2:x, y2:y }); if(b > x+1) keep.push({ x1:x+1, y1:y, x2:b, y2:y }); return; }
+    } else if(o === 'v' && w.x1 === x && w.x2 === x){
+      const a = Math.min(w.y1,w.y2), b = Math.max(w.y1,w.y2);
+      if(a <= y && b >= y+1){ if(a < y) keep.push({ x1:x, y1:a, x2:x, y2:y }); if(b > y+1) keep.push({ x1:x, y1:y+1, x2:x, y2:b }); return; }
+    }
+    keep.push(w);
+  });
+  d.walls = keep;
+  d.doors = (d.doors || []).filter(op => !dkeOpeningCovers(op, { x, y, o }));   // diag openings never match
+}
+
 // ── Initiative tie-in ────────────────────────────────────────────────────────
 // Tokens match initiative entries BY NAME (case-insensitive). The referee reads
 // the live combatants array (js/45) so the glow works even before sharing; a
@@ -504,6 +536,7 @@ function dkeOpeningCovers(op, e){
 }
 function dkeOpeningSVG(op){
   const C = DKE_CELL, L = op.len || 1, type = op.t || 'door', s = op.s || 'closed';
+  if(op.o === 'd') return dkeDiagOpeningSVG(op);
   if(op.o === 'h'){
     const y = op.y*C, x0 = op.x*C;
     const gap = `<line x1="${x0+.12*C}" y1="${y}" x2="${x0+(L-.12)*C}" y2="${y}" stroke="#0f1117" stroke-width="5"/>`;
@@ -528,9 +561,66 @@ function dkeOpeningSVG(op){
 // Fat transparent tap target over an opening (the leaf itself is too thin to hit).
 function dkeOpeningHitSVG(op){
   const C = DKE_CELL, L = op.len || 1;
+  if(op.o === 'd') return `<line x1="${op.x1*C}" y1="${op.y1*C}" x2="${op.x2*C}" y2="${op.y2*C}" stroke="transparent" stroke-width="16"/>`;
   return op.o === 'h'
     ? `<rect x="${(op.x+.1)*C}" y="${op.y*C-7}" width="${(L-.2)*C}" height="14" fill="transparent"/>`
     : `<rect x="${op.x*C-7}" y="${(op.y+.1)*C}" width="14" height="${(L-.2)*C}" fill="transparent"/>`;
+}
+// ── Angled-wall openings ─────────────────────────────────────────────────────
+// A door/window on a diagonal wall stores its own sub-segment in grid coords —
+// {o:'d', x1,y1,x2,y2, t?, s?} — so it's robust to wall re-indexing and draws /
+// hit-tests straight off the endpoints. Angled walls don't bound rooms (flood-
+// fill is cell-based), so these openings are purely visual, like the wall itself.
+function dkeIsDiagWall(w){ return w && w.x1 !== w.x2 && w.y1 !== w.y2; }
+function dkeDiagOpeningHit(op, u, tol){ return dkeSegDist(u, op) < (tol || .3); }
+// Nearest diagonal wall to a tap, with the projection param t along it.
+function dkeNearestDiagWall(p, maxDist){
+  const d = dkeD(); if(!d) return null;
+  const u = dkeCellPt(p);
+  let best = null, bestDist = (maxDist == null) ? .4 : maxDist;
+  (d.walls || []).forEach((w, i) => {
+    if(!dkeIsDiagWall(w)) return;   // axis walls keep using the h/v edge system
+    const dist = dkeSegDist(u, w);
+    if(dist < bestDist){ bestDist = dist; best = { i, w, dist }; }
+  });
+  if(!best) return null;
+  const w = best.w, dx = w.x2 - w.x1, dy = w.y2 - w.y1, len2 = dx*dx + dy*dy;
+  best.t = len2 ? Math.max(0, Math.min(1, ((u.x - w.x1)*dx + (u.y - w.y1)*dy) / len2)) : 0;
+  return best;
+}
+// A span of `len` grid-units centred on the projection, clamped to the wall ends.
+function dkeDiagOpeningSpan(dw, len){
+  const w = dw.w, dx = w.x2 - w.x1, dy = w.y2 - w.y1, wl = Math.hypot(dx, dy) || 1;
+  const L = Math.max(1, Math.min(3, (len | 0) || 1)), half = (L / 2) / wl;
+  let t0 = dw.t - half, t1 = dw.t + half;
+  if(t0 < 0){ t1 += -t0; t0 = 0; }
+  if(t1 > 1){ t0 -= (t1 - 1); t1 = 1; }
+  t0 = Math.max(0, t0); t1 = Math.min(1, t1);
+  return { x1: w.x1 + dx*t0, y1: w.y1 + dy*t0, x2: w.x1 + dx*t1, y2: w.y1 + dy*t1 };
+}
+function dkeDiagOpeningSVG(op){
+  const C = DKE_CELL, type = op.t || 'door', s = op.s || 'closed';
+  const x1 = op.x1*C, y1 = op.y1*C, x2 = op.x2*C, y2 = op.y2*C;
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+  const ux = dx/len, uy = dy/len, nx = -uy, ny = ux;   // unit along + left normal
+  const ins = .12*C;                                    // dark gap inset from each end
+  const gx1 = x1 + ux*ins, gy1 = y1 + uy*ins, gx2 = x2 - ux*ins, gy2 = y2 - uy*ins;
+  const gap = `<line x1="${gx1.toFixed(2)}" y1="${gy1.toFixed(2)}" x2="${gx2.toFixed(2)}" y2="${gy2.toFixed(2)}" stroke="#0f1117" stroke-width="5"/>`;
+  const leaf = col => `<line x1="${gx1.toFixed(2)}" y1="${gy1.toFixed(2)}" x2="${gx2.toFixed(2)}" y2="${gy2.toFixed(2)}" stroke="${col}" stroke-width="6" stroke-linecap="round"/>`;
+  if(type === 'window'){
+    let m = ''; const n = Math.round(len / C);
+    for(let k = 1; k < n; k++){ const px = x1 + ux*k*C, py = y1 + uy*k*C;
+      m += `<line x1="${(px-nx*2.5).toFixed(2)}" y1="${(py-ny*2.5).toFixed(2)}" x2="${(px+nx*2.5).toFixed(2)}" y2="${(py+ny*2.5).toFixed(2)}" stroke="#4a8f9c" stroke-width=".8"/>`; }
+    return gap + `<line x1="${gx1.toFixed(2)}" y1="${gy1.toFixed(2)}" x2="${gx2.toFixed(2)}" y2="${gy2.toFixed(2)}" stroke="#7fd4e0" stroke-opacity=".45" stroke-width="5"/>` + m;
+  }
+  if(s === 'open'){   // leaf swung perpendicular from the first end
+    const sx = x1 + ux*ins, sy = y1 + uy*ins;
+    return gap + `<line x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${(sx+nx*.6*C).toFixed(2)}" y2="${(sy+ny*.6*C).toFixed(2)}" stroke="#D4A843" stroke-width="3" stroke-linecap="round"/>`;
+  }
+  if(s === 'locked'){ const mx = (x1+x2)/2, my = (y1+y2)/2;
+    return gap + leaf('#c0506e') + `<circle cx="${mx.toFixed(2)}" cy="${my.toFixed(2)}" r="1.6" fill="#0f1117"/>`;
+  }
+  return gap + leaf('#D4A843');
 }
 
 // Public URL of a deck's floorplan-underlay image. '' when the deck has none.
@@ -545,6 +635,52 @@ function dkeDeckImgUrl(deck){
   if(typeof handoutUrlFor === 'function') return handoutUrlFor(camp, deck.img.id, deck.img.ver);   // legacy (pre-0012)
   return '';
 }
+// ── Floor clipped to angled walls ────────────────────────────────────────────
+// A diagonal wall that bounds a room should cut the stair-stepped floor cells so
+// the floor edge follows the wall. For each diagonal wall we find its EXTERIOR
+// side (the side with fewer floor cells) and carve the exterior sliver out of
+// each floor cell the wall crosses. Presentation only — flood-fill/room detection
+// is unchanged (angled walls remain cell-transparent for tap-the-room).
+function dkeClipCellHalfPlane(cx, cy, side){   // Sutherland–Hodgman, keep side()>=0
+  const poly = [{ x:cx, y:cy }, { x:cx+1, y:cy }, { x:cx+1, y:cy+1 }, { x:cx, y:cy+1 }], out = [];
+  for(let i = 0; i < poly.length; i++){
+    const a = poly[i], b = poly[(i+1) % poly.length], sa = side(a.x,a.y), sb = side(b.x,b.y);
+    if(sa >= 0) out.push(a);
+    if((sa >= 0) !== (sb >= 0)){ const t = sa / (sa - sb); out.push({ x: a.x + t*(b.x-a.x), y: a.y + t*(b.y-a.y) }); }
+  }
+  return out;
+}
+function dkeDiagFloorCuts(deck){
+  const walls = (deck.walls || []).filter(dkeIsDiagWall);
+  if(!walls.length) return [];
+  const floor = new Set();
+  (deck.floors || []).forEach(f => { for(let i = 0; i < f.w; i++) for(let j = 0; j < f.h; j++) floor.add((f.x+i)+','+(f.y+j)); });
+  if(!floor.size) return [];
+  const cuts = [];
+  walls.forEach(w => {
+    const dx = w.x2 - w.x1, dy = w.y2 - w.y1, wl = Math.hypot(dx, dy) || 1;
+    const nx = -dy/wl, ny = dx/wl;   // unit left normal
+    // Exterior = the side with fewer floor cells (sample ±0.5 along the normal).
+    const N = Math.max(2, Math.round(wl)); let plus = 0, minus = 0;
+    for(let s = 0; s <= N; s++){ const t = s/N, px = w.x1 + dx*t, py = w.y1 + dy*t;
+      if(floor.has(Math.floor(px + nx*.5) + ',' + Math.floor(py + ny*.5))) plus++;
+      if(floor.has(Math.floor(px - nx*.5) + ',' + Math.floor(py - ny*.5))) minus++;
+    }
+    if(plus === minus) return;                 // partition through floor → don't cut
+    const extSign = plus < minus ? 1 : -1;     // exterior normal points the emptier way
+    const side = (x,y) => extSign * ((x - w.x1)*nx + (y - w.y1)*ny);
+    const xa = Math.floor(Math.min(w.x1,w.x2)), xb = Math.ceil(Math.max(w.x1,w.x2));
+    const ya = Math.floor(Math.min(w.y1,w.y2)), yb = Math.ceil(Math.max(w.y1,w.y2));
+    for(let cx = xa; cx < xb; cx++) for(let cy = ya; cy < yb; cy++){
+      if(!floor.has(cx + ',' + cy)) continue;
+      const raw = [[cx,cy],[cx+1,cy],[cx+1,cy+1],[cx,cy+1]].map(c => (c[0]-w.x1)*nx + (c[1]-w.y1)*ny);
+      if(raw.every(v => v > 1e-9) || raw.every(v => v < -1e-9)) continue;   // wall misses this cell
+      const poly = dkeClipCellHalfPlane(cx, cy, side);
+      if(poly.length >= 3) cuts.push(poly);
+    }
+  });
+  return cuts;
+}
 function dkeContentSVG(deck, opt){
   opt = opt || {};
   const C = DKE_CELL, eh = dkeEsc;
@@ -557,10 +693,19 @@ function dkeContentSVG(deck, opt){
     const op = (deck.img && typeof deck.img.op === 'number') ? deck.img.op : 0.55;
     out += `<image href="${eh(imgUrl)}" x="0" y="0" width="${deck.w*C}" height="${deck.h*C}" opacity="${op}" preserveAspectRatio="xMidYMid meet" style="pointer-events:none" onerror="this.remove()"/>`;
   }
-  // Floors next, grid over them (Roll20-style), structure on top.
+  // Floors next, grid over them (Roll20-style), structure on top. Angled walls
+  // carve the floor so its edge follows the diagonal instead of stair-stepping.
+  let floorSVG = '';
   (deck.floors||[]).forEach(f => {
-    out += `<rect x="${f.x*C}" y="${f.y*C}" width="${f.w*C}" height="${f.h*C}" fill="#1a1f2e"/>`;
+    floorSVG += `<rect x="${f.x*C}" y="${f.y*C}" width="${f.w*C}" height="${f.h*C}" fill="#1a1f2e"/>`;
   });
+  const floorCuts = dkeDiagFloorCuts(deck);
+  if(floorCuts.length){
+    const clipId = 'dke-fclip-' + (opt.idp || 'dke');
+    const holes = floorCuts.map(poly => 'M' + poly.map(pt => (pt.x*C).toFixed(2) + ',' + (pt.y*C).toFixed(2)).join('L') + 'Z').join('');
+    out += `<clipPath id="${clipId}"><path d="M0,0H${deck.w*C}V${deck.h*C}H0Z${holes}" clip-rule="evenodd"/></clipPath>`;
+    out += `<g clip-path="url(#${clipId})">${floorSVG}</g>`;
+  } else out += floorSVG;
   if(L.grid !== false){
     let grid = '';
     for(let i = 0; i <= deck.w; i++) grid += `M${i*C},0 V${deck.h*C} `;
@@ -841,6 +986,7 @@ let dkeTplSel = 'cabin';     // selected template key, or '__clip' for the clipb
 let dkeClipTpl = null;       // template captured by Copy area
 let dkeOpenType = 'door';    // Openings tool: 'door' | 'window'
 let dkeOpenLen = 1;          // Openings tool: length in cells (1–3)
+let dkeMergePick = null;     // Merge tool: first-picked room {cells:[{x,y}]}
 let dkePropScale = 1;        // Props tool: placement scale (1–3), incl. shuttles
 let dkeView = { x:0, y:0, w:100, h:100 };
 let dkePoly = null;                 // active wall-run last vertex {x,y}
@@ -851,7 +997,7 @@ let dkeSaveTimer = null, dkeDirty = false;
 
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
-  ['wall','─ Wall'], ['poly','⟋ Wall run'], ['door','🚪 Openings'], ['prop','📦 Props'],
+  ['wall','─ Wall'], ['poly','⟋ Wall run'], ['merge','⋈ Merge'], ['door','🚪 Openings'], ['prop','📦 Props'],
   ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['image','🖼 Image'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
@@ -861,8 +1007,9 @@ const DKE_HINTS = {
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
   poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
-  door:'Pick door or window + a length above, then tap a wall edge to place it. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
-  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell. Stamps grow right/down from the tap. Tap the same prop again to rotate it; Select → ⤢ Size to resize.',
+  merge:'Tap one room, then tap an adjacent room — the wall between them is removed so they become a single room.',
+  door:'Pick door or window + a length above, then tap a wall edge — or an angled wall — to place it. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
+  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
@@ -1182,7 +1329,7 @@ function dkeGhost(markup){
 // Tools grouped into labelled rows so the (bigger) toolbar stays scannable.
 const DKE_TOOL_GROUPS = [
   ['Edit',     ['pan','select','erase']],
-  ['Draw',     ['room','floor','wall','poly']],
+  ['Draw',     ['room','floor','wall','poly','merge']],
   ['Build',    ['door','prop','template','image']],
   ['Annotate', ['label','link','token','ruler']]
 ];
@@ -1201,6 +1348,7 @@ function dkeRenderTools(){
 function dkeSetTool(t){
   dkeTool = t;
   if(t !== 'poly') dkePolyEnd(true);
+  if(t !== 'merge' && dkeMergePick){ dkeMergePick = null; dkeGhost(''); }
   if(t !== 'ruler'){ dkeRuler = null; dkeRulerAnchor = null; dkeGhost(''); }
   if(t !== 'select'){ dkeSel = null; dkeGroup = []; dkeRenderContent(); }
   dkeRenderTools(); dkeRenderSub(); dkeRenderHint();
@@ -1343,6 +1491,8 @@ function dkeRenderSub(){
       html += `<label class="dke-dim">opacity <input type="range" min="0.05" max="1" step="0.05" value="${op}" oninput="dkeSetDeckImgOpacity(this.value)" style="width:90px"></label>`
         + `<button class="dke-tool dke-danger" onclick="dkeRemoveDeckImage()">🗑 Remove image</button>`;
     }
+  } else if(dkeTool === 'merge'){
+    html = `<span class="dke-note">${dkeMergePick ? 'Now tap the adjacent room to merge — Esc cancels' : 'Tap the first room'}</span>`;
   } else if(dkeTool === 'poly' && dkePoly){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeGroup.length){
@@ -1458,6 +1608,8 @@ function dkeHitTest(p){
     const i = d.doors.findIndex(op => dkeOpeningCovers(op, e));
     if(i >= 0) return { kind:'door', i };
   }
+  for(let i = d.doors.length - 1; i >= 0; i--)
+    if(d.doors[i].o === 'd' && dkeDiagOpeningHit(d.doors[i], u, .25)) return { kind:'door', i };
   for(let i = d.tokens.length - 1; i >= 0; i--)
     if(Math.hypot(u.x - (d.tokens[i].x+.5), u.y - (d.tokens[i].y+.5)) < .5) return { kind:'token', i };
   for(let i = d.props.length - 1; i >= 0; i--)
@@ -1520,7 +1672,9 @@ function dkeRescaleContent(d, base, fx, fy){
   d.floors = (base.floors||[]).map(o => ({ x:rp(o.x,fx), y:rp(o.y,fy), w:Math.max(1,rp(o.w,fx)), h:Math.max(1,rp(o.h,fy)) }));
   d.walls  = (base.walls||[]).map(o => ({ x1:rp(o.x1,fx), y1:rp(o.y1,fy), x2:rp(o.x2,fx), y2:rp(o.y2,fy) }))
              .filter(w => w.x1 !== w.x2 || w.y1 !== w.y2);
-  d.doors  = (base.doors||[]).map(o => { const nd = { x:rp(o.x,fx), y:rp(o.y,fy), o:o.o }; if(o.t) nd.t = o.t; if(o.s) nd.s = o.s;
+  d.doors  = (base.doors||[]).map(o => {
+             if(o.o === 'd'){ const nd = { o:'d', x1:o.x1*fx, y1:o.y1*fy, x2:o.x2*fx, y2:o.y2*fy }; if(o.t) nd.t = o.t; if(o.s) nd.s = o.s; return nd; }
+             const nd = { x:rp(o.x,fx), y:rp(o.y,fy), o:o.o }; if(o.t) nd.t = o.t; if(o.s) nd.s = o.s;
              const L = Math.max(1, rp(o.len||1, o.o === 'h' ? fx : fy)); if(L > 1) nd.len = L; return nd; });
   d.props  = (base.props||[]).map(o => { const np = { t:o.t, x:rp(o.x,fx), y:rp(o.y,fy), r:o.r||0 };
              const s = Math.max(1, Math.min(3, Math.round((o.s||1) * Math.min(fx,fy)))); if(s > 1) np.s = s; dkeClampProp(d, np); return np; });
@@ -1619,7 +1773,7 @@ function dkeDuplicate(){
 function dkeRotateSel(){
   const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'prop') return;
   dkeSnapshot();
-  const p = d.props[dkeSel.i]; if(p){ p.r = ((p.r||0) + 90) % 360; dkeClampProp(d, p); }
+  const p = d.props[dkeSel.i]; if(p){ p.r = ((p.r||0) + 15) % 360; dkeClampProp(d, p); }
   dkeCommit();
 }
 function dkeCyclePropSize(){
@@ -1934,24 +2088,47 @@ function dkeTapAction(p){
     dkeGhost(`<circle cx="${dkePoly.x*C}" cy="${dkePoly.y*C}" r="5" fill="none" stroke="#D4A843" stroke-width="2"/>`
       + (dkePoly.path.length >= 3 ? `<circle cx="${st.x*C}" cy="${st.y*C}" r="7" fill="#4caf8233" stroke="#4caf82" stroke-width="2"><animate attributeName="r" values="6;9;6" dur="1.4s" repeatCount="indefinite"/></circle>` : `<circle cx="${st.x*C}" cy="${st.y*C}" r="4" fill="#D4A843"/>`));
   } else if(dkeTool === 'door'){
-    const e = dkeNearestEdge(p, .4); if(!e) return;
-    const i = d.doors.findIndex(op => dkeOpeningCovers(op, e));
+    const e = dkeNearestEdge(p, .4);
+    if(e){
+      const i = d.doors.findIndex(op => dkeOpeningCovers(op, e));
+      dkeSnapshot();
+      if(i >= 0){
+        const op = d.doors[i];
+        if((op.t || 'door') === 'door' && dkeOpenType === 'door'){
+          const ns = dkeNextDoorState(op.s);   // tap a door → cycle its state
+          if(ns === 'closed') delete op.s; else op.s = ns;
+        } else {
+          d.doors.splice(i, 1);   // tap a window (or door with window selected) → remove
+        }
+      } else {
+        // Place the selected type + length, clamped so it stays on the grid.
+        let len = Math.max(1, Math.min(3, dkeOpenLen | 0 || 1));
+        len = Math.max(1, Math.min(len, e.o === 'h' ? d.w - e.x : d.h - e.y));
+        const op = { x: e.x, y: e.y, o: e.o };
+        if(dkeOpenType === 'window') op.t = 'window';
+        if(len > 1) op.len = len;
+        d.doors.push(op);
+      }
+      dkeCommit();
+      return;
+    }
+    // No axis-aligned edge nearby → try an angled wall.
+    const dw = dkeNearestDiagWall(p, .4); if(!dw) return;
+    const u = dkeCellPt(p);
     dkeSnapshot();
-    if(i >= 0){
-      const op = d.doors[i];
+    const di = d.doors.findIndex(op => op.o === 'd' && dkeDiagOpeningHit(op, u, .3));
+    if(di >= 0){
+      const op = d.doors[di];
       if((op.t || 'door') === 'door' && dkeOpenType === 'door'){
-        const ns = dkeNextDoorState(op.s);   // tap a door → cycle its state
+        const ns = dkeNextDoorState(op.s);
         if(ns === 'closed') delete op.s; else op.s = ns;
       } else {
-        d.doors.splice(i, 1);   // tap a window (or door with window selected) → remove
+        d.doors.splice(di, 1);
       }
     } else {
-      // Place the selected type + length, clamped so it stays on the grid.
-      let len = Math.max(1, Math.min(3, dkeOpenLen | 0 || 1));
-      len = Math.max(1, Math.min(len, e.o === 'h' ? d.w - e.x : d.h - e.y));
-      const op = { x: e.x, y: e.y, o: e.o };
+      const seg = dkeDiagOpeningSpan(dw, dkeOpenLen);
+      const op = { o: 'd', x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2 };
       if(dkeOpenType === 'window') op.t = 'window';
-      if(len > 1) op.len = len;
       d.doors.push(op);
     }
     dkeCommit();
@@ -1960,7 +2137,7 @@ function dkeTapAction(p){
     // Match against whole footprints so a tap anywhere on a multi-cell prop hits it.
     const existing = d.props.find(pr => dkePropCells(pr).some(cc => cc.x === c.x && cc.y === c.y));
     dkeSnapshot();
-    if(existing && existing.t === dkePropType){ existing.r = ((existing.r||0) + 90) % 360; dkeClampProp(d, existing); }
+    if(existing && existing.t === dkePropType){ existing.r = ((existing.r||0) + 15) % 360; dkeClampProp(d, existing); }
     else if(existing){ existing.t = dkePropType; existing.r = 0; dkeClampProp(d, existing); }
     else { const np = { t: dkePropType, x: c.x, y: c.y, r: 0 }; if(dkePropScale > 1) np.s = dkePropScale; dkeClampProp(d, np); d.props.push(np); }
     dkeCommit();
@@ -1993,6 +2170,27 @@ function dkeTapAction(p){
     dkeSnapshot();
     dkeStampTemplate(d, tpl, c.x, c.y);
     dkeCommit();
+  } else if(dkeTool === 'merge'){
+    const c = dkeCell(p); if(!c) return;
+    const room = dkeRoomCells(d, c.x, c.y);
+    if(!room){ if(typeof showToast === 'function') showToast('Tap inside a floored room'); return; }
+    if(!dkeMergePick){
+      dkeMergePick = { cells: room };
+      dkeGhost(`<path d="${dkeRoomFillD(room)}" fill="#4caf8226" stroke="#4caf82" stroke-width="1.5" stroke-dasharray="5,3"/>`);
+      dkeRenderSub();
+      if(typeof showToast === 'function') showToast('Now tap the room to merge with');
+      return;
+    }
+    if(new Set(dkeMergePick.cells.map(k => k.x + ',' + k.y)).has(c.x + ',' + c.y)){
+      if(typeof showToast === 'function') showToast('Same room — tap a different one'); return;
+    }
+    const edges = dkeSharedEdges(dkeMergePick.cells, room);
+    dkeMergePick = null; dkeGhost('');
+    if(!edges.length){ dkeRenderSub(); if(typeof showToast === 'function') showToast("Those rooms aren't adjacent"); return; }
+    dkeSnapshot();
+    edges.forEach(e => dkeRemoveEdgeWall(d, e.x, e.y, e.o));
+    dkeCommit(); dkeRenderSub();
+    if(typeof showToast === 'function') showToast('Rooms merged');
   }
 }
 // ═══ TOKEN DRAG ON THE STATION VIEW (referee, no editor needed) ══════════════
@@ -2268,7 +2466,7 @@ function dkeMapClickGuard(ev){
 })();
 
 // Single-key tool shortcuts (no modifier) — desktop convenience.
-const DKE_KEYS = { v:'select', h:'pan', r:'room', f:'floor', w:'wall', q:'poly',
+const DKE_KEYS = { v:'select', h:'pan', r:'room', f:'floor', w:'wall', q:'poly', g:'merge',
   d:'door', p:'prop', o:'template', i:'image', t:'token', l:'label', a:'link', m:'ruler', e:'erase' };
 function dkeKeyDown(ev){
   if(!dkeIsOpen) return;
@@ -2277,6 +2475,7 @@ function dkeKeyDown(ev){
   const k = (ev.key || '').toLowerCase();
   if(ev.key === 'Escape'){
     if(dkePoly) dkePolyEnd();
+    else if(dkeMergePick){ dkeMergePick = null; dkeGhost(''); dkeRenderSub(); }
     else if(dkeSel || dkeGroup.length){ dkeSel = null; dkeGroup = []; dkeRenderContent(); dkeRenderSub(); }
     ev.preventDefault();
   } else if((ev.key === 'Delete' || ev.key === 'Backspace') && (dkeSel || dkeGroup.length)){
