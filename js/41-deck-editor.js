@@ -65,8 +65,33 @@ const DKE_PROPS = {
 // 2×1 stamp turns; an optional `s` (1–3) multiplies both dimensions. Missing
 // def / s absent stays the catalogue size, so pre-existing props are unchanged.
 function dkePropScaleOf(p){ const s = (p && p.s) | 0; return s >= 1 && s <= 3 ? s : 1; }
+// Custom (referee-uploaded) props carry t = 'custom:<id>' and their own footprint
+// w/h ON THE DATUM, so footprint/clamp/hit-test stay deck-independent; only render
+// + palette need the deck's customProps catalogue (name + image version).
+function dkeIsCustomProp(t){ return String(t == null ? '' : t).indexOf('custom:') === 0; }
+function dkeCustomDef(deck, t){
+  if(!deck || !dkeIsCustomProp(t)) return null;
+  const id = String(t).slice(7);
+  return (deck.customProps || []).find(c => c.id === id) || null;
+}
+function dkeCustomImgUrl(deck, cp){
+  if(!cp || !cp.id) return '';
+  const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+  return (typeof deckMapUrlFor === 'function') ? deckMapUrlFor(camp, cp.id, cp.ver) : '';
+}
+// Set a prop's type, carrying the footprint w/h onto the datum for custom props
+// (so footprint stays deck-free) and stripping them when reverting to a built-in.
+function dkeSetPropType(deck, prop, type){
+  prop.t = type;
+  const cp = dkeCustomDef(deck, type);
+  if(cp){ prop.w = cp.w; prop.h = cp.h; }
+  else { delete prop.w; delete prop.h; }
+}
 function dkePropFootprint(p){
-  const def = DKE_PROPS[p && p.t] || {}, w = def.w || 1, h = def.h || 1, r = ((p && p.r) || 0) % 360;
+  const def = DKE_PROPS[p && p.t];
+  const w = def ? (def.w || 1) : ((p && p.w) || 1);   // custom prop → footprint from the datum
+  const h = def ? (def.h || 1) : ((p && p.h) || 1);
+  const r = ((p && p.r) || 0) % 360;
   const swap = (r === 90 || r === 270), sc = dkePropScaleOf(p);
   return { fw: (swap ? h : w) * sc, fh: (swap ? w : h) * sc };
 }
@@ -103,6 +128,8 @@ function dkeStampTemplate(d, tpl, ax, ay){
   if(!d || !tpl) return null;
   const ox = Math.max(0, Math.min(d.w - tpl.w, ax)), oy = Math.max(0, Math.min(d.h - tpl.h, ay));
   (tpl.floors||[]).forEach(f => d.floors.push({ x:f.x+ox, y:f.y+oy, w:f.w, h:f.h }));
+  (tpl.customProps||[]).forEach(cp => { if(!Array.isArray(d.customProps)) d.customProps = [];
+    if(!d.customProps.some(c => c.id === cp.id)) d.customProps.push({ id:cp.id, n:cp.n, w:cp.w, h:cp.h, ver:cp.ver }); });
   (tpl.walls||[]).forEach(w => dkeAddWall(d, w.x1+ox, w.y1+oy, w.x2+ox, w.y2+oy));
   (tpl.doors||[]).forEach(dr => {
     if(dr.o === 'd'){
@@ -112,7 +139,8 @@ function dkeStampTemplate(d, tpl, ax, ay){
       const nd = { x:dr.x+ox, y:dr.y+oy, o:dr.o }; if(dr.t) nd.t = dr.t; if(dr.len) nd.len = dr.len; if(dr.s) nd.s = dr.s; d.doors.push(nd);
     }
   });
-  (tpl.props||[]).forEach(pr => d.props.push({ t:pr.t, x:pr.x+ox, y:pr.y+oy, r:pr.r||0 }));
+  (tpl.props||[]).forEach(pr => { const np = { t:pr.t, x:pr.x+ox, y:pr.y+oy, r:pr.r||0 };
+    if(pr.s) np.s = pr.s; if(pr.w) np.w = pr.w; if(pr.h) np.h = pr.h; if(pr.label) np.label = pr.label; d.props.push(np); });
   (tpl.labels||[]).forEach(l => d.labels.push({ t:l.t, x:l.x+ox, y:l.y+oy }));
   return { ox, oy };
 }
@@ -122,7 +150,7 @@ function dkeCaptureRegion(d, x0, y0, x1, y1){
   const ax = Math.min(x0,x1), ay = Math.min(y0,y1), bx = Math.max(x0,x1), by = Math.max(y0,y1);
   const w = bx - ax, h = by - ay;
   if(w < 1 || h < 1) return null;
-  const tpl = { w, h, floors:[], walls:[], doors:[], props:[], labels:[] };
+  const tpl = { w, h, floors:[], walls:[], doors:[], props:[], labels:[], customProps:[] };
   (d.floors||[]).forEach(f => {
     const fx0 = Math.max(f.x,ax), fy0 = Math.max(f.y,ay), fx1 = Math.min(f.x+f.w,bx), fy1 = Math.min(f.y+f.h,by);
     if(fx1 > fx0 && fy1 > fy0) tpl.floors.push({ x:fx0-ax, y:fy0-ay, w:fx1-fx0, h:fy1-fy0 });
@@ -139,7 +167,11 @@ function dkeCaptureRegion(d, x0, y0, x1, y1){
       const nd = { x:dr.x-ax, y:dr.y-ay, o:dr.o }; if(dr.t) nd.t = dr.t; if(dr.len) nd.len = dr.len; if(dr.s) nd.s = dr.s; tpl.doors.push(nd);
     }
   });
-  (d.props||[]).forEach(pr => { if(pr.x>=ax && pr.x<bx && pr.y>=ay && pr.y<by) tpl.props.push({ t:pr.t, x:pr.x-ax, y:pr.y-ay, r:pr.r||0 }); });
+  (d.props||[]).forEach(pr => { if(pr.x>=ax && pr.x<bx && pr.y>=ay && pr.y<by){
+    const np = { t:pr.t, x:pr.x-ax, y:pr.y-ay, r:pr.r||0 };
+    if(pr.s) np.s = pr.s; if(pr.w) np.w = pr.w; if(pr.h) np.h = pr.h; if(pr.label) np.label = pr.label; tpl.props.push(np);
+    const cp = dkeCustomDef(d, pr.t); if(cp && !tpl.customProps.some(c => c.id === cp.id)) tpl.customProps.push({ id:cp.id, n:cp.n, w:cp.w, h:cp.h, ver:cp.ver });
+  } });
   (d.labels||[]).forEach(l => { if(l.x>=ax && l.x<=bx && l.y>=ay && l.y<=by) tpl.labels.push({ t:l.t, x:l.x-ax, y:l.y-ay }); });
   return tpl;
 }
@@ -159,7 +191,7 @@ function dkeNorm(d){
   // the range bands are measured against (default 50 m, referee-editable).
   d.mpc = Math.max(0.1, Math.min(100, parseFloat(d.mpc) || 1.5));
   d.refRange = Math.max(1, Math.min(9999, parseInt(d.refRange,10) || 50));
-  ['floors','walls','doors','props','labels','links','tokens'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
+  ['floors','walls','doors','props','labels','links','tokens','customProps'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
   return d;
 }
 function deckHasContent(d){
@@ -756,10 +788,28 @@ function dkeContentSVG(deck, opt){
     if(refView && (d.t || 'door') === 'door') doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeCycleDoor(${i})"><title>Door: ${eh(d.s||'closed')} — tap to cycle</title>${dkeOpeningHitSVG(d)}</g>`;
   });
   (deck.props||[]).forEach(p => {
-    const def = DKE_PROPS[p.t]; if(!def) return;
+    const def = DKE_PROPS[p.t];
+    if(!def && !dkeIsCustomProp(p.t)) return;   // unknown non-custom key → skip
+    const custom = def ? null : dkeCustomDef(deck, p.t);   // null = orphaned (def deleted)
     const f = dkePropFootprint(p), sc = dkePropScaleOf(p);   // s=1 → same transform as before
     const scaleTx = sc !== 1 ? ` scale(${sc})` : '';
-    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(p.label || def.n)}</title>${def.g}</g>`;
+    const name = p.label || (def ? def.n : (custom ? custom.n : 'Custom prop'));
+    let glyph;
+    if(def){ glyph = def.g; }
+    else {
+      // Referee image prop, drawn at its native (unrotated) cell size and centred;
+      // rotate()/scale() in the group transform handle orientation + size, exactly
+      // like a built-in glyph. A dashed box (with the name if no image) sits beneath
+      // so a pending/failed/deleted image still reads as a prop. The <image> is
+      // omitted for the handout raster (opt.noPortraits) to avoid tainting the canvas.
+      const bw = (p.w||1)*C, bh = (p.h||1)*C;
+      const url = custom ? dkeCustomImgUrl(deck, custom) : '';
+      const box = `<rect x="${-bw/2}" y="${-bh/2}" width="${bw}" height="${bh}" fill="#141824" stroke="#5b8ef0" stroke-width="1" stroke-dasharray="3,2"/>`;
+      const img = (url && !opt.noPortraits) ? `<image x="${-bw/2}" y="${-bh/2}" width="${bw}" height="${bh}" href="${eh(url)}" preserveAspectRatio="xMidYMid meet" style="pointer-events:none" onerror="this.remove()"/>` : '';
+      const cap = img ? '' : `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="7" fill="#8b93a7" font-family="system-ui,sans-serif">${eh(name)}</text>`;
+      glyph = box + img + cap;
+    }
+    out += `<g transform="translate(${(p.x+f.fw/2)*C},${(p.y+f.fh/2)*C}) rotate(${p.r||0})${scaleTx}"><title>${eh(name)}</title>${glyph}</g>`;
     if(p.label && L.labels !== false) out += `<text x="${(p.x+f.fw/2)*C}" y="${(p.y+f.fh)*C-2}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#a3a9bf" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(p.label)}</text>`;
   });
   if(L.labels !== false) (deck.labels||[]).forEach(l => {
@@ -1042,7 +1092,7 @@ const DKE_HINTS = {
   poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
   merge:'Tap one room, then tap an adjacent room — the wall between them is removed so they become a single room.',
   door:'Pick door or window + a length above, then tap a wall edge — or an angled wall — to place it; a coloured ghost shows exactly where it lands. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
-  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
+  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell — or ＋ Custom to upload your own image as a prop. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
@@ -1130,6 +1180,7 @@ function dkeOpenShip(){
 function dkeClose(){
   if(!dkeIsOpen) return;
   dkeIsOpen = false; dkePoly = null; dkeGesture = null; dkePtrs.clear(); dkePinch = null;
+  dkeClosePropUpload();
   const w = document.getElementById('dke-wrap'); if(w) w.classList.remove('open');
   dkeFlushSave();
   const wasShip = dkeTarget === 'ship';
@@ -1448,6 +1499,114 @@ function dkeRemoveDeckImage(){
   delete d.img;   // the bucket object is left as a harmless orphan (like handouts)
   dkeCommit(); dkeRenderSub();
 }
+// ── Custom (referee-uploaded) props ──────────────────────────────────────────
+// A referee uploads an image, names it and gives it a cell footprint; it joins
+// the Props palette and places like any stamp. Images reuse the public 'deck-maps'
+// bucket (own dkprop_ id, no new migration) and PNG output preserves transparency
+// so top-down cut-out props sit cleanly on the floor. The catalogue lives per-deck
+// (deck.customProps) so it syncs with the deck; placed props carry their own w/h.
+let dkePropUpFile = null, dkePropUpBusy = false;
+function dkeResizePropImage(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');   // PNG keeps prop transparency
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+function dkePropUploadHTML(){
+  return `<div style="background:#11141d;border:1px solid #2a3040;border-radius:10px;padding:18px;max-width:340px;width:90%;color:#e8eaf0;font-family:system-ui,sans-serif;max-height:90vh;overflow:auto">
+    <div style="font-weight:700;font-size:15px;margin-bottom:10px">Add a custom prop</div>
+    <label class="dke-tool" style="cursor:pointer;display:inline-block">⬆ Choose image<input type="file" id="dke-propup-file" accept="image/jpeg,image/png,image/webp" style="display:none"></label>
+    <div id="dke-propup-prev" style="margin:10px 0;text-align:center;min-height:64px;display:flex;align-items:center;justify-content:center;background:#0b0e16;border-radius:6px"><span style="opacity:.4;font-size:12px">no image yet</span></div>
+    <label style="font-size:12px;display:block;margin-bottom:8px">Name<input class="hx-edit-in" id="dke-propup-name" style="width:100%" placeholder="e.g. Command throne"></label>
+    <div style="display:flex;gap:10px">
+      <label style="font-size:12px;flex:1">Width (cells)<input class="hx-edit-in" id="dke-propup-w" type="number" min="1" max="12" value="2" style="width:100%"></label>
+      <label style="font-size:12px;flex:1">Height (cells)<input class="hx-edit-in" id="dke-propup-h" type="number" min="1" max="12" value="2" style="width:100%"></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="dke-tool" onclick="dkeClosePropUpload()">Cancel</button>
+      <button class="dke-tool" id="dke-propup-add" onclick="dkeSubmitPropUpload()" style="border-color:#4caf82;color:#8fe0b8">Add prop</button>
+    </div>
+    <div style="font-size:11px;opacity:.55;margin-top:8px">PNG with a transparent background works best. The prop syncs to players.</div>
+  </div>`;
+}
+function dkeOpenPropUpload(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  if(!dkeD()) return;
+  let m = document.getElementById('dke-propup');
+  if(!m){ m = document.createElement('div'); m.id = 'dke-propup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(6,8,14,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(m);
+  }
+  dkePropUpFile = null;
+  m.innerHTML = dkePropUploadHTML();
+  m.style.display = 'flex';
+  const fi = document.getElementById('dke-propup-file');
+  if(fi) fi.addEventListener('change', dkePropUpPick);
+}
+function dkePropUpPick(ev){
+  const file = ev.target && ev.target.files && ev.target.files[0]; if(!file) return;
+  dkePropUpFile = file;
+  const prev = document.getElementById('dke-propup-prev');
+  if(prev){ const url = URL.createObjectURL(file); prev.innerHTML = `<img src="${url}" style="max-width:120px;max-height:120px;object-fit:contain" onload="URL.revokeObjectURL(this.src)">`; }
+  const nm = document.getElementById('dke-propup-name');
+  if(nm && !nm.value) nm.value = (file.name || 'Prop').replace(/\.[a-z0-9]+$/i, '').slice(0, 40);
+}
+function dkeClosePropUpload(){ const m = document.getElementById('dke-propup'); if(m) m.style.display = 'none'; dkePropUpFile = null; }
+function dkeSubmitPropUpload(){
+  if(dkePropUpBusy) return;
+  const d = dkeD(); if(!d) return;
+  const file = dkePropUpFile;
+  const toast = msg => { if(typeof showToast === 'function') showToast(msg); };
+  if(!file){ toast('Choose an image first'); return; }
+  if(file.type && !/^image\/(jpeg|png|webp)$/.test(file.type)){ toast('Choose a JPG/PNG/WebP image'); return; }
+  if(file.size > 20 * 1024 * 1024){ toast('Image too large (max 20 MB source)'); return; }
+  if(typeof dkeResizePropImage !== 'function' || typeof uploadDeckMapBlob !== 'function'){ toast('Prop upload unavailable here'); return; }
+  const nameEl = document.getElementById('dke-propup-name');
+  const name = ((nameEl && nameEl.value) || 'Prop').trim().slice(0, 40) || 'Prop';
+  const wEl = document.getElementById('dke-propup-w'), hEl = document.getElementById('dke-propup-h');
+  const w = Math.max(1, Math.min(12, parseInt(wEl && wEl.value, 10) || 2));
+  const h = Math.max(1, Math.min(12, parseInt(hEl && hEl.value, 10) || 2));
+  const id = 'dkprop_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const camp = (typeof activeCampaignId !== 'undefined') ? activeCampaignId : 'default';
+  dkePropUpBusy = true;
+  const addBtn = document.getElementById('dke-propup-add'); if(addBtn){ addBtn.textContent = 'Uploading…'; addBtn.disabled = true; }
+  dkeResizePropImage(file, 512)
+    .then(blob => uploadDeckMapBlob(camp, id, blob))
+    .then(() => {
+      dkeSnapshot();
+      if(!Array.isArray(d.customProps)) d.customProps = [];
+      d.customProps.push({ id, n: name, w, h, ver: Date.now() });
+      dkePropType = 'custom:' + id;
+      dkeCommit(); dkeRenderSub();
+      dkeClosePropUpload();
+      toast('Custom prop added — tap the map to place it');
+    })
+    .catch(err => { console.error(err); toast('Upload failed — is the deck-maps bucket set up? (migration 0012)'); })
+    .finally(() => { dkePropUpBusy = false; const b = document.getElementById('dke-propup-add'); if(b){ b.textContent = 'Add prop'; b.disabled = false; } });
+}
+function dkeDeleteCustomProp(id){
+  const d = dkeD(); if(!d) return;
+  const cp = (d.customProps || []).find(c => c.id === id); if(!cp) return;
+  const used = (d.props || []).filter(p => p.t === 'custom:' + id).length;
+  const msg = `Remove custom prop "${cp.n}"?` + (used ? `\n${used} placed copy(ies) will show as a placeholder.` : '');
+  if(typeof confirm === 'function' && !confirm(msg)) return;
+  dkeSnapshot();
+  d.customProps = (d.customProps || []).filter(c => c.id !== id);
+  if(dkePropType === 'custom:' + id) dkePropType = 'console';
+  dkeCommit(); dkeRenderSub();   // bucket object left as a harmless orphan (like handouts/underlay)
+}
 function dkeRenderHint(){
   const el = document.getElementById('dke-hint');
   if(!el) return;
@@ -1471,12 +1630,21 @@ function dkeRenderSub(){
     html = ty('door','🚪 Door') + ty('window','⊟ Window')
       + `<span class="dke-note" style="margin:0 2px 0 8px">length</span>` + ln(1) + ln(2) + ln(3);
   } else if(dkeTool === 'prop'){
+    const dk = dkeD();
     html = Object.keys(DKE_PROPS).map(k => {
       const dp = DKE_PROPS[k], gw = dp.w || 1, gh = dp.h || 1, m = Math.max(gw, gh), half = m * 16;
       const size = (gw > 1 || gh > 1) ? ` <span style="opacity:.55">${gw}×${gh}</span>` : '';
       return `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(dp.n)}">`
         + `<svg viewBox="${-half} ${-half} ${m*32} ${m*32}" width="20" height="20" style="vertical-align:middle">${dp.g}</svg> ${eh(dp.n)}${size}</button>`;
     }).join('')
+      + ((dk && dk.customProps) || []).map(cp => {
+        const key = 'custom:' + cp.id, url = dkeCustomImgUrl(dk, cp), on = dkePropType === key;
+        const thumb = url ? `<img src="${eh(url)}" width="20" height="20" style="vertical-align:middle;object-fit:contain" onerror="this.style.display='none'">` : '🗿';
+        return `<button class="dke-tool${on?' on':''}" onclick="dkePropType='${eh(key)}';dkeRenderSub()" title="${eh(cp.n)}">`
+          + `${thumb} ${eh(cp.n)} <span style="opacity:.55">${cp.w}×${cp.h}</span>`
+          + `<span onclick="event.stopPropagation();dkeDeleteCustomProp('${eh(cp.id)}')" title="Remove this custom prop" style="margin-left:5px;opacity:.6;cursor:pointer">✕</span></button>`;
+      }).join('')
+      + `<button class="dke-tool" onclick="dkeOpenPropUpload()" title="Upload your own image as a prop" style="border-color:#4caf82;color:#8fe0b8">＋ Custom</button>`
       + `<span class="dke-note" style="margin:0 2px 0 8px">size</span>`
       + [1,2,3].map(n => `<button class="dke-tool${dkePropScale===n?' on':''}" onclick="dkePropScale=${n};dkeRenderSub()">${n}×</button>`).join('');
   } else if(dkeTool === 'token'){
@@ -2182,8 +2350,8 @@ function dkeTapAction(p){
     const existing = d.props.find(pr => dkePropCells(pr).some(cc => cc.x === c.x && cc.y === c.y));
     dkeSnapshot();
     if(existing && existing.t === dkePropType){ existing.r = ((existing.r||0) + 15) % 360; dkeClampProp(d, existing); }
-    else if(existing){ existing.t = dkePropType; existing.r = 0; dkeClampProp(d, existing); }
-    else { const np = { t: dkePropType, x: c.x, y: c.y, r: 0 }; if(dkePropScale > 1) np.s = dkePropScale; dkeClampProp(d, np); d.props.push(np); }
+    else if(existing){ existing.r = 0; dkeSetPropType(d, existing, dkePropType); dkeClampProp(d, existing); }
+    else { const np = { x: c.x, y: c.y, r: 0 }; dkeSetPropType(d, np, dkePropType); if(dkePropScale > 1) np.s = dkePropScale; dkeClampProp(d, np); d.props.push(np); }
     dkeCommit();
   } else if(dkeTool === 'token'){
     const c = dkeCell(p); if(!c) return;
