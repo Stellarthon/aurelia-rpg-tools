@@ -1,0 +1,43 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static:
+    name: syntax + logic harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: node --check every js file
+        shell: bash
+        run: |
+          shopt -s nullglob
+          fail=0
+          for f in js/*.js tools/*.mjs tools/*.cjs config.js config.example.js sw.js; do
+            echo "check $f"
+            node --check "$f" || fail=1
+          done
+          exit $fail
+      - name: deck-editor logic harness
+        run: node tools/deck-harness.mjs
+
+  smoke:
+    name: headless boot smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: install Playwright + Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: run smoke test
+        run: node tools/smoke.mjs
