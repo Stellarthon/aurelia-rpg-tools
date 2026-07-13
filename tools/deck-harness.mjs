@@ -42,6 +42,10 @@ const NAMES = [
   'dkeIsDiagWall','dkeNearestDiagWall','dkeDiagOpeningSpan','dkeDiagOpeningHit','dkeDiagOpeningSVG',
   'dkeClipCellHalfPlane','dkeDiagFloorCuts',
   'dkeSharedEdges','dkeRemoveEdgeWall','dkeOpeningCovers','dkeRoomCells','dkeEdgeWalled','dkeWallBlocks',
+  // room records + auto-detection + window see-through
+  'dkeNewRoomId','dkeRoomEnclosed','dkeEnclosedRegions','dkeRoomForCell','dkeRoomById','dkeRoomLiveCells',
+  'dkeSyncRooms','dkeRoomName','dkeRoomPending','dkeOpeningSides','dkeIsWindow','dkeIsClearWindow',
+  'dkeWindowGraph','dkeWindowCluster','dkeRoomVisibleToPlayers','dkeRoomSeenThroughWindow',
   // openings preview + edges
   'dkeNearestEdge','dkeDoorPreview',
   // copy / paste
@@ -59,10 +63,15 @@ function deckMapUrlFor(camp, id, ver){ return 'https://x/' + camp + '/' + id + (
 let __deck = null, __ghost = '', dkeOpenType = 'door', dkeOpenLen = 1;
 function dkeD(){ return __deck; }
 function dkeGhost(m){ __ghost = m; }
+// Room-record helpers reference these module globals / app functions at runtime.
+let dkeRoomSeq = 0;
+const __revealed = new Set();
+function isRevealed(id){ return __revealed.has(id); }
 `;
 const body = prelude + NAMES.map(grab).join('\n')
   + `\nreturn Object.assign({ ${NAMES.join(', ')} }, {
        _setDeck:(d)=>{ __deck = d; }, _ghost:()=>__ghost,
+       _reveal:(id)=>__revealed.add(id), _hide:(id)=>__revealed.delete(id), _clearReveal:()=>__revealed.clear(),
        _setOpen:(t,l)=>{ dkeOpenType = t; dkeOpenLen = l; } });`;
 const M = new Function(body)();
 
@@ -250,6 +259,90 @@ const find = (arr, p) => arr.find(p);
   M.dkeStampTemplate(destDeck, tpl, 4, 4);
   ok(destDeck.customProps.length === 1, 'restamp does not duplicate the custom def');
   ok(destDeck.props.length === 2, 'restamp adds a second placed prop');
+})();
+
+// ═══ GROUP 5 — room records: enclosure detection, sync, merge dedup ══════════
+(() => {
+  const oneRoom = () => ({
+    w:8, h:8, floors:[{ x:1,y:1,w:2,h:2 }],
+    walls:[ { x1:1,y1:1,x2:3,y2:1 }, { x1:3,y1:1,x2:3,y2:3 }, { x1:3,y1:3,x2:1,y2:3 }, { x1:1,y1:3,x2:1,y2:1 } ],
+    doors:[], rooms:[]
+  });
+  let d = oneRoom();
+  const cells = M.dkeRoomCells(d, 1, 1);
+  ok(M.dkeRoomEnclosed(d, cells) === true, 'a 2×2 floor ringed by walls is enclosed');
+  const regs = M.dkeEnclosedRegions(d);
+  ok(regs.length === 1, 'one enclosed region found');
+  eq(regs[0].anchor, { x:1, y:1 }, 'region anchor = canonical (min-y,min-x) cell');
+
+  // Open floor with no perimeter walls → not a room.
+  const open = { w:8, h:8, floors:[{ x:1,y:1,w:2,h:2 }], walls:[], doors:[], rooms:[] };
+  ok(M.dkeRoomEnclosed(open, M.dkeRoomCells(open, 1, 1)) === false, 'un-walled floor is not enclosed');
+  ok(M.dkeEnclosedRegions(open).length === 0, 'open floor yields no enclosed regions');
+
+  // Sync auto-creates a pending (fresh) record and is idempotent.
+  const made = M.dkeSyncRooms(d, true);
+  ok(made.length === 1 && d.rooms.length === 1, 'sync creates exactly one room record');
+  ok(d.rooms[0].x === 1 && d.rooms[0].y === 1 && d.rooms[0].fresh === 1, 'new record anchored + flagged fresh');
+  ok(M.dkeRoomPending(d.rooms[0]) === true, 'fresh unnamed record is pending (pulses)');
+  ok(M.dkeRoomName(d.rooms[0]) === 'Unnamed room', 'unnamed record shows a placeholder name');
+  const again = M.dkeSyncRooms(d, true);
+  ok(again.length === 0 && d.rooms.length === 1, 'sync is idempotent — no duplicate record');
+  ok(M.dkeRoomForCell(d, 2, 2) === d.rooms[0], 'dkeRoomForCell resolves the record from any interior cell');
+  ok(M.dkeRoomForCell(d, 6, 6) === null, 'a cell outside the floor resolves to no room');
+  d.rooms[0].name = 'Bridge'; delete d.rooms[0].fresh;
+  ok(M.dkeRoomPending(d.rooms[0]) === false, 'a named room no longer pends');
+
+  // Naming a room parks it if its walls open up, and it never gets deleted.
+  const opened = oneRoom(); M.dkeSyncRooms(opened, false); opened.rooms[0].name = 'Vault';
+  opened.walls = opened.walls.filter(w => !(w.x1 === 1 && w.x2 === 1));   // drop the left wall → area opens
+  const parked = M.dkeSyncRooms(opened, true);
+  ok(parked.length === 0 && opened.rooms.length === 1 && opened.rooms[0].name === 'Vault', 'opening a room parks (keeps) its authored record');
+  ok(M.dkeRoomLiveCells(opened, opened.rooms[0]) === null, 'a parked room reports no live cells');
+})();
+
+// ═══ GROUP 6 — merge dedups room records; windows share visibility ═══════════
+(() => {
+  const two = () => ({
+    w:8, h:6, floors:[{ x:0,y:0,w:2,h:2 }, { x:2,y:0,w:2,h:2 }],
+    walls:[
+      { x1:0,y1:0,x2:2,y2:0 }, { x1:2,y1:0,x2:2,y2:2 }, { x1:2,y1:2,x2:0,y2:2 }, { x1:0,y1:2,x2:0,y2:0 },
+      { x1:2,y1:0,x2:4,y2:0 }, { x1:4,y1:0,x2:4,y2:2 }, { x1:4,y1:2,x2:2,y2:2 }
+    ],
+    doors:[], rooms:[]
+  });
+  let d = two();
+  M.dkeSyncRooms(d, false);
+  ok(d.rooms.length === 2, 'two enclosed rooms → two records');
+  d.rooms[0].name = 'Alpha'; d.rooms[1].name = 'Beta';
+  // Remove the shared wall → the rooms flood into one; sync folds the two records.
+  M.dkeRemoveEdgeWall(d, 2, 0, 'v'); M.dkeRemoveEdgeWall(d, 2, 1, 'v');
+  ok(M.dkeEnclosedRegions(d).length === 1, 'after merge there is a single enclosed region');
+  M.dkeSyncRooms(d, true);
+  ok(d.rooms.length === 1, 'merge dedups to one room record');
+  ok(!!d.rooms[0].name, 'the surviving record keeps an authored name');
+  eq({ x:d.rooms[0].x, y:d.rooms[0].y }, { x:0, y:0 }, 're-anchored to the merged region canonical cell');
+
+  // Window see-through: reveal one room, a CLEAR window shows the other; frost blocks it.
+  let w = two();
+  w.doors = [{ x:2, y:0, o:'v', t:'window' }];
+  M.dkeSyncRooms(w, false);
+  const A = w.rooms.find(r => r.x === 0), B = w.rooms.find(r => r.x === 2);
+  eq(M.dkeOpeningSides({ x:2, y:0, o:'v' }), [{ x:1, y:0 }, { x:2, y:0 }], 'a vertical opening separates the cells left/right of it');
+  ok(M.dkeIsClearWindow(w.doors[0]) === true && M.dkeIsWindow(w.doors[0]) === true, 'an un-frosted window is a clear window');
+  M._clearReveal();
+  ok(M.dkeRoomVisibleToPlayers(w, A) === false, 'nothing revealed → room A hidden');
+  M._reveal(A.id);
+  ok(M.dkeRoomVisibleToPlayers(w, A) === true, 'revealing A shows A');
+  ok(M.dkeRoomVisibleToPlayers(w, B) === true, 'a clear window into A makes B visible too');
+  ok(M.dkeRoomSeenThroughWindow(w, B) === true, 'B is flagged as seen-through-window (not itself revealed)');
+  ok(M.dkeRoomSeenThroughWindow(w, A) === false, 'A is directly revealed, not merely seen through glass');
+  ok(M.dkeWindowCluster(w, A).has('2,0'), 'window cluster of A includes B');
+  // Frost the glass → the sight line closes.
+  w.doors[0].f = 1;
+  ok(M.dkeIsClearWindow(w.doors[0]) === false, 'a frosted window is no longer clear');
+  ok(M.dkeRoomVisibleToPlayers(w, B) === false, 'frosted glass hides B again');
+  ok(M.dkeRoomVisibleToPlayers(w, A) === true, 'A stays visible — it is directly revealed');
 })();
 
 // ── report ───────────────────────────────────────────────────────────────────

@@ -182,7 +182,7 @@ function dkeActiveTpl(){
 }
 
 // ── Deck data helpers ────────────────────────────────────────────────────────
-function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[] }; }
+function dkeBlank(){ return { w:24, h:16, floors:[], walls:[], doors:[], props:[], labels:[], links:[], tokens:[], rooms:[] }; }
 function dkeNorm(d){
   d.w = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.w,10) || 24));
   d.h = Math.max(4, Math.min(DKE_MAXDIM, parseInt(d.h,10) || 16));
@@ -191,7 +191,9 @@ function dkeNorm(d){
   // the range bands are measured against (default 50 m, referee-editable).
   d.mpc = Math.max(0.1, Math.min(100, parseFloat(d.mpc) || 1.5));
   d.refRange = Math.max(1, Math.min(9999, parseInt(d.refRange,10) || 50));
-  ['floors','walls','doors','props','labels','links','tokens','customProps'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
+  ['floors','walls','doors','props','labels','links','tokens','customProps','rooms'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
+  // Every room record needs a stable id (older decks / imported rooms may lack one).
+  (d.rooms||[]).forEach(r => { if(!r.id) r.id = dkeNewRoomId(); });
   return d;
 }
 function deckHasContent(d){
@@ -337,6 +339,269 @@ function dkeRemoveEdgeWall(d, x, y, o){
   d.doors = (d.doors || []).filter(op => !dkeOpeningCovers(op, { x, y, o }));   // diag openings never match
 }
 
+// ═══ ROOM RECORDS — authored info per enclosed room (like planets / locations) ═══
+// A room RECORD lives on the deck: { id, x, y, name?, type?, desc?, ref?, aloud?,
+// fresh?, dismissed? }. (x,y) is the room's canonical anchor cell — its live cell
+// set is always dkeRoomCells(deck, x, y), so the record survives wall edits. The
+// DESIGNER auto-creates a record the instant an area becomes fully enclosed by
+// walls, then nudges the referee to name it (the "room created" pulse). Player
+// visibility of a room's info reuses the shared reveal store (isRevealed / the
+// revealedAreas key), and a clear (non-frosted) WINDOW makes two rooms share
+// visibility — reveal one and players can see into the other.
+let dkeRoomSeq = 0;
+function dkeNewRoomId(){
+  const t = (typeof Date !== 'undefined' && Date.now) ? Date.now().toString(36) : 'r';
+  return 'room-' + t + '-' + (dkeRoomSeq++).toString(36);
+}
+// Every boundary edge of a flood-filled region is wall-backed → the area is sealed.
+// A single un-walled floor→open edge means the room isn't closed off yet.
+function dkeRoomEnclosed(deck, cells){
+  if(!cells || !cells.length) return false;
+  const set = new Set(cells.map(c => c.x + ',' + c.y));
+  return cells.every(c =>
+    [[1,0],[-1,0],[0,1],[0,-1]].every(dd => {
+      if(set.has((c.x+dd[0]) + ',' + (c.y+dd[1]))) return true;        // interior edge
+      return dkeWallBlocks(deck, c.x, c.y, dd[0], dd[1]);              // boundary must be walled
+    }));
+}
+// All distinct enclosed regions, each { cells, anchor:{x,y} }. The anchor is the
+// canonical (min-y, then min-x) cell so it's stable no matter which cell was tapped.
+function dkeEnclosedRegions(deck){
+  const floor = new Set();
+  (deck.floors||[]).forEach(f => { for(let i=0;i<f.w;i++) for(let j=0;j<f.h;j++) floor.add((f.x+i)+','+(f.y+j)); });
+  const seen = new Set(), regions = [];
+  floor.forEach(key => {
+    if(seen.has(key)) return;
+    const parts = key.split(','), sx = +parts[0], sy = +parts[1];
+    const cells = dkeRoomCells(deck, sx, sy) || [];
+    cells.forEach(c => seen.add(c.x + ',' + c.y));
+    if(dkeRoomEnclosed(deck, cells)){
+      let a = cells[0];
+      cells.forEach(c => { if(c.y < a.y || (c.y === a.y && c.x < a.x)) a = c; });
+      regions.push({ cells, anchor:{ x:a.x, y:a.y } });
+    }
+  });
+  return regions;
+}
+// The room record whose anchor lies in the region containing (x,y), if any.
+function dkeRoomForCell(deck, x, y){
+  const cells = dkeRoomCells(deck, x, y); if(!cells) return null;
+  const set = new Set(cells.map(c => c.x + ',' + c.y));
+  return (deck.rooms||[]).find(r => set.has(r.x + ',' + r.y)) || null;
+}
+function dkeRoomById(deck, id){ return (deck.rooms||[]).find(r => r.id === id) || null; }
+// A room record is "live" only while its area is still an enclosed room.
+function dkeRoomLiveCells(deck, r){
+  const cells = dkeRoomCells(deck, r.x, r.y);
+  return (cells && dkeRoomEnclosed(deck, cells)) ? cells : null;
+}
+// Reconcile deck.rooms with the current enclosed regions. IDEMPOTENT — safe to run
+// on every commit (incl. undo/redo restores): re-anchors records to their region's
+// canonical cell, folds duplicates a merge collapsed into one region (keeping the
+// richest record), and creates a pending record for every newly enclosed region.
+// Records whose area was opened back up are PARKED (kept, never deleted) so authored
+// info returns if the walls close again. `markFresh` tags brand-new records so the
+// designer pulses them; the initial load passes false to stay quiet on old decks.
+// Returns the ids of the rooms it just created.
+function dkeSyncRooms(deck, markFresh){
+  if(!Array.isArray(deck.rooms)) deck.rooms = [];
+  const regions = dkeEnclosedRegions(deck);
+  const rank = r => (r.name ? 4 : 0) + ((r.desc||r.ref||r.aloud||r.type) ? 2 : 0) + (r.dismissed ? 0 : 1);
+  const claimedBy = new Map();   // "x,y" anchor → record
+  const keep = [];
+  (deck.rooms||[]).forEach(r => {
+    if(!r.id) r.id = dkeNewRoomId();
+    const region = regions.find(rg => rg.cells.some(c => c.x === r.x && c.y === r.y));
+    if(!region){ keep.push(r); return; }                    // area currently open → park the record as-is
+    r.x = region.anchor.x; r.y = region.anchor.y;
+    const k = r.x + ',' + r.y, prev = claimedBy.get(k);
+    if(!prev){ claimedBy.set(k, r); keep.push(r); }
+    else if(rank(r) > rank(prev)){                           // two records merged into one room → keep the richer
+      const i = keep.indexOf(prev); if(i >= 0) keep.splice(i, 1);
+      claimedBy.set(k, r); keep.push(r);
+    }
+  });
+  deck.rooms = keep;
+  const made = [];
+  regions.forEach(rg => {
+    const k = rg.anchor.x + ',' + rg.anchor.y;
+    if(!claimedBy.has(k)){
+      const rec = { id: dkeNewRoomId(), x: rg.anchor.x, y: rg.anchor.y };
+      if(markFresh) rec.fresh = 1;
+      deck.rooms.push(rec);
+      made.push(rec.id);
+    }
+  });
+  return made;
+}
+function dkeRoomName(r){ return (r && r.name) ? r.name : 'Unnamed room'; }
+// Does a room still need naming? (fresh + never named + not dismissed) → it pulses.
+function dkeRoomPending(r){ return !!(r && r.fresh && !r.name && !r.dismissed); }
+
+// ── Window see-through ───────────────────────────────────────────────────────
+// The two cells an axis opening separates — enough to resolve the room on each
+// side. Diagonal openings don't bound rooms (flood-fill is cell-based), so skip.
+function dkeOpeningSides(op){
+  if(op.o === 'h') return [{ x: op.x, y: op.y - 1 }, { x: op.x, y: op.y }];
+  if(op.o === 'v') return [{ x: op.x - 1, y: op.y }, { x: op.x, y: op.y }];
+  return null;
+}
+function dkeIsWindow(op){ return op && (op.t || 'door') === 'window'; }
+function dkeIsClearWindow(op){ return dkeIsWindow(op) && !op.f; }   // f = frosted (opaque)
+// Adjacency graph of rooms (by anchor key) joined by CLEAR windows — frosted glass
+// is skipped, so it blocks sight exactly as the referee intends.
+function dkeWindowGraph(deck){
+  const adj = new Map();
+  const link = (a, b) => {
+    if(!a || !b) return; const ka = a.x+','+a.y, kb = b.x+','+b.y; if(ka === kb) return;
+    if(!adj.has(ka)) adj.set(ka, new Set()); adj.get(ka).add(kb);
+    if(!adj.has(kb)) adj.set(kb, new Set()); adj.get(kb).add(ka);
+  };
+  (deck.doors||[]).forEach(op => {
+    if(!dkeIsClearWindow(op)) return;
+    const s = dkeOpeningSides(op); if(!s) return;
+    link(dkeRoomForCell(deck, s[0].x, s[0].y), dkeRoomForCell(deck, s[1].x, s[1].y));
+  });
+  return adj;
+}
+// Anchor keys of every room see-through-connected to `room` (its window cluster),
+// transitively and including itself — a chain of clear windows still counts.
+function dkeWindowCluster(deck, room, adj){
+  adj = adj || dkeWindowGraph(deck);
+  const key = room.x + ',' + room.y, seen = new Set([key]), stack = [key];
+  while(stack.length){ const k = stack.pop(); (adj.get(k) || new Set()).forEach(n => { if(!seen.has(n)){ seen.add(n); stack.push(n); } }); }
+  return seen;
+}
+// A room is visible to players when it — or any room a clear window links it to —
+// has been revealed. This is what "a window into another room lets players see
+// both" means: reveal one, and its whole clear-glass cluster shows.
+function dkeRoomVisibleToPlayers(deck, room){
+  if(typeof isRevealed !== 'function') return false;
+  if(isRevealed(room.id)) return true;
+  const cluster = dkeWindowCluster(deck, room);
+  return (deck.rooms||[]).some(r => cluster.has(r.x + ',' + r.y) && isRevealed(r.id));
+}
+// True when the room isn't itself revealed but is visible only THROUGH a window —
+// the referee sees a 🪟 hint so the see-through is never a surprise.
+function dkeRoomSeenThroughWindow(deck, room){
+  if(typeof isRevealed !== 'function' || isRevealed(room.id)) return false;
+  return dkeRoomVisibleToPlayers(deck, room);
+}
+
+// ── Room info: shared deck accessor, mutation + reveal handlers, and the panel ──
+// The panel opens over the editor (dkeD) or straight off the live station map
+// (dkeMapDeck), so both surfaces edit the same records and save the same way.
+function dkeRoomsDeck(){ return dkeIsOpen ? dkeD() : (typeof dkeMapDeck === 'function' ? dkeMapDeck() : null); }
+function dkeRoomsSave(){
+  if(dkeIsOpen){ dkeSave(); dkeRenderContent(); }
+  else { if(typeof saveAuthoredStations === 'function') saveAuthoredStations(); if(typeof renderStationMap === 'function') renderStationMap(); }
+}
+// Name a room from the toolbar's quick field (clears the naming pulse).
+function dkeQuickNameRoom(id, val){
+  const d = dkeD(); const r = d && dkeRoomById(d, id); if(!r) return;
+  dkeSnapshot();
+  const n = String(val||'').trim();
+  if(n) r.name = n; else delete r.name;
+  delete r.fresh;
+  dkeCommit(); dkeRenderSub();
+}
+// Reset a room's authored info (the record itself persists — the enclosed area is
+// still a room), and stop it nagging to be named.
+function dkeClearRoom(id){
+  const d = dkeRoomsDeck(); const r = d && dkeRoomById(d, id); if(!r) return;
+  if(dkeIsOpen) dkeSnapshot();
+  ['name','type','desc','ref','aloud','fresh'].forEach(k => delete r[k]);
+  r.dismissed = 1;
+  if(dkeIsOpen){ dkeCommit(); dkeRenderSub(); } else dkeRoomsSave();
+  dkeRenderRoomPanel();
+  if(typeof showToast === 'function') showToast('Room info cleared');
+}
+// Player-visibility toggle (shared reveal store — a clear window shares it onward).
+function dkeToggleRoomReveal(id){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  if(typeof toggleReveal !== 'function') return;
+  toggleReveal(id);                       // flips revealedAreas[id] + saves + re-renders the current view
+  if(dkeIsOpen) dkeRenderContent();
+  dkeRenderSub(); dkeRenderRoomPanel();
+}
+// Referee opens a room to author its info; players fall through to the read card.
+function dkeOpenRoomPanel(id){
+  if(typeof isReferee === 'function' && !isReferee()){ dkeReadRoom(id); return; }
+  dkeRoomPanelId = id;
+  dkeEnsureRoomPanel();
+  dkeRenderRoomPanel();
+  setTimeout(() => { const i = document.getElementById('dke-room-name'); if(i && !i.value) i.focus(); }, 0);
+}
+// Player taps a room on the live map → read what's been revealed (name + read-aloud
+// + overview). Referee-only notes never appear here.
+function dkeReadRoom(id){
+  const d = dkeRoomsDeck(); const r = d && dkeRoomById(d, id); if(!r) return;
+  if(typeof isReferee === 'function' && isReferee()){ dkeOpenRoomPanel(id); return; }
+  if(!dkeRoomVisibleToPlayers(d, r)){ if(typeof showToast === 'function') showToast('Not yet revealed'); return; }
+  dkeRoomPanelId = id;
+  dkeEnsureRoomPanel();
+  dkeRenderRoomPanel();
+}
+function dkeCloseRoomPanel(){ dkeRoomPanelId = null; const w = document.getElementById('dke-room-panel'); if(w) w.classList.remove('open'); }
+let dkeRoomPanelId = null;
+function dkeEnsureRoomPanel(){
+  if(document.getElementById('dke-room-panel')) return;
+  const w = document.createElement('div');
+  w.id = 'dke-room-panel';
+  w.innerHTML = `<div class="dke-rp-hdr"><span id="dke-rp-title">ROOM</span><button class="dke-rp-x" onclick="dkeCloseRoomPanel()">✕</button></div><div class="dke-rp-body" id="dke-rp-body"></div>`;
+  document.body.appendChild(w);
+}
+// Persist the editable fields back onto the record (referee form only).
+function dkeSaveRoomField(field, val){
+  const d = dkeRoomsDeck(); const r = d && dkeRoomById(d, dkeRoomPanelId); if(!r) return;
+  if(dkeIsOpen) dkeSnapshot();
+  const v = String(val == null ? '' : val).trim();
+  if(field === 'name'){ if(v) r.name = v; else delete r.name; delete r.fresh; }
+  else if(v) r[field] = v; else delete r[field];
+  if(dkeIsOpen){ dkeCommit(); dkeRenderSub(); } else dkeRoomsSave();
+  if(field === 'name'){ const t = document.getElementById('dke-rp-title'); if(t) t.textContent = (dkeRoomName(r) || 'ROOM').toUpperCase(); }
+}
+function dkeRenderRoomPanel(){
+  const w = document.getElementById('dke-room-panel'); if(!w) return;
+  const d = dkeRoomsDeck(); const r = d && dkeRoomById(d, dkeRoomPanelId);
+  if(!dkeRoomPanelId || !r){ w.classList.remove('open'); return; }
+  w.classList.add('open');
+  const eh = dkeEsc, ref = !(typeof isReferee === 'function') || isReferee();
+  const titleEl = document.getElementById('dke-rp-title');
+  if(titleEl) titleEl.textContent = (dkeRoomName(r) || 'ROOM').toUpperCase();
+  const body = document.getElementById('dke-rp-body'); if(!body) return;
+  if(!ref){
+    // Player read card — only the revealed, player-safe fields.
+    let h = `<div class="dke-rp-name">${eh(dkeRoomName(r))}</div>`;
+    if(r.type) h += `<div class="dke-rp-sub">${eh(r.type)}</div>`;
+    if(r.aloud) h += `<div class="dke-rp-aloud">${eh(r.aloud).replace(/\n/g,'<br>')}</div>`;
+    if(r.desc) h += `<div class="dke-rp-desc">${eh(r.desc).replace(/\n/g,'<br>')}</div>`;
+    if(!r.aloud && !r.desc) h += `<div class="dke-rp-desc" style="opacity:.6">Nothing further is known yet.</div>`;
+    body.innerHTML = h;
+    return;
+  }
+  const revealed = (typeof isRevealed === 'function') && isRevealed(r.id);
+  const seenWin = dkeRoomSeenThroughWindow(d, r);
+  const ta = (f, ph, rows) => `<textarea class="hx-edit-in" rows="${rows||2}" placeholder="${ph}" onchange="dkeSaveRoomField('${f}',this.value)">${eh(r[f]||'')}</textarea>`;
+  body.innerHTML =
+      `<label class="dke-rp-lbl">Name</label>`
+    + `<input class="hx-edit-in" id="dke-room-name" placeholder="e.g. Bridge, Med-bay…" value="${eh(r.name||'')}" onchange="dkeSaveRoomField('name',this.value)">`
+    + `<label class="dke-rp-lbl">Type / subtitle</label>`
+    + `<input class="hx-edit-in" placeholder="e.g. Command · Restricted" value="${eh(r.type||'')}" onchange="dkeSaveRoomField('type',this.value)">`
+    + `<label class="dke-rp-lbl">Overview <span class="dke-rp-hint">(players see this once revealed)</span></label>`
+    + ta('desc','What the room is, what stands out…', 3)
+    + `<label class="dke-rp-lbl">📢 Read-aloud <span class="dke-rp-hint">(players see this once revealed)</span></label>`
+    + ta('aloud','Boxed text to read when they enter…', 2)
+    + `<label class="dke-rp-lbl">🔒 Referee note <span class="dke-rp-hint">(never shown to players)</span></label>`
+    + ta('ref','Secrets, triggers, what is really here…', 2)
+    + `<div class="dke-rp-row">`
+      + `<button class="dke-tool${revealed?' on':''}" onclick="dkeToggleRoomReveal('${eh(r.id)}')">${revealed?'👁 Revealed to players':'🚫 Hidden from players'}</button>`
+      + `<button class="dke-tool dke-danger" onclick="dkeClearRoom('${eh(r.id)}')">🗑 Clear info</button>`
+    + `</div>`
+    + (seenWin ? `<div class="dke-rp-note">🪟 Visible to players through a clear window into a revealed room. Frost the window to block the view.</div>` : '')
+    + `<div class="dke-rp-note" style="opacity:.7">Reveal shares through clear windows — players see every room a clear window connects to a revealed one.</div>`;
+}
+
 // ── Initiative tie-in ────────────────────────────────────────────────────────
 // Tokens match initiative entries BY NAME (case-insensitive). The referee reads
 // the live combatants array (js/45) so the glow works even before sharing; a
@@ -445,6 +710,16 @@ function dkeCycleDoor(i){
   if(typeof renderStationMap === 'function') renderStationMap();
   if(typeof updateNodes === 'function') updateNodes();
   if(typeof showToast === 'function') showToast('Door ' + (deck.doors[i].s || 'closed'));
+}
+// Referee frosts / clears a window on the live map. A clear window lets players see
+// into the next room once either room is revealed; frosting blocks that sight line.
+function dkeToggleWindowFrost(i){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const deck = dkeMapDeck(); const op = deck && (deck.doors||[])[i]; if(!op || !dkeIsWindow(op)) return;
+  if(op.f) delete op.f; else op.f = 1;
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof showToast === 'function') showToast('Window ' + (op.f ? 'frosted (opaque)' : 'clear (see-through)'));
 }
 // Auto-reveal: when the referee drops a PLAYER-CHARACTER token into a fogged room
 // on the station view, the party has entered it, so lift that room's fog. Only
@@ -588,6 +863,10 @@ function dkeOpeningSVG(op){
     const gap = `<line x1="${x0+.12*C}" y1="${y}" x2="${x0+(L-.12)*C}" y2="${y}" stroke="#0f1117" stroke-width="5"/>`;
     if(type === 'window'){
       let m = ''; for(let k = 1; k < L; k++) m += `<line x1="${x0+k*C}" y1="${y-2.5}" x2="${x0+k*C}" y2="${y+2.5}" stroke="#4a8f9c" stroke-width=".8"/>`;
+      if(op.f){   // frosted: opaque pale glass with a hatch — sight-blocking
+        let h = ''; for(let k = 0; k < L*3; k++){ const hx = x0+(k+.5)*C/3; h += `<line x1="${hx-2}" y1="${y-2.5}" x2="${hx+2}" y2="${y+2.5}" stroke="#8ba6b0" stroke-width=".6"/>`; }
+        return gap + `<rect x="${x0+.15*C}" y="${y-2.5}" width="${(L-.3)*C}" height="5" rx="1" fill="#cdd8de" fill-opacity=".8" stroke="#9fb4bc" stroke-width=".9"/>${h}`;
+      }
       return gap + `<rect x="${x0+.15*C}" y="${y-2.5}" width="${(L-.3)*C}" height="5" rx="1" fill="#7fd4e0" fill-opacity=".45" stroke="#7fd4e0" stroke-width=".9"/>${m}`;
     }
     if(s === 'open')   return gap + `<rect x="${x0+.12*C-1.5}" y="${y}" width="3" height="${.6*C}" rx="1.5" fill="#D4A843"/>`;
@@ -598,6 +877,10 @@ function dkeOpeningSVG(op){
   const gap = `<line x1="${x}" y1="${y0+.12*C}" x2="${x}" y2="${y0+(L-.12)*C}" stroke="#0f1117" stroke-width="5"/>`;
   if(type === 'window'){
     let m = ''; for(let k = 1; k < L; k++) m += `<line x1="${x-2.5}" y1="${y0+k*C}" x2="${x+2.5}" y2="${y0+k*C}" stroke="#4a8f9c" stroke-width=".8"/>`;
+    if(op.f){   // frosted: opaque pale glass with a hatch — sight-blocking
+      let h = ''; for(let k = 0; k < L*3; k++){ const hy = y0+(k+.5)*C/3; h += `<line x1="${x-2.5}" y1="${hy-2}" x2="${x+2.5}" y2="${hy+2}" stroke="#8ba6b0" stroke-width=".6"/>`; }
+      return gap + `<rect x="${x-2.5}" y="${y0+.15*C}" width="5" height="${(L-.3)*C}" rx="1" fill="#cdd8de" fill-opacity=".8" stroke="#9fb4bc" stroke-width=".9"/>${h}`;
+    }
     return gap + `<rect x="${x-2.5}" y="${y0+.15*C}" width="5" height="${(L-.3)*C}" rx="1" fill="#7fd4e0" fill-opacity=".45" stroke="#7fd4e0" stroke-width=".9"/>${m}`;
   }
   if(s === 'open')   return gap + `<rect x="${x}" y="${y0+.12*C-1.5}" width="${.6*C}" height="3" rx="1.5" fill="#D4A843"/>`;
@@ -687,6 +970,25 @@ function dkeDoorPreview(p){
   if(dw){ const s = dkeDiagOpeningSpan(dw, dkeOpenLen); dkeGhost(ln(s.x1*C, s.y1*C, s.x2*C, s.y2*C)); return; }
   dkeGhost('');
 }
+// Select-tool hover: outline the room under the cursor and name it, so the referee
+// sees exactly what they'd select before tapping. Skips the already-selected room
+// (it carries its own highlight) and only redraws when the hovered room changes.
+let dkeRoomHoverId = null;
+function dkeRoomHoverPreview(p){
+  const d = dkeD(); if(!d) return;
+  const u = dkeCellPt(p);
+  if(u.x < 0 || u.y < 0 || u.x >= d.w || u.y >= d.h){ if(dkeRoomHoverId){ dkeRoomHoverId = null; dkeGhost(''); } return; }
+  const room = dkeRoomForCell(d, Math.floor(u.x), Math.floor(u.y));
+  const cells = room && dkeRoomLiveCells(d, room);
+  const showId = (cells && !(dkeSel && dkeSel.kind === 'room' && dkeSel.id === room.id)) ? room.id : null;
+  if(showId === dkeRoomHoverId) return;
+  dkeRoomHoverId = showId;
+  if(!showId){ dkeGhost(''); return; }
+  const g = dkeRoomGeom(cells), eh = dkeEsc;
+  dkeGhost(`<path d="${dkeRoomOutlineD(cells)}" fill="#5b8ef012" stroke="#7fb0ff" stroke-width="1.8" stroke-dasharray="6,3" style="pointer-events:none"/>`
+    + `<text x="${g.ctrX.toFixed(1)}" y="${(g.ctrY-2).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#bcd6ff" font-family="system-ui,sans-serif" style="pointer-events:none">${eh(dkeRoomName(room))}</text>`
+    + `<text x="${g.ctrX.toFixed(1)}" y="${(g.ctrY+10).toFixed(1)}" text-anchor="middle" font-size="7" fill="#8fb0e0" font-family="system-ui,sans-serif" style="pointer-events:none">tap to select</text>`);
+}
 
 // Public URL of a deck's floorplan-underlay image. '' when the deck has none.
 // Different-origin, so the SW won't cache it — offline the <image> just paints
@@ -746,6 +1048,107 @@ function dkeDiagFloorCuts(deck){
   });
   return cuts;
 }
+// Bounding geometry of a room's cell set, in px — top-centre point (for badges)
+// and centre point (for the name label).
+function dkeRoomGeom(cells){
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  cells.forEach(c => { if(c.x < minX) minX = c.x; if(c.y < minY) minY = c.y; if(c.x > maxX) maxX = c.x; if(c.y > maxY) maxY = c.y; });
+  const C = DKE_CELL, cxCell = (minX + maxX + 1) / 2;
+  return { topX: cxCell*C, topY: minY*C, ctrX: cxCell*C, ctrY: (minY + maxY + 1) / 2 * C, minX, minY, maxX, maxY };
+}
+// The floating action icons shown above a SELECTED room (design mode) — a shared
+// spec used by both the renderer and the editor's tap hit-test so they never drift.
+// action ∈ 'edit' | 'reveal' | 'delete'. Reveal reflects live isRevealed() state.
+function dkeRoomActionIcons(deck, r, geom){
+  const y = geom.topY - 20, cx = geom.topX;
+  const revealed = (typeof isRevealed === 'function') && isRevealed(r.id);
+  return [
+    { a:'edit',   cx: cx - 30, cy: y, col:'#D4A843', glyph:'<path d="M-4,4 L-4,1.5 L2.5,-5 L5,-2.5 L-1.5,4 Z" fill="none" stroke="#D4A843" stroke-width="1.3" stroke-linejoin="round"/>', title:'Edit room info' },
+    { a:'reveal', cx: cx,      cy: y, col: revealed ? '#4caf82' : '#7f93b8',
+      glyph: revealed
+        ? '<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#4caf82" stroke-width="1.2"/><circle r="1.8" fill="#4caf82"/>'
+        : '<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#7f93b8" stroke-width="1.3" stroke-linecap="round"/><path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#7f93b8" stroke-width="1.1" stroke-linecap="round"/>',
+      title: revealed ? 'Revealed to players — tap to hide' : 'Hidden from players — tap to reveal' },
+    { a:'delete', cx: cx + 30, cy: y, col:'#c0506e', glyph:'<path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#c0506e" stroke-width="1.5" stroke-linecap="round"/>', title:'Delete room' }
+  ];
+}
+function dkeRoomIconSVG(ic){
+  return `<g transform="translate(${ic.cx.toFixed(1)},${ic.cy.toFixed(1)})"><circle r="11" fill="#0f1117" stroke="${ic.col}" stroke-width="1.6"/>${ic.glyph}<title>${dkeEsc(ic.title)}</title></g>`;
+}
+// The whole room layer: outlines, name labels, the "room created" naming pulse,
+// selection highlight + edit icons (design mode), and the referee reveal toggle.
+// Three audiences: the editor canvas, the interactive station map for the referee,
+// and the player/handout render (which only ever shows rooms visible to players —
+// revealed, or seen through a clear window into a revealed room).
+function dkeRoomsSVG(deck, opt){
+  if(!(deck.rooms||[]).length) return '';
+  const C = DKE_CELL, eh = dkeEsc;
+  const editor = !!opt.editor;
+  const refView = !editor && !!opt.interactive && (typeof isReferee === 'function') && isReferee();
+  const player = !editor && !refView;   // interactive player OR static handout
+  const sel = opt.sel && opt.sel.kind === 'room' ? opt.sel.id : null;
+  let out = '';
+  (deck.rooms||[]).forEach(r => {
+    const cells = dkeRoomLiveCells(deck, r); if(!cells) return;   // area no longer enclosed → nothing to show
+    const g = dkeRoomGeom(cells), named = !!r.name, name = dkeRoomName(r);
+    const visible = player ? dkeRoomVisibleToPlayers(deck, r) : true;
+    if(player && !visible) return;                                // players never see undisclosed rooms
+    if(player && !named) return;                                  // …or unnamed ones
+    const isSel = editor && sel === r.id;
+    const seenWin = dkeRoomSeenThroughWindow(deck, r);
+    // Outline / fill.
+    if(isSel){
+      out += `<path d="${dkeRoomFillD(cells)}" fill="#D4A84318" style="pointer-events:none"/>`
+        + `<path d="${dkeRoomOutlineD(cells)}" fill="none" stroke="#D4A843" stroke-width="2" style="pointer-events:none"/>`;
+    } else if(editor){
+      out += `<path d="${dkeRoomOutlineD(cells)}" fill="none" stroke="#6f7ba0" stroke-width="1" stroke-dasharray="2,4" opacity=".5" style="pointer-events:none"/>`;
+    }
+    // Whole-room tap target (interactive surfaces only — the editor selects rooms
+    // through its own pointer pipeline). Referee → open the info panel; player →
+    // read the revealed info. Skipped where an AREA LINK already claims the room so
+    // the existing tap-to-open-area behaviour is never overridden.
+    if(opt.interactive){
+      const cellSet = new Set(cells.map(c => c.x + ',' + c.y));
+      const linked = (deck.links||[]).some(lk => cellSet.has(lk.x + ',' + lk.y));
+      if(!linked){
+        const call = refView ? `dkeOpenRoomPanel('${eh(r.id)}')` : `dkeReadRoom('${eh(r.id)}')`;
+        out += `<path d="${dkeRoomFillD(cells)}" fill="transparent" style="cursor:pointer" onclick="event.stopPropagation();${call}"><title>${eh(name)}</title></path>`;
+      }
+    }
+    // Name label (skip empty player rooms handled above). Referee sees a 🪟 when a
+    // room is only visible because a clear window looks into it.
+    const col = named ? '#cfe0ff' : '#8b93a7';
+    const tag = (refView && seenWin) ? ' 🪟' : '';
+    const lockTag = refView ? (isRevealed(r.id) ? '' : (seenWin ? '' : ' 🔒')) : '';
+    if(named || editor || refView){
+      out += `<text x="${g.ctrX.toFixed(1)}" y="${g.ctrY.toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="600" fill="${col}" font-family="system-ui,sans-serif" style="pointer-events:none" opacity="${named?'.9':'.6'}">${eh(name)}${tag}${lockTag}</text>`;
+    }
+    // Design-mode affordances: naming pulse + edit icons.
+    if(editor){
+      if(isSel){
+        dkeRoomActionIcons(deck, r, g).forEach(ic => { out += dkeRoomIconSVG(ic); });
+      } else if(dkeRoomPending(r)){
+        const bx = g.topX, by = g.topY - 20;
+        out += `<g style="pointer-events:none"><circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="11" fill="none" stroke="#4caf82" stroke-width="2">`
+          + `<animate attributeName="r" values="9;14;9" dur="1.3s" repeatCount="indefinite"/>`
+          + `<animate attributeName="stroke-opacity" values="1;.2;1" dur="1.3s" repeatCount="indefinite"/></circle>`
+          + `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="9" fill="#0f1117" stroke="#4caf82" stroke-width="1.4"/>`
+          + `<path transform="translate(${bx.toFixed(1)},${by.toFixed(1)})" d="M-3.4,-3.4 L1,-3.4 L4,-.4 L-.4,4 L-3.4,1 Z" fill="none" stroke="#8fe0b8" stroke-width="1.2" stroke-linejoin="round"/>`
+          + `<circle transform="translate(${bx.toFixed(1)},${by.toFixed(1)})" cx="-1.4" cy="-1.4" r="1" fill="#8fe0b8"/>`
+          + `<text x="${bx.toFixed(1)}" y="${(by-15).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#8fe0b8" font-family="system-ui,sans-serif">NEW ROOM</text></g>`;
+      }
+    }
+    // Referee reveal eye on the interactive map (players never see it).
+    if(refView){
+      const revealed = isRevealed(r.id);
+      const eyG = revealed
+        ? '<path d="M-6,0 Q0,-4.6 6,0 Q0,4.6 -6,0 Z" fill="none" stroke="#4caf82" stroke-width="1.2"/><circle r="1.8" fill="#4caf82"/>'
+        : '<path d="M-6,-1.5 Q0,3.5 6,-1.5" fill="none" stroke="#a3a9bf" stroke-width="1.3" stroke-linecap="round"/><path d="M-4.2,1.4 l-1.4,2 M0,2.4 v2.4 M4.2,1.4 l1.4,2" stroke="#a3a9bf" stroke-width="1.1" stroke-linecap="round"/>';
+      out += `<g transform="translate(${g.ctrX.toFixed(1)},${(g.ctrY+13).toFixed(1)})" style="cursor:pointer" onclick="event.stopPropagation();dkeToggleRoomReveal('${eh(r.id)}')"><circle r="9" fill="transparent"/>${eyG}<title>${revealed?'Revealed — tap to hide':'Hidden — tap to reveal'}</title></g>`;
+    }
+  });
+  return out;
+}
 function dkeContentSVG(deck, opt){
   opt = opt || {};
   const C = DKE_CELL, eh = dkeEsc;
@@ -786,6 +1189,7 @@ function dkeContentSVG(deck, opt){
   (deck.doors||[]).forEach((d, i) => {
     out += dkeOpeningSVG(d);
     if(refView && (d.t || 'door') === 'door') doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeCycleDoor(${i})"><title>Door: ${eh(d.s||'closed')} — tap to cycle</title>${dkeOpeningHitSVG(d)}</g>`;
+    else if(refView && (d.t || 'door') === 'window') doorCtl += `<g style="cursor:pointer" onclick="event.stopPropagation();dkeToggleWindowFrost(${i})"><title>Window: ${d.f?'frosted (opaque)':'clear — players see through into the next room'} — tap to toggle</title>${dkeOpeningHitSVG(d)}</g>`;
   });
   (deck.props||[]).forEach(p => {
     const def = DKE_PROPS[p.t];
@@ -866,6 +1270,8 @@ function dkeContentSVG(deck, opt){
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
   out += roomLayer + fogDim + markerLayer + doorCtl;
+  // Authored room records (name + info + reveal), layered over the area markers.
+  out += dkeRoomsSVG(deck, opt);
   // Remembered rooms (player side): the snapshotted NPCs are FROZEN — hide their
   // live tokens and draw last-known ghosts instead, until the referee re-reveals.
   let frozen = null, memGhosts = '';
@@ -1085,7 +1491,7 @@ const DKE_TOOLS = [
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
-  select:'Tap to select · drag a prop/label/link/token to move it · drag a box over empty space to marquee-select several, then drag any of them to move the group (or Delete).',
+  select:'Tap a room to select it — name it and add info (✎), reveal it to players (👁), or clear it (🗑). Tap a prop/label/token to select · drag to move · window selected → ❄ toggles frosted glass. Drag a box to marquee-select several.',
   room:'Drag a rectangle — floor and perimeter walls are placed in one go.',
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
@@ -1128,7 +1534,11 @@ function dkeEnsureDom(){
   svg.addEventListener('pointermove', dkePointerMove);
   svg.addEventListener('pointerup', dkePointerUp);
   svg.addEventListener('pointercancel', dkePointerUp);
-  svg.addEventListener('pointerleave', function(){ if(dkeTool === 'door' && !dkePtrs.size && !dkeGesture) dkeGhost(''); });
+  svg.addEventListener('pointerleave', function(){
+    if(dkePtrs.size || dkeGesture) return;
+    if(dkeTool === 'door') dkeGhost('');
+    else if(dkeTool === 'select' && dkeRoomHoverId){ dkeRoomHoverId = null; dkeGhost(''); }
+  });
   document.getElementById('dke-canvas').addEventListener('wheel', dkeWheel, { passive:false });
   document.getElementById('dke-undo').addEventListener('click', dkeUndoPop);
   document.getElementById('dke-redo').addEventListener('click', dkeRedoPop);
@@ -1148,6 +1558,7 @@ function dkeBeginEdit(holder, titleName){
   if(!decks.length){ decks.push(dkeBlank()); holder.deckIdx = 0; }
   const d = dkeCurrentDeck(holder);
   dkeNorm(d);
+  dkeSyncRooms(d, false);   // register already-enclosed rooms quietly (no naming pulse on existing decks)
   dkeEnsureDom();
   dkeIsOpen = true; dkeTool = deckHasContent(d) ? 'select' : 'room';
   dkeSel = null; dkeGroup = []; dkePoly = null; dkeGesture = null; dkeUndoStack = []; dkeRedoStack = []; dkePtrs.clear(); dkePinch = null;
@@ -1180,6 +1591,7 @@ function dkeOpenShip(){
 function dkeClose(){
   if(!dkeIsOpen) return;
   dkeIsOpen = false; dkePoly = null; dkeGesture = null; dkePtrs.clear(); dkePinch = null;
+  dkeRoomHoverId = null; dkeCloseRoomPanel();
   dkeClosePropUpload();
   const w = document.getElementById('dke-wrap'); if(w) w.classList.remove('open');
   dkeFlushSave();
@@ -1435,6 +1847,7 @@ function dkeSetTool(t){
   if(t !== 'poly') dkePolyEnd(true);
   if(t !== 'merge' && dkeMergePick){ dkeMergePick = null; dkeGhost(''); }
   if(t !== 'ruler'){ dkeRuler = null; dkeRulerAnchor = null; dkeGhost(''); }
+  if(dkeRoomHoverId){ dkeRoomHoverId = null; dkeGhost(''); }   // drop any select-tool room hover outline
   if(t !== 'select'){ dkeSel = null; dkeGroup = []; dkeRenderContent(); }
   dkeRenderTools(); dkeRenderSub(); dkeRenderHint();
 }
@@ -1699,12 +2112,24 @@ function dkeRenderSub(){
     html = `<button class="dke-tool on" onclick="dkePolyEnd()">✓ End wall run</button>`;
   } else if(dkeTool === 'select' && dkeGroup.length){
     html = `<span class="dke-note">${dkeGroup.length} selected — drag to move</span><button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteGroup()">🗑 Delete all</button>`;
+  } else if(dkeTool === 'select' && dkeSel && dkeSel.kind === 'room'){
+    const d = dkeD(), r = d && dkeRoomById(d, dkeSel.id);
+    if(r){
+      const revealed = (typeof isRevealed === 'function') && isRevealed(r.id);
+      const room = dkeRoomLiveCells(d, r), mpc = dkeDeckMpc(d), area = room ? Math.round(room.length*mpc*mpc) : 0;
+      html = `<span class="dke-note">🚪 ${eh(dkeRoomName(r))}${area?` · ${area} m²`:''}</span>`
+        + `<input class="hx-edit-in" style="max-width:170px" placeholder="Room name…" value="${eh(r.name||'')}" onchange="dkeQuickNameRoom('${eh(r.id)}',this.value)">`
+        + `<button class="dke-tool" onclick="dkeOpenRoomPanel('${eh(r.id)}')">✎ Edit info</button>`
+        + `<button class="dke-tool${revealed?' on':''}" onclick="dkeToggleRoomReveal('${eh(r.id)}')">${revealed?'👁 Revealed':'🚫 Hidden'}</button>`
+        + `<button class="dke-tool dke-danger" onclick="dkeClearRoom('${eh(r.id)}')">🗑 Clear</button>`;
+    }
   } else if(dkeTool === 'select' && dkeSel){
     const d = dkeD(), it = d ? (d[dkeSel.kind+'s']||[])[dkeSel.i] : null;
     if(it){
       if(dkeSel.kind === 'prop') html += `<button class="dke-tool" onclick="dkeRotateSel()">⟳ Rotate</button><button class="dke-tool" onclick="dkeCyclePropSize()">⤢ Size ${dkePropScaleOf(it)}×</button><input class="hx-edit-in" style="max-width:150px" placeholder="name…" value="${eh(it.label||'')}" onchange="dkeEditPropLabel(this.value)">`;
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
       if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:180px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)"><button class="dke-tool" onclick="dkeCycleTokenStatus()">◍ ${it.st || 'status'}</button>`;
+      if(dkeSel.kind === 'door' && dkeIsWindow(it)) html += `<button class="dke-tool${it.f?' on':''}" onclick="dkeToggleFrostSel()" title="Frosted glass blocks the see-through into the next room">❄ ${it.f?'Frosted':'Clear glass'}</button>`;
       if(dkeSel.kind === 'floor'){ const room = dkeRoomCells(d, it.x, it.y), mpc = dkeDeckMpc(d), cells = room ? room.length : it.w*it.h; html += `<span class="dke-note">Room ≈ ${Math.round(cells*mpc*mpc)} m² (${cells} cells)</span>`; }
       html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
@@ -1831,6 +2256,39 @@ function dkeHitTest(p){
   }
   return null;
 }
+// Editor room hit-test: did the tap land on the SELECTED room's floating edit
+// icons, or on any pending room's naming pulse? Returns {action,id} or null. Uses
+// the same geometry the renderer draws with, so tap targets can't drift.
+function dkeRoomTapAt(p){
+  const d = dkeD(); if(!d) return null;
+  if(dkeSel && dkeSel.kind === 'room'){
+    const r = dkeRoomById(d, dkeSel.id), cells = r && dkeRoomLiveCells(d, r);
+    if(cells){
+      const ics = dkeRoomActionIcons(d, r, dkeRoomGeom(cells));
+      for(let k = 0; k < ics.length; k++){ if(Math.hypot(p.x - ics[k].cx, p.y - ics[k].cy) <= 13) return { action: ics[k].a, id: r.id }; }
+    }
+  }
+  const rooms = d.rooms || [];
+  for(let k = 0; k < rooms.length; k++){
+    const r = rooms[k]; if(!dkeRoomPending(r)) continue;
+    const cells = dkeRoomLiveCells(d, r); if(!cells) continue;
+    const g = dkeRoomGeom(cells);
+    if(Math.hypot(p.x - g.topX, p.y - (g.topY - 20)) <= 13) return { action:'name', id: r.id };
+  }
+  return null;
+}
+function dkeRoomIconAction(action, id){
+  if(action === 'edit' || action === 'name'){ dkeSel = { kind:'room', id }; dkeGroup = []; dkeRenderContent(); dkeRenderSub(); dkeOpenRoomPanel(id); }
+  else if(action === 'reveal') dkeToggleRoomReveal(id);
+  else if(action === 'delete') dkeClearRoom(id);
+}
+// Frost / clear-glass toggle for a selected window (design mode).
+function dkeToggleFrostSel(){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'door') return;
+  const op = d.doors[dkeSel.i]; if(!op || !dkeIsWindow(op)) return;
+  dkeSnapshot(); if(op.f) delete op.f; else op.f = 1; dkeCommit(); dkeRenderSub();
+  if(typeof showToast === 'function') showToast('Window ' + (op.f ? 'frosted (opaque)' : 'clear (see-through)'));
+}
 
 // ── Undo / save ──────────────────────────────────────────────────────────────
 function dkeSnapshot(){
@@ -1855,6 +2313,11 @@ function dkeHistoryStep(from, onto){
 function dkeUndoPop(){ dkeHistoryStep(dkeUndoStack, dkeRedoStack); }
 function dkeRedoPop(){ dkeHistoryStep(dkeRedoStack, dkeUndoStack); }
 function dkeCommit(){
+  const d = dkeD();
+  if(d){
+    const made = dkeSyncRooms(d, true);   // auto-detect newly enclosed rooms → they pulse for naming
+    if(made.length && typeof showToast === 'function') showToast(made.length > 1 ? made.length + ' rooms detected — name them' : 'Room created — tap 🏷 above it to name it');
+  }
   dkeRenderContent();
   dkeDirty = true;
   if(dkeSaveTimer) clearTimeout(dkeSaveTimer);
@@ -1925,6 +2388,7 @@ function dkeResizeHandlesSVG(d){
 // ── Selection actions ────────────────────────────────────────────────────────
 function dkeDeleteSel(){
   const d = dkeD(); if(!d || !dkeSel) return;
+  if(dkeSel.kind === 'room'){ dkeClearRoom(dkeSel.id); dkeSel = null; dkeRenderContent(); dkeRenderSub(); return; }
   dkeSnapshot();
   (d[dkeSel.kind + 's']||[]).splice(dkeSel.i, 1);
   dkeSel = null;
@@ -2054,12 +2518,22 @@ function dkePointerDown(ev){
     const v = dkeVertex(p);
     dkeGesture = { t:'tplcopy', x0: v.x, y0: v.y, x1: v.x, y1: v.y };
   } else if(dkeTool === 'select'){
+    if(dkeRoomHoverId){ dkeRoomHoverId = null; dkeGhost(''); }   // clear any hover outline on tap
+    // Room naming pulse / edit icons win first (they float above the room).
+    const ri = dkeRoomTapAt(p);
+    if(ri){ dkeRoomIconAction(ri.action, ri.id); dkeGesture = { t:'tapped' }; return; }
     const hit = dkeHitTest(p), u = dkeCellPt(p);
     const movable = hit && (hit.kind === 'prop' || hit.kind === 'label' || hit.kind === 'link' || hit.kind === 'token');
+    // A tap on plain floor (or empty space over a room) selects the ROOM, not the
+    // floor rect — that's what carries the authored info.
+    const room = (!hit || hit.kind === 'floor') ? dkeRoomForCell(d, Math.floor(u.x), Math.floor(u.y)) : null;
+    const liveRoom = (room && dkeRoomLiveCells(d, room)) ? room : null;
     if(movable && dkeInGroup(hit)){                 // grab a grouped item → move the whole group
       dkeGesture = { t:'gmove', sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false, start: u };
     } else if(movable){                             // single movable item
       dkeGroup = []; dkeGesture = { t:'move', hit, sx: ev.clientX, sy: ev.clientY, moved:false, snapped:false };
+    } else if(liveRoom){                            // enclosed room → select its record
+      dkeGroup = []; dkeSel = { kind:'room', id: liveRoom.id }; dkeRenderContent(); dkeRenderSub(); dkeGesture = { t:'tapped' };
     } else if(hit){                                 // structural item (wall/floor/door) → single select
       dkeGroup = []; dkeSel = hit; dkeRenderContent(); dkeRenderSub(); dkeGesture = { t:'tapped' };
     } else {                                        // empty space → rubber-band marquee
@@ -2078,6 +2552,8 @@ function dkePointerMove(ev){
   if(!dkeIsOpen) return;
   // Openings tool: hover preview of where the opening lands (desktop; no button held).
   if(dkeTool === 'door' && !dkePtrs.size && !dkeGesture){ dkeDoorPreview(dkeToSvg(ev.clientX, ev.clientY)); return; }
+  // Select tool: hover-outline the room under the cursor (desktop).
+  if(dkeTool === 'select' && !dkePtrs.size && !dkeGesture){ dkeRoomHoverPreview(dkeToSvg(ev.clientX, ev.clientY)); return; }
   if(!dkePtrs.has(ev.pointerId)) return;
   ev.preventDefault();
   dkePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -2178,7 +2654,7 @@ function dkePointerUp(ev){
   const d = dkeD(); if(!d) return;
   const p = dkeToSvg(ev.clientX, ev.clientY), C = DKE_CELL;
   if(g.t === 'resize'){
-    if(g.snapped) dkeFlushSave();
+    if(g.snapped){ const dd = dkeD(); if(dd){ dkeSyncRooms(dd, true); dkeRenderContent(); } dkeFlushSave(); }
     return;
   }
   if(g.t === 'room'){
@@ -2208,6 +2684,8 @@ function dkePointerUp(ev){
       if(typeof showToast === 'function') showToast(`Copied ${tpl.w}×${tpl.h} — tap to paste`);
     } else if(typeof showToast === 'function'){ showToast('Nothing to copy in that box'); }
   } else if(g.t === 'floor' || g.t === 'erase'){
+    const dd = dkeD();
+    if(dd){ const made = dkeSyncRooms(dd, true); dkeRenderContent(); if(made.length && typeof showToast === 'function') showToast(made.length > 1 ? made.length + ' rooms detected — name them' : 'Room created — tap 🏷 above it to name it'); }
     dkeFlushSave();
   } else if(g.t === 'ruler'){
     if(g.moved && g.b){ dkeRuler = { a: g.a, b: g.b }; dkeRulerAnchor = null; }
