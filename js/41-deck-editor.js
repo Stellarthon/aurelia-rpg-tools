@@ -1710,8 +1710,15 @@ function dkeShipStudioRowHTML(){
   const has = deck && deckHasContent(deck);
   let inner = '';
   if(has){
-    inner += `<button class="cbt-btn${dkeShipRuler?' on':''}" style="margin-bottom:6px;padding:5px 10px" onclick="dkeShipToggleRuler()">📏 Range ruler</button>`
-      + `<svg id="ship-deck-svg" viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block${dkeShipRuler?';touch-action:none':''}">${dkeShipDeckSVG(deck)}</svg>`;
+    // Toolbar: range ruler + pan/zoom controls. Drag the deck to pan, wheel/pinch
+    // or the buttons to zoom, ⤢ to refit (touch-action:none so touch drags pan).
+    inner += `<div class="ship-deck-tools">`
+        + `<button class="cbt-btn${dkeShipRuler?' on':''}" onclick="dkeShipToggleRuler()">📏 Range ruler</button>`
+        + `<button class="cbt-btn" onclick="dkeShipZoomBtn(1)" title="Zoom in" aria-label="Zoom in">＋</button>`
+        + `<button class="cbt-btn" onclick="dkeShipZoomBtn(-1)" title="Zoom out" aria-label="Zoom out">－</button>`
+        + `<button class="cbt-btn" onclick="dkeShipFitReset()" title="Fit deck to view" aria-label="Fit deck to view">⤢</button>`
+      + `</div>`
+      + `<svg id="ship-deck-svg" viewBox="${dkeShipViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block;touch-action:none">${dkeShipDeckSVG(deck)}</svg>`;
   }
   if(ref){   // players with no deck see nothing (no empty section clutter)
     inner += `<button class="cbt-btn" style="width:100%;margin-top:${has ? '8px' : '0'}" onclick="dkeOpenShip()">🗺 ${has ? 'Edit' : 'Draw'} ship deck plan</button>`;
@@ -1743,44 +1750,173 @@ function dkeShipCellAt(deck, p){
   return { x: Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL))),
            y: Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL))) };
 }
-function dkeShipRulerDown(ev){
-  if(!dkeShipRuler) return;
+// ── Ship-deck viewport (pan / zoom / pinch — parity with the station map) ─────
+// dkeShipView is a viewBox override that keeps the deck's NATURAL aspect constant
+// (zoom scales w & h uniformly, pan translates) so the height:auto SVG never
+// reflows; null = fit-to-deck (deckStationViewBox), so an untouched ship deck
+// renders exactly as before. It resets when the shown deck changes (signature).
+// The read-only ship deck has no tap-to-open, so a drag just pans; only the range
+// ruler competes for the single-finger gesture (pinch/wheel zoom work regardless).
+let dkeShipView = null, dkeShipViewSig = '';
+let dkeShipPanG = null, dkeShipPtrs = new Map(), dkeShipPinch = null;
+function dkeShipViewSigNow(){
+  const deck = dkeShipDeck();
+  const i = (typeof shipState !== 'undefined') ? dkeDeckIndex(shipState) : 0;
+  return i + '#' + (deck ? deck.w + 'x' + deck.h : '-');
+}
+function dkeShipFit(deck){ const C = DKE_CELL; return { x:-C, y:-C, w: deck.w*C + 2*C, h: deck.h*C + 2*C }; }
+// The viewBox dkeShipStudioRowHTML stamps on #ship-deck-svg: the live override
+// when set (reset first if the deck changed), else the fit-to-deck default.
+function dkeShipViewBox(deck){
+  const sig = dkeShipViewSigNow();
+  if(sig !== dkeShipViewSig){ dkeShipView = null; dkeShipViewSig = sig; }
+  if(dkeShipView){ dkeShipClampView(deck); return `${dkeShipView.x} ${dkeShipView.y} ${dkeShipView.w} ${dkeShipView.h}`; }
+  return deckStationViewBox(deck);
+}
+function dkeShipApplyView(){
+  if(!dkeShipView) return;
+  const svg = document.getElementById('ship-deck-svg');
+  if(svg) svg.setAttribute('viewBox', `${dkeShipView.x} ${dkeShipView.y} ${dkeShipView.w} ${dkeShipView.h}`);
+}
+// Keep a margin of the deck on screen so a pan can never lose the map.
+function dkeShipClampView(deck){
+  if(!dkeShipView || !deck) return;
+  const C = DKE_CELL, v = dkeShipView, m = C*2;
+  const bx = -C, by = -C, bw = deck.w*C + 2*C, bh = deck.h*C + 2*C;
+  if(v.w >= bw) v.x = bx + bw/2 - v.w/2; else v.x = Math.min(bx + bw - m, Math.max(bx - v.w + m, v.x));
+  if(v.h >= bh) v.y = by + bh/2 - v.h/2; else v.y = Math.min(by + bh - m, Math.max(by - v.h + m, v.y));
+}
+// Zoom by factor k about a client point (k<1 zooms in). Anchors on the true svg
+// point under the cursor via the CTM (robust to the max-height letterbox). Fit is
+// the most zoomed-out state, so you can't pan off into empty space.
+function dkeShipZoomBy(cx, cy, k){
+  const deck = dkeShipDeck(); if(!deck) return;
+  if(!dkeShipView) dkeShipView = dkeShipFit(deck);
+  const svg = document.getElementById('ship-deck-svg'); const m = svg && svg.getScreenCTM(); if(!m) return;
+  const pw = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+  const C = DKE_CELL, v = dkeShipView;
+  const minW = C*3, maxW = deck.w*C + 2*C;
+  const nw = Math.max(minW, Math.min(maxW, v.w * k)), s = nw / v.w;
+  const fx = (pw.x - v.x) / v.w, fy = (pw.y - v.y) / v.h;
+  v.w = nw; v.h = v.h * s;
+  v.x = pw.x - fx * v.w; v.y = pw.y - fy * v.h;
+  dkeShipClampView(deck);
+  dkeShipApplyView();
+}
+// Translate the view by a client-space drag, mapped to svg units through the CTM.
+function dkeShipPanByClient(prevX, prevY, nowX, nowY){
+  const svg = document.getElementById('ship-deck-svg'); const m = svg && svg.getScreenCTM(); if(!m || !dkeShipView) return;
+  const inv = m.inverse();
+  const p1 = new DOMPoint(prevX, prevY).matrixTransform(inv), p2 = new DOMPoint(nowX, nowY).matrixTransform(inv);
+  dkeShipView.x -= (p2.x - p1.x); dkeShipView.y -= (p2.y - p1.y);
+  const deck = dkeShipDeck(); if(deck) dkeShipClampView(deck);
+  dkeShipApplyView();
+}
+function dkeShipPinchMetrics(){
+  const pts = [...dkeShipPtrs.values()], a = pts[0], b = pts[1] || pts[0];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+function dkeShipZoomBtn(dir){
+  const svg = document.getElementById('ship-deck-svg'); if(!svg) return;
+  const r = svg.getBoundingClientRect();
+  dkeShipZoomBy(r.left + r.width / 2, r.top + r.height / 2, dir > 0 ? 0.8 : 1.25);
+}
+function dkeShipFitReset(){ dkeShipView = null; if(typeof renderShipPanel === 'function') renderShipPanel(); }
+function dkeShipWheel(ev){
   if(!(ev.target && ev.target.closest && ev.target.closest('#ship-deck-svg'))) return;
-  const deck = dkeShipDeck(), p = dkeShipRulerPt(ev); if(!deck || !p) return;
-  dkeShipRulerG = { a: dkeShipCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
+  if(!dkeShipDeck()) return;
+  ev.preventDefault();
+  dkeShipZoomBy(ev.clientX, ev.clientY, Math.pow(1.0015, ev.deltaY));
+}
+function dkeShipDown(ev){
+  if(!(ev.target && ev.target.closest && ev.target.closest('#ship-deck-svg'))) return;
+  const deck = dkeShipDeck(); if(!deck) return;
+  dkeShipPtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if(dkeShipPtrs.size === 2){   // second finger → pinch-zoom
+    dkeShipPanG = null; dkeShipRulerG = null;
+    dkeShipPinch = dkeShipPinchMetrics();
+    const svg = document.getElementById('ship-deck-svg');
+    try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    ev.preventDefault();
+    return;
+  }
+  if(dkeShipPtrs.size > 2) return;
+  if(dkeShipRuler){
+    const p = dkeShipRulerPt(ev); if(!p) return;
+    dkeShipRulerG = { a: dkeShipCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
+    const svg = document.getElementById('ship-deck-svg');
+    try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    ev.preventDefault();
+    return;
+  }
+  // Drag the deck to pan.
+  dkeShipPanG = { px: ev.clientX, py: ev.clientY, sx: ev.clientX, sy: ev.clientY, moved:false };
   const svg = document.getElementById('ship-deck-svg');
   try { svg.setPointerCapture(ev.pointerId); } catch(e){}
   ev.preventDefault();
 }
-function dkeShipRulerMove(ev){
-  const g = dkeShipRulerG; if(!g) return;
-  if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
-  g.moved = true; ev.preventDefault();
-  const deck = dkeShipDeck(), p = dkeShipRulerPt(ev); if(!deck || !p) return;
-  g.b = dkeShipCellAt(deck, p);
-  const svg = document.getElementById('ship-deck-svg');
-  if(svg){ const old = svg.querySelector('#ship-ruler-live'); if(old) old.remove();
-    svg.insertAdjacentHTML('beforeend', `<g id="ship-ruler-live">${dkeRulerOverlaySVG(deck, g.a, g.b)}</g>`); }
-}
-function dkeShipRulerUp(ev){
-  const g = dkeShipRulerG; if(!g) return;
-  dkeShipRulerG = null;
-  const deck = dkeShipDeck(); if(!deck) return;
-  const p = dkeShipRulerPt(ev);
-  if(g.moved && p){ dkeShipRulerState = { a: g.a, b: dkeShipCellAt(deck, p) }; dkeShipRulerAnchor = null; }
-  else if(!g.moved){
-    if(!dkeShipRulerAnchor){ dkeShipRulerAnchor = g.a; dkeShipRulerState = null; }
-    else { dkeShipRulerState = { a: dkeShipRulerAnchor, b: g.a }; dkeShipRulerAnchor = null; }
+function dkeShipMove(ev){
+  if(dkeShipPtrs.has(ev.pointerId)) dkeShipPtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if(dkeShipPinch && dkeShipPtrs.size >= 2){
+    ev.preventDefault();
+    const cur = dkeShipPinchMetrics();
+    if(cur.d > 0 && dkeShipPinch.d > 0) dkeShipZoomBy(cur.mx, cur.my, dkeShipPinch.d / cur.d);
+    dkeShipPanByClient(dkeShipPinch.mx, dkeShipPinch.my, cur.mx, cur.my);
+    dkeShipPinch = cur;
+    return;
   }
-  if(typeof renderShipPanel === 'function') renderShipPanel();
+  const rg = dkeShipRulerG;
+  if(rg){
+    if(!rg.moved && Math.hypot(ev.clientX - rg.sx, ev.clientY - rg.sy) < 5) return;
+    rg.moved = true; ev.preventDefault();
+    const deck = dkeShipDeck(), p = dkeShipRulerPt(ev); if(!deck || !p) return;
+    rg.b = dkeShipCellAt(deck, p);
+    const svg = document.getElementById('ship-deck-svg');
+    if(svg){ const old = svg.querySelector('#ship-ruler-live'); if(old) old.remove();
+      svg.insertAdjacentHTML('beforeend', `<g id="ship-ruler-live">${dkeRulerOverlaySVG(deck, rg.a, rg.b)}</g>`); }
+    return;
+  }
+  const pg = dkeShipPanG;
+  if(pg){
+    if(!pg.moved && Math.hypot(ev.clientX - pg.sx, ev.clientY - pg.sy) < 5) return;
+    pg.moved = true; ev.preventDefault();
+    if(!dkeShipView){ const deck = dkeShipDeck(); if(deck) dkeShipView = dkeShipFit(deck); }
+    dkeShipPanByClient(pg.px, pg.py, ev.clientX, ev.clientY);
+    pg.px = ev.clientX; pg.py = ev.clientY;
+  }
 }
-(function dkeShipRulerInit(){
+function dkeShipUp(ev){
+  const wasPinch = !!dkeShipPinch;
+  dkeShipPtrs.delete(ev.pointerId);
+  if(dkeShipPtrs.size < 2) dkeShipPinch = null;
+  if(wasPinch){
+    if(dkeShipPtrs.size === 1){ const only = [...dkeShipPtrs.values()][0]; dkeShipPanG = { px: only.x, py: only.y, sx: only.x, sy: only.y, moved:true }; }
+    ev.preventDefault();
+    return;
+  }
+  const rg = dkeShipRulerG;
+  if(rg){
+    dkeShipRulerG = null;
+    const deck = dkeShipDeck(); if(!deck) return;
+    const p = dkeShipRulerPt(ev);
+    if(rg.moved && p){ dkeShipRulerState = { a: rg.a, b: dkeShipCellAt(deck, p) }; dkeShipRulerAnchor = null; }
+    else if(!rg.moved){
+      if(!dkeShipRulerAnchor){ dkeShipRulerAnchor = rg.a; dkeShipRulerState = null; }
+      else { dkeShipRulerState = { a: dkeShipRulerAnchor, b: rg.a }; dkeShipRulerAnchor = null; }
+    }
+    if(typeof renderShipPanel === 'function') renderShipPanel();
+    return;
+  }
+  dkeShipPanG = null;
+}
+(function dkeShipDeckInit(){
   const body = document.getElementById('ship-body');
   if(!body) return;
-  body.addEventListener('pointerdown', dkeShipRulerDown);
-  body.addEventListener('pointermove', dkeShipRulerMove);
-  body.addEventListener('pointerup', dkeShipRulerUp);
-  body.addEventListener('pointercancel', dkeShipRulerUp);
+  body.addEventListener('pointerdown', dkeShipDown);
+  body.addEventListener('pointermove', dkeShipMove);
+  body.addEventListener('pointerup', dkeShipUp);
+  body.addEventListener('pointercancel', dkeShipUp);
+  body.addEventListener('wheel', dkeShipWheel, { passive:false });   // scroll-to-zoom the ship deck
 })();
 
 // ── Deck switcher (editor: add / rename / delete / switch the active deck) ────
@@ -2996,8 +3132,15 @@ function dkeRulerBtnSync(){
   const has = !!dkeMapDeck();
   if(!has && dkeMapRuler){
     dkeMapRuler = false; dkeMapRulerState = null; dkeMapRulerAnchor = null; dkeMapRulerG = null;
-    const svg = document.getElementById('mapsvg'); if(svg) svg.style.touchAction = '';
   }
+  // Deck pan/zoom is live whenever a deck plan is on screen (referee + players):
+  // show the zoom controls, take over touch so a drag pans (not page-scrolls), and
+  // drop any stored view once the plan goes away so the next deck opens fitted.
+  const zoomEl = document.getElementById('deck-zoom');
+  if(zoomEl) zoomEl.style.display = has ? 'flex' : 'none';
+  const msvg = document.getElementById('mapsvg');
+  if(msvg) msvg.style.touchAction = has ? 'none' : '';
+  if(!has && dkeMapView){ dkeMapView = null; dkeMapViewSig = ''; }
   btn.style.display = has ? 'flex' : 'none';
   btn.classList.toggle('on', dkeMapRuler);
   // Range-rings + ping buttons — referee only.
@@ -3055,9 +3198,126 @@ function dkeMapPt(ev){
   const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
   return { x: p.x, y: p.y };
 }
+// ═══ DECK VIEW PAN / ZOOM (read-only station map) ════════════════════════════
+// The station map (#mapsvg) fits the whole deck by default; these let anyone —
+// referee OR player — pan and zoom into it. State is a viewBox override in
+// dkeMapView ({x,y,w,h}); null = fit-to-deck (deckStationViewBox, so a deck
+// nobody has touched renders exactly as before). The override is aspect-matched
+// to the panel so the client↔svg mapping stays linear (the editor's dkeApplyView
+// trick), and it resets whenever the shown deck changes — station switch, deck
+// switch, resize — keyed off a signature so a background poll re-render can't
+// wipe a live zoom. Panning rides the same #mapsvg pointer handlers as the token
+// drag / ruler, so it survives the innerHTML re-renders; a drag that doesn't move
+// stays a tap, so tap-to-open-room and tap-a-token are unchanged.
+let dkeMapView = null, dkeMapViewSig = '';
+let dkeMapPanG = null;          // single-pointer background pan gesture
+let dkeMapPtrs = new Map();     // live pointers over the map (for pinch)
+let dkeMapPinch = null;         // last pinch metrics {d,mx,my}
+function dkeMapRect(){ const s = document.getElementById('mapsvg'); return s ? s.getBoundingClientRect() : { left:0, top:0, width:0, height:0 }; }
+function dkeMapViewSigNow(){
+  const s = (typeof stationAdditions !== 'undefined') ? stationAdditions[currentStationId] : null;
+  const deck = dkeMapDeck();
+  return (typeof currentStationId !== 'undefined' ? currentStationId : '') + '#'
+    + dkeDeckIndex(s) + '#' + (deck ? deck.w + 'x' + deck.h : '-');
+}
+// Aspect-matched fit of the whole deck within the panel (same bounds as
+// deckStationViewBox, so the first zoom keeps the framing the user was looking at).
+function dkeMapFit(deck){
+  const C = DKE_CELL, pad = C, R = dkeMapRect();
+  const cw = deck.w*C + 2*pad, ch = deck.h*C + 2*pad;
+  const aspect = (R.width > 0 && R.height > 0) ? R.width / R.height : (cw / ch);
+  let vw = cw, vh = vw / aspect;
+  if(vh < ch){ vh = ch; vw = vh * aspect; }
+  return { x: deck.w*C/2 - vw/2, y: deck.h*C/2 - vh/2, w: vw, h: vh };
+}
+// Keep a margin of the deck on screen so a pan can never lose the map entirely.
+function dkeMapClampView(deck){
+  if(!dkeMapView || !deck) return;
+  const C = DKE_CELL, v = dkeMapView, m = C*4;
+  const bx = -C, by = -C, bw = deck.w*C + 2*C, bh = deck.h*C + 2*C;
+  if(v.w >= bw) v.x = bx + bw/2 - v.w/2;
+  else v.x = Math.min(bx + bw - m, Math.max(bx - v.w + m, v.x));
+  if(v.h >= bh) v.y = by + bh/2 - v.h/2;
+  else v.y = Math.min(by + bh - m, Math.max(by - v.h + m, v.y));
+}
+// Push dkeMapView to the live viewBox without a full re-render (used mid-gesture).
+function dkeMapApplyView(){
+  if(!dkeMapView) return;
+  const R = dkeMapRect();
+  if(R.width > 0 && R.height > 0) dkeMapView.h = dkeMapView.w * (R.height / R.width);
+  const svg = document.getElementById('mapsvg');
+  if(svg) svg.setAttribute('viewBox', `${dkeMapView.x} ${dkeMapView.y} ${dkeMapView.w} ${dkeMapView.h}`);
+}
+// The viewBox renderStationMap uses for a deck: the live override when set (after
+// resetting it if the shown deck changed), else the fit-to-deck default.
+function dkeMapViewBox(deck){
+  const sig = dkeMapViewSigNow();
+  if(sig !== dkeMapViewSig){ dkeMapView = null; dkeMapViewSig = sig; }
+  if(dkeMapView){
+    const R = dkeMapRect();
+    if(R.width > 0 && R.height > 0) dkeMapView.h = dkeMapView.w * (R.height / R.width);
+    dkeMapClampView(deck);
+    return `${dkeMapView.x} ${dkeMapView.y} ${dkeMapView.w} ${dkeMapView.h}`;
+  }
+  return deckStationViewBox(deck);
+}
+// Client → svg-user coords under the aspect-matched override (linear; valid only
+// while dkeMapView is set, which the callers guarantee).
+function dkeMapToSvgLin(cx, cy){
+  const R = dkeMapRect();
+  if(!dkeMapView || !R.width || !R.height) return { x:0, y:0 };
+  return { x: dkeMapView.x + (cx - R.left) / R.width * dkeMapView.w,
+           y: dkeMapView.y + (cy - R.top) / R.height * dkeMapView.h };
+}
+// Zoom by factor k about a client point (k<1 zooms in); seeds the override from
+// the current fit on first use so the first wheel/pinch keeps its anchor point.
+function dkeMapZoomBy(cx, cy, k){
+  const deck = dkeMapDeck(); if(!deck) return;
+  if(!dkeMapView) dkeMapView = dkeMapFit(deck);
+  const C = DKE_CELL, R = dkeMapRect();
+  if(!R.width || !R.height) return;
+  const p = dkeMapToSvgLin(cx, cy);
+  const minW = C*3, maxW = (deck.w*C + 2*C) * 2.5;
+  const nw = Math.max(minW, Math.min(maxW, dkeMapView.w * k));
+  const realK = nw / dkeMapView.w;
+  dkeMapView.w = nw; dkeMapView.h = dkeMapView.h * realK;
+  dkeMapView.x = p.x - (cx - R.left) / R.width * dkeMapView.w;
+  dkeMapView.y = p.y - (cy - R.top) / R.height * dkeMapView.h;
+  dkeMapClampView(deck);
+  dkeMapApplyView();
+}
+function dkeMapPinchMetrics(){
+  const pts = [...dkeMapPtrs.values()], a = pts[0], b = pts[1] || pts[0];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+function dkeMapWheel(ev){
+  if(dkeIsOpen || !dkeMapDeck()) return;
+  ev.preventDefault();
+  dkeMapZoomBy(ev.clientX, ev.clientY, Math.pow(1.0015, ev.deltaY));
+}
+// Toolbar buttons — zoom about the map centre; also the no-wheel / touch path.
+function dkeMapZoomBtn(dir){
+  const R = dkeMapRect();
+  dkeMapZoomBy(R.left + R.width / 2, R.top + R.height / 2, dir > 0 ? 0.8 : 1.25);
+}
+function dkeMapFitReset(){
+  dkeMapView = null;
+  if(typeof renderStationMap === 'function') renderStationMap();
+}
 function dkeMapDown(ev){
   if(dkeIsOpen) return;
   const deck = dkeMapDeck(); if(!deck) return;
+  dkeMapPtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  // Second finger → pinch-zoom; drop any in-flight single gesture uncommitted.
+  if(dkeMapPtrs.size === 2){
+    dkeMapPanG = null; dkeMapDrag = null; dkeMapRulerG = null;
+    dkeMapPinch = dkeMapPinchMetrics();
+    const svg = document.getElementById('mapsvg');
+    try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    ev.preventDefault();
+    return;
+  }
+  if(dkeMapPtrs.size > 2) return;
   if(dkeMapRuler){
     const p = dkeMapPt(ev); if(!p) return;
     dkeMapRulerG = { a: dkeMapCellAt(deck, p), sx: ev.clientX, sy: ev.clientY, moved:false };
@@ -3083,17 +3343,42 @@ function dkeMapDown(ev){
     ev.preventDefault();
     return;
   }
-  if(typeof isReferee !== 'function' || !isReferee()) return;
+  // Referee token drag — only when the press lands on a token.
   const tg = (ev.target && ev.target.closest) ? ev.target.closest('g[data-tk]') : null;
-  if(!tg) return;
-  const i = parseInt(tg.getAttribute('data-tk'), 10);
-  if(!(deck.tokens||[])[i]) return;
-  const p0 = dkeMapPt(ev); if(!p0) return;
-  dkeMapDrag = { i, sx: ev.clientX, sy: ev.clientY, p0, last: null, moved: false };
+  if(tg && typeof isReferee === 'function' && isReferee()){
+    const i = parseInt(tg.getAttribute('data-tk'), 10);
+    if((deck.tokens||[])[i]){
+      const p0 = dkeMapPt(ev);
+      if(p0){
+        dkeMapDrag = { i, sx: ev.clientX, sy: ev.clientY, p0, last: null, moved: false };
+        const svg = document.getElementById('mapsvg');
+        try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+        return;
+      }
+    }
+  }
+  // Otherwise a background press → pan (referee AND players). No move ⇒ it stays a
+  // tap, so the room-open / token click still fires on release.
+  dkeMapPanG = { sx: ev.clientX, sy: ev.clientY, cx: ev.clientX, cy: ev.clientY, moved: false };
   const svg = document.getElementById('mapsvg');
   try { svg.setPointerCapture(ev.pointerId); } catch(e){}
 }
 function dkeMapMove(ev){
+  if(dkeMapPtrs.has(ev.pointerId)) dkeMapPtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  // Pinch-zoom: scale about the finger midpoint and pan by its drift.
+  if(dkeMapPinch && dkeMapPtrs.size >= 2){
+    ev.preventDefault();
+    const cur = dkeMapPinchMetrics(), R = dkeMapRect();
+    if(cur.d > 0 && dkeMapPinch.d > 0) dkeMapZoomBy(cur.mx, cur.my, dkeMapPinch.d / cur.d);
+    if(dkeMapView && R.width && R.height){
+      dkeMapView.x -= (cur.mx - dkeMapPinch.mx) / R.width * dkeMapView.w;
+      dkeMapView.y -= (cur.my - dkeMapPinch.my) / R.height * dkeMapView.h;
+      const deck = dkeMapDeck(); if(deck) dkeMapClampView(deck);
+      dkeMapApplyView();
+    }
+    dkeMapPinch = cur;
+    return;
+  }
   if(dkeMapRuler){
     const rg = dkeMapRulerG; if(!rg) return;
     if(!rg.moved && Math.hypot(ev.clientX - rg.sx, ev.clientY - rg.sy) < 5) return;
@@ -3103,15 +3388,34 @@ function dkeMapMove(ev){
     dkeMapRulerLive(deck, rg.a, rg.b);
     return;
   }
-  const g = dkeMapDrag; if(!g) return;
-  if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
-  g.moved = true;
-  ev.preventDefault();
-  const p = dkeMapPt(ev); if(!p) return;
-  g.last = p;
-  const svg = document.getElementById('mapsvg');
-  const el = svg && svg.querySelector('g[data-tk="' + g.i + '"]');
-  if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
+  const g = dkeMapDrag;
+  if(g){
+    if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 5) return;
+    g.moved = true;
+    ev.preventDefault();
+    const p = dkeMapPt(ev); if(!p) return;
+    g.last = p;
+    const svg = document.getElementById('mapsvg');
+    const el = svg && svg.querySelector('g[data-tk="' + g.i + '"]');
+    if(el) el.setAttribute('transform', `translate(${p.x - g.p0.x},${p.y - g.p0.y})`);
+    return;
+  }
+  // Background pan — drag empty space (or anywhere no tool/token claims) to move.
+  const pg = dkeMapPanG;
+  if(pg){
+    if(!pg.moved && Math.hypot(ev.clientX - pg.sx, ev.clientY - pg.sy) < 5) return;
+    pg.moved = true; ev.preventDefault();
+    const deck = dkeMapDeck(); if(!deck) return;
+    if(!dkeMapView) dkeMapView = dkeMapFit(deck);
+    const R = dkeMapRect();
+    if(R.width && R.height){
+      dkeMapView.x -= (ev.clientX - pg.cx) / R.width * dkeMapView.w;
+      dkeMapView.y -= (ev.clientY - pg.cy) / R.height * dkeMapView.h;
+    }
+    pg.cx = ev.clientX; pg.cy = ev.clientY;
+    dkeMapClampView(deck);
+    dkeMapApplyView();
+  }
 }
 // Plain tap on a token (referee) opens that character's sheet (PC) or NPC roster
 // entry — the token already carries the name the rest of the app keys off.
@@ -3147,6 +3451,19 @@ function dkeSeedCombatFromMap(){
   if(typeof showToast === 'function') showToast(added ? `Added ${added} combatant${added > 1 ? 's' : ''} from the map` : 'All map tokens are already in initiative');
 }
 function dkeMapUp(ev){
+  const wasPinch = !!dkeMapPinch;
+  dkeMapPtrs.delete(ev.pointerId);
+  if(dkeMapPtrs.size < 2) dkeMapPinch = null;
+  if(wasPinch){
+    // One finger left after a pinch → keep panning from where it rests.
+    if(dkeMapPtrs.size === 1){
+      const only = [...dkeMapPtrs.values()][0];
+      dkeMapPanG = { sx: only.x, sy: only.y, cx: only.x, cy: only.y, moved: true };
+    }
+    dkeMapClickGuardUntil = Date.now() + 400;   // a pinch must not open a room
+    ev.preventDefault();
+    return;
+  }
   if(dkeMapRuler){
     const rg = dkeMapRulerG; if(!rg) return;
     dkeMapRulerG = null;
@@ -3161,20 +3478,30 @@ function dkeMapUp(ev){
     if(typeof renderStationMap === 'function') renderStationMap();
     return;
   }
-  const g = dkeMapDrag; if(!g) return;
-  dkeMapDrag = null;
-  if(!g.moved){ dkeMapOpenToken(g.i); return; }   // plain tap on a token → open its sheet / NPC block
-  const deck = dkeMapDeck();
-  const p = dkeMapPt(ev) || g.last;
-  if(deck && p && deck.tokens[g.i]){
-    deck.tokens[g.i].x = Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL)));
-    deck.tokens[g.i].y = Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL)));
-    dkeFogAutoReveal(deck, deck.tokens[g.i]);   // PC dropped into a fogged room → lift its fog
-    if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  const g = dkeMapDrag;
+  if(g){
+    dkeMapDrag = null;
+    if(!g.moved){ dkeMapOpenToken(g.i); return; }   // plain tap on a token → open its sheet / NPC block
+    const deck = dkeMapDeck();
+    const p = dkeMapPt(ev) || g.last;
+    if(deck && p && deck.tokens[g.i]){
+      deck.tokens[g.i].x = Math.max(0, Math.min(deck.w - 1, Math.floor(p.x / DKE_CELL)));
+      deck.tokens[g.i].y = Math.max(0, Math.min(deck.h - 1, Math.floor(p.y / DKE_CELL)));
+      dkeFogAutoReveal(deck, deck.tokens[g.i]);   // PC dropped into a fogged room → lift its fog
+      if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+    }
+    dkeMapClickGuardUntil = Date.now() + 400;  // the drop's click must not open an area
+    if(typeof renderStationMap === 'function'){ renderStationMap(); }
+    if(typeof updateNodes === 'function') updateNodes();
+    return;
   }
-  dkeMapClickGuardUntil = Date.now() + 400;  // the drop's click must not open an area
-  if(typeof renderStationMap === 'function'){ renderStationMap(); }
-  if(typeof updateNodes === 'function') updateNodes();
+  // Background pan release — swallow the trailing click only if it actually moved,
+  // so a pan drag doesn't open a room but a plain tap still does.
+  const pg = dkeMapPanG;
+  if(pg){
+    dkeMapPanG = null;
+    if(pg.moved) dkeMapClickGuardUntil = Date.now() + 400;
+  }
 }
 function dkeMapClickGuard(ev){
   if(Date.now() < dkeMapClickGuardUntil){
@@ -3189,6 +3516,7 @@ function dkeMapClickGuard(ev){
   svg.addEventListener('pointermove', dkeMapMove);
   svg.addEventListener('pointerup', dkeMapUp);
   svg.addEventListener('pointercancel', dkeMapUp);
+  svg.addEventListener('wheel', dkeMapWheel, { passive:false });   // scroll-to-zoom the deck view
   svg.addEventListener('click', dkeMapClickGuard, true);
 })();
 
