@@ -663,6 +663,9 @@ textarea{font-family:var(--font)}
   background:var(--bg1);color:var(--tx0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer}
 .deck-zoom-btn:hover{border-color:var(--tx1)}
 .deck-zoom-btn:active{background:var(--bg2)}
+/* Ship Status deck-plan toolbar (range ruler + pan/zoom controls). */
+.ship-deck-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.ship-deck-tools .cbt-btn.on{background:#D4A843;color:#0f1117;border-color:#D4A843}
 /* Editor deck strip (add / rename / delete / switch the active deck). */
 .dke-decks{display:flex;flex-wrap:wrap;gap:4px;padding:5px 8px;background:var(--bg1);border-bottom:.5px solid var(--bd2);flex-shrink:0}
 .dke-deck{padding:4px 9px;font-size:11px;font-weight:600;font-family:inherit;line-height:1;
