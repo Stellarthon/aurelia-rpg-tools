@@ -54,7 +54,7 @@ function renderStationMap(){
     // map once it has content; otherwise fall back to the original hand-drawn map.
     const deck = deckOf(stationAdditions['aurelia']);
     if(deck && typeof deckHasContent === 'function' && deckHasContent(deck)){
-      svg.setAttribute('viewBox', deckStationViewBox(deck));
+      svg.setAttribute('viewBox', dkeMapViewBox(deck));
       svg.innerHTML = deckStationSVG(deck, stationDef());
       return;
     }
@@ -65,7 +65,7 @@ function renderStationMap(){
   // ring layout; the plan needs its own viewBox, so restore 400×500 otherwise.
   const deck = deckOf(stationAdditions[currentStationId]);
   if(deck && typeof deckHasContent === 'function' && deckHasContent(deck)){
-    svg.setAttribute('viewBox', deckStationViewBox(deck));
+    svg.setAttribute('viewBox', dkeMapViewBox(deck));
     svg.innerHTML = deckStationSVG(deck, stationDef());
     return;
   }
