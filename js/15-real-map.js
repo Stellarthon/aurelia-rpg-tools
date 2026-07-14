@@ -105,7 +105,7 @@ const RealMap = (function(){
   let layoutDirty=true, facDirty=true;
   let dcSig=null, dcUndoDone=false, dcRev=0;   // per-world datacard state
   const POS=new Map();                         // node id → {x,y} (derived; never written to nodes)
-  let _facDefs='', _facBlobs='', _facLabels='';
+  let _facBlobs='', _facLabels='', _facDefsNode=null;
   let _lastCam='';
 
   // ── Derived layout: hex placement (deterministic, shared with the hex map)
@@ -135,23 +135,47 @@ const RealMap = (function(){
   //    Visibility mirrors the hex map's rules: independent / uncharted /
   //    unknown / hidden factions get NO tint and NO label. Referee-painted
   //    hexes (hexPaint) render as soft washes at their derived positions. ──
+  // Faction territory tints paint through radial-gradient paint servers. Those
+  // gradients live in a PERSISTENT <defs> built via DOM (a sibling of the scene,
+  // exactly like the texture patterns) — NOT re-injected with the per-frame
+  // scene innerHTML. A gradient torn down and recreated inside the same
+  // innerHTML swap that also creates the circles referencing it fails to resolve
+  // in WebKit/Safari and falls back to solid black (the "black circles" the tint
+  // blobs became on iOS/iPad); a paint server that already exists when its
+  // circle paints resolves everywhere. Rebuilt only when factions change.
+  function ensureFacDefsNode(){
+    if(_facDefsNode || !svg) return _facDefsNode;
+    _facDefsNode=document.createElementNS(SVG_NS,'defs');
+    _facDefsNode.setAttribute('id','real-fac-defs');
+    svg.insertBefore(_facDefsNode, svg.firstChild);
+    return _facDefsNode;
+  }
+  function makeFacGradient(gid, col){
+    const g=document.createElementNS(SVG_NS,'radialGradient');
+    g.setAttribute('id',gid); g.setAttribute('cx','50%'); g.setAttribute('cy','50%'); g.setAttribute('r','50%');
+    [['0%','0.42'],['65%','0.13'],['100%','0']].forEach(([off,op])=>{
+      const s=document.createElementNS(SVG_NS,'stop');
+      s.setAttribute('offset',off); s.setAttribute('stop-color',col||'#9fb0c8'); s.setAttribute('stop-opacity',op);
+      g.appendChild(s);
+    });
+    return g;
+  }
   function ensureFactionOverlay(){
     if(!facDirty) return;
     ensureLayout();
     const FAC=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
     const groups={};
     nodes().forEach(n=>{ (groups[n.faction]=groups[n.faction]||[]).push(n); });
-    let defs='', blobs='', labels='', gi=0;
+    const dn=ensureFacDefsNode();
+    if(dn){ while(dn.firstChild) dn.removeChild(dn.firstChild); }   // rebuild persistent gradients from scratch
+    let blobs='', labels='', gi=0;
     Object.keys(groups).forEach(fk=>{
       if(fk==='independent' || fk==='uncharted' || !FAC[fk] || facHiddenOf(fk)) return;
       const fac=effFacOf(fk), col=fac.color;
       const mem=groups[fk].map(posOf).filter(Boolean);
       if(!mem.length) return;
       const gid='real-fg-'+(gi++);
-      defs+=`<radialGradient id="${gid}" cx="50%" cy="50%" r="50%">`+
-            `<stop offset="0%" stop-color="${col}" stop-opacity="0.42"/>`+
-            `<stop offset="65%" stop-color="${col}" stop-opacity="0.13"/>`+
-            `<stop offset="100%" stop-color="${col}" stop-opacity="0"/></radialGradient>`;
+      if(dn) dn.appendChild(makeFacGradient(gid, col));
       mem.forEach(p=>{ blobs+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${R_TERR}" fill="url(#${gid})"/>`; });
       if(mem.length<2) return;
       let cx=0,cy=0; mem.forEach(p=>{cx+=p.x;cy+=p.y;}); cx/=mem.length; cy/=mem.length;
@@ -172,7 +196,7 @@ const RealMap = (function(){
       const p=axialPx(q,r);
       blobs+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${RPX}" fill="${at(col)}" fill-opacity="0.28"/>`;
     });
-    _facDefs=defs; _facBlobs=blobs; _facLabels=labels;
+    _facBlobs=blobs; _facLabels=labels;
     facDirty=false;
   }
 
@@ -542,7 +566,8 @@ const RealMap = (function(){
 
     let out='';
     if(regionsOn && _facBlobs){
-      out+=`<defs>${_facDefs}</defs>`;
+      // Gradients (real-fg-*) live in the persistent #real-fac-defs node, so the
+      // per-frame scene only carries the circles that reference them.
       out+=`<g opacity="${(0.10+0.75*overviewK).toFixed(3)}" pointer-events="none">${_facBlobs}</g>`;
       if(overviewK>0.01) out+=`<g opacity="${overviewK.toFixed(3)}" pointer-events="none">${_facLabels}</g>`;
     }
