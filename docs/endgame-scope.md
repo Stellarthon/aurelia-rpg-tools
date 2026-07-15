@@ -75,23 +75,42 @@ key above; token tampering yields 401/filtered; advisors clean.
 The stated long-term goal (Q5). An open repo *publishes the honour-system bypass*, so
 this is why §1 is urgent, not merely nice. Three sub-items:
 
-### 2a. Decide the content model — the one question only the owner can answer
-The Campaign-Pack engine already makes an **empty starter pack** clean. Choose:
-- **(A) Ship an empty starter pack** — the public repo carries *no* Archon Gambit
-  setting content; the reference campaign lives only server-side / in a private
-  `config.js`. Cleanest for OSS; requires re-applying the bundle strip
-  (`strip-secrets.mjs`) so `--check` exits 0.
-- **(B) Ship the reference campaign as a public sample** — accept that the setting
-  content is open. Simpler, but the Archon Gambit secrets stop being secret.
+### 2a. Content model — DECIDED: separate public repo, generic sample
+Resolved 2026-07-15. Rather than strip this repo in place, the agnostic build ships
+to a **separate public repo, [`Stellarthon/SciFiVTT`](https://github.com/Stellarthon/SciFiVTT)**,
+carrying a **generic sample sector** (no Archon Gambit lore or data) and keeping the
+Mongoose Traveller mechanics (campaign/setting scrub only). This private repo keeps
+the reference campaign untouched.
 
-> **This is the fork in the road.** Everything else in §2 depends on it. Recommend **(A)**:
-> it preserves the campaign *and* is the only option consistent with §1's goal.
+The Campaign-Pack engine already makes this clean — Archon Gambit is just the default
+pack; the engine renders through generic pack accessors.
 
-### 2b. Strip + verify (only if 2a = A)
-- Run `strip-secrets.mjs` (no `--check`) to produce the empty public shell; confirm
-  `--check` then exits 0 in CI.
-- Add the strip check to `.github/workflows/ci.yml` so a re-baked bundle can never
-  regress into the public shell silently.
+### 2b. `tools/build-agnostic.mjs` — SHIPPED
+A reproducible build tool generates the SciFiVTT distribution from this codebase, so
+the public repo stays in sync as features land here. It:
+- copies the deployable engine + generic assets (omits `config.js`, `docs/`,
+  `supabase/`, `tools/`, `.github/`, the reference-campaign PDF);
+- injects a **generic sample sector** — a deterministic ~29-system galaxy with a
+  generic faction set, one sample station, home-system bodies/locations, and pregen
+  crew — replacing the Archon Gambit data literals;
+- applies transforms: `aurelia_`→`vtt_` storage prefix, and neutralised
+  branding / terminology / factions / morality-tracker / crew identities;
+- writes an agnostic README, MIT LICENSE, `config.example.js`, `.gitignore`;
+- runs a **lore leak-guard** (`--check`) that fails if any Archon Gambit token
+  survives, plus `node --check` on every emitted module.
+
+Verified: leak-guard clean, all modules parse, and a headless boot test confirms the
+generic content wires into the app (galaxy/station/crew/factions/pack) with no console
+errors, and the unconfigured→setup-wizard redirect works.
+
+**Anchor-id note (v1 limitation):** three structural ids the engine pins at boot
+(`auros`, `aurelia`, `aurelia-station`) are kept as opaque internal keys — never
+shown to a user, never in data prose. Renaming them to generic slugs is a clean
+follow-up.
+
+**Delivery:** SciFiVTT is not in this session's GitHub scope, so the build output is
+handed off as an artifact for the owner to push (or grant repo access in a later
+session). Re-run `node tools/build-agnostic.mjs` any time to regenerate.
 
 ### 2c. Publishing hygiene (independent of 2a)
 - **Baked anon key + access/design codes** (`config.js`): documented safe-to-publish
@@ -152,7 +171,7 @@ built**, restating the roadmap's anti-feature list:
 |---|---|---|---|---|
 | 1 | §1 Stage 4.5 read cutover | code + migration | 2–3 d | **Yes** |
 | 2 | §2a content-model decision | decision | minutes | **Yes** (unblocks everything) |
-| 3 | §2b strip + CI guard (if 2a=A) | code | 0.5 d | **Yes** for public repo |
+| 3 | §2b agnostic build → SciFiVTT | ✅ tool shipped; owner pushes | — | **Yes** for public repo |
 | 4 | §2c license + hygiene | docs/config | 0.5 d | **Yes** for public repo |
 | 5 | §3 gear catalogue / tunables | content | referee's time | No |
 | 6 | §4 ship-sheet print + on-device checks | polish | hours | No |
