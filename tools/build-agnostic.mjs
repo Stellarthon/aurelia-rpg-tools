@@ -313,6 +313,12 @@ const TRANSFORMS = [
   [/Archon Gambit/g, CAMPAIGN_TITLE],
   [/'archon-gambit'/g, `'${CAMPAIGN_ID}'`],
   [/"archon-gambit"/g, `"${CAMPAIGN_ID}"`],
+  // App title / PWA manifest strings (specific phrases, before the generic
+  // "Orion Arm"/"Aurelian" word rules below shred them).
+  [/Aurelian System — Referee Map/g, `${APP_NAME} — Referee Map`],
+  [/Orion Arm — Referee Map/g, `${APP_NAME} — Referee Map`],
+  [/"short_name": "Orion Arm"/g, `"short_name": "${APP_NAME}"`],
+  [/running Traveller campaigns in the Orion Arm/g, 'running sci-fi RPG campaigns'],
 
   // ── Multi-word AG lore phrases.
   [/Archon Collective — Morality/g, 'Morality'],
