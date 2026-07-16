@@ -1047,6 +1047,13 @@ function rulesTableRegistry(){
   add('ship-crit-systems','Ship critical-hit systems','Ship','pairs',   typeof SHIP_CRIT_SYSTEMS !== 'undefined' ? SHIP_CRIT_SYSTEMS : null);
   add('rep-bands',      'Reputation ladder',      'Social',  'json',    typeof REP_BANDS !== 'undefined' ? REP_BANDS : null);
   add('good-flavour',   'Trade-good dockside names','Economy','kv',     typeof GOOD_FLAVOR !== 'undefined' ? GOOD_FLAVOR : null);
+  if(typeof ECON !== 'undefined' && ECON){   // structured GalNet / economy flavour (edited in place through ECON's live refs)
+    add('gov-reasons',  'Cabinet-change reasons', 'Government', 'kv',   ECON.GOV_REASONS);
+    add('gov-posts',    'Ministerial posts',      'Government', 'json', ECON.GOV_POSTS);
+    add('fac-gov',      'Head-of-state titles',   'Government', 'json', ECON.FAC_GOV);
+    add('corp-houses',  'Rival corp houses',      'Economy',   'json', ECON.CORP_ARCHETYPES);
+    add('megacorp',     'Megacorp',               'Economy',   'json', ECON.MEGACORP);
+  }
   return reg;
 }
 function _rulesApplyInPlace(target, value){
