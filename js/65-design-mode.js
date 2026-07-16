@@ -469,6 +469,7 @@ function countAllDesignEdits(){
   n += _dCount(_dg(()=>tradeGoodOverrides)) + (Array.isArray(tga) ? tga.length : 0) + _dCount(_dg(()=>tradeGoodDeletions));
   n += _dCount(_dg(()=>generatorOverrides));
   n += _dCount(_dg(()=>rulesOverrides));
+  n += _dCount(_dg(()=>contractOverrides));
   return n;
 }
 
@@ -688,6 +689,8 @@ async function revertAllContentEdits(){
     if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
   if(typeof generatorOverrides !== 'undefined'){ generatorOverrides = {};
     if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  if(typeof contractOverrides !== 'undefined'){ contractOverrides = {};
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides(); }
   if(typeof rulesOverrides !== 'undefined'){ rulesOverrides = {};
     if(typeof applyRulesOverrides === 'function') applyRulesOverrides();   // restore the shipped tables in place
     if(typeof saveRulesOverrides === 'function') await saveRulesOverrides(); }
@@ -734,6 +737,7 @@ function collectDesignLayer(){
   if(typeof hexPaint !== 'undefined') put('hex-paint', hexPaint);
   if(typeof tradeGoodOverrides !== 'undefined'){ put('trade-good-overrides', tradeGoodOverrides); put('trade-good-additions', tradeGoodAdditions); put('trade-good-deletions', tradeGoodDeletions); }
   if(typeof generatorOverrides !== 'undefined') put('generator-overrides', generatorOverrides);
+  if(typeof contractOverrides !== 'undefined') put('contract-overrides', contractOverrides);
   if(typeof rulesOverrides !== 'undefined') put('rules-overrides', rulesOverrides);
   if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
   return d;

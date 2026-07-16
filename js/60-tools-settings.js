@@ -980,6 +980,10 @@ function renderDesignMenu(){
       <span class="settings-row-label">📐 Rules &amp; Tables</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openContractTemplates()">
+      <span class="settings-row-label">📜 Contract Templates</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
       <span class="settings-row-label">🌠 Splash Screens</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>

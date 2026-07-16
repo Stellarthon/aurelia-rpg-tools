@@ -1259,6 +1259,46 @@ const FACTION_CONTRACT = {
     'The {faction} has opened a {reward} development charter at {place} — surveyors, haulers and fixers all wanted for the build-up.',
     'A {faction} ministry is hiring for works at {place}: {reward} on the table for crews willing to sign a charter.' ]}
 };
+// ── Editable contract templates (Design Mode) ────────────────────────────────
+// CORP_CONTRACT / FACTION_CONTRACT are the shipped job-brief templates (title,
+// player briefs, referee note — with {corp}/{place}/{good}… placeholders). This
+// overlay lets the referee rewrite any one of them; contractTemplate() returns
+// the override merged over the shipped base, so draftCorpContract() picks it up
+// with no other rewiring. Referee tool (players never read these — contracts are
+// drafted only from isReferee()-gated paths), synced so it follows devices. New
+// contract *kinds* aren't addable: only the economy-flagged kinds ever fire.
+let contractOverrides = {};   // {'<scope>.<kind>': {title, refNote, briefs:[…]}}
+async function loadContractOverrides(){
+  try { const r = await supaStorage.get('contract-overrides', true); contractOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ contractOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('contract-overrides', contractOverrides);
+}
+async function saveContractOverrides(){ try { contractOverrides = await mergedSaveStore('contract-overrides', contractOverrides); } catch(e){ console.error('Contract overrides save failed', e); } }
+// Effective template for a scope ('corp'|'faction') + kind — override merged over
+// the shipped base (per-field, so a partial override still inherits the rest).
+// Returns null when neither a base nor an override exists (preserves the draft
+// fall-back chain).
+function contractTemplate(scope, kind){
+  const baseMap = scope === 'faction'
+    ? (typeof FACTION_CONTRACT !== 'undefined' ? FACTION_CONTRACT : {})
+    : (typeof CORP_CONTRACT !== 'undefined' ? CORP_CONTRACT : {});
+  const base = baseMap[kind] || null;
+  const ov = contractOverrides[scope + '.' + kind];
+  if(!ov) return base;
+  if(!base) return (ov.title || (Array.isArray(ov.briefs) && ov.briefs.length)) ? ov : null;
+  return {
+    title:   ov.title != null ? ov.title : base.title,
+    refNote: ov.refNote != null ? ov.refNote : base.refNote,
+    briefs:  (Array.isArray(ov.briefs) && ov.briefs.length) ? ov.briefs : base.briefs,
+  };
+}
+// Registry of the editable contract templates (for the Design-Mode editor).
+function contractTemplateRegistry(){
+  const reg = [];
+  const add = (scope, map, group) => { if(map) Object.keys(map).forEach(kind => reg.push({ key: scope + '.' + kind, scope, kind, group, base: map[kind] })); };
+  add('corp',    typeof CORP_CONTRACT    !== 'undefined' ? CORP_CONTRACT    : null, 'Corp jobs');
+  add('faction', typeof FACTION_CONTRACT !== 'undefined' ? FACTION_CONTRACT : null, 'Faction jobs');
+  return reg;
+}
 // Fill a CORP_CONTRACT / FACTION_CONTRACT template from a rich contract item (ECON.contractItem /
 // ECON.factionContractItem / an intel 'contract' item).
 function fillContract(s, item){
@@ -1276,7 +1316,10 @@ function fillContract(s, item){
 }
 // Roll a concrete contract from a flagged opportunity → {type,corp,target,reward,title,brief,refNote}.
 function draftCorpContract(item){
-  const t = (item.issuer==='faction' && FACTION_CONTRACT[item.contract]) || (CORP_CONTRACT[item.contract]) || FACTION_CONTRACT[item.contract] || CORP_CONTRACT.escort;
+  const t = ((item.issuer==='faction') && contractTemplate('faction', item.contract))
+    || contractTemplate('corp', item.contract)
+    || contractTemplate('faction', item.contract)
+    || contractTemplate('corp', 'escort');
   return { type:item.contract, corp:item.label, target:item.targetName||null, reward:item.reward, color:item.color||null,
     title: fillContract(t.title, item), brief: fillContract(pick(t.briefs), item), refNote: fillContract(t.refNote, item) };
 }
@@ -2907,4 +2950,5 @@ loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'und
 loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // referee-painted territory hexes (shared)
 if(typeof loadTradeGoodStores === 'function') loadTradeGoodStores().then(() => { if(typeof HX !== 'undefined' && HX.refresh) HX.refresh(); if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel(); });   // referee-edited trade-goods catalogue (shared)
 if(typeof loadGeneratorOverrides === 'function') loadGeneratorOverrides();   // referee-edited oracle / rumour / encounter / NPC generator lists
+if(typeof loadContractOverrides === 'function') loadContractOverrides();   // referee-edited corp / faction contract templates
 

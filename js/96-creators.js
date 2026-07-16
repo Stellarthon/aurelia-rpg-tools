@@ -534,6 +534,93 @@ function _rulesAfterEdit(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONTRACT TEMPLATES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Rewrites the shipped corp / faction job-brief templates (js/85 CORP_CONTRACT /
+// FACTION_CONTRACT via contractTemplateRegistry + contractOverrides). Each has a
+// referee title, one or more player briefs (one per line) and a referee note.
+// Placeholders in curly braces are filled at draft time. Reuses the trade panel.
+const CONTRACT_PLACEHOLDER_HINT = 'Placeholders: {corp} / {faction}, {target}, {place}, {from}, {to}, {good}, {vessel}, {reward}.';
+function openContractTemplates(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof contractTemplateRegistry === 'function') ? contractTemplateRegistry() : [];
+  const ovs = (typeof contractOverrides !== 'undefined' && contractOverrides) ? contractOverrides : {};
+  const groups = {};
+  reg.forEach(t => { (groups[t.group] = groups[t.group] || []).push(t); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(t => {
+      const eff = (typeof contractTemplate === 'function') ? (contractTemplate(t.scope, t.kind) || t.base) : t.base;
+      const edited = Object.prototype.hasOwnProperty.call(ovs, t.key);
+      const nBriefs = (eff && Array.isArray(eff.briefs)) ? eff.briefs.length : 0;
+      const label = t.kind.charAt(0).toUpperCase() + t.kind.slice(1);
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1">
+          <div class="design-history-label">${escHtml(label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+          <div class="design-history-snippet">${escHtml((eff && eff.title) || '')} · ${nBriefs} brief${nBriefs === 1 ? '' : 's'}</div>
+        </div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openContractTemplateForm('${escAttr(t.key)}')" title="Edit">✎</button></div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No contract templates available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">Job briefs the economy sim posts as contracts. ${escHtml(CONTRACT_PLACEHOLDER_HINT)}</div>`;
+  _tgPanel('CONTRACT TEMPLATES', html);
+}
+function openContractTemplateForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof contractTemplateRegistry === 'function') ? contractTemplateRegistry() : [];
+  const t = reg.find(x => x.key === key);
+  if(!t){ showToast('Template not found', 'error'); return; }
+  const ovs = (typeof contractOverrides !== 'undefined' && contractOverrides) ? contractOverrides : {};
+  const overridden = Object.prototype.hasOwnProperty.call(ovs, key);
+  const eff = (typeof contractTemplate === 'function') ? (contractTemplate(t.scope, t.kind) || t.base) : t.base;
+  const briefs = (eff && Array.isArray(eff.briefs)) ? eff.briefs : [];
+  const label = t.kind.charAt(0).toUpperCase() + t.kind.slice(1);
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">Title (referee)</div>
+      <input id="contract-title" class="design-field-input" value="${escAttr((eff && eff.title) || '')}"></div>
+    <div class="design-field-group"><div class="design-field-label">Player briefs — one per line (a random line is used per draft)</div>
+      <textarea id="contract-briefs" class="design-field-textarea" style="min-height:150px">${escHtml(briefs.join('\n'))}</textarea></div>
+    <div class="design-field-group"><div class="design-field-label">Referee note</div>
+      <textarea id="contract-refnote" class="design-field-textarea" style="min-height:110px">${escHtml((eff && eff.refNote) || '')}</textarea></div>
+    <div class="se-note">${escHtml(CONTRACT_PLACEHOLDER_HINT)}</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetContractTemplate('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px"><button class="se-cancel" onclick="openContractTemplates()">Cancel</button>
+      <button class="se-save" onclick="commitContractTemplate('${escAttr(key)}')">Save</button></span>
+    </div>`;
+  _tgPanel('EDIT: ' + label.toUpperCase() + ' CONTRACT', html);
+}
+async function commitContractTemplate(key){
+  const title = (document.getElementById('contract-title').value || '').trim();
+  const briefs = (document.getElementById('contract-briefs').value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const refNote = (document.getElementById('contract-refnote').value || '').trim();
+  if(!title){ showToast('Title required', 'error'); return; }
+  if(!briefs.length){ showToast('Add at least one player brief', 'error'); return; }
+  if(typeof contractOverrides !== 'undefined'){
+    contractOverrides[key] = { title, briefs, refNote };
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides();
+  }
+  _contractAfterEdit();
+  showToast('Contract template saved');
+  openContractTemplates();
+}
+async function resetContractTemplate(key){
+  if(typeof contractOverrides !== 'undefined' && Object.prototype.hasOwnProperty.call(contractOverrides, key)){
+    delete contractOverrides[key];
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides();
+  }
+  _contractAfterEdit();
+  showToast('Reset to default', 'info');
+  openContractTemplates();
+}
+// Re-render the oracle panel (which can surface a live contract rumour) if open.
+function _contractAfterEdit(){
+  if(typeof renderOraclePanel === 'function' && typeof genPanelOpen !== 'undefined' && genPanelOpen) renderOraclePanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // BODY CREATOR  —  add planets / moons / asteroid belts in design mode
 // ═══════════════════════════════════════════════════════════════════════════
 // Mirrors the NPC creator's structure: a modal with Manual and Random (UWP)
