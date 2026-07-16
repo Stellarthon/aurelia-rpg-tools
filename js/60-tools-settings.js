@@ -1046,7 +1046,10 @@ function rulesTableRegistry(){
   add('combat-hazards', 'Combat hazards',         'Combat',  'json',    typeof COMBAT_HAZARDS !== 'undefined' ? COMBAT_HAZARDS : null);
   add('ship-crit-systems','Ship critical-hit systems','Ship','pairs',   typeof SHIP_CRIT_SYSTEMS !== 'undefined' ? SHIP_CRIT_SYSTEMS : null);
   add('rep-bands',      'Reputation ladder',      'Social',  'json',    typeof REP_BANDS !== 'undefined' ? REP_BANDS : null);
+  add('contact-rels',   'Contact relationship types','Social','json',   typeof CONTACT_RELS !== 'undefined' ? CONTACT_RELS : null);
   add('good-flavour',   'Trade-good dockside names','Economy','kv',     typeof GOOD_FLAVOR !== 'undefined' ? GOOD_FLAVOR : null);
+  add('disc-categories','Discovery-log categories','Content', 'pairs',  typeof DISC_CATEGORIES !== 'undefined' ? DISC_CATEGORIES : null);
+  add('equip-slots',    'Equipment slots',        'Content', 'pairs',   typeof EQUIP_SLOTS !== 'undefined' ? EQUIP_SLOTS : null);
   if(typeof ECON !== 'undefined' && ECON){   // structured GalNet / economy flavour (edited in place through ECON's live refs)
     add('gov-reasons',  'Cabinet-change reasons', 'Government', 'kv',   ECON.GOV_REASONS);
     add('gov-posts',    'Ministerial posts',      'Government', 'json', ECON.GOV_POSTS);

@@ -1214,6 +1214,7 @@ function generatorListRegistry(){
     add('rumour.friendly', 'Friendly', 'Rumours', RUMOUR_TEMPLATES.friendly);
     add('rumour.neutral',  'Neutral',  'Rumours', RUMOUR_TEMPLATES.neutral);
   }
+  if(typeof RUMOUR_RELIABILITY !== 'undefined') add('rumour.reliability', 'Reliability tags', 'Rumours', RUMOUR_RELIABILITY);
   if(typeof MARKET_RUMOUR !== 'undefined' && MARKET_RUMOUR){   // the living-economy rumour phrasings
     Object.keys(MARKET_RUMOUR).forEach(k => add('market.' + k, (MARKET_RUMOUR_LABELS && MARKET_RUMOUR_LABELS[k]) || k, 'Market rumours', MARKET_RUMOUR[k]));
   }
@@ -1417,7 +1418,7 @@ function generateRumour(){
              .replace(/{ship}/g, shipState.name || 'the ship')
              .replace(/{place}/g, oraclePlace())
              .replace(/{good}/g, pick(genList('oracle.goods', ORACLE_GOODS)));
-  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
+  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(genList('rumour.reliability', RUMOUR_RELIABILITY)) };
   renderOraclePanel();
 }
 

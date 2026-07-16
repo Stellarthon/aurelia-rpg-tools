@@ -533,6 +533,9 @@ function _rulesAfterEdit(){
   if(typeof renderCombat === 'function' && typeof combatEncounter !== 'undefined' && combatEncounter) renderCombat();
   if(typeof renderShipPanel === 'function' && typeof shipPanelOpen !== 'undefined' && shipPanelOpen) renderShipPanel();
   if(typeof renderReputationPanel === 'function' && typeof repPanelOpen !== 'undefined' && repPanelOpen) renderReputationPanel();
+  if(typeof renderDiscoveryPanel === 'function' && typeof discPanelOpen !== 'undefined' && discPanelOpen) renderDiscoveryPanel();
+  if(typeof renderContactsPanel === 'function' && typeof contactsPanelOpen !== 'undefined' && contactsPanelOpen) renderContactsPanel();
+  if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();   // starport-base / territory tables on the map
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
