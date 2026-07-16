@@ -508,7 +508,9 @@ async function mergedSaveStore(key, current){
 // Returns the same { ok, value } shape as supaStorage.get.
 let _refOverlays = {};   // {key: rawJsonString} delivered to referees by get-content
 async function getOverlayStore(key){
-  const isRef = (typeof isReferee === 'function') && isReferee();
+  // Use the REAL role: a referee previewing-as-player must still read their full
+  // "-ref" data, not the redacted public copy.
+  const isRef = (typeof isRefereeReal === 'function') ? isRefereeReal() : ((typeof isReferee === 'function') && isReferee());
   const split = (typeof isSplitStore === 'function') && isSplitStore(key);
   if(isRef && split){
     if(Object.prototype.hasOwnProperty.call(_refOverlays, key) && _refOverlays[key] != null){

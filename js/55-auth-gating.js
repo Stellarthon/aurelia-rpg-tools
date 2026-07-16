@@ -206,7 +206,17 @@ let networkLockMessage = '';    // TASK 6: 403 lock-out message to surface to a 
 // The table display window (js/93) is NEVER a referee, whatever the shared
 // localStorage says — this one line at the choke point keeps every
 // referee-only surface (overlays, design mode, records) off the table TV.
-function isReferee(){ if(DISPLAY_MODE) return false; if(phonePlayerLock()) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+// previewAs: a real referee "Preview as player" state. null = not previewing;
+// '' = generic player; a name = as that identity. While set, isReferee() reports
+// false so ALL render/visibility gates (canSee, .ref-only, redaction) behave as
+// that player — but isRefereeReal() still reports true, and NETWORK/poll guards
+// use it so the referee never polls (which would overwrite their full in-memory
+// design data with the redacted public copies). Enter/exit below.
+let previewAs = null;
+function isReferee(){ if(DISPLAY_MODE) return false; if(previewAs !== null) return false; if(phonePlayerLock()) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+// The device's REAL referee status, ignoring an active preview. Poll/load/write
+// guards use this; render gates use isReferee().
+function isRefereeReal(){ return (previewAs !== null) ? true : isReferee(); }
 
 // ── Permission model (V1) ────────────────────────────────────────────────
 // Per-viewer information gating. This is spoiler/visibility control, NOT
@@ -244,6 +254,76 @@ function applyIdentityClass(){
 // styling) when the viewer's role or identity changes.
 function refreshRoleGatedViews(){
   if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+}
+
+// ── Preview as player (referee) ─────────────────────────────────────────────
+// Lets a referee see the map exactly as a chosen player does — reveals,
+// per-player redaction, spoiler regions and referee-only content all applied —
+// without changing their token, role or data. It flips isReferee() (render
+// gates) while leaving isRefereeReal() true (network guards), so nothing is
+// fetched or overwritten; the view is rebuilt from the referee's own in-memory
+// data through the same canSee()/.ref-only gates a player's device uses.
+let _previewSaved = null;
+function _previewRerender(){
+  try {
+    if(currentView === 'station' && typeof renderDetail === 'function' && typeof cur !== 'undefined' && cur){ renderDetail(); if(typeof updateStationLocks === 'function') updateStationLocks(); }
+    else if(currentView === 'system'){ if(typeof selectedBody !== 'undefined' && selectedBody && typeof selectBody === 'function') selectBody(selectedBody); else if(typeof renderSystemOverview === 'function') renderSystemOverview(); }
+    else if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody){ if(typeof selectedBodyLoc !== 'undefined' && selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else if(typeof buildBodyView === 'function') buildBodyView(selectedBody); }
+    else if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
+  } catch(e){ if(typeof pushErr === 'function') pushErr('preview rerender failed', e && e.stack); }
+  if(typeof refreshSecureViews === 'function') refreshSecureViews();
+  if(typeof renderWhoAmI === 'function') renderWhoAmI();
+}
+function showPreviewBanner(identity){
+  let b = document.getElementById('preview-banner');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'preview-banner';
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9999;display:flex;align-items:center;gap:12px;background:#2A1A3B;color:#fff;border:1px solid #9B59B6;border-radius:8px;padding:8px 14px;font-family:monospace;font-size:12px;box-shadow:0 6px 22px rgba(0,0,0,.55)';
+    document.body.appendChild(b);
+  }
+  const who = identity ? escHtml(identity) : 'a generic player';
+  b.innerHTML = `<span>👁 Previewing as <b style="color:#C9A0FF">${who}</b></span>
+    <button onclick="exitPlayerPreview()" style="background:#9B59B6;border:none;border-radius:5px;color:#fff;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer">Exit preview</button>`;
+  b.style.display = 'flex';
+}
+function hidePreviewBanner(){ const b = document.getElementById('preview-banner'); if(b) b.style.display = 'none'; }
+function enterPlayerPreview(identity){
+  if(!isRefereeReal()) return;                 // real referees only
+  const fp = document.getElementById('float-panels');
+  if(previewAs === null){
+    _previewSaved = {
+      identity: myIdentity,
+      pmChecked: pmCheck ? pmCheck.checked : false,
+      pmActive: rootEl ? rootEl.classList.contains('pm-active') : false,
+      fpPmActive: fp ? fp.classList.contains('pm-active') : false,
+    };
+  }
+  previewAs = identity || '';
+  myIdentity = identity || null;
+  if(typeof designModeOn !== 'undefined' && designModeOn && typeof forceDesignModeOff === 'function') forceDesignModeOff();
+  if(pmCheck) pmCheck.checked = true;
+  if(rootEl) rootEl.classList.add('pm-active');
+  if(fp) fp.classList.add('pm-active');
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  showPreviewBanner(identity);
+  if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  _previewRerender();
+}
+function exitPlayerPreview(){
+  if(previewAs === null) return;
+  const s = _previewSaved || {};
+  const fp = document.getElementById('float-panels');
+  previewAs = null;
+  myIdentity = (s.identity != null) ? s.identity : null;
+  if(pmCheck) pmCheck.checked = !!s.pmChecked;
+  if(rootEl) rootEl.classList.toggle('pm-active', !!s.pmActive);
+  if(fp) fp.classList.toggle('pm-active', !!s.fpPmActive);
+  _previewSaved = null;
+  hidePreviewBanner();
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  _previewRerender();
 }
 
 // ── Secure content (per-player redaction client · Stage 2) ───────────────────
@@ -526,7 +606,7 @@ function applyHydratedData(data){
 // copies — or a direct "<key>-ref" read that migration 0014's carve-out blocks.
 // Players never reach this (referee-gated).
 async function reloadDesignOverlays(){
-  if(typeof isReferee === 'function' && !isReferee()) return;
+  if(typeof isRefereeReal === 'function' && !isRefereeReal()) return;
   for(const fn of ['loadContentOverrides','loadBodyStores','loadLocationStores','loadSystemStores','loadAuthoredStations']){
     if(typeof window[fn] === 'function'){ try { await window[fn](); } catch(e){} }
   }
@@ -623,7 +703,7 @@ let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps
 
 async function pollRevealState(){
   if(DISPLAY_MODE) return; // the table TV's only input is the BroadcastChannel (js/93)
-  if(isReferee()) return; // referee never polls — would be pointless and noisy
+  if(isRefereeReal()) return; // real referee never polls (preview reuses in-memory data)
   // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
   // state intact), never an overwrite-with-empty-defaults that wipes the screen.
   try {
@@ -1235,7 +1315,7 @@ function applyViewSpec(spec){
 function startPolling(){
   stopPolling();
   if(DISPLAY_MODE) return; // table TV: no polling, ever (js/93 drives it)
-  if(isReferee()) return;
+  if(isRefereeReal()) return;
   pollBackoff = POLL_MS;
   const tick = async () => {
     await pollRevealState();
@@ -1249,10 +1329,10 @@ function startPolling(){
 // focus events reliably fire when the app comes back — so this catches the gap
 // even without the player tapping Refresh.
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && !isReferee()) pollRevealState();
+  if(document.visibilityState === 'visible' && !isRefereeReal()) pollRevealState();
 });
 window.addEventListener('focus', () => {
-  if(!isReferee()) pollRevealState();
+  if(!isRefereeReal()) pollRevealState();
 });
 
 // Reconnect plumbing (referee included — the referee never runs the 4s player
@@ -1264,12 +1344,12 @@ window.addEventListener('focus', () => {
 window.addEventListener('online', () => {
   markOnline();
   flushQueue();
-  if(!isReferee()) pollRevealState(); else pollWhispers();
+  if(!isRefereeReal()) pollRevealState(); else pollWhispers();
 });
 window.addEventListener('offline', () => { markOffline(); });
 setInterval(() => {
   if(queueLength()) flushQueue();
-  if(isReferee()) pollWhispers();  // no-op on the TV (DISPLAY_MODE guard) and without a token
+  if(isRefereeReal()) pollWhispers();  // no-op on the TV (DISPLAY_MODE guard) and without a token
   updateConnPill(); // refresh the "last synced … ago" label
 }, 8000);
 

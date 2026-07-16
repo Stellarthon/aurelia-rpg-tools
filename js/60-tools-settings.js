@@ -855,6 +855,25 @@ function renderRefereeMenu(){
     <div class="settings-row" style="pointer-events:none;padding-bottom:2px">
       <span class="settings-row-label" style="color:var(--tx1);font-weight:400">Signed in as <b style="color:var(--accentGold)">${escHtml(refName)}</b></span>
     </div>` : '';
+  // Preview-as-player: identities come from the token roster (players only) when
+  // available, else the known campaign characters. Entering exits Design Mode and
+  // renders the whole app through that player's visibility (reveals + redaction).
+  const previewNames = (typeof securePlayers !== 'undefined' && Array.isArray(securePlayers) && securePlayers.length)
+    ? securePlayers.filter(p => p && p.role !== 'referee' && p.identity).map(p => p.identity)
+    : ((typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS.slice() : []);
+  const previewSection = `
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">👁 Preview as player</div>
+    <div class="se-note" style="padding:0 2px 6px">See the map exactly as a player does — reveals, redaction and spoiler regions applied. Design Mode turns off; exit from the banner.</div>
+    ${previewNames.map(nm => `
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();enterPlayerPreview('${String(nm).replace(/'/g,"\\'")}')">
+      <span class="settings-row-label">As ${escHtml(nm)}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">preview →</span>
+    </div>`).join('')}
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();enterPlayerPreview('')">
+      <span class="settings-row-label">As a generic player</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">preview →</span>
+    </div>`;
   card.innerHTML = `
     <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Tools</div>
     ${refNameRow}
@@ -871,6 +890,7 @@ function renderRefereeMenu(){
       <span class="settings-row-label">🪐 Orbital Rings${ringsShown ? '' : ' — hidden'}</span>
       <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
     </div>
+    ${previewSection}
     <div class="archon-divider"></div>
     <div class="settings-section-lbl">Campaign Backup</div>
     <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();exportCampaign()">
