@@ -1,11 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// DESIGN MODE — STAGE 1: simple text field overrides
+// DESIGN MODE — referee content authoring
 // ═══════════════════════════════════════════════════════════════════════════
-// Scope: read-aloud text, referee description/context, and referee notes
-// fields on station areas/subs and Aurelia locations. Skill checks, timed
-// events, and NPC stat-block rows are NOT covered yet — those are
-// structurally different (nested arrays of objects, not plain strings) and
-// are a deliberate later stage rather than part of this first pass.
+// Scope (grew well past the original "text fields only" pass): text overrides
+// (read-aloud / referee context / referee notes / custom boxes) PLUS structured
+// add/edit/remove of skill checks, timed events, NPC stat blocks and their
+// detail rows, whole bodies (planets/moons/belts), locations, star systems,
+// regions, jump lanes, territory paint, the ship-weapon catalogue, the item
+// catalogue, authored stations + deck plans, splash screens and the whole
+// Campaign Studio config layer. Nearly everything syncs to Supabase; see the
+// store table in the section comments below. Referee-only fields are redacted
+// out of the player-facing copies (js/55 stripOverlayForPlayers; see
+// docs/design-mode-redaction.md).
 //
 // Mechanism: original campaign content stays exactly where it already is,
 // hardcoded in MAIN / BASE_LOCATIONS. This system adds a lookup layer in
@@ -280,6 +285,7 @@ async function addNewCheck(listKey){
   contentAdditions[listKey].push(blank);
   await saveContentAdditions();
   if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
   const newIdx = contentAdditions[listKey].length - 1;
   const newKey = listKey.replace(/-checks$/, '-check-') + 'add' + newIdx;
   openDesignEditCheck(newKey, blank);
@@ -291,6 +297,7 @@ async function addNewEvent(listKey){
   contentAdditions[listKey].push(blank);
   await saveContentAdditions();
   if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
   const newIdx = contentAdditions[listKey].length - 1;
   const newKey = listKey.replace(/-events$/, '-event-') + 'add' + newIdx;
   openDesignEditEvent(newKey, blank);

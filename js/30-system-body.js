@@ -621,26 +621,49 @@ function renderBodyContentSections(body, pm){
     html += `</div>`;
   }
 
-  if(!pm&&body.checks&&body.checks.length){
-    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
-    const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
-    body.checks.forEach(c=>{
-      html += `<div class="chk"><div class="chk-t">${escHtml(c.skill)}</div>`;
-      c.degrees.forEach(d=>{
-        const cls=d.cls||degCls[d.c]||"deg-p";
-        const lbl=d.label||d.l||"";
-        const txt=d.text||d.t||"";
-        html+=`<div class="deg-row"><div class="${cls}">${escHtml(lbl)}</div><div style="font-size:11px">${escHtml(txt)}</div></div>`;
-      });
+  // Skill checks — add/edit/remove in Design Mode, mirroring station areas.
+  // Keyed body-<id>-checks / body-<id>-check-<i>. The section shows whenever
+  // there are checks OR design mode is on (so the add button appears on a body
+  // that has none yet). Referee-only data (redacted from players + .ref-only).
+  {
+    const chkListKey = 'body-'+id+'-checks';
+    const mergedChecks = mergeListWithAdditions(body.checks, chkListKey, 'body-'+id+'-check-');
+    if(!pm && (mergedChecks.length || designModeOn)){
+      html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
+      const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
+      html += mergedChecks.map(({item:c, key:ckey})=>{
+        designOriginalRegistry[ckey] = c;
+        const cdata = resolveContent(ckey, c);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
+        return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>${escHtml(cdata.skill)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(d=>{
+          const cls=d.cls||degCls[d.c]||"deg-p";
+          const lbl=d.label||d.l||"";
+          const txt=d.text||d.t||"";
+          return `<div class="deg-row"><div class="${cls}">${escHtml(lbl)}</div><div style="font-size:11px">${escHtml(txt)}</div></div>`;
+        }).join("")}</div>`;
+      }).join("");
+      if(designModeOn) html += `<button class="design-add-btn" onclick="addNewCheck('${chkListKey}')">+ Add Skill Check</button>`;
       html += `</div>`;
-    });
-    html += `</div>`;
+    }
   }
 
-  if(!pm&&body.events&&body.events.length){
-    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
-    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${escHtml(e.t)}</div>${escHtml(e.e)}</div>`);
-    html += `</div>`;
+  // Timed events — add/edit/remove in Design Mode. Keyed body-<id>-events / -event-<i>.
+  {
+    const evtListKey = 'body-'+id+'-events';
+    const mergedEvents = mergeListWithAdditions(body.events, evtListKey, 'body-'+id+'-event-');
+    if(!pm && (mergedEvents.length || designModeOn)){
+      html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
+      html += mergedEvents.map(({item:e, key:ekey})=>{
+        designOriginalRegistry[ekey] = e;
+        const edata = resolveContent(ekey, e);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ekey}', ${JSON.stringify(edata).replace(/"/g,'&quot;')})" title="Remove this event">🗑</button>` : '';
+        return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${escHtml(edata.t)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${escHtml(edata.e)}</div>`;
+      }).join("");
+      if(designModeOn) html += `<button class="design-add-btn" onclick="addNewEvent('${evtListKey}')">+ Add Event</button>`;
+      html += `</div>`;
+    }
   }
   return html;
 }
