@@ -870,6 +870,22 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // NPC portraits — players see referee-uploaded faces on body/station NPCs live.
+  try {
+    if(typeof npcPortraits !== 'undefined'){
+      const rnp = await supaStorage.get('npc-portraits', true);
+      if(rnp.ok){
+        const nnp = rnp.value != null ? JSON.parse(rnp.value) : {};
+        if(JSON.stringify(nnp) !== JSON.stringify(npcPortraits)){
+          npcPortraits = nnp;
+          if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function'){
+            if(typeof selectedBodyLoc !== 'undefined' && selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody);
+          } else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Worlds & locations — players see referee-added / edited / removed bodies and
   // locations live, the same way they already get system and content edits.
   // Fetched ONLY while a system or body is on screen (the only views that render

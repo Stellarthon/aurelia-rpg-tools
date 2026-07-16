@@ -471,6 +471,7 @@ function countAllDesignEdits(){
   n += _dCount(_dg(()=>rulesOverrides));
   n += _dCount(_dg(()=>contractOverrides));
   n += _dCount(_dg(()=>themeOverrides)) + _dCount(_dg(()=>panelFlags));
+  n += _dCount(_dg(()=>npcPortraits));
   return n;
 }
 
@@ -701,6 +702,8 @@ async function revertAllContentEdits(){
   if(typeof panelFlags !== 'undefined'){ panelFlags = {};
     if(typeof applyPanelFlags === 'function') applyPanelFlags();           // show every panel again
     if(typeof savePanelFlags === 'function') await savePanelFlags(); }
+  if(typeof npcPortraits !== 'undefined'){ npcPortraits = {};              // drop custom body/station NPC faces
+    if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
 
   // Combat / weapon stores (js/80).
   if(typeof weaponAdditions !== 'undefined'){ weaponAdditions = []; weaponDeletions = {}; weaponPropertyOverrides = {};
@@ -748,6 +751,7 @@ function collectDesignLayer(){
   if(typeof rulesOverrides !== 'undefined') put('rules-overrides', rulesOverrides);
   if(typeof themeOverrides !== 'undefined') put('theme-overrides', themeOverrides);
   if(typeof panelFlags !== 'undefined') put('panel-flags', panelFlags);
+  if(typeof npcPortraits !== 'undefined') put('npc-portraits', npcPortraits);
   if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
   return d;
 }
@@ -1090,7 +1094,19 @@ function renderNpcEditForm(data){
       <input type="text" class="design-field-input design-npc-stat" data-stat="${attrEsc(k)}" value="${attrEsc(stats[k])}" style="width:54px;text-align:center;padding:6px 4px">
       <div class="design-field-label" style="margin:0">${escHtml(k)}</div>
     </div>`).join('');
-  showDesignEditBody(`
+  // Portrait (players see this NPC, so the version stamp is in the shared
+  // npc-portraits store keyed by the nid — the design key minus the -npc suffix).
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  const pver = (typeof npcPortraitVer === 'function') ? npcPortraitVer(nid) : 0;
+  const avatar = (typeof npcMediaAvatar === 'function') ? npcMediaAvatar(nid, data && data.name, 48) : '';
+  const portraitRow = `
+    <div class="design-field-group" style="display:flex;align-items:center;gap:10px">
+      ${avatar}
+      <button class="design-edit-pencil-inline" onclick="triggerDesignNpcPortrait()">${pver ? 'Change photo' : 'Upload photo'}</button>
+      ${pver ? `<button class="design-edit-pencil-inline danger" onclick="removeDesignNpcPortrait()" title="Remove photo">✕</button>` : ''}
+      <input type="file" id="design-npc-portrait-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onDesignNpcPortraitFile(event)">
+    </div>`;
+  showDesignEditBody(portraitRow + `
     <div class="design-field-group"><div class="design-field-label">Name</div>
       <input type="text" id="design-npc-name" class="design-field-input" value="${attrEsc(data.name)}"></div>
     <div class="design-field-group"><div class="design-field-label">Role</div>
@@ -1100,6 +1116,44 @@ function renderNpcEditForm(data){
     <div class="design-field-group"><div class="design-field-label">Characteristics</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${statCells || '<span class="hx-small">This NPC has no characteristics.</span>'}</div></div>
   `);
+}
+// Re-render whichever entity view is on screen after a design change.
+function rerenderDesignEntityView(){
+  if(currentView === 'station' && typeof cur !== 'undefined' && cur && typeof renderDetail === 'function') renderDetail();
+  else if(currentView === 'system' && selectedBody && typeof selectBody === 'function') selectBody(selectedBody);
+  else if(currentView === 'body' && selectedBody){ if(selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else if(typeof buildBodyView === 'function') buildBodyView(selectedBody); }
+}
+function _reRenderNpcForm(){
+  const key = designEditCurrentKey; if(!key) return;
+  const original = designOriginalRegistry[key] || {};
+  const has = Object.prototype.hasOwnProperty.call(contentOverrides, key);
+  renderNpcEditForm(has ? Object.assign({}, original, contentOverrides[key]) : original);
+}
+function triggerDesignNpcPortrait(){ const f = document.getElementById('design-npc-portrait-file'); if(f) f.click(); }
+async function onDesignNpcPortraitFile(e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee()) return;
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  if(!nid) return;
+  if(typeof resizePortrait !== 'function' || typeof uploadNpcPortraitBlob !== 'function'){ if(typeof showToast === 'function') showToast('Portraits unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast === 'function') showToast('Uploading…', 'info');
+    const blob = await resizePortrait(file, 256);
+    await uploadNpcPortraitBlob(nid, blob);
+    if(typeof npcPortraits !== 'undefined'){ npcPortraits[nid] = Date.now(); if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+    _reRenderNpcForm();
+    rerenderDesignEntityView();
+    if(typeof showToast === 'function') showToast('Portrait updated');
+  } catch(err){ console.error('NPC portrait upload failed', err); if(typeof showToast === 'function') showToast('Portrait upload failed'); }
+}
+async function removeDesignNpcPortrait(){
+  if(!isReferee()) return;
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  if(typeof npcPortraits !== 'undefined' && npcPortraits[nid]){ delete npcPortraits[nid]; if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+  _reRenderNpcForm();
+  rerenderDesignEntityView();
 }
 function openDesignEditNpc(key, original){
   designEditCurrentKey = key;

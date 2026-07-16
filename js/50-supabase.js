@@ -118,6 +118,34 @@ async function uploadNpcPortraitBlob(id, blob){
   if(!res.ok) throw new Error('NPC portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
   return true;
 }
+// Body & station NPCs render for PLAYERS, so their portrait version stamps live
+// in a shared, public-read store (referee-write) keyed by the NPC's stable nid —
+// unlike the referee-only roster, whose stamp rides its own entry. The image
+// still lives in the same 'portraits' bucket (npc/ sub-path), so no new bucket.
+let npcPortraits = {};   // {nid: ver}
+function npcPortraitVer(nid){ return (npcPortraits && npcPortraits[nid]) || 0; }
+async function loadNpcPortraits(){
+  try { const r = await supaStorage.get('npc-portraits', true); npcPortraits = (r.value != null ? JSON.parse(r.value) : {}); if(!npcPortraits || typeof npcPortraits !== 'object') npcPortraits = {}; }
+  catch(e){ npcPortraits = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('npc-portraits', npcPortraits);
+}
+async function saveNpcPortraits(){
+  try { if(typeof mergedSaveStore === 'function') npcPortraits = await mergedSaveStore('npc-portraits', npcPortraits);
+        else await supaStorage.set('npc-portraits', JSON.stringify(npcPortraits), true); }
+  catch(e){ console.error('NPC portraits save failed', e); }
+}
+// A round avatar for an NPC card, keyed by nid: the portrait if one exists, else
+// an initial-letter placeholder. Callers that only want a face when one is set
+// (player-facing cards) should guard on npcPortraitVer(nid) first.
+function npcMediaAvatar(nid, name, size){
+  const ver = npcPortraitVer(nid);
+  const esc = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+  if(ver && typeof npcPortraitUrlFor === 'function'){
+    return `<img src="${npcPortraitUrlFor(nid, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none;background:var(--bg2)" onerror="this.style.visibility='hidden'">`;
+  }
+  const init = (name && String(name).trim()[0]) || '?';
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;flex:none;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.42)}px;color:var(--tx1)">${esc(init.toUpperCase())}</span>`;
+}
 
 // ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────
 // The referee's OWN, legally-owned rulebook PDFs — one object per book per

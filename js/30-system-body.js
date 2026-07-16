@@ -615,8 +615,11 @@ function renderBodyContentSections(body, pm){
       const nEff = Object.prototype.hasOwnProperty.call(contentOverrides, npcOvKey) ? Object.assign({}, n, contentOverrides[npcOvKey]) : n;
       const editNpcBtn = designModeOn ? `<button class="design-edit-pencil-inline" style="margin-left:6px" onclick="event.stopPropagation();openDesignEditNpc('${npcOvKey}', ${JSON.stringify(n).replace(/"/g,'&quot;')})" title="Edit NPC name/role/skills/stats">✎</button>` : '';
       const statGrid = (nEff.stats && Object.keys(nEff.stats).length) ? `<div class="stat-grid">${Object.entries(nEff.stats).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>` : '';
+      const npcNameBlock = `<div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div></div>`;
+      const npcLeft = (typeof npcPortraitVer === 'function' && npcPortraitVer(nid))
+        ? `<div style="display:flex;align-items:center;gap:8px;min-width:0">${npcMediaAvatar(nid, nEff.name, 34)}${npcNameBlock}</div>` : npcNameBlock;
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div></div>
+        ${npcLeft}
         <span style="display:flex;align-items:center;gap:2px">${editNpcBtn}<span class="chev" id="${nid}-chev">▾</span></span></div>
         <div class="npc-body" id="${nid}">
           ${statGrid}

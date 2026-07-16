@@ -66,7 +66,7 @@ const REFEREE_ONLY = new Set([
   "galaxy-lanes", "hex-paint", "route-blocks",
   "trade-good-overrides", "trade-good-additions", "trade-good-deletions",
   "generator-overrides", "rules-overrides", "contract-overrides",
-  "theme-overrides", "panel-flags",
+  "theme-overrides", "panel-flags", "npc-portraits",
 ]);
 const MAX_KEY = 256;
 const MAX_VALUE = 1_000_000;

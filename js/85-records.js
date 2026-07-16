@@ -3015,4 +3015,8 @@ loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefi
 if(typeof loadTradeGoodStores === 'function') loadTradeGoodStores().then(() => { if(typeof HX !== 'undefined' && HX.refresh) HX.refresh(); if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel(); });   // referee-edited trade-goods catalogue (shared)
 if(typeof loadGeneratorOverrides === 'function') loadGeneratorOverrides();   // referee-edited oracle / rumour / encounter / NPC generator lists
 if(typeof loadContractOverrides === 'function') loadContractOverrides();   // referee-edited corp / faction contract templates
+if(typeof loadNpcPortraits === 'function') loadNpcPortraits().then(() => {   // body/station NPC faces (all devices)
+  if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function') buildBodyView(selectedBody);
+  else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+});
 

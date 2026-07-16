@@ -282,8 +282,11 @@ function renderDetail(){
       const editNpcBtn = designModeOn
         ? `<button class="design-edit-pencil-inline" style="margin-left:6px" onclick="event.stopPropagation();openDesignEditNpc('${npcOvKey}', ${JSON.stringify(n).replace(/"/g,'&quot;')})" title="Edit NPC name/role/skills/stats">✎</button>`
         : '';
+      const staNameBlock = `<div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div>${locBadge}${dispoBadge}</div>`;
+      const staLeft = (typeof npcPortraitVer === 'function' && npcPortraitVer(nid))
+        ? `<div style="display:flex;align-items:center;gap:8px;min-width:0">${npcMediaAvatar(nid, nEff.name, 34)}${staNameBlock}</div>` : staNameBlock;
       return `<div class="npc-card"${hasLocEditor ? ' style="overflow:visible"' : ''}><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div>${locBadge}${dispoBadge}</div>
+        ${staLeft}
         <span style="display:flex;align-items:center;gap:2px">${editNpcBtn}${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
         <div class="npc-body${bodyOpen}" id="${nid}">
           ${locEditor}
