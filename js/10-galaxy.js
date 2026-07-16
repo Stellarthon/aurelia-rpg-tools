@@ -423,9 +423,9 @@ let systemDeletions = {};
 let systemPropertyOverrides = {};
 
 async function loadSystemStores(){
-  try { const r = await supaStorage.get('system-additions', true);      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
-  try { const r = await supaStorage.get('system-deletions', true);      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
-  try { const r = await supaStorage.get('system-prop-overrides', true); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
+  try { const r = await getOverlayStore('system-additions');      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
+  try { const r = await getOverlayStore('system-deletions');      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
+  try { const r = await getOverlayStore('system-prop-overrides'); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
   if(typeof snapshotBaseline === 'function'){ snapshotBaseline('system-additions', systemAdditions); snapshotBaseline('system-deletions', systemDeletions); snapshotBaseline('system-prop-overrides', systemPropertyOverrides); }
 }
 async function saveSystemAdditions(){ try { systemAdditions = await mergedSaveStore('system-additions', systemAdditions); } catch(e){ console.error('System additions save failed', e); } }

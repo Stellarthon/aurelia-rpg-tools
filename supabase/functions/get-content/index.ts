@@ -257,6 +257,27 @@ Deno.serve(async (req) => {
         .order("role", { ascending: true });
       out.players = roster ?? [];
     } catch { out.players = []; }
+    // Design-Mode redaction — full overlay blobs, referee only. The "<key>-ref"
+    // rows hold the UNREDACTED Design-Mode edits (refNotes, hooks, NPCs, checks,
+    // events, Referee Context); they are carved out of public read (migration
+    // 0014), so this token-checked path is the ONLY way a referee reads them
+    // back. Returned keyed by the bare store name (campaign prefix + "-ref"
+    // suffix removed) to match the client's getOverlayStore() lookup. Namespaced
+    // by the caller's active campaign so authored campaigns never collide.
+    try {
+      const pfx = typeof body?.designPrefix === "string" ? body.designPrefix : "";
+      const like = pfx.replace(/[%_\\]/g, "\\$&") + "%-ref";
+      const { data: refRows } = await supabase
+        .from("aurelia_state").select("key, value").like("key", like);
+      const designRef: Record<string, string> = {};
+      for (const row of refRows ?? []) {
+        const k = String(row.key);
+        if (pfx && !k.startsWith(pfx)) continue;
+        const bare = k.slice(pfx.length).replace(/-ref$/, "");
+        designRef[bare] = row.value as string;
+      }
+      out.designRef = designRef;
+    } catch { out.designRef = {}; }
   }
 
   return json(out);

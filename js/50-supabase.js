@@ -470,9 +470,14 @@ function snapshotBaseline(key, val){
   catch(e){ _designBaselines[key] = Array.isArray(val) ? [] : {}; }
 }
 async function mergedSaveStore(key, current){
+  // A referee-only-bearing store keeps its FULL data under "<key>-ref" (carved
+  // out of public read) and a REDACTED copy under the public key that players
+  // read. The merge re-reads the full ref blob; single-copy stores use the key.
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  const fullKey = split ? (key + '-ref') : key;
   let merged = current;
   try {
-    const res = await supaStorage.get(key, true);   // re-read the authoritative remote blob
+    const res = await supaStorage.get(fullKey, true);   // re-read the authoritative FULL remote blob
     // Merge only against a remote blob that actually EXISTS. An absent row
     // (value === null) is "no co-editor state to preserve", not "everything was
     // deleted" — merging against {} there would wrongly drop unchanged keys of a
@@ -485,9 +490,35 @@ async function mergedSaveStore(key, current){
       merged = threeWayMerge(base, current, remote);
     }
   } catch(e){ merged = current; /* offline / parse fail → plain write, no worse than before */ }
-  await supaStorage.set(key, JSON.stringify(merged), true);
+  if(split && typeof stripOverlayForPlayers === 'function'){
+    await supaStorage.set(fullKey, JSON.stringify(merged), true);                            // full → referee-only "<key>-ref"
+    await supaStorage.set(key, JSON.stringify(stripOverlayForPlayers(key, merged)), true);   // redacted → public "<key>"
+  } else {
+    await supaStorage.set(key, JSON.stringify(merged), true);
+  }
   snapshotBaseline(key, merged);
   return merged;
+}
+
+// Read an overlay store for the CURRENT role. A referee reads the full data from
+// "<key>-ref": preferring the copy get-content delivered over the token boundary
+// (populated in _refOverlays), then a direct read (works until the migration
+// carves "<key>-ref" out of public read), then the public key as a pre-migration
+// / pre-first-save fallback. A player always reads the public (redacted) key.
+// Returns the same { ok, value } shape as supaStorage.get.
+let _refOverlays = {};   // {key: rawJsonString} delivered to referees by get-content
+async function getOverlayStore(key){
+  const isRef = (typeof isReferee === 'function') && isReferee();
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  if(isRef && split){
+    if(Object.prototype.hasOwnProperty.call(_refOverlays, key) && _refOverlays[key] != null){
+      return { ok: true, value: _refOverlays[key], fromCache: false };
+    }
+    const r = await supaStorage.get(key + '-ref', true);
+    if(r.ok && r.value != null) return r;
+    // else fall through to the public key (no ref blob yet / not migrated)
+  }
+  return supaStorage.get(key, true);
 }
 
 // ── Outbound write queue (last-write-wins per key) ───────────────────────────

@@ -368,6 +368,90 @@ function stripLocalSecrets(){
     if(typeof TIMED_EVENTS !== 'undefined') TIMED_EVENTS.length = 0; // whole GM timeline
   } catch(e){ console.error('stripLocalSecrets failed', e); }
 }
+
+// ── Design-Mode overlay redaction ───────────────────────────────────────────
+// stripLocalSecrets() above redacts the SHIPPED campaign data. But a referee's
+// Design-Mode edits live in overlay blobs in aurelia_state (body-*, location-*,
+// system-*, station-additions, content-*), which are publicly readable — so an
+// edited or added refNote / hook / Referee Context / NPC / check / event would
+// reach player devices unredacted. stripOverlayForPlayers() removes the SAME
+// fields (REDACT_FIELDS) from an overlay blob before it is exposed to players,
+// so the player-readable copy of every overlay carries no referee-only content.
+// Runs on the referee's device (which has full context incl. the box registry),
+// producing the player-safe blob written to the public key; the full blob is
+// written to a carved-out "<key>-ref" the referee reads back via get-content.
+function _stripFieldsFrom(obj, fields){ if(obj && typeof obj === 'object') fields.forEach(f => { delete obj[f]; }); return obj; }
+
+// Is a content-overrides KEY a referee-only field? content-overrides mixes
+// player-visible text (read-aloud, body/location Overview) and referee-only text
+// (Referee Context/Notes, refNote, check/event/NPC-row edits), keyed by content
+// key, so it must be classified per key rather than per field.
+function isRefOnlyContentKey(key){
+  if(typeof key !== 'string') return false;
+  if(/(^|[-_])refnotes$/i.test(key)) return true;                 // Referee Notes
+  if(/[-_]refNote$/.test(key)) return true;                       // body/location Referee Note box
+  if(/[-_](check|checks|event|events)([-_]|$)/i.test(key)) return true;  // skill checks / timed events
+  if(/[-_](row|rows)([-_]|$)/i.test(key)) return true;            // NPC detail rows (NPCs are referee-only)
+  // Station "Referee Context" is an area `desc`; body/location `desc` is the
+  // player-visible Overview — so only a `-desc` that is NOT a body-/loc- key.
+  if(/[-_]desc$/.test(key) && !/^body-/.test(key) && !/^loc-/.test(key)) return true;
+  // Custom boxes: `…-box-<btKey>` is referee-only iff its box type is refOnly.
+  const bm = key.match(/[-_]box[-_](.+)$/);
+  if(bm && typeof getBoxTypes === 'function'){
+    const bt = getBoxTypes().find(t => t && t.key === bm[1]);
+    if(bt && bt.refOnly) return true;
+  }
+  return false;
+}
+
+// Per-store shape + the REDACT_FIELDS set to strip from each object it holds.
+// Stores NOT listed (faction-*, galaxy-lanes, route-blocks, hex-paint) carry no
+// referee-only fields, so they pass through unchanged.
+const _OVERLAY_STRIP = {
+  'body-additions':         { shape: 'sysArray',     fields: REDACT_FIELDS.body },
+  'body-prop-overrides':    { shape: 'sysIdMap',     fields: REDACT_FIELDS.body },
+  'body-deletions':         { shape: 'sysIdDel',     fields: REDACT_FIELDS.body,     sub: 'body' },
+  'location-additions':     { shape: 'sysBodyArray', fields: REDACT_FIELDS.location },
+  'location-prop-overrides':{ shape: 'sysIdMap',     fields: REDACT_FIELDS.location },
+  'location-deletions':     { shape: 'sysIdDel',     fields: REDACT_FIELDS.location, sub: 'loc' },
+  'system-additions':       { shape: 'array',        fields: REDACT_FIELDS.node },
+  'system-prop-overrides':  { shape: 'idMap',        fields: REDACT_FIELDS.node },
+  'system-deletions':       { shape: 'idDel',        fields: REDACT_FIELDS.node,     sub: 'node' },
+  'station-additions':      { shape: 'stations',     fields: REDACT_FIELDS.area },
+  'content-overrides':      { shape: 'contentOv' },
+  'content-additions':      { shape: 'wholesale' },
+  'content-deletions':      { shape: 'wholesale' },
+  'content-history':        { shape: 'wholesale' },
+};
+// Return a deep copy of an overlay store value with referee-only content removed.
+// Never mutates the input (the referee keeps the full data in memory).
+function stripOverlayForPlayers(storeName, value){
+  const spec = _OVERLAY_STRIP[storeName];
+  if(!spec) return value;                                   // secret-free store
+  if(spec.shape === 'wholesale') return Array.isArray(value) ? [] : {};
+  let v; try { v = JSON.parse(JSON.stringify(value == null ? (Array.isArray(value) ? [] : {}) : value)); }
+  catch(e){ return Array.isArray(value) ? [] : {}; }        // unparseable → fail closed (empty)
+  const F = spec.fields;
+  const each = o => _stripFieldsFrom(o, F);
+  switch(spec.shape){
+    case 'array':        if(Array.isArray(v)) v.forEach(each); break;
+    case 'idMap':        if(v) Object.keys(v).forEach(id => each(v[id])); break;
+    case 'sysArray':     if(v) Object.keys(v).forEach(s => { if(Array.isArray(v[s])) v[s].forEach(each); }); break;
+    case 'sysIdMap':     if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(id => each(inner[id])); }); break;
+    case 'sysBodyArray': if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(b => { if(Array.isArray(inner[b])) inner[b].forEach(each); }); }); break;
+    // Deletion tombstones carry the FULL removed object under .body/.loc/.node.
+    case 'sysIdDel':     if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(id => { if(inner[id]) _stripFieldsFrom(inner[id][spec.sub], F); }); }); break;
+    case 'idDel':        if(v) Object.keys(v).forEach(id => { if(v[id]) _stripFieldsFrom(v[id][spec.sub], F); }); break;
+    case 'stations':     if(v) Object.keys(v).forEach(sid => { const st = v[sid] || {}; const areas = st.areas || {}; Object.keys(areas).forEach(ak => { const a = areas[ak]; each(a); if(a && a.subs) Object.keys(a.subs).forEach(sk => each(a.subs[sk])); }); }); break;
+    case 'contentOv':    if(v && typeof v === 'object') Object.keys(v).forEach(k => { if(isRefOnlyContentKey(k)) delete v[k]; }); break;
+  }
+  return v;
+}
+// A "split" store carries referee-only fields, so the referee writes a stripped
+// copy to the public key (players read that) and the FULL copy to "<key>-ref"
+// (referees read that back). Consulted by the data layer's mergedSaveStore /
+// getOverlayStore. Stores not listed here are secret-free and stay single-copy.
+function isSplitStore(key){ return Object.prototype.hasOwnProperty.call(_OVERLAY_STRIP, key); }
 function applySecureFragments(content){
   for(const frag of (content || [])){
     const p = String(frag.path || '').split('.'); const v = frag.value || {};
@@ -435,6 +519,19 @@ function applyHydratedData(data){
   // simply start with no thread until the first live poll).
   if(Array.isArray(data.whispers)) applyWhispers(data.whispers);
 }
+// After a referee's get-content response populates _refOverlays, re-run the
+// Design-Mode overlay loaders so they pick up the FULL blobs. The boot loaders
+// race hydrate (which is not awaited), so they may have read the redacted public
+// copies — or a direct "<key>-ref" read that migration 0014's carve-out blocks.
+// Players never reach this (referee-gated).
+async function reloadDesignOverlays(){
+  if(typeof isReferee === 'function' && !isReferee()) return;
+  for(const fn of ['loadContentOverrides','loadBodyStores','loadLocationStores','loadSystemStores','loadAuthoredStations']){
+    if(typeof window[fn] === 'function'){ try { await window[fn](); } catch(e){} }
+  }
+  if(typeof refreshDesignAffordances === 'function') refreshDesignAffordances();
+  else if(typeof currentView !== 'undefined' && currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+}
 async function hydrateSecureContent(){
   const token = getContentToken();
   if(!token) return false;                 // secure mode off → keep hardcoded data
@@ -443,7 +540,9 @@ async function hydrateSecureContent(){
     const res = await fetch(CONTENT_API, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: '{}',
+      // designPrefix lets get-content return this campaign's "<store>-ref" overlay
+      // blobs (referee only) keyed by bare store name for getOverlayStore().
+      body: JSON.stringify({ designPrefix: (typeof campaignKeyPrefix === 'function' ? campaignKeyPrefix() : '') }),
     });
     if(res.status === 403){
       // TASK 6: the venue-network lock blocked this device. Surface the referee's
@@ -460,6 +559,11 @@ async function hydrateSecureContent(){
     if(data.role === 'referee'){           // TASK 6/7: capture referee-only extras (never present for players)
       secureNetworkLock = data.networkLock || null;
       securePlayers = data.players || null;
+      // Full (unredacted) Design-Mode overlay blobs, delivered only to a referee
+      // over the token boundary. getOverlayStore() reads these back so the
+      // referee still sees their own refNotes/hooks/NPCs after the public copies
+      // are redacted and the "-ref" rows are carved out of public read.
+      if(typeof _refOverlays !== 'undefined') _refOverlays = data.designRef || {};
       if(secureNetworkLock && secureNetworkLock.repinned && typeof showToast === 'function')
         showToast('Network lock re-pinned to your current IP (' + (secureNetworkLock.pinned_ip || '?') + ').');
     }
@@ -476,6 +580,10 @@ async function hydrateSecureContent(){
     if(typeof showToast === 'function') showToast('Offline — using last saved content.');
   }
   applyHydratedData(data);
+  // Referee: now that _refOverlays holds the full overlay blobs, re-run the
+  // overlay loaders so any that raced this fetch swap their redacted reads for
+  // the full data. (Fire-and-forget; the loaders re-render on completion.)
+  if(data && data.role === 'referee') reloadDesignOverlays();
   return true;
 }
 

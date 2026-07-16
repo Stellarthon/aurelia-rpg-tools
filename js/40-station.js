@@ -13,12 +13,13 @@ let cur=null, curSub=null, curTab="overview";
 let currentStationId = 'aurelia';
 let stationAdditions = {};
 async function loadAuthoredStations(){
-  try { const r = await supaStorage.get('station-additions', true);
+  try { const r = await getOverlayStore('station-additions');
     stationAdditions = (r.value != null ? JSON.parse(r.value) : {}) || {}; }
   catch(e){ stationAdditions = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('station-additions', stationAdditions);
 }
 async function saveAuthoredStations(){
-  try { await supaStorage.set('station-additions', JSON.stringify(stationAdditions), true); }
+  try { stationAdditions = await mergedSaveStore('station-additions', stationAdditions); }
   catch(e){ console.error('Station save failed:', e); }
 }
 function stationDef(){

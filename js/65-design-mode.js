@@ -49,19 +49,19 @@ let contentDeletions = {};
 
 async function loadContentOverrides(){
   try {
-    const res = await supaStorage.get('content-overrides', true);
+    const res = await getOverlayStore('content-overrides');
     contentOverrides = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ contentOverrides = {}; }
   try {
-    const res2 = await supaStorage.get('content-history', true);
+    const res2 = await getOverlayStore('content-history');
     contentHistory = res2.value != null ? JSON.parse(res2.value) : {};
   } catch(e){ contentHistory = {}; }
   try {
-    const res3 = await supaStorage.get('content-additions', true);
+    const res3 = await getOverlayStore('content-additions');
     contentAdditions = res3.value != null ? JSON.parse(res3.value) : {};
   } catch(e){ contentAdditions = {}; }
   try {
-    const res4 = await supaStorage.get('content-deletions', true);
+    const res4 = await getOverlayStore('content-deletions');
     contentDeletions = res4.value != null ? JSON.parse(res4.value) : {};
   } catch(e){ contentDeletions = {}; }
   // Baselines for the field-level merge-on-save (see mergedSaveStore).
@@ -106,11 +106,11 @@ let bodyDeletions = {};
 let bodyPropertyOverrides = {};
 
 async function loadBodyStores(){
-  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-additions'); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyAdditions = {}; }
-  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-deletions'); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyDeletions = {}; }
-  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-prop-overrides'); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyPropertyOverrides = {}; }
   snapshotBaseline('body-additions', bodyAdditions);
   snapshotBaseline('body-deletions', bodyDeletions);
@@ -177,11 +177,11 @@ function baseLocationsFor(sysId, bodyId){
 }
 
 async function loadLocationStores(){
-  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-additions'); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationAdditions = {}; }
-  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-deletions'); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationDeletions = {}; }
-  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-prop-overrides'); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationPropertyOverrides = {}; }
   snapshotBaseline('location-additions', locationAdditions);
   snapshotBaseline('location-deletions', locationDeletions);
