@@ -886,6 +886,7 @@ async function pollRevealState(){
         if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function'){
           if(typeof selectedBodyLoc !== 'undefined' && selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody);
         } else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+        else if(currentView === 'galaxy' && typeof HX !== 'undefined' && HX.refresh) HX.refresh();   // system / region scene art
       }
     }
   } catch(e){ /* silent — next poll will retry */ }

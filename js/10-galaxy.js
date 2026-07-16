@@ -2022,7 +2022,8 @@ const HX = (function(){
       if(regKeys.length){ html+=`<div class="hx-small" style="margin:8px 0 3px;color:var(--tx1)">Regions${ref()?' · <span style="opacity:.75">👁 tap to hide/reveal for players</span>':''}</div>`;
         regKeys.forEach(k=>{ const f=FAC[k]||{}; const hid=(typeof factionHidden!=='undefined'&&!!factionHidden[k]);
           const eye=ref()?`<button class="hx-fac-eye ${hid?'hidden-fac':'shown-fac'}" title="${hid?'Hidden from players — tap to reveal':'Visible to players — tap to hide'}" onclick="event.stopPropagation();toggleFactionHidden('${k}')">${hid?'🙈':'👁'}</button>`:'';
-          html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
+          const regThumb=(typeof sceneThumbHTML==='function'&&typeof portraitSlug==='function')?sceneThumbHTML('region-'+portraitSlug(k),16):'';
+          html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name">${regThumb?regThumb+'&nbsp;':''}<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
       html+=document.documentElement.classList.contains('is-phone')
         ? `<div class="hx-small" style="margin-top:8px">Pick a system above to inspect it and plan a jump — the map itself is on the table display.</div>`
         : `<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
@@ -2031,6 +2032,9 @@ const HX = (function(){
     html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
     html+=`<div class="hx-small hx-mono" style="margin-top:2px">${s.deep?'Deep space — no fixed stellar position':eh(s.star)}</div>`;
     html+=`<span class="hx-tag" style="color:${fac.color};border-color:${fac.color}">${eh(fac.name)}</span>`;
+    // Establishing scene image for the system (design-mode upload; players see it).
+    if(typeof sceneImageBlockHTML==='function' && typeof portraitSlug==='function' && s.systemId){
+      const _sb=sceneImageBlockHTML('sys-'+portraitSlug(s.systemId), disp(s)); if(_sb) html+=`<div style="margin-top:8px">${_sb}</div>`; }
     if(s.uncharted) html+=`<div class="hx-small" style="color:var(--tx1);margin:-2px 0 6px">○ Uncharted — no charted worlds; estimated data only</div>`;
     else {
       html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="enterSystem('${s.systemId}')">⊙ View close up of ${eh(disp(s))}</button></div>`;
@@ -2209,9 +2213,18 @@ const HX = (function(){
       const RF=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
       const ea2=(typeof escAttr==='function')?escAttr:eh;
       Object.keys(RF).forEach(fk=>{ const f=RF[fk]||{}; const builtin=(fk==='independent'||fk==='uncharted'); const mem=SYS.filter(x=>x.fac===fk&&!x.uncharted).length;
+        const rKey='region-'+((typeof portraitSlug==='function')?portraitSlug(fk):fk);
+        const rThumb=(typeof sceneThumbHTML==='function')?sceneThumbHTML(rKey,20):'';
+        const rArt=(typeof sceneImageVer==='function')
+          ? `<button class="hx-reg-del" title="Region art" onclick="triggerSceneImage('${rKey}')">🖼</button>`
+            + (sceneImageVer(rKey)?`<button class="hx-reg-del" title="Remove region art" onclick="removeSceneImage('${rKey}')">✕</button>`:'')
+            + `<input type="file" id="scene-image-file-${rKey}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${rKey}', event)">`
+          : '';
         html+=`<div class="hx-reg-row">`+
+          (rThumb?rThumb+'&nbsp;':'')+
           `<input type="color" class="hx-reg-col" value="${ea2(f.color||'#888888')}" onchange="hxEditFactionField('${fk}','color',this.value)" title="Region colour">`+
           `<input class="hx-edit-in" value="${ea2(f.name||fk)}" onchange="hxEditFactionField('${fk}','name',this.value)" title="${mem} system${mem===1?'':'s'} in this region">`+
+          rArt+
           (builtin?`<span class="hx-reg-lock" title="Built-in fallback region">🔒</span>`:`<button class="hx-reg-del" title="Remove region" onclick="hxRemoveFaction('${fk}')">🗑</button>`)+
         `</div>`; });
       html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxAddFaction()">＋ Add region</button></div>`;

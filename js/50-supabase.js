@@ -198,10 +198,17 @@ function sceneImageBlockHTML(key, label){
     html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <button class="design-add-btn" style="flex:1" onclick="triggerSceneImage('${esc(key)}')">${ver ? '🖼 Change scene image' : '🖼 Add scene image'}</button>
       ${ver ? `<button class="design-tier-remove" onclick="removeSceneImage('${esc(key)}')">✕</button>` : ''}
-      <input type="file" id="scene-image-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${esc(key)}', event)">
+      <input type="file" id="scene-image-file-${esc(key)}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${esc(key)}', event)">
     </div>`;
   }
   return html;
+}
+// A small square thumbnail for a scene key (region list rows, editor rows) — the
+// image if set, else nothing.
+function sceneThumbHTML(key, size){
+  const ver = sceneImageVer(key);
+  if(!ver) return '';
+  return `<img src="${sceneImageUrlFor(_sceneCampaign(), key, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:4px;object-fit:cover;flex:none;vertical-align:middle" onerror="this.style.display='none'">`;
 }
 
 // ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────

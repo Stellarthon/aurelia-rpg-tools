@@ -1125,6 +1125,7 @@ function rerenderDesignEntityView(){
   if(currentView === 'station' && typeof cur !== 'undefined' && cur && typeof renderDetail === 'function') renderDetail();
   else if(currentView === 'system' && selectedBody && typeof selectBody === 'function') selectBody(selectedBody);
   else if(currentView === 'body' && selectedBody){ if(selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else if(typeof buildBodyView === 'function') buildBodyView(selectedBody); }
+  else if(currentView === 'galaxy' && typeof HX !== 'undefined'){ if(HX.refresh) HX.refresh(); if(typeof renderDesignPanel === 'function') renderDesignPanel(); }
 }
 function _reRenderNpcForm(){
   const key = designEditCurrentKey; if(!key) return;
@@ -1178,7 +1179,7 @@ function resizeSceneImage(file, maxDim){
     img.src = url;
   });
 }
-function triggerSceneImage(key){ const f = document.getElementById('scene-image-file'); if(f) f.click(); }
+function triggerSceneImage(key){ const f = document.getElementById('scene-image-file-' + key); if(f) f.click(); }
 async function onSceneImageFile(key, e){
   const file = e && e.target && e.target.files && e.target.files[0];
   if(e && e.target) e.target.value = '';

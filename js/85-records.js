@@ -3019,8 +3019,9 @@ if(typeof loadNpcPortraits === 'function') loadNpcPortraits().then(() => {   // 
   if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function') buildBodyView(selectedBody);
   else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
 });
-if(typeof loadSceneImages === 'function') loadSceneImages().then(() => {   // location / area establishing art (all devices)
+if(typeof loadSceneImages === 'function') loadSceneImages().then(() => {   // location / area / system / region establishing art (all devices)
   if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function') buildBodyView(selectedBody);
   else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+  else if(currentView === 'galaxy' && typeof HX !== 'undefined' && HX.refresh) HX.refresh();
 });
 
