@@ -100,6 +100,24 @@ async function uploadPortraitBlob(characterName, blob){
   if(!res.ok) throw new Error('Portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
   return true;
 }
+// NPC portraits share the same public 'portraits' bucket under an npc/ sub-path,
+// so no new migration is needed — the bucket's anon read/insert/update policies
+// (migration 0002) already cover it. Keyed by the NPC's stable id; a portraitVer
+// stamp on the roster entry cache-busts the shared public URL across devices.
+function npcPortraitPath(id){ return 'npc/' + portraitSlug(id) + '.jpg'; }
+function npcPortraitUrlFor(id, ver){
+  const url = PORTRAIT_BASE + 'npc/' + encodeURIComponent(portraitSlug(id)) + '.jpg';
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadNpcPortraitBlob(id, blob){
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/portraits/npc/' + encodeURIComponent(portraitSlug(id)) + '.jpg', {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('NPC portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
 
 // ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────
 // The referee's OWN, legally-owned rulebook PDFs — one object per book per

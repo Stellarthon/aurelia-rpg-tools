@@ -550,12 +550,52 @@ function npcToEncounter(id){
 }
 function npcEditField(id, field, value){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const numeric = ['str','dex','end','intl','edu','soc']; n[field] = numeric.includes(field) ? (parseInt(value)||0) : value; saveNpcRoster(); }
 
+// ── NPC portraits (Supabase Storage 'portraits' bucket, npc/ sub-path) ──
+// A face for each roster NPC. Reuses the character-portrait resize+upload flow
+// (js/50 uploadNpcPortraitBlob, js/60 resizePortrait); the version stamp lives on
+// the roster entry, so no new store / migration is needed.
+function npcAvatar(n, size){
+  const ver = n && n.portraitVer;
+  if(ver && typeof npcPortraitUrlFor === 'function'){
+    return `<img src="${npcPortraitUrlFor(n.id, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none;background:var(--bg2)" onerror="this.style.visibility='hidden'">`;
+  }
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;flex:none;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.4)}px;color:var(--tx1)">${escQH((n && n.name ? n.name.trim()[0] : '?').toUpperCase())}</span>`;
+}
+function triggerNpcPortraitUpload(id){ const f = document.getElementById('npc-portrait-file-' + id); if(f) f.click(); }
+async function onNpcPortraitFile(id, e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee()) return;
+  const n = npcById(id); if(!n) return;
+  if(typeof resizePortrait !== 'function' || typeof uploadNpcPortraitBlob !== 'function'){ if(typeof showToast==='function') showToast('Portraits unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast==='function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast==='function') showToast('Uploading…', 'info');
+    const blob = await resizePortrait(file, 256);
+    await uploadNpcPortraitBlob(id, blob);
+    n.portraitVer = Date.now();
+    saveNpcRoster();
+    renderNpcPanel();
+    if(typeof showToast==='function') showToast('Portrait updated');
+  } catch(err){
+    console.error('NPC portrait upload failed', err);
+    if(typeof showToast==='function') showToast('Portrait upload failed');
+  }
+}
+async function npcPortraitRemove(id){
+  if(!isReferee()) return;
+  const n = npcById(id); if(!n || !n.portraitVer) return;
+  delete n.portraitVer;                       // bucket object left as a harmless orphan (like handouts)
+  saveNpcRoster();
+  renderNpcPanel();
+}
+
 function renderNpcCard(n){
   const ea = (typeof escQH==='function') ? escQH : (x=>String(x==null?'':x));
   const ea2 = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));
   const editing = npcEditingId === n.id;
   const meta = [n.role, n.faction, n.location].filter(Boolean).map(ea).join(' · ');
-  let hd = `<div class="disc-card-hd"><span class="disc-title">${ea(n.name||'(unnamed)')}</span>
+  let hd = `<div class="disc-card-hd"><span style="display:flex;align-items:center;gap:8px;min-width:0">${npcAvatar(n, 26)}<span class="disc-title">${ea(n.name||'(unnamed)')}</span></span>
     <div class="disc-ctl">
       <button class="disc-mini" onclick="npcToEncounter('${n.id}')" title="Add to encounter (initiative tracker)">⚔</button>
       <button class="disc-mini" onclick="npcEdit('${n.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
@@ -570,6 +610,12 @@ function renderNpcCard(n){
   const chars = ['str','dex','end','intl','edu','soc'].map(c =>
     `<label>${c.toUpperCase()}<input type="number" value="${parseInt(n[c])||0}" onchange="npcEditField('${n.id}','${c}',this.value)"></label>`).join('');
   const ed = `<div class="disc-add">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      ${npcAvatar(n, 48)}
+      <button class="disc-mini" onclick="triggerNpcPortraitUpload('${n.id}')" title="Upload a face">${n.portraitVer?'Change photo':'Upload photo'}</button>
+      ${n.portraitVer?`<button class="disc-mini del" onclick="npcPortraitRemove('${n.id}')" title="Remove photo">✕</button>`:''}
+      <input type="file" id="npc-portrait-file-${n.id}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onNpcPortraitFile('${n.id}', event)">
+    </div>
     <input value="${ea2(n.name)}" placeholder="Name" onchange="npcEditField('${n.id}','name',this.value)">
     <div class="disc-add-row">
       <input value="${ea2(n.role)}" placeholder="Role / title" onchange="npcEditField('${n.id}','role',this.value)">
