@@ -976,6 +976,10 @@ function renderDesignMenu(){
       <span class="settings-row-label">🎲 Generator Tables</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRulesTables()">
+      <span class="settings-row-label">📐 Rules &amp; Tables</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
       <span class="settings-row-label">🌠 Splash Screens</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -1010,6 +1014,69 @@ function refreshOpenMenus(){
   if(!document.getElementById('settings-menu').classList.contains('hidden')) renderSettingsMenu(isReferee());
   if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
   if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULES & TABLES OVERLAY  (Design Mode) — edit the shipped reference tables
+// ═══════════════════════════════════════════════════════════════════════════
+// The rules/reference tables (task ladder, status conditions, fuel model, trade
+// rates, combat presets, quick-reference sheets) are `const` arrays/objects read
+// by reference across the app. Rather than rewire every consumer, an override is
+// APPLIED IN PLACE — the const's CONTENTS are replaced (array splice / Object
+// rewrite) so every existing reader sees the edit with no other change. A
+// pristine snapshot is captured at boot before any override, so "reset to
+// default" always works. Referee tool, synced. Combat internals too tightly
+// coupled to the engine (range bands, weapon-type keys) are deliberately omitted.
+let rulesOverrides = {};
+let _rulesDefaults = null;
+function rulesTableRegistry(){
+  const reg = [];
+  const add = (key, label, group, shape, ref) => { if(ref !== undefined && ref !== null) reg.push({ key, label, group, shape, ref }); };
+  add('task-ladder',    'Task-difficulty ladder', 'Rules',   'pairs',   typeof TASK_LADDER !== 'undefined' ? TASK_LADDER : null);
+  add('status-fx',      'Status conditions',      'Rules',   'json',    typeof TRAVELLER_STATUS_FX !== 'undefined' ? TRAVELLER_STATUS_FX : null);
+  add('qref',           'Quick-reference sheets', 'Rules',   'json',    typeof QREF_DATA !== 'undefined' ? QREF_DATA : null);
+  add('fuel-rules',     'Fuel model',             'Rules',   'json',    typeof FUEL_RULES !== 'undefined' ? FUEL_RULES : null);
+  add('freight-rates',  'Freight rates (Cr/ton)', 'Economy', 'kv',      typeof FREIGHT_RATES !== 'undefined' ? FREIGHT_RATES : null);
+  add('passage-rates',  'Passage rates',          'Economy', 'json',    typeof PASSAGE_RATES !== 'undefined' ? PASSAGE_RATES : null);
+  add('qr-outcomes',    'Combat quick-resolve',   'Combat',  'strings', typeof COMBAT_QR_OUTCOMES !== 'undefined' ? COMBAT_QR_OUTCOMES : null);
+  add('combat-hazards', 'Combat hazards',         'Combat',  'json',    typeof COMBAT_HAZARDS !== 'undefined' ? COMBAT_HAZARDS : null);
+  return reg;
+}
+function _rulesApplyInPlace(target, value){
+  if(Array.isArray(target)){ target.length = 0; if(Array.isArray(value)) value.forEach(v => target.push(v)); }
+  else if(target && typeof target === 'object'){ Object.keys(target).forEach(k => delete target[k]); if(value && typeof value === 'object') Object.assign(target, value); }
+}
+function _captureRulesDefaults(){
+  if(_rulesDefaults) return;
+  _rulesDefaults = {};
+  rulesTableRegistry().forEach(t => { try { _rulesDefaults[t.key] = JSON.parse(JSON.stringify(t.ref)); } catch(e){} });
+}
+function applyRulesOverrides(){
+  rulesTableRegistry().forEach(t => {
+    const val = Object.prototype.hasOwnProperty.call(rulesOverrides, t.key) ? rulesOverrides[t.key]
+      : (_rulesDefaults ? _rulesDefaults[t.key] : undefined);
+    if(val !== undefined) _rulesApplyInPlace(t.ref, val);
+  });
+}
+async function loadRulesOverrides(){
+  _captureRulesDefaults();   // pristine snapshot BEFORE any override is applied
+  try { const r = await supaStorage.get('rules-overrides', true); rulesOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ rulesOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('rules-overrides', rulesOverrides);
+  applyRulesOverrides();
+}
+async function saveRulesOverrides(){ try { rulesOverrides = await mergedSaveStore('rules-overrides', rulesOverrides); } catch(e){ console.error('Rules overrides save failed', e); } }
+// Shape-aware serialise / parse for the editor textarea.
+function rulesFormat(shape, value){
+  if(shape === 'strings') return (Array.isArray(value) ? value : []).join('\n');
+  if(shape === 'pairs')   return (Array.isArray(value) ? value : []).map(p => (p[0] + ' = ' + p[1])).join('\n');
+  if(shape === 'kv')      return Object.keys(value || {}).map(k => (k + ' = ' + value[k])).join('\n');
+  try { return JSON.stringify(value, null, 2); } catch(e){ return ''; }
+}
+function rulesParse(shape, text){
+  if(shape === 'strings') return String(text).split('\n').map(s => s.trim()).filter(Boolean);
+  if(shape === 'pairs')   return String(text).split('\n').map(s => s.trim()).filter(Boolean).map(line => { const i = line.indexOf('='); return i < 0 ? [line, ''] : [line.slice(0, i).trim(), line.slice(i + 1).trim()]; });
+  if(shape === 'kv'){ const o = {}; String(text).split('\n').map(s => s.trim()).filter(Boolean).forEach(line => { const i = line.indexOf('='); if(i < 0) return; const k = line.slice(0, i).trim(); const raw = line.slice(i + 1).trim(); o[k] = (raw !== '' && !isNaN(raw)) ? Number(raw) : raw; }); return o; }
+  return JSON.parse(text);   // json — throws on bad input (caught by caller)
 }
 
 // ── Bounded undo / redo for Design Mode ─────────────────────────────────────

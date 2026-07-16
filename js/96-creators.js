@@ -457,6 +457,83 @@ async function resetGeneratorList(key){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// RULES & TABLES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// UI over the js/60 rules overlay: list the shipped reference tables, edit each
+// per its shape (strings / key=value pairs / raw JSON), applied in place so every
+// consumer picks it up. Reuses the trade editor's panel host (_tgPanel).
+function openRulesTables(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const ovs = (typeof rulesOverrides !== 'undefined' && rulesOverrides) ? rulesOverrides : {};
+  const groups = {};
+  reg.forEach(t => { (groups[t.group] = groups[t.group] || []).push(t); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(t => {
+      const edited = Object.prototype.hasOwnProperty.call(ovs, t.key);
+      const size = Array.isArray(t.ref) ? (t.ref.length + ' rows') : (t.ref && typeof t.ref === 'object' ? (Object.keys(t.ref).length + ' keys') : '');
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(t.label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+        <div class="design-history-snippet">${escHtml(size + ' · ' + t.shape)}</div></div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openRulesTableForm('${escAttr(t.key)}')" title="Edit">✎</button></div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No editable rules tables available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">The shipped rules / reference tables. "json" tables edit as raw JSON — keep the shape valid. Combat internals tied to the engine (range bands, weapon types) are deliberately not listed.</div>`;
+  _tgPanel('RULES & TABLES', html);
+}
+function openRulesTableForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key);
+  if(!t){ showToast('Table not found', 'error'); return; }
+  const ovs = (typeof rulesOverrides !== 'undefined' && rulesOverrides) ? rulesOverrides : {};
+  const overridden = Object.prototype.hasOwnProperty.call(ovs, key);
+  const text = (typeof rulesFormat === 'function') ? rulesFormat(t.shape, t.ref) : '';
+  const hint = t.shape === 'json' ? 'Raw JSON — keep it valid.' : (t.shape === 'strings' ? 'One entry per line.' : 'One "key = value" per line.');
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">${escHtml(t.group + ' · ' + t.label)} — ${escHtml(hint)}</div>
+      <textarea id="rules-text" class="design-field-textarea" style="min-height:260px;font-family:monospace;font-size:11px">${escHtml(text)}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetRulesTable('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px"><button class="se-cancel" onclick="openRulesTables()">Cancel</button>
+      <button class="se-save" onclick="commitRulesTable('${escAttr(key)}')">Save</button></span>
+    </div>`;
+  _tgPanel('EDIT: ' + t.label.toUpperCase(), html);
+}
+async function commitRulesTable(key){
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key); if(!t) return;
+  let value;
+  try { value = rulesParse(t.shape, document.getElementById('rules-text').value); }
+  catch(e){ showToast('Invalid ' + (t.shape === 'json' ? 'JSON' : 'input') + ' — not saved', 'error'); return; }
+  if(t.shape === 'json' && (value === null || typeof value !== 'object')){ showToast('Top level must be an object or array', 'error'); return; }
+  rulesOverrides[key] = value;
+  if(typeof _rulesApplyInPlace === 'function') _rulesApplyInPlace(t.ref, value);   // live-apply to the const
+  if(typeof saveRulesOverrides === 'function') await saveRulesOverrides();
+  _rulesAfterEdit();
+  showToast('Rules table saved');
+  openRulesTables();
+}
+async function resetRulesTable(key){
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key); if(!t) return;
+  if(typeof rulesOverrides !== 'undefined') delete rulesOverrides[key];
+  if(typeof _rulesDefaults !== 'undefined' && _rulesDefaults && _rulesDefaults[key] !== undefined && typeof _rulesApplyInPlace === 'function') _rulesApplyInPlace(t.ref, _rulesDefaults[key]);
+  if(typeof saveRulesOverrides === 'function') await saveRulesOverrides();
+  _rulesAfterEdit();
+  showToast('Reset to default', 'info');
+  openRulesTables();
+}
+// Re-render surfaces that read these tables, if open.
+function _rulesAfterEdit(){
+  if(typeof renderQref === 'function' && typeof qrefOpen !== 'undefined' && qrefOpen) renderQref();
+  if(typeof renderCombat === 'function' && typeof combatEncounter !== 'undefined' && combatEncounter) renderCombat();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // BODY CREATOR  —  add planets / moons / asteroid belts in design mode
 // ═══════════════════════════════════════════════════════════════════════════
 // Mirrors the NPC creator's structure: a modal with Manual and Random (UWP)

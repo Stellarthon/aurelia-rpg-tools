@@ -674,3 +674,8 @@
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
   else schedule();
 })();
+
+// Rules & Tables overlay (Design Mode): loaded here, in the last script, so every
+// hardcoded rules const (js/00/60/80/91/92) exists before we snapshot pristine
+// defaults and apply the referee's overrides in place. See js/60.
+if(typeof loadRulesOverrides === 'function') loadRulesOverrides();

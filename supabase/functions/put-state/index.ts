@@ -65,7 +65,7 @@ const REFEREE_ONLY = new Set([
   "weapon-additions", "weapon-deletions", "weapon-prop-overrides",
   "galaxy-lanes", "hex-paint", "route-blocks",
   "trade-good-overrides", "trade-good-additions", "trade-good-deletions",
-  "generator-overrides",
+  "generator-overrides", "rules-overrides",
 ]);
 const MAX_KEY = 256;
 const MAX_VALUE = 1_000_000;
