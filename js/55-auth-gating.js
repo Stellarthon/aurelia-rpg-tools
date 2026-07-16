@@ -825,6 +825,29 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Trade-goods catalogue — players see referee edits to the Station Trade desk
+  // (base prices, DMs, added/removed goods). Public overlay, like the map layers.
+  try {
+    if(typeof tradeGoodOverrides !== 'undefined'){
+      const [rto, rta, rtd] = await Promise.all([
+        supaStorage.get('trade-good-overrides', true), supaStorage.get('trade-good-additions', true), supaStorage.get('trade-good-deletions', true),
+      ]);
+      if(rto.ok && rta.ok && rtd.ok){
+        const no = rto.value != null ? JSON.parse(rto.value) : {};
+        const na = rta.value != null ? JSON.parse(rta.value) : [];
+        const nd = rtd.value != null ? JSON.parse(rtd.value) : {};
+        const changed = JSON.stringify(no) !== JSON.stringify(tradeGoodOverrides)
+          || JSON.stringify(na) !== JSON.stringify(tradeGoodAdditions)
+          || JSON.stringify(nd) !== JSON.stringify(tradeGoodDeletions);
+        if(changed){
+          tradeGoodOverrides = no; tradeGoodAdditions = Array.isArray(na) ? na : []; tradeGoodDeletions = nd;
+          if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+          if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
   // Worlds & locations — players see referee-added / edited / removed bodies and
   // locations live, the same way they already get system and content edits.
   // Fetched ONLY while a system or body is on screen (the only views that render

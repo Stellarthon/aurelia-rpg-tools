@@ -428,6 +428,29 @@ async function loadSystemStores(){
   try { const r = await getOverlayStore('system-prop-overrides'); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
   if(typeof snapshotBaseline === 'function'){ snapshotBaseline('system-additions', systemAdditions); snapshotBaseline('system-deletions', systemDeletions); snapshotBaseline('system-prop-overrides', systemPropertyOverrides); }
 }
+
+// ── Trade-goods catalogue overlay (Design Mode) ──────────────────────────────
+// Edit / add / remove the goods that drive the Station Trade desk — base Cr,
+// buy & sell trade-code DMs, and availability — layered over the built-in
+// MgT2e TRADE_GOODS table (closure-private in the HX engine; effectiveTradeGoods
+// there reads these). PUBLIC (the trade desk is player-visible), synced like the
+// other overlays. Keyed by good NAME so an override survives reordering.
+//   tradeGoodOverrides: { name: {name?,base?,buy?,sell?,avail?} }  edits to base goods
+//   tradeGoodAdditions: [ {name,base,buy,sell,avail}, … ]          referee-added goods
+//   tradeGoodDeletions: { name: true }                             tombstoned base goods
+let tradeGoodOverrides = {};
+let tradeGoodAdditions = [];
+let tradeGoodDeletions = {};
+async function loadTradeGoodStores(){
+  try { const r = await supaStorage.get('trade-good-overrides', true); tradeGoodOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ tradeGoodOverrides = {}; }
+  try { const r = await supaStorage.get('trade-good-additions', true); tradeGoodAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(tradeGoodAdditions)) tradeGoodAdditions = []; } catch(e){ tradeGoodAdditions = []; }
+  try { const r = await supaStorage.get('trade-good-deletions', true); tradeGoodDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ tradeGoodDeletions = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('trade-good-overrides', tradeGoodOverrides); snapshotBaseline('trade-good-additions', tradeGoodAdditions); snapshotBaseline('trade-good-deletions', tradeGoodDeletions); }
+}
+async function saveTradeGoodOverrides(){ try { tradeGoodOverrides = await mergedSaveStore('trade-good-overrides', tradeGoodOverrides); } catch(e){ console.error('Trade good overrides save failed', e); } }
+async function saveTradeGoodAdditions(){ try { tradeGoodAdditions = await mergedSaveStore('trade-good-additions', tradeGoodAdditions); } catch(e){ console.error('Trade good additions save failed', e); } }
+async function saveTradeGoodDeletions(){ try { tradeGoodDeletions = await mergedSaveStore('trade-good-deletions', tradeGoodDeletions); } catch(e){ console.error('Trade good deletions save failed', e); } }
+
 async function saveSystemAdditions(){ try { systemAdditions = await mergedSaveStore('system-additions', systemAdditions); } catch(e){ console.error('System additions save failed', e); } }
 async function saveSystemDeletions(){ try { systemDeletions = await mergedSaveStore('system-deletions', systemDeletions); } catch(e){ console.error('System deletions save failed', e); } }
 async function saveSystemPropertyOverrides(){ try { systemPropertyOverrides = await mergedSaveStore('system-prop-overrides', systemPropertyOverrides); } catch(e){ console.error('System property overrides save failed', e); } }
@@ -1189,6 +1212,18 @@ const HX = (function(){
     {name:'Textiles',base:3000,buy:{Ag:7},sell:{Hi:3,Na:2},avail:['Ag','Ni']},
     {name:'Wood',base:1000,buy:{Ag:6},sell:{Ri:2,In:1},avail:['Ag','Ga']},
   ];
+  // Effective catalogue = base TRADE_GOODS (minus tombstoned, with overrides
+  // applied) then referee-added goods. Design Mode edits the module-scope stores
+  // (js/10 tradeGood*); every trade-desk read routes through here.
+  function effectiveTradeGoods(){
+    const dels = (typeof tradeGoodDeletions !== 'undefined' && tradeGoodDeletions) ? tradeGoodDeletions : {};
+    const ovs  = (typeof tradeGoodOverrides !== 'undefined' && tradeGoodOverrides) ? tradeGoodOverrides : {};
+    const adds = (typeof tradeGoodAdditions !== 'undefined' && Array.isArray(tradeGoodAdditions)) ? tradeGoodAdditions : [];
+    const out = [];
+    TRADE_GOODS.forEach(g => { if(dels[g.name]) return; const ov = ovs[g.name]; out.push(ov ? Object.assign({}, g, ov) : g); });
+    adds.forEach(g => { if(g && g.name && !dels[g.name]) out.push(g); });
+    return out;
+  }
   const PURCHASE_PCT=[3.0,2.5,2.0,1.75,1.5,1.35,1.25,1.20,1.15,1.10,1.05,1.00,0.95,0.90,0.85,0.80,0.75,0.70,0.65,0.60,0.55,0.50,0.45,0.40,0.35,0.30,0.25,0.20,0.15];
   const SALE_PCT=[0.10,0.20,0.30,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,1.00,1.05,1.10,1.15,1.20,1.25,1.30,1.40,1.50,1.60,1.75,2.00,2.50,3.00,4.00];
   function priceMult(arr,roll){ const i=clamp(Math.round(roll)+3,0,arr.length-1); return arr[i]; }
@@ -1251,7 +1286,7 @@ const HX = (function(){
     return simplePressure(sys.id||sys.label, goodName); }
   function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
     const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
-    TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
+    effectiveTradeGoods().forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
       const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker-COUNTERPARTY_BROKER+mktPressure(src,g.name),
             sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-COUNTERPARTY_BROKER-mktPressure(dst,g.name);
       let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
@@ -1273,7 +1308,7 @@ const HX = (function(){
     if(!s) return null;
     if(!hasMarket(s)){ const f=effFac(s.fac); return { id:s.id, label:disp(s), noMarket:true, faction:(f&&f.name)||'' }; }
     const codes=tradeCodes(s);
-    const rows=TRADE_GOODS.map(g=>{
+    const rows=effectiveTradeGoods().map(g=>{
       const availHere = g.avail==='all' || g.avail.some(c=>codes.includes(c));
       const buyDM=bestDM(g.buy,codes), sellDM=bestDM(g.sell,codes), pr=mktPressure(s,g.name);
       const buyRoll =AVG_ROLL+buyDM-sellDM+broker-COUNTERPARTY_BROKER+pr,
@@ -2442,6 +2477,10 @@ const HX = (function(){
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; },
     // Bases (UWP Bases field) — id-based accessors in the localMarket/worldFacts style.
     basesOf(id){ const s=BY_ID[id]; return s?basesOf(s):[]; }, BASE_META,
+    // Trade-goods catalogue: base (built-in) list for the Design-Mode editor, and
+    // the effective list after overrides. Editing writes the module-scope stores.
+    tradeGoodsBase(){ return TRADE_GOODS.map(g => JSON.parse(JSON.stringify(g))); },
+    tradeGoodsEffective(){ return effectiveTradeGoods(); },
     designSectionsHTML };
 })();
 

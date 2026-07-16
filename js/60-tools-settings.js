@@ -968,6 +968,10 @@ function renderDesignMenu(){
       <span class="settings-row-label">🎒 Item Catalogue</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openTradeCatalogue()">
+      <span class="settings-row-label">💰 Trade Goods</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
       <span class="settings-row-label">🌠 Splash Screens</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>

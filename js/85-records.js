@@ -2864,4 +2864,5 @@ loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // referee-painted territory hexes (shared)
+if(typeof loadTradeGoodStores === 'function') loadTradeGoodStores().then(() => { if(typeof HX !== 'undefined' && HX.refresh) HX.refresh(); if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel(); });   // referee-edited trade-goods catalogue (shared)
 

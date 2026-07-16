@@ -268,6 +268,126 @@ function editDraftInManual(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TRADE-GOODS CATALOGUE EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Edits the goods that drive the Station Trade desk: base Cr, buy/sell
+// trade-code DMs, and availability. Base goods (HX.tradeGoodsBase) get overrides
+// keyed by name; new goods are additions; base goods tombstone (restorable).
+// Stores + savers are module-scope in js/10; HX.tradeGoodsEffective reads them.
+function tgParseDMs(s){ const o = {}; String(s || '').split(',').forEach(p => { const m = p.split(':'); const code = (m[0] || '').trim(); const dm = parseInt((m[1] || '').trim(), 10); if(code && !isNaN(dm)) o[code] = dm; }); return o; }
+function tgFormatDMs(o){ if(!o || typeof o !== 'object') return ''; return Object.keys(o).map(k => k + ':' + o[k]).join(', '); }
+function tgParseAvail(s){ s = String(s || '').trim(); if(!s || s.toLowerCase() === 'all') return 'all'; const codes = s.split(',').map(x => x.trim()).filter(Boolean); return codes.length ? codes : 'all'; }
+function tgFormatAvail(a){ return (a === 'all' || !a) ? 'all' : (Array.isArray(a) ? a.join(', ') : String(a)); }
+function _tgPanel(title, bodyHTML){
+  document.getElementById('design-edit-title').textContent = title;
+  document.getElementById('design-edit-body').innerHTML = bodyHTML;
+  const f = document.getElementById('design-edit-footer'); if(f) f.classList.add('hidden');
+  if(typeof designEditCurrentKey !== 'undefined') designEditCurrentKey = null;
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+function openTradeCatalogue(){
+  if(!isReferee() || !designModeOn) return;
+  const eff = (typeof HX !== 'undefined' && HX.tradeGoodsEffective) ? HX.tradeGoodsEffective() : [];
+  const base = (typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : [];
+  const baseNames = new Set(base.map(g => g.name));
+  const dels = (typeof tradeGoodDeletions !== 'undefined' && tradeGoodDeletions) ? tradeGoodDeletions : {};
+  const ovs = (typeof tradeGoodOverrides !== 'undefined' && tradeGoodOverrides) ? tradeGoodOverrides : {};
+  const rows = eff.map(g => {
+    const isAdded = !baseNames.has(g.name);
+    const tag = isAdded ? ' <span style="color:#3f9d5a">+new</span>' : (ovs[g.name] ? ' <span style="color:#9B59B6">· edited</span>' : '');
+    const snippet = 'Cr' + (Number(g.base) || 0).toLocaleString() + ' · buy ' + (tgFormatDMs(g.buy) || '—') + ' · sell ' + (tgFormatDMs(g.sell) || '—') + ' · ' + tgFormatAvail(g.avail);
+    return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+      <div style="min-width:0;flex:1">
+        <div class="design-history-label">${escHtml(g.name)}${tag}</div>
+        <div class="design-history-snippet">${escHtml(snippet)}</div>
+      </div>
+      <span style="display:flex;gap:4px;flex:none">
+        <button class="design-edit-pencil-inline" onclick="openTradeGoodForm('${escAttr(g.name)}')" title="Edit">✎</button>
+        <button class="design-edit-pencil-inline danger" onclick="deleteTradeGood('${escAttr(g.name)}', ${isAdded})" title="Remove">🗑</button>
+      </span></div>`;
+  }).join('');
+  const delNames = Object.keys(dels).filter(n => dels[n]);
+  const delRows = delNames.length ? `<div class="settings-section-lbl" style="margin-top:12px">Removed</div>` + delNames.map(nm =>
+    `<div class="design-history-item" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div class="design-history-snippet">${escHtml(nm)}</div>
+      <button class="design-tier-remove" style="flex:none" onclick="restoreTradeGood('${escAttr(nm)}')">↺ restore</button></div>`).join('') : '';
+  const html = (rows || '<div class="init-empty">No trade goods.</div>') + delRows +
+    `<button class="design-add-btn" style="width:100%;margin-top:12px" onclick="openTradeGoodForm(null)">+ Add trade good</button>
+     <div class="se-note" style="margin-top:6px">Drives the Station Trade desk. Trade codes are MgT2e two-letter codes (Ag, In, Ht, Ri, …). Buy DMs = where it's produced/cheap; Sell DMs = where it's in demand.</div>`;
+  _tgPanel('TRADE GOODS', html);
+}
+function openTradeGoodForm(name){
+  if(!isReferee() || !designModeOn) return;
+  const base = (typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : [];
+  const baseNames = new Set(base.map(g => g.name));
+  let g;
+  if(name){
+    const eff = (typeof HX !== 'undefined' && HX.tradeGoodsEffective) ? HX.tradeGoodsEffective() : [];
+    g = eff.find(x => x.name === name) || { name, base: 1000, buy: {}, sell: {}, avail: 'all' };
+  } else {
+    g = { name: '', base: 1000, buy: {}, sell: {}, avail: 'all' };
+  }
+  const field = (id, label, val, ph) => `<div class="design-field-group"><div class="design-field-label">${label}</div><input id="${id}" class="design-field-input" value="${escAttr(val)}"${ph ? ` placeholder="${escAttr(ph)}"` : ''}></div>`;
+  const html =
+    field('tg-name', 'Name', g.name) +
+    `<div class="design-field-group"><div class="design-field-label">Base price (Cr)</div><input id="tg-base" type="number" min="0" class="design-field-input" value="${Number(g.base) || 0}"></div>` +
+    field('tg-buy', 'Buy DMs — where it\'s produced / cheap (code:DM)', tgFormatDMs(g.buy), 'In:2, Ht:3') +
+    field('tg-sell', 'Sell DMs — where it\'s in demand', tgFormatDMs(g.sell), 'Ni:2, Lt:1') +
+    field('tg-avail', 'Availability ("all" or trade codes)', tgFormatAvail(g.avail), 'all') +
+    `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="se-cancel" onclick="openTradeCatalogue()">Cancel</button>
+      <button class="se-save" onclick="commitTradeGood('${escAttr(name || '')}')">Save</button>
+    </div>`;
+  _tgPanel(name ? 'EDIT TRADE GOOD' : 'NEW TRADE GOOD', html);
+  setTimeout(() => { const i = document.getElementById('tg-name'); if(i && !name) i.focus(); }, 0);
+}
+async function commitTradeGood(origName){
+  const name = (document.getElementById('tg-name').value || '').trim();
+  if(!name){ showToast('Trade good needs a name', 'error'); return; }
+  const good = {
+    name,
+    base: Math.max(0, Math.round(Number(document.getElementById('tg-base').value) || 0)),
+    buy: tgParseDMs(document.getElementById('tg-buy').value),
+    sell: tgParseDMs(document.getElementById('tg-sell').value),
+    avail: tgParseAvail(document.getElementById('tg-avail').value),
+  };
+  const baseNames = new Set(((typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : []).map(g => g.name));
+  if(origName && baseNames.has(origName)){
+    tradeGoodOverrides[origName] = good;                 // override a built-in good (rename via good.name)
+    if(typeof saveTradeGoodOverrides === 'function') await saveTradeGoodOverrides();
+  } else {
+    const idx = origName ? tradeGoodAdditions.findIndex(x => x && x.name === origName) : -1;
+    if(idx >= 0) tradeGoodAdditions[idx] = good; else tradeGoodAdditions.push(good);
+    if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions();
+  }
+  _tgAfterEdit();
+  showToast('Trade good saved');
+  openTradeCatalogue();
+}
+async function deleteTradeGood(name, isAdded){
+  if(!confirm('Remove trade good "' + name + '"?' + (isAdded ? ' This deletes it.' : ' You can restore it later.'))) return;
+  if(isAdded){
+    const idx = tradeGoodAdditions.findIndex(x => x && x.name === name);
+    if(idx >= 0){ tradeGoodAdditions.splice(idx, 1); if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions(); }
+  } else {
+    if(typeof tradeGoodDeletions !== 'undefined'){ tradeGoodDeletions[name] = true; if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  }
+  _tgAfterEdit();
+  openTradeCatalogue();
+}
+async function restoreTradeGood(name){
+  if(typeof tradeGoodDeletions !== 'undefined'){ delete tradeGoodDeletions[name]; if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  _tgAfterEdit();
+  openTradeCatalogue();
+}
+// Repaint the map trade layer + the Station Trade desk (if open) after an edit.
+function _tgAfterEdit(){
+  if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+  if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+  else if(typeof refreshTradeScreen === 'function') refreshTradeScreen();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // BODY CREATOR  —  add planets / moons / asteroid belts in design mode
 // ═══════════════════════════════════════════════════════════════════════════
 // Mirrors the NPC creator's structure: a modal with Manual and Random (UWP)
