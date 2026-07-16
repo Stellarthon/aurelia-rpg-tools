@@ -1190,6 +1190,17 @@ async function loadGeneratorOverrides(){
 }
 async function saveGeneratorOverrides(){ try { generatorOverrides = await mergedSaveStore('generator-overrides', generatorOverrides); } catch(e){ console.error('Generator overrides save failed', e); } }
 function genList(key, base){ const o = generatorOverrides[key]; return (Array.isArray(o) && o.length) ? o : base; }
+// The living-economy rumour phrasings (MARKET_RUMOUR) editable through the same
+// overlay — one bucket per market signal. Returns the override if set, else the
+// shipped bucket (or [] for an unknown bucket, so callers keep their fallback).
+function marketRumours(bucket){ return genList('market.' + bucket, (typeof MARKET_RUMOUR !== 'undefined' && Array.isArray(MARKET_RUMOUR[bucket])) ? MARKET_RUMOUR[bucket] : []); }
+// Friendly labels for the MARKET_RUMOUR buckets in the Design-Mode editor.
+const MARKET_RUMOUR_LABELS = {
+  shock_output:'Output shock', shock_block:'Lane blocked', shock_embargo:'Embargo',
+  shock_crackdown:'Crackdown', shock_tariff:'Tariff', shock_demand:'Demand spike',
+  shortage:'Shortage', glut:'Glut', status_boom:'Boom', status_bust:'Bust',
+  status_unrest:'Unrest', status_rationing:'Rationing', blackmarket:'Black market',
+};
 // Registry of the editable string-list tables (for the Design-Mode editor). Base
 // arrays span js/85 (here) + js/96 (NPC_GEN); read defensively at call time.
 function generatorListRegistry(){
@@ -1202,6 +1213,9 @@ function generatorListRegistry(){
     add('rumour.hostile',  'Hostile',  'Rumours', RUMOUR_TEMPLATES.hostile);
     add('rumour.friendly', 'Friendly', 'Rumours', RUMOUR_TEMPLATES.friendly);
     add('rumour.neutral',  'Neutral',  'Rumours', RUMOUR_TEMPLATES.neutral);
+  }
+  if(typeof MARKET_RUMOUR !== 'undefined' && MARKET_RUMOUR){   // the living-economy rumour phrasings
+    Object.keys(MARKET_RUMOUR).forEach(k => add('market.' + k, (MARKET_RUMOUR_LABELS && MARKET_RUMOUR_LABELS[k]) || k, 'Market rumours', MARKET_RUMOUR[k]));
   }
   if(typeof ENCOUNTER_TABLES !== 'undefined' && ENCOUNTER_TABLES){
     add('encounter.space',   'Space',   'Encounters', ENCOUNTER_TABLES.space);
@@ -1363,15 +1377,15 @@ function pickMarketRumour(){
   if(item.kind === 'contract'){ const d = draftCorpContract(item);   // a corp job overheard on the docks
     return { kind:'rumour', text:d.brief, faction:null, source:'contract', contract:d,
       reliability:(item.contract==='sabotage'||item.contract==='espionage'||item.contract==='smuggle')?'Whispered':'Reliable' }; }
-  if(item.kind === 'status'){ const tmpl = MARKET_RUMOUR['status_'+item.status] || MARKET_RUMOUR.shortage;   // a world's mood/condition
+  if(item.kind === 'status'){ let tmpl = marketRumours('status_'+item.status); if(!tmpl.length) tmpl = marketRumours('shortage');   // a world's mood/condition
     return { kind:'rumour', text: pick(tmpl).replace(/{place}/g, item.label), faction:null, reliability:'Reliable', source:'market' }; }
-  if(item.kind === 'blackmarket'){ const text = pick(MARKET_RUMOUR.blackmarket).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
+  if(item.kind === 'blackmarket'){ const text = pick(marketRumours('blackmarket')).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
     return { kind:'rumour', text, faction:null, reliability:'Whispered', source:'market' }; }   // illicit, so sketchy intel
   if(item.kind === 'news'){ return { kind:'rumour', text:item.text, faction:null, reliability:'Reliable', source:'news' }; }   // a GalNet broadcast — government reshuffle, trade war, détente
   const key = item.kind === 'shock'
     ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
-  const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
+  let tmpl = marketRumours(key); if(!tmpl.length) tmpl = marketRumours('shortage');
   const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
   return { kind:'rumour', text, faction:null, reliability:'Reliable', source:'market' };
 }
