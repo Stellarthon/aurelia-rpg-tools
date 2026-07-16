@@ -1,11 +1,23 @@
 # Phase 0 — Grid Inventory & Equipment: Audit, Decisions & Design
 
-Status: **Phase 0 complete — awaiting sign-off to begin Phase 1.**
+Status: **Phase 0 complete. Phases 1–4 SHIPPED** (this doc is historical — see the
+note below). Original wording is preserved as the Phase-0 record.
+
+> **Build status (updated):** Phases 1–4 are implemented and wired in
+> `js/60-tools-settings.js` — structured render + free-text migration (Phase 1),
+> the referee-authored item catalogue with honour-based add/remove (Phase 2),
+> equip slots + advisory encumbrance (Phase 3), and container tabs + the footprint
+> drag grid (Phase 4). Reachable via 🎒 Item Catalogue and the ＋ Add item button on
+> each sheet. Phase 6 (portraits) also shipped. What remains is Phase 5 (referee
+> edit-any / grant-item — verify what's already covered by add-from-catalogue) and
+> Phase 7 (polish). The "no feature code written yet" and per-phase "will build"
+> wording below is the Phase-0 snapshot, not current state.
+
 Scope: adds a grid-based inventory + equipment system to the character sheet of
 *Archon Gambit* (Mongoose Traveller 2e companion). This document is the read-before-write
 audit required by the build brief §0/§7, the record of the Referee's Phase-0 decisions,
 and the concrete data/UX design that Phase 1+ will build to. **No feature code has been
-written yet.**
+written yet.** *(← Phase-0 snapshot; superseded — see the build-status note above.)*
 
 ---
 

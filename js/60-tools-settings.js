@@ -1960,20 +1960,27 @@ async function saveCurrentSheet(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// INVENTORY  (Phase 1 — read-only structured render + safe free-text migration)
+// INVENTORY  (grid inventory & equipment — Phases 1–4 shipped)
 // ───────────────────────────────────────────────────────────────────────────
 // Per-character gear, stored exactly like the character sheet: one shared JSON
 // blob in aurelia_state under key 'inventory', keyed by character (funds-style)
 // so the referee sees all five in one fetch and can edit any, while players
 // see/edit only their own — honour system, client-side gated, the same model
 // as sheet-${name} and funds. No new table, no RLS (see docs/inventory-phase-0-
-// audit.md §1.2/§3). Phase 1 is READ-ONLY: it renders items and performs a
-// one-time migration of the old free-text Weapons/Equipment fields into
-// structured instances (raw text preserved, so nothing typed is ever lost).
-// Add/remove + the referee catalogue land in Phase 2, equip + advisory
-// encumbrance in Phase 3, the drag grid in Phase 4.
+// audit.md §1.2/§3).
+//
+// Implemented (the render/CRUD live below and in the ITEM CATALOGUE section):
+//   Phase 1  structured render + one-time free-text Weapons/Equipment migration
+//            (raw text preserved in the item's notes, so nothing typed is lost)
+//   Phase 2  referee-authored item-catalogue (catAdd/catEditField/catDuplicate/
+//            catRemove, category-adaptive form) + honour-based add (frozen
+//            snapshot per owned item) / remove — openCatalogue + ＋ Add item
+//   Phase 3  equip slots (renderEquipSlots/invEquip) + advisory, referee-tunable
+//            encumbrance indicator (renderEncIndicator)
+//   Phase 4  Carried/Stowed + custom containers and a footprint drag grid
+//            (renderInvTile/invTilePointerDown/renderContainersEditor)
 
-// Worn/wielded slots — single source of truth (used from Phase 3).
+// Worn/wielded slots — single source of truth (equip flow, Phase 3).
 const EQUIP_SLOTS = [
   ['armour','Armour'], ['primary','Primary Weapon'], ['secondary','Sidearm'],
   ['aug','Augment'], ['misc','Other']
