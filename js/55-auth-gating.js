@@ -636,6 +636,53 @@ async function pollRevealState(){
     }
   } catch(e){ /* silent — next poll will retry */ }
 
+  // Worlds & locations — players see referee-added / edited / removed bodies and
+  // locations live, the same way they already get system and content edits.
+  // Fetched ONLY while a system or body is on screen (the only views that render
+  // them), so the galaxy / station / combat polls stay lean; a fresh navigation
+  // into a system catches up on the next tick (≤4s). The six keys are fetched in
+  // parallel so this adds one round-trip, not six, to those ticks.
+  if(currentView === 'system' || currentView === 'body'){
+    try {
+      const [rba, rbd, rbp, rla, rld, rlp] = await Promise.all([
+        supaStorage.get('body-additions', true),      supaStorage.get('body-deletions', true),      supaStorage.get('body-prop-overrides', true),
+        supaStorage.get('location-additions', true),  supaStorage.get('location-deletions', true),  supaStorage.get('location-prop-overrides', true),
+      ]);
+      if(rba.ok && rbd.ok && rbp.ok && rla.ok && rld.ok && rlp.ok){
+        const nba = rba.value != null ? JSON.parse(rba.value) : {};
+        const nbd = rbd.value != null ? JSON.parse(rbd.value) : {};
+        const nbp = rbp.value != null ? JSON.parse(rbp.value) : {};
+        const nla = rla.value != null ? JSON.parse(rla.value) : {};
+        const nld = rld.value != null ? JSON.parse(rld.value) : {};
+        const nlp = rlp.value != null ? JSON.parse(rlp.value) : {};
+        const bodyChanged = JSON.stringify(nba) !== JSON.stringify(bodyAdditions)
+          || JSON.stringify(nbd) !== JSON.stringify(bodyDeletions)
+          || JSON.stringify(nbp) !== JSON.stringify(bodyPropertyOverrides);
+        const locChanged = JSON.stringify(nla) !== JSON.stringify(locationAdditions)
+          || JSON.stringify(nld) !== JSON.stringify(locationDeletions)
+          || JSON.stringify(nlp) !== JSON.stringify(locationPropertyOverrides);
+        if(bodyChanged){ bodyAdditions = nba; bodyDeletions = nbd; bodyPropertyOverrides = nbp; }
+        if(locChanged){ locationAdditions = nla; locationDeletions = nld; locationPropertyOverrides = nlp; }
+        if(bodyChanged || locChanged){
+          // Rebuild whichever view is on screen; if the body the player was
+          // looking at was removed under them, fall back a level rather than
+          // render a hole (mirrors the referee's own restoreDesign path).
+          if(currentView === 'system'){
+            if(typeof buildOrrery === 'function') buildOrrery();
+            if(selectedBody && typeof getBodies === 'function' && getBodies().find(b => b.id === selectedBody)){
+              if(typeof selectBody === 'function') selectBody(selectedBody);
+            } else if(typeof goSystemOverview === 'function') goSystemOverview();
+          } else if(currentView === 'body' && selectedBody){
+            if(typeof getBodies === 'function' && getBodies().find(b => b.id === selectedBody)){
+              if(selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc);
+              else if(typeof buildBodyView === 'function') buildBodyView(selectedBody);
+            } else if(typeof goSystem === 'function') goSystem();
+          }
+        }
+      }
+    } catch(e){ /* silent — next poll will retry */ }
+  }
+
   // Authored station deck maps — players receive referee-authored interiors
   // (and live edits to them) the same way they receive galaxy edits.
   try {
