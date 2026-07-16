@@ -67,6 +67,14 @@ Between steps 2 and 3 the default player path is already redacted; only a hand-c
 fetch of a `-ref` key could still read a secret. Existing edits become safe the first
 time the referee re-saves each store (or you can re-save all from **My Design Edits**).
 
+**The rest of the Design-Mode overlays are not secrets** — the reference tables,
+generators, economy flavour, UI theme/panels, and the media layer (portraits + scene
+art) are shared campaign look/data, public-**read** and referee-**write** only. Their
+deploy pieces — the expanded `put-state` referee-only key list, and migration
+`0015_scenes_bucket.sql` for location/area/**system**/**region** scene art (NPC
+portraits reuse the existing `portraits` bucket, no new migration) — are in
+`../supabase/README.md` **Step 10**.
+
 ## Verification checklist (run against the deployed project)
 
 - [ ] As a **player** token, `POST get-content` → response has no `designRef`; a direct
