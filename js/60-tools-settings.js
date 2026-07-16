@@ -1045,6 +1045,8 @@ function rulesTableRegistry(){
   add('qr-outcomes',    'Combat quick-resolve',   'Combat',  'strings', typeof COMBAT_QR_OUTCOMES !== 'undefined' ? COMBAT_QR_OUTCOMES : null);
   add('combat-hazards', 'Combat hazards',         'Combat',  'json',    typeof COMBAT_HAZARDS !== 'undefined' ? COMBAT_HAZARDS : null);
   add('ship-crit-systems','Ship critical-hit systems','Ship','pairs',   typeof SHIP_CRIT_SYSTEMS !== 'undefined' ? SHIP_CRIT_SYSTEMS : null);
+  add('rep-bands',      'Reputation ladder',      'Social',  'json',    typeof REP_BANDS !== 'undefined' ? REP_BANDS : null);
+  add('good-flavour',   'Trade-good dockside names','Economy','kv',     typeof GOOD_FLAVOR !== 'undefined' ? GOOD_FLAVOR : null);
   return reg;
 }
 function _rulesApplyInPlace(target, value){

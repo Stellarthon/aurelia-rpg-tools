@@ -532,6 +532,7 @@ function _rulesAfterEdit(){
   if(typeof renderQref === 'function' && typeof qrefOpen !== 'undefined' && qrefOpen) renderQref();
   if(typeof renderCombat === 'function' && typeof combatEncounter !== 'undefined' && combatEncounter) renderCombat();
   if(typeof renderShipPanel === 'function' && typeof shipPanelOpen !== 'undefined' && shipPanelOpen) renderShipPanel();
+  if(typeof renderReputationPanel === 'function' && typeof repPanelOpen !== 'undefined' && repPanelOpen) renderReputationPanel();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
