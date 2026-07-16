@@ -58,8 +58,11 @@ function gen_2d6(){ return (Math.floor(Math.random()*6)+1) + (Math.floor(Math.ra
 
 // Build a random NPC object matching the schema.
 function generateRandomNpc(){
-  const name = gen_pick(NPC_GEN.firstNames) + ' ' + gen_pick(NPC_GEN.lastNames);
-  const role = gen_pick(NPC_GEN.roles);
+  // Read through the Design-Mode generator overrides (js/85 genList) so a
+  // referee's edited name/role/manner/want/hook lists drive random NPCs too.
+  const gl = (typeof genList === 'function') ? genList : (k, base) => base;
+  const name = gen_pick(gl('npc.firstNames', NPC_GEN.firstNames)) + ' ' + gen_pick(gl('npc.lastNames', NPC_GEN.lastNames));
+  const role = gen_pick(gl('npc.roles', NPC_GEN.roles));
   const stats = { STR:gen_2d6(), DEX:gen_2d6(), END:gen_2d6(), INT:gen_2d6(), EDU:gen_2d6(), SOC:gen_2d6() };
   // Skills: pick 2-3 plausible from role
   const skillPool = ['Admin','Streetwise','Persuade','Recon','Computers','Engineer','Gun Combat',
@@ -71,9 +74,9 @@ function generateRandomNpc(){
     if(!chosen.find(c => c.startsWith(s))) chosen.push(s + ' ' + (1 + Math.floor(Math.random()*2)));
   }
   const rows = [
-    ['Manner', gen_pick(NPC_GEN.manners)],
-    ['Wants', gen_pick(NPC_GEN.wants)],
-    ['Hook', gen_pick(NPC_GEN.hooks)]
+    ['Manner', gen_pick(gl('npc.manners', NPC_GEN.manners))],
+    ['Wants', gen_pick(gl('npc.wants', NPC_GEN.wants))],
+    ['Hook', gen_pick(gl('npc.hooks', NPC_GEN.hooks))]
   ];
   return { name, role, stats, skills: chosen.join(', '), rows };
 }
@@ -385,6 +388,72 @@ function _tgAfterEdit(){
   if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
   if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
   else if(typeof refreshTradeScreen === 'function') refreshTradeScreen();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERATOR TABLES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Edits the string-list tables behind the oracle/rumours/encounters and the
+// random-NPC generator (js/85 generatorListRegistry + genList). One entry per
+// line; an override replaces the built-in list. Reuses the trade editor's panel.
+function openGeneratorTables(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof generatorListRegistry === 'function') ? generatorListRegistry() : [];
+  const ovs = (typeof generatorOverrides !== 'undefined' && generatorOverrides) ? generatorOverrides : {};
+  const groups = {};
+  reg.forEach(item => { (groups[item.group] = groups[item.group] || []).push(item); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(item => {
+      const eff = (Array.isArray(ovs[item.key]) && ovs[item.key].length) ? ovs[item.key] : item.base;
+      const edited = Array.isArray(ovs[item.key]) && ovs[item.key].length;
+      const preview = (eff[0] || '').slice(0, 60);
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1">
+          <div class="design-history-label">${escHtml(item.label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+          <div class="design-history-snippet">${eff.length} entr${eff.length === 1 ? 'y' : 'ies'} · ${escHtml(preview)}${(eff[0] || '').length > 60 ? '…' : ''}</div>
+        </div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openGeneratorListForm('${escAttr(item.key)}')" title="Edit">✎</button>
+      </div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No generator tables available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">Edit any list — one entry per line. Rumour entries may use placeholders: {faction}, {ship}, {place}, {good}.</div>`;
+  _tgPanel('GENERATOR TABLES', html);
+}
+function openGeneratorListForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof generatorListRegistry === 'function') ? generatorListRegistry() : [];
+  const item = reg.find(x => x.key === key);
+  if(!item){ showToast('List not found', 'error'); return; }
+  const ovs = (typeof generatorOverrides !== 'undefined' && generatorOverrides) ? generatorOverrides : {};
+  const overridden = Array.isArray(ovs[key]) && ovs[key].length;
+  const eff = overridden ? ovs[key] : item.base;
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">${escHtml(item.group + ' · ' + item.label)} — one entry per line</div>
+      <textarea id="gen-list-text" class="design-field-textarea" style="min-height:220px">${escHtml(eff.join('\n'))}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetGeneratorList('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px">
+        <button class="se-cancel" onclick="openGeneratorTables()">Cancel</button>
+        <button class="se-save" onclick="commitGeneratorList('${escAttr(key)}')">Save</button>
+      </span>
+    </div>`;
+  _tgPanel('EDIT: ' + item.label.toUpperCase(), html);
+}
+async function commitGeneratorList(key){
+  const raw = document.getElementById('gen-list-text').value;
+  const list = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if(!list.length){ showToast('Add at least one entry', 'error'); return; }
+  if(typeof generatorOverrides !== 'undefined'){ generatorOverrides[key] = list; if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  showToast('Generator list saved');
+  openGeneratorTables();
+}
+async function resetGeneratorList(key){
+  if(typeof generatorOverrides !== 'undefined' && generatorOverrides[key]){ delete generatorOverrides[key]; if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  showToast('Reset to default', 'info');
+  openGeneratorTables();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

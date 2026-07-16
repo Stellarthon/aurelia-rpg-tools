@@ -467,6 +467,7 @@ function countAllDesignEdits(){
   n += _dCount(_dg(()=>hexPaint));
   const tga = _dg(()=>tradeGoodAdditions);
   n += _dCount(_dg(()=>tradeGoodOverrides)) + (Array.isArray(tga) ? tga.length : 0) + _dCount(_dg(()=>tradeGoodDeletions));
+  n += _dCount(_dg(()=>generatorOverrides));
   return n;
 }
 
@@ -684,6 +685,8 @@ async function revertAllContentEdits(){
     if(typeof saveTradeGoodOverrides === 'function') await saveTradeGoodOverrides();
     if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions();
     if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  if(typeof generatorOverrides !== 'undefined'){ generatorOverrides = {};
+    if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
 
   // Combat / weapon stores (js/80).
   if(typeof weaponAdditions !== 'undefined'){ weaponAdditions = []; weaponDeletions = {}; weaponPropertyOverrides = {};
@@ -726,6 +729,7 @@ function collectDesignLayer(){
   if(typeof routeBlocks !== 'undefined') put('route-blocks', routeBlocks);
   if(typeof hexPaint !== 'undefined') put('hex-paint', hexPaint);
   if(typeof tradeGoodOverrides !== 'undefined'){ put('trade-good-overrides', tradeGoodOverrides); put('trade-good-additions', tradeGoodAdditions); put('trade-good-deletions', tradeGoodDeletions); }
+  if(typeof generatorOverrides !== 'undefined') put('generator-overrides', generatorOverrides);
   if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
   return d;
 }

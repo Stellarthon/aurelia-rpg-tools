@@ -1178,6 +1178,47 @@ const ENCOUNTER_DIFF = ['Trivial','Routine','Tricky','Dangerous','Deadly'];
 const ORACLE_WHERE = [['space','Space'],['port','Port'],['surface','Surface']];
 const ORACLE_DANGER = [['0','Calm'],['1','Normal'],['2','Tense'],['3','Hostile']];
 
+// ── Editable generator lists (Design Mode) ───────────────────────────────────
+// The oracle / rumour / encounter and random-NPC string lists are hardcoded and
+// setting-flavoured. This overlay lets the referee edit any of them (one entry
+// per line); genList(key, base) returns the override if set, else the built-in.
+// Referee tool (players don't roll the oracle), synced so it follows devices.
+let generatorOverrides = {};   // {listKey: [strings]}
+async function loadGeneratorOverrides(){
+  try { const r = await supaStorage.get('generator-overrides', true); generatorOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ generatorOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('generator-overrides', generatorOverrides);
+}
+async function saveGeneratorOverrides(){ try { generatorOverrides = await mergedSaveStore('generator-overrides', generatorOverrides); } catch(e){ console.error('Generator overrides save failed', e); } }
+function genList(key, base){ const o = generatorOverrides[key]; return (Array.isArray(o) && o.length) ? o : base; }
+// Registry of the editable string-list tables (for the Design-Mode editor). Base
+// arrays span js/85 (here) + js/96 (NPC_GEN); read defensively at call time.
+function generatorListRegistry(){
+  const reg = [];
+  const add = (key, label, group, base) => { if(Array.isArray(base)) reg.push({ key, label, group, base: base.slice() }); };
+  add('oracle.places', 'Places', 'Oracle', typeof ORACLE_PLACES !== 'undefined' ? ORACLE_PLACES : null);
+  add('oracle.goods',  'Goods',  'Oracle', typeof ORACLE_GOODS  !== 'undefined' ? ORACLE_GOODS  : null);
+  if(typeof RUMOUR_TEMPLATES !== 'undefined' && RUMOUR_TEMPLATES){
+    add('rumour.generic',  'Generic',  'Rumours', RUMOUR_TEMPLATES.generic);
+    add('rumour.hostile',  'Hostile',  'Rumours', RUMOUR_TEMPLATES.hostile);
+    add('rumour.friendly', 'Friendly', 'Rumours', RUMOUR_TEMPLATES.friendly);
+    add('rumour.neutral',  'Neutral',  'Rumours', RUMOUR_TEMPLATES.neutral);
+  }
+  if(typeof ENCOUNTER_TABLES !== 'undefined' && ENCOUNTER_TABLES){
+    add('encounter.space',   'Space',   'Encounters', ENCOUNTER_TABLES.space);
+    add('encounter.port',    'Port',    'Encounters', ENCOUNTER_TABLES.port);
+    add('encounter.surface', 'Surface', 'Encounters', ENCOUNTER_TABLES.surface);
+  }
+  if(typeof NPC_GEN !== 'undefined' && NPC_GEN){
+    add('npc.firstNames', 'First names', 'Random NPC', NPC_GEN.firstNames);
+    add('npc.lastNames',  'Last names',  'Random NPC', NPC_GEN.lastNames);
+    add('npc.roles',      'Roles',       'Random NPC', NPC_GEN.roles);
+    add('npc.manners',    'Manners',     'Random NPC', NPC_GEN.manners);
+    add('npc.wants',      'Wants',       'Random NPC', NPC_GEN.wants);
+    add('npc.hooks',      'Hooks',       'Random NPC', NPC_GEN.hooks);
+  }
+  return reg;
+}
+
 let oracleWhere = 'space';
 let oracleDanger = 1;
 let oracleResult = null;   // {kind:'rumour'|'encounter', ...}
@@ -1194,13 +1235,13 @@ function oraclePlace(){
       .filter(n => !n.uninhabited).map(n => n.label || n.name).filter(Boolean);
     if(!p.length) p = ['the docks', 'the port concourse', 'the outer berths'];
   } else {
-    p = ORACLE_PLACES.slice();
+    p = genList('oracle.places', ORACLE_PLACES).slice();
   }
   if(shipState.destination) p.push(shipState.destination);
   return pick(p);
 }
 
-function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
+function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(genList('oracle.goods', ORACLE_GOODS))); }
 // ── FACTION CONTRACTS — jobs the STATES post (parallel to CORP_CONTRACT; {faction} = the power). The
 //    faction AI (ECON.factionEvents) flags relief / patrol / bounty / development needs in its space;
 //    these resolve them into ready-to-run contracts, drafted + posted through the same pipeline. ──
@@ -1311,17 +1352,17 @@ function generateRumour(){
   }
   let bucket = 'generic';
   if(faction){ const s = faction.standing; bucket = s <= -3 ? 'hostile' : s >= 3 ? 'friendly' : (Math.random() < 0.5 ? 'neutral' : 'generic'); }
-  let line = pick(RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic);
+  let line = pick(genList('rumour.'+bucket, (RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length) ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic));
   line = line.replace(/{faction}/g, faction ? faction.name : 'Someone')
              .replace(/{ship}/g, shipState.name || 'the ship')
              .replace(/{place}/g, oraclePlace())
-             .replace(/{good}/g, pick(ORACLE_GOODS));
+             .replace(/{good}/g, pick(genList('oracle.goods', ORACLE_GOODS)));
   oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
   renderOraclePanel();
 }
 
 function generateEncounter(){
-  const base = pick(ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space);
+  const base = pick(genList('encounter.'+oracleWhere, ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space));
   const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0); // most-negative standing
   let diff = oracleDanger + Math.floor(Math.random() * 2);
   if(worst <= -3) diff += 1;
@@ -2865,4 +2906,5 @@ loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // referee-painted territory hexes (shared)
 if(typeof loadTradeGoodStores === 'function') loadTradeGoodStores().then(() => { if(typeof HX !== 'undefined' && HX.refresh) HX.refresh(); if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel(); });   // referee-edited trade-goods catalogue (shared)
+if(typeof loadGeneratorOverrides === 'function') loadGeneratorOverrides();   // referee-edited oracle / rumour / encounter / NPC generator lists
 
