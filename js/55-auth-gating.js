@@ -392,6 +392,7 @@ function isRefOnlyContentKey(key){
   if(/[-_]refNote$/.test(key)) return true;                       // body/location Referee Note box
   if(/[-_](check|checks|event|events)([-_]|$)/i.test(key)) return true;  // skill checks / timed events
   if(/[-_](row|rows)([-_]|$)/i.test(key)) return true;            // NPC detail rows (NPCs are referee-only)
+  if(/[-_]npc$/.test(key)) return true;                           // whole-NPC edit (name/role/skills/stats)
   // Station "Referee Context" is an area `desc`; body/location `desc` is the
   // player-visible Overview — so only a `-desc` that is NOT a body-/loc- key.
   if(/[-_]desc$/.test(key) && !/^body-/.test(key) && !/^loc-/.test(key)) return true;

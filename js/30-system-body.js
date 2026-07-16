@@ -609,11 +609,18 @@ function renderBodyContentSections(body, pm){
         return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${escHtml(rdata[0])}</div><div class="nrv">${escHtml(rdata[1])}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
+      // Whole-NPC edit override (name/role/skills/stats), merged over the base.
+      const npcOvKey = nid+'-npc';
+      designOriginalRegistry[npcOvKey] = n;
+      const nEff = Object.prototype.hasOwnProperty.call(contentOverrides, npcOvKey) ? Object.assign({}, n, contentOverrides[npcOvKey]) : n;
+      const editNpcBtn = designModeOn ? `<button class="design-edit-pencil-inline" style="margin-left:6px" onclick="event.stopPropagation();openDesignEditNpc('${npcOvKey}', ${JSON.stringify(n).replace(/"/g,'&quot;')})" title="Edit NPC name/role/skills/stats">✎</button>` : '';
+      const statGrid = (nEff.stats && Object.keys(nEff.stats).length) ? `<div class="stat-grid">${Object.entries(nEff.stats).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>` : '';
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div></div>
-        <span class="chev" id="${nid}-chev">▾</span></div>
+        <div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div></div>
+        <span style="display:flex;align-items:center;gap:2px">${editNpcBtn}<span class="chev" id="${nid}-chev">▾</span></span></div>
         <div class="npc-body" id="${nid}">
-          <div class="skill-row">${escHtml(n.skills)}</div>
+          ${statGrid}
+          <div class="skill-row">${escHtml(nEff.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;

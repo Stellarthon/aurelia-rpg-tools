@@ -256,6 +256,10 @@ function renderDetail(){
     html += addNpcBtn;
     html+=mergedNpcs.map(({item:n, key:nidKey, isAddition})=>{
       const nid=nidKey;
+      // Whole-NPC edit override (name/role/skills/stats), merged over the base.
+      const npcOvKey = nid+'-npc';
+      designOriginalRegistry[npcOvKey] = n;
+      const nEff = Object.prototype.hasOwnProperty.call(contentOverrides, npcOvKey) ? Object.assign({}, n, contentOverrides[npcOvKey]) : n;
       const rowListKey = nid+'-rows';
       const rowBaseKey = nid+'-row-';
       const mergedRows = mergeListWithAdditions(n.rows, rowListKey, rowBaseKey);
@@ -275,13 +279,16 @@ function renderDetail(){
       const delNpcBtn = (designModeOn && isAddition)
         ? `<button class="design-edit-pencil-inline danger" style="margin-left:6px" onclick="event.stopPropagation();deleteAddedNpc('${npcListKey}','${nidKey}')" title="Delete this NPC">🗑</button>`
         : '';
+      const editNpcBtn = designModeOn
+        ? `<button class="design-edit-pencil-inline" style="margin-left:6px" onclick="event.stopPropagation();openDesignEditNpc('${npcOvKey}', ${JSON.stringify(n).replace(/"/g,'&quot;')})" title="Edit NPC name/role/skills/stats">✎</button>`
+        : '';
       return `<div class="npc-card"${hasLocEditor ? ' style="overflow:visible"' : ''}><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div>${locBadge}${dispoBadge}</div>
-        <span style="display:flex;align-items:center;gap:2px">${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
+        <div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div>${locBadge}${dispoBadge}</div>
+        <span style="display:flex;align-items:center;gap:2px">${editNpcBtn}${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
         <div class="npc-body${bodyOpen}" id="${nid}">
           ${locEditor}
-          <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>
-          <div class="skill-row">${escHtml(n.skills)}</div>
+          <div class="stat-grid">${Object.entries(nEff.stats||{}).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>
+          <div class="skill-row">${escHtml(nEff.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;

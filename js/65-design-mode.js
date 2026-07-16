@@ -957,6 +957,43 @@ function openDesignEditNpcRow(key, original){
   document.getElementById('design-edit-panel').classList.remove('hidden');
 }
 
+// Opens the structured editor for a whole NPC's name / role / skills / stats.
+// Stored as a PARTIAL override keyed "<nid>-npc" — the render Object.assigns it
+// over the base NPC, so detail rows (edited separately by row key) are untouched.
+// Works for base AND referee-added NPCs, on stations and bodies; the key is
+// referee-only (isRefOnlyContentKey) so it's redacted from players.
+function attrEsc(s){ return escHtml(s == null ? '' : s).replace(/"/g, '&quot;'); }
+function renderNpcEditForm(data){
+  const stats = (data && data.stats) || {};
+  const statCells = Object.keys(stats).map(k => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <input type="text" class="design-field-input design-npc-stat" data-stat="${attrEsc(k)}" value="${attrEsc(stats[k])}" style="width:54px;text-align:center;padding:6px 4px">
+      <div class="design-field-label" style="margin:0">${escHtml(k)}</div>
+    </div>`).join('');
+  showDesignEditBody(`
+    <div class="design-field-group"><div class="design-field-label">Name</div>
+      <input type="text" id="design-npc-name" class="design-field-input" value="${attrEsc(data.name)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Role</div>
+      <input type="text" id="design-npc-role" class="design-field-input" value="${attrEsc(data.role)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Skills (comma-separated)</div>
+      <input type="text" id="design-npc-skills" class="design-field-input" value="${attrEsc(data.skills)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Characteristics</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${statCells || '<span class="hx-small">This NPC has no characteristics.</span>'}</div></div>
+  `);
+}
+function openDesignEditNpc(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'npc';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT NPC';
+  const has = Object.prototype.hasOwnProperty.call(contentOverrides, key);
+  const data = has ? Object.assign({}, original, contentOverrides[key]) : (original || {});
+  renderNpcEditForm(data);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
 function showDesignEditBody(formHTML){
   document.getElementById('design-edit-body').innerHTML = formHTML + '<div id="design-history-list"></div>';
 }
@@ -997,6 +1034,19 @@ function readDesignEditFormValue(){
   if(designEditType === 'nperow'){
     return [document.getElementById('design-row-label').value, document.getElementById('design-row-text').value];
   }
+  if(designEditType === 'npc'){
+    const stats = {};
+    document.querySelectorAll('.design-npc-stat').forEach(inp => {
+      const v = String(inp.value).trim();
+      stats[inp.dataset.stat] = (v !== '' && !isNaN(v)) ? Number(v) : v;   // keep numbers numeric, allow hex/text
+    });
+    return {
+      name: document.getElementById('design-npc-name').value,
+      role: document.getElementById('design-npc-role').value,
+      skills: document.getElementById('design-npc-skills').value,
+      stats,
+    };
+  }
   return null;
 }
 
@@ -1010,6 +1060,10 @@ function renderDesignEditFormFromValue(value){
   }
   if(designEditType === 'check'){
     renderCheckEditForm(value);
+    return;
+  }
+  if(designEditType === 'npc'){
+    renderNpcEditForm(value);
     return;
   }
   if(designEditType === 'event'){
