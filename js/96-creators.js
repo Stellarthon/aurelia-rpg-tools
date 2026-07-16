@@ -132,6 +132,10 @@ function setNpcCreatorMode(mode){
 
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Escape referee-authored text, THEN turn newlines into <br>. Used by the
+// content-render sites that want author line breaks but must not let authored
+// text inject markup (see the Design-Mode escaping pass).
+function escHtmlBr(s){ return escHtml(s).replace(/\n/g, '<br>'); }
 
 function renderNpcCreatorBody(){
   const body = document.getElementById('npc-creator-body');

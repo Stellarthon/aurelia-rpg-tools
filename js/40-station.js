@@ -223,13 +223,13 @@ function renderDetail(){
     if(a.read){
       designOriginalRegistry[stKey+'-read'] = a.read;
       const readText = resolveContent(stKey+'-read', a.read);
-      html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${designWrap(stKey+'-read', a.read, readText)}</div></div>`;
+      html+=`<div class="read-blk"><div class="read-lbl">📢 Read Aloud</div><div class="read-body">${designWrap(stKey+'-read', a.read, escHtml(readText))}</div></div>`;
     }
     if(!pm&&a.rsr) html+=`<div class="rsr-tag">🔴 ${a.rsr}</div>`;
     if(a.desc){
       designOriginalRegistry[stKey+'-desc'] = a.desc;
       const descText = resolveContent(stKey+'-desc', a.desc);
-      html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${designWrap(stKey+'-desc', a.desc, descText)}</div></div>`;
+      html+=`<div class="blk"><div class="blk-lbl">Referee Context</div><div class="blk-body">${designWrap(stKey+'-desc', a.desc, escHtml(descText))}</div></div>`;
     }
     if(a.ship){
       html+=`<div class="blk" style="margin-top:8px"><div class="blk-lbl">THE MERIDIAN'S EDGE — STATBLOCK</div><div style="display:grid;grid-template-columns:1fr;gap:4px;margin-top:4px">
@@ -263,7 +263,7 @@ function renderDetail(){
         const rdata = resolveContent(rkey, r);
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
-        return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${rdata[0]}:</b> ${rdata[1]}</span><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
+        return `<div class="sr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><span><b>${escHtml(rdata[0])}:</b> ${escHtml(rdata[1])}</span><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       const locBadge = !pmCheck.checked ? npcLocationBadgeHTML(n.name) : '';
@@ -275,12 +275,12 @@ function renderDetail(){
         ? `<button class="design-edit-pencil-inline danger" style="margin-left:6px" onclick="event.stopPropagation();deleteAddedNpc('${npcListKey}','${nidKey}')" title="Delete this NPC">🗑</button>`
         : '';
       return `<div class="npc-card"${hasLocEditor ? ' style="overflow:visible"' : ''}><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div>${locBadge}${dispoBadge}</div>
+        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div>${locBadge}${dispoBadge}</div>
         <span style="display:flex;align-items:center;gap:2px">${delNpcBtn}<span class="chev" id="${nid}-chev"${hasLocEditor ? ' class="open"' : ''}>▾</span></span></div>
         <div class="npc-body${bodyOpen}" id="${nid}">
           ${locEditor}
-          <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${v}</div><div class="sk">${k}</div></div>`).join("")}</div>
-          <div class="skill-row">${n.skills}</div>
+          <div class="stat-grid">${Object.entries(n.stats).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>
+          <div class="skill-row">${escHtml(n.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;
@@ -319,11 +319,11 @@ function renderDetail(){
         const cdata = resolveContent(ckey, c);
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
-        return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>🎲 ${cdata.skill}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(dg=>{
+        return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>🎲 ${escHtml(cdata.skill)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(dg=>{
           const cls=dg.cls||degCls[dg.c]||"deg-p";
           const lbl=dg.label||dg.l||"";
           const txt=dg.text||dg.t||"";
-          return `<div class="deg-row"><span class="${cls}">${lbl}</span><span style="font-size:11px">${txt}</span></div>`;
+          return `<div class="deg-row"><span class="${cls}">${escHtml(lbl)}</span><span style="font-size:11px">${escHtml(txt)}</span></div>`;
         }).join("")}</div>`;
       }).join("");
     }
@@ -344,7 +344,7 @@ function renderDetail(){
         const edata = resolveContent(ekey, e);
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ekey}', ${JSON.stringify(edata).replace(/"/g,'&quot;')})" title="Remove this event">🗑</button>` : '';
-        return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${edata.t}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${edata.e}</div>`;
+        return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${escHtml(edata.t)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${escHtml(edata.e)}</div>`;
       }).join("");
     }
     if(designModeOn){
@@ -357,7 +357,7 @@ function renderDetail(){
     const origRefnotes = a.refnotes||"No referee notes for this area.";
     designOriginalRegistry[rnKey] = origRefnotes;
     const refnotesText = resolveContent(rnKey, origRefnotes);
-    html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${designWrap(rnKey, origRefnotes, refnotesText)}</div></div>`;
+    html+=`<div class="blk" style="border-left:3px solid ${mainA.ac}"><div class="blk-lbl">Referee Notes</div><div class="blk-body">${designWrap(rnKey, origRefnotes, escHtml(refnotesText))}</div></div>`;
     d.innerHTML=html;
   } else if(curTab==="subareas"){
     const subs=(stationAreas()[cur]||{}).subs||{}, keys=Object.keys(subs);

@@ -1285,7 +1285,7 @@ function renderBoxTypesHTML(keyFor, builtinValue, pm, onlyCustom){
     if(!hasContent && !designModeOn) return;
     const cls = bt.cls === 'ref' ? 's-blk ref ref-only' : 's-blk read';
     const disp = hasContent
-      ? (text || '').replace(/\n/g, '<br>')
+      ? escHtmlBr(text)
       : '<span style="opacity:.45;font-style:italic">(empty — tap ✎ to add)</span>';
     html += `<div class="${cls}"><div class="s-blk-lbl">${escHtml(bt.label)}</div>${designWrap(key, original, disp)}</div>`;
   });

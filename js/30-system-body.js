@@ -583,7 +583,7 @@ function renderBodyContentSections(body, pm){
   const sbDescKey = 'body-'+id+'-desc';
   designOriginalRegistry[sbDescKey] = body.desc;
   const sbDescText = resolveContent(sbDescKey, body.desc);
-  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, (sbDescText||'').replace(/\n/g,"<br>"))}</div></div>`;
+  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, escHtmlBr(sbDescText))}</div></div>`;
 
   // Referee boxes (Read Aloud, Referee Note, + any custom box types) are
   // registry-driven so adding / removing / renaming a box propagates to every
@@ -606,14 +606,14 @@ function renderBodyContentSections(body, pm){
         const rdata = resolveContent(rkey, r);
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
-        return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
+        return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${escHtml(rdata[0])}</div><div class="nrv">${escHtml(rdata[1])}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
+        <div><div class="npc-name">${escHtml(n.name)}</div><div class="npc-role">${escHtml(n.role)}</div></div>
         <span class="chev" id="${nid}-chev">▾</span></div>
         <div class="npc-body" id="${nid}">
-          <div class="skill-row">${n.skills}</div>
+          <div class="skill-row">${escHtml(n.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;
@@ -625,12 +625,12 @@ function renderBodyContentSections(body, pm){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
     const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
     body.checks.forEach(c=>{
-      html += `<div class="chk"><div class="chk-t">${c.skill}</div>`;
+      html += `<div class="chk"><div class="chk-t">${escHtml(c.skill)}</div>`;
       c.degrees.forEach(d=>{
         const cls=d.cls||degCls[d.c]||"deg-p";
         const lbl=d.label||d.l||"";
         const txt=d.text||d.t||"";
-        html+=`<div class="deg-row"><div class="${cls}">${lbl}</div><div style="font-size:11px">${txt}</div></div>`;
+        html+=`<div class="deg-row"><div class="${cls}">${escHtml(lbl)}</div><div style="font-size:11px">${escHtml(txt)}</div></div>`;
       });
       html += `</div>`;
     });
@@ -639,7 +639,7 @@ function renderBodyContentSections(body, pm){
 
   if(!pm&&body.events&&body.events.length){
     html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
-    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`);
+    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${escHtml(e.t)}</div>${escHtml(e.e)}</div>`);
     html += `</div>`;
   }
   return html;
@@ -1683,19 +1683,19 @@ function selectBodyLocation(locId){
   const dText = resolveContent(dKey, loc.desc);
   html += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
     <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
-    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(dKey, loc.desc, (dText||'').split('\n').join('<br>'))}</div></div>`;
+    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(dKey, loc.desc, escHtmlBr(dText))}</div></div>`;
 
   if(!pm && loc.readAloud){
     const rKey = 'loc-'+locId+'-readAloud';
     designOriginalRegistry[rKey] = loc.readAloud;
     const rText = resolveContent(rKey, loc.readAloud);
-    html += `<div class="s-blk read"><div class="s-blk-lbl">READ ALOUD</div>${designWrap(rKey, loc.readAloud, rText)}</div>`;
+    html += `<div class="s-blk read"><div class="s-blk-lbl">READ ALOUD</div>${designWrap(rKey, loc.readAloud, escHtml(rText))}</div>`;
   }
   if(!pm && loc.refNote){
     const nKey = 'loc-'+locId+'-refNote';
     designOriginalRegistry[nKey] = loc.refNote;
     const nText = resolveContent(nKey, loc.refNote);
-    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(nKey, loc.refNote, (nText||'').split('\n').join('<br>'))}</div>`;
+    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(nKey, loc.refNote, escHtmlBr(nText))}</div>`;
   }
 
   // Custom referee boxes (parity with the retired bespoke view) — keeps any
