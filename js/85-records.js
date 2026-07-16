@@ -1230,6 +1230,9 @@ function generatorListRegistry(){
     add('npc.wants',      'Wants',       'Random NPC', NPC_GEN.wants);
     add('npc.hooks',      'Hooks',       'Random NPC', NPC_GEN.hooks);
   }
+  if(typeof ECON !== 'undefined' && ECON && typeof ECON.flavourLists === 'function'){   // GalNet / trader / pirate name lists (economy sim)
+    try { ECON.flavourLists().forEach(t => add(t.key, t.label, t.group, t.base)); } catch(e){}
+  }
   return reg;
 }
 
