@@ -147,6 +147,63 @@ function npcMediaAvatar(nid, name, size){
   return `<span style="width:${size}px;height:${size}px;border-radius:50%;flex:none;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.42)}px;color:var(--tx1)">${esc(init.toUpperCase())}</span>`;
 }
 
+// ── Location / scene imagery (Supabase Storage 'scenes' bucket) ──────────────
+// A landscape establishing image a referee attaches to a place (body location or
+// station area), shown at the top of its detail where players see it. Own bucket
+// (migration 0015), public-read like handouts. One object per key, per campaign:
+// scenes/<campaignSlug>/<key>.jpg. Version stamps live in the shared, public-read
+// 'scene-images' KV so the public URL can be cache-busted across devices.
+const SCENE_BASE = SUPABASE_URL + '/storage/v1/object/public/scenes/';
+function sceneObjectPath(campaignId, key){
+  return rulebookSlug(campaignId) + '/' + String(key || '').replace(/[^a-z0-9_-]/gi, '') + '.jpg';
+}
+function sceneImageUrlFor(campaignId, key, ver){
+  const url = SCENE_BASE + sceneObjectPath(campaignId, key).split('/').map(encodeURIComponent).join('/');
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadSceneImageBlob(campaignId, key, blob){
+  const path = sceneObjectPath(campaignId, key).split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/scenes/' + path, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('Scene image upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+let sceneImages = {};   // {sceneKey: ver}
+function sceneImageVer(key){ return (sceneImages && sceneImages[key]) || 0; }
+function _sceneCampaign(){ return (typeof activeCampaignId !== 'undefined' ? activeCampaignId : 'default'); }
+async function loadSceneImages(){
+  try { const r = await supaStorage.get('scene-images', true); sceneImages = (r.value != null ? JSON.parse(r.value) : {}); if(!sceneImages || typeof sceneImages !== 'object') sceneImages = {}; }
+  catch(e){ sceneImages = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('scene-images', sceneImages);
+}
+async function saveSceneImages(){
+  try { if(typeof mergedSaveStore === 'function') sceneImages = await mergedSaveStore('scene-images', sceneImages);
+        else await supaStorage.set('scene-images', JSON.stringify(sceneImages), true); }
+  catch(e){ console.error('Scene images save failed', e); }
+}
+// The banner + (in design mode) upload/remove control for a place's scene image.
+// key is a stable per-place string; label names it in the upload hint.
+function sceneImageBlockHTML(key, label){
+  const ver = sceneImageVer(key);
+  const esc = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const designOn = (typeof designModeOn !== 'undefined' && designModeOn && (typeof isReferee !== 'function' || isReferee()));
+  let html = '';
+  if(ver){
+    html += `<img src="${sceneImageUrlFor(_sceneCampaign(), key, ver)}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--rad,6px);display:block;margin-bottom:8px" onerror="this.style.display='none'">`;
+  }
+  if(designOn){
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <button class="design-add-btn" style="flex:1" onclick="triggerSceneImage('${esc(key)}')">${ver ? '🖼 Change scene image' : '🖼 Add scene image'}</button>
+      ${ver ? `<button class="design-tier-remove" onclick="removeSceneImage('${esc(key)}')">✕</button>` : ''}
+      <input type="file" id="scene-image-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${esc(key)}', event)">
+    </div>`;
+  }
+  return html;
+}
+
 // ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────
 // The referee's OWN, legally-owned rulebook PDFs — one object per book per
 // campaign, overwritten on re-upload; migration 0003_rulebooks_bucket.sql.

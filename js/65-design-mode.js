@@ -471,7 +471,7 @@ function countAllDesignEdits(){
   n += _dCount(_dg(()=>rulesOverrides));
   n += _dCount(_dg(()=>contractOverrides));
   n += _dCount(_dg(()=>themeOverrides)) + _dCount(_dg(()=>panelFlags));
-  n += _dCount(_dg(()=>npcPortraits));
+  n += _dCount(_dg(()=>npcPortraits)) + _dCount(_dg(()=>sceneImages));
   return n;
 }
 
@@ -704,6 +704,8 @@ async function revertAllContentEdits(){
     if(typeof savePanelFlags === 'function') await savePanelFlags(); }
   if(typeof npcPortraits !== 'undefined'){ npcPortraits = {};              // drop custom body/station NPC faces
     if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+  if(typeof sceneImages !== 'undefined'){ sceneImages = {};                // drop location / area scene art
+    if(typeof saveSceneImages === 'function') await saveSceneImages(); }
 
   // Combat / weapon stores (js/80).
   if(typeof weaponAdditions !== 'undefined'){ weaponAdditions = []; weaponDeletions = {}; weaponPropertyOverrides = {};
@@ -752,6 +754,7 @@ function collectDesignLayer(){
   if(typeof themeOverrides !== 'undefined') put('theme-overrides', themeOverrides);
   if(typeof panelFlags !== 'undefined') put('panel-flags', panelFlags);
   if(typeof npcPortraits !== 'undefined') put('npc-portraits', npcPortraits);
+  if(typeof sceneImages !== 'undefined') put('scene-images', sceneImages);
   if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
   return d;
 }
@@ -1153,6 +1156,47 @@ async function removeDesignNpcPortrait(){
   const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
   if(typeof npcPortraits !== 'undefined' && npcPortraits[nid]){ delete npcPortraits[nid]; if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
   _reRenderNpcForm();
+  rerenderDesignEntityView();
+}
+
+// ── Scene images (location / station-area establishing art) ──────────────────
+// Landscape banners, so — unlike the square portrait crop — this preserves the
+// aspect ratio and just caps the longest edge. See js/50 scene-images store.
+function resizeSceneImage(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if(Math.max(w, h) > maxDim){ const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+function triggerSceneImage(key){ const f = document.getElementById('scene-image-file'); if(f) f.click(); }
+async function onSceneImageFile(key, e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee() || !key) return;
+  if(typeof uploadSceneImageBlob !== 'function'){ if(typeof showToast === 'function') showToast('Scene images unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast === 'function') showToast('Uploading…', 'info');
+    const blob = await resizeSceneImage(file, 1400);
+    await uploadSceneImageBlob(_sceneCampaign(), key, blob);
+    if(typeof sceneImages !== 'undefined'){ sceneImages[key] = Date.now(); if(typeof saveSceneImages === 'function') await saveSceneImages(); }
+    rerenderDesignEntityView();
+    if(typeof showToast === 'function') showToast('Scene image updated');
+  } catch(err){ console.error('Scene image upload failed', err); if(typeof showToast === 'function') showToast('Upload failed — is the scenes bucket set up? (migration 0015)'); }
+}
+async function removeSceneImage(key){
+  if(!isReferee()) return;
+  if(typeof sceneImages !== 'undefined' && sceneImages[key]){ delete sceneImages[key]; if(typeof saveSceneImages === 'function') await saveSceneImages(); }
   rerenderDesignEntityView();
 }
 function openDesignEditNpc(key, original){

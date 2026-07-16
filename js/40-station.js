@@ -221,6 +221,8 @@ function renderDetail(){
       html += revealToggleRowHTML(cur);
     }
     const stKey = staKey(cur+(curSub?"_"+curSub:""));
+    // Establishing scene image (design-mode upload; players see it on reveal).
+    if(typeof sceneImageBlockHTML === 'function'){ html += sceneImageBlockHTML('sa-' + portraitSlug(stKey), a.label || a.name || cur); }
     if(a.read){
       designOriginalRegistry[stKey+'-read'] = a.read;
       const readText = resolveContent(stKey+'-read', a.read);

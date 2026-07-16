@@ -1697,6 +1697,9 @@ function selectBodyLocation(locId){
 
   if(!pm){ html += revealToggleRowHTML(locId); }
 
+  // Establishing scene image (design-mode upload; players see it once revealed).
+  if(typeof sceneImageBlockHTML === 'function'){ html += sceneImageBlockHTML('bl-' + portraitSlug(found.bodyId) + '-' + portraitSlug(locId), loc.name); }
+
   // Interior entry. Built-in campaign: the hand-drawn Aurelia deck map.
   // Authored campaigns: a location whose interiorId points at a referee-
   // authored station (created in the Design Studio) opens ITS generated map.
