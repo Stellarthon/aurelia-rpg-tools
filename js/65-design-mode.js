@@ -1,11 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// DESIGN MODE — STAGE 1: simple text field overrides
+// DESIGN MODE — referee content authoring
 // ═══════════════════════════════════════════════════════════════════════════
-// Scope: read-aloud text, referee description/context, and referee notes
-// fields on station areas/subs and Aurelia locations. Skill checks, timed
-// events, and NPC stat-block rows are NOT covered yet — those are
-// structurally different (nested arrays of objects, not plain strings) and
-// are a deliberate later stage rather than part of this first pass.
+// Scope (grew well past the original "text fields only" pass): text overrides
+// (read-aloud / referee context / referee notes / custom boxes) PLUS structured
+// add/edit/remove of skill checks, timed events, NPC stat blocks and their
+// detail rows, whole bodies (planets/moons/belts), locations, star systems,
+// regions, jump lanes, territory paint, the ship-weapon catalogue, the item
+// catalogue, authored stations + deck plans, splash screens and the whole
+// Campaign Studio config layer. Nearly everything syncs to Supabase; see the
+// store table in the section comments below. Referee-only fields are redacted
+// out of the player-facing copies (js/55 stripOverlayForPlayers; see
+// docs/design-mode-redaction.md).
 //
 // Mechanism: original campaign content stays exactly where it already is,
 // hardcoded in MAIN / BASE_LOCATIONS. This system adds a lookup layer in
@@ -49,40 +54,45 @@ let contentDeletions = {};
 
 async function loadContentOverrides(){
   try {
-    const res = await supaStorage.get('content-overrides', true);
+    const res = await getOverlayStore('content-overrides');
     contentOverrides = res.value != null ? JSON.parse(res.value) : {};
   } catch(e){ contentOverrides = {}; }
   try {
-    const res2 = await supaStorage.get('content-history', true);
+    const res2 = await getOverlayStore('content-history');
     contentHistory = res2.value != null ? JSON.parse(res2.value) : {};
   } catch(e){ contentHistory = {}; }
   try {
-    const res3 = await supaStorage.get('content-additions', true);
+    const res3 = await getOverlayStore('content-additions');
     contentAdditions = res3.value != null ? JSON.parse(res3.value) : {};
   } catch(e){ contentAdditions = {}; }
   try {
-    const res4 = await supaStorage.get('content-deletions', true);
+    const res4 = await getOverlayStore('content-deletions');
     contentDeletions = res4.value != null ? JSON.parse(res4.value) : {};
   } catch(e){ contentDeletions = {}; }
+  // Baselines for the field-level merge-on-save (see mergedSaveStore).
+  snapshotBaseline('content-overrides', contentOverrides);
+  snapshotBaseline('content-history', contentHistory);
+  snapshotBaseline('content-additions', contentAdditions);
+  snapshotBaseline('content-deletions', contentDeletions);
 }
 
 async function saveContentOverrides(){
-  try { await supaStorage.set('content-overrides', JSON.stringify(contentOverrides), true); }
+  try { contentOverrides = await mergedSaveStore('content-overrides', contentOverrides); }
   catch(e){ console.error('Content override save failed', e); }
 }
 
 async function saveContentHistory(){
-  try { await supaStorage.set('content-history', JSON.stringify(contentHistory), true); }
+  try { contentHistory = await mergedSaveStore('content-history', contentHistory); }
   catch(e){ console.error('Content history save failed', e); }
 }
 
 async function saveContentAdditions(){
-  try { await supaStorage.set('content-additions', JSON.stringify(contentAdditions), true); }
+  try { contentAdditions = await mergedSaveStore('content-additions', contentAdditions); }
   catch(e){ console.error('Content additions save failed', e); }
 }
 
 async function saveContentDeletions(){
-  try { await supaStorage.set('content-deletions', JSON.stringify(contentDeletions), true); }
+  try { contentDeletions = await mergedSaveStore('content-deletions', contentDeletions); }
   catch(e){ console.error('Content deletions save failed', e); }
 }
 
@@ -101,23 +111,26 @@ let bodyDeletions = {};
 let bodyPropertyOverrides = {};
 
 async function loadBodyStores(){
-  try { const r = await supaStorage.get('body-additions', true); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-additions'); bodyAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyAdditions = {}; }
-  try { const r = await supaStorage.get('body-deletions', true); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-deletions'); bodyDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyDeletions = {}; }
-  try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('body-prop-overrides'); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyPropertyOverrides = {}; }
+  snapshotBaseline('body-additions', bodyAdditions);
+  snapshotBaseline('body-deletions', bodyDeletions);
+  snapshotBaseline('body-prop-overrides', bodyPropertyOverrides);
 }
 async function saveBodyAdditions(){
-  try { await supaStorage.set('body-additions', JSON.stringify(bodyAdditions), true); }
+  try { bodyAdditions = await mergedSaveStore('body-additions', bodyAdditions); }
   catch(e){ console.error('Body additions save failed', e); }
 }
 async function saveBodyDeletions(){
-  try { await supaStorage.set('body-deletions', JSON.stringify(bodyDeletions), true); }
+  try { bodyDeletions = await mergedSaveStore('body-deletions', bodyDeletions); }
   catch(e){ console.error('Body deletions save failed', e); }
 }
 async function saveBodyPropertyOverrides(){
-  try { await supaStorage.set('body-prop-overrides', JSON.stringify(bodyPropertyOverrides), true); }
+  try { bodyPropertyOverrides = await mergedSaveStore('body-prop-overrides', bodyPropertyOverrides); }
   catch(e){ console.error('Body property overrides save failed', e); }
 }
 
@@ -169,23 +182,26 @@ function baseLocationsFor(sysId, bodyId){
 }
 
 async function loadLocationStores(){
-  try { const r = await supaStorage.get('location-additions', true); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-additions'); locationAdditions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationAdditions = {}; }
-  try { const r = await supaStorage.get('location-deletions', true); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-deletions'); locationDeletions = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationDeletions = {}; }
-  try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
+  try { const r = await getOverlayStore('location-prop-overrides'); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationPropertyOverrides = {}; }
+  snapshotBaseline('location-additions', locationAdditions);
+  snapshotBaseline('location-deletions', locationDeletions);
+  snapshotBaseline('location-prop-overrides', locationPropertyOverrides);
 }
 async function saveLocationAdditions(){
-  try { await supaStorage.set('location-additions', JSON.stringify(locationAdditions), true); }
+  try { locationAdditions = await mergedSaveStore('location-additions', locationAdditions); }
   catch(e){ console.error('Location additions save failed', e); }
 }
 async function saveLocationDeletions(){
-  try { await supaStorage.set('location-deletions', JSON.stringify(locationDeletions), true); }
+  try { locationDeletions = await mergedSaveStore('location-deletions', locationDeletions); }
   catch(e){ console.error('Location deletions save failed', e); }
 }
 async function saveLocationPropertyOverrides(){
-  try { await supaStorage.set('location-prop-overrides', JSON.stringify(locationPropertyOverrides), true); }
+  try { locationPropertyOverrides = await mergedSaveStore('location-prop-overrides', locationPropertyOverrides); }
   catch(e){ console.error('Location property overrides save failed', e); }
 }
 
@@ -269,6 +285,7 @@ async function addNewCheck(listKey){
   contentAdditions[listKey].push(blank);
   await saveContentAdditions();
   if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
   const newIdx = contentAdditions[listKey].length - 1;
   const newKey = listKey.replace(/-checks$/, '-check-') + 'add' + newIdx;
   openDesignEditCheck(newKey, blank);
@@ -280,6 +297,7 @@ async function addNewEvent(listKey){
   contentAdditions[listKey].push(blank);
   await saveContentAdditions();
   if(currentView === 'station' && cur) renderDetail();
+  if(currentView === 'body' && selectedBody) buildBodyView(selectedBody);
   const newIdx = contentAdditions[listKey].length - 1;
   const newKey = listKey.replace(/-events$/, '-event-') + 'add' + newIdx;
   openDesignEditEvent(newKey, blank);
@@ -406,6 +424,396 @@ function openRemovedItemsPanel(){
 
 function closeRemovedItemsPanel(){
   closeDesignEdit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MY DESIGN EDITS — audit index + per-item revert + revert-all
+// ═══════════════════════════════════════════════════════════════════════════
+// The Removed Items panel above answers "what did I delete?"; this one answers
+// the other half — "what have I ADDED or CHANGED?" — which otherwise has no
+// listing at all: a referee could only find edits by walking every view hunting
+// for the purple has-override pencils. Every design store is enumerated, each
+// edited BASE object gets a per-item "revert to original", and one "revert ALL
+// content edits" returns the shipped campaign to pristine WITHOUT touching live
+// session state (reveals, clock, initiative, whispers) or separately-authored
+// assets (item catalogue, economy tuning, splash screens, Campaign Studio).
+// Cross-file stores (system/faction/weapon/lane/paint/block) live in js/10 and
+// js/80; every reference here is typeof-guarded so a missing symbol no-ops.
+
+function _dCount(o){ return o ? Object.keys(o).length : 0; }
+function _dSumArrays(m){ let n = 0; if(m) Object.keys(m).forEach(k => { if(Array.isArray(m[k])) n += m[k].length; }); return n; }
+function _dSumInner(m){ let n = 0; if(m) Object.keys(m).forEach(s => n += _dCount(m[s])); return n; }
+function _dSumNested(m){ let n = 0; if(m) Object.keys(m).forEach(s => { const inner = m[s]||{}; Object.keys(inner).forEach(b => { if(Array.isArray(inner[b])) n += inner[b].length; }); }); return n; }
+// Cross-file design stores in js/10 / js/80 are top-level `let` globals, which
+// are NOT window properties — so read them through a thunk that resolves the
+// real lexical binding, swallowing any ReferenceError if a module is absent.
+function _dg(getter){ try { const v = getter(); return v === undefined ? undefined : v; } catch(e){ return undefined; } }
+
+// Total number of design edits layered over the built-in campaign — the exact
+// set revert-all clears. Everything cross-file is read defensively.
+function countAllDesignEdits(){
+  let n = 0;
+  n += _dCount(contentOverrides) + _dSumArrays(contentAdditions) + _dCount(contentDeletions);
+  n += _dSumArrays(bodyAdditions) + _dSumInner(bodyDeletions) + _dSumInner(bodyPropertyOverrides);
+  n += _dSumNested(locationAdditions) + _dSumInner(locationDeletions) + _dSumInner(locationPropertyOverrides);
+  const sysAdd = _dg(()=>systemAdditions); if(Array.isArray(sysAdd)) n += sysAdd.length;
+  n += _dCount(_dg(()=>systemDeletions)) + _dCount(_dg(()=>systemPropertyOverrides));
+  n += _dCount(_dg(()=>factionAdditions)) + _dCount(_dg(()=>factionDeletions)) + _dCount(_dg(()=>factionPropertyOverrides));
+  const wpnAdd = _dg(()=>weaponAdditions); if(Array.isArray(wpnAdd)) n += wpnAdd.length;
+  n += _dCount(_dg(()=>weaponDeletions)) + _dCount(_dg(()=>weaponPropertyOverrides));
+  const la = _dg(()=>gxLaneAdditions), ld = _dg(()=>gxLaneDeletions);
+  if(Array.isArray(la)) n += la.length; if(Array.isArray(ld)) n += ld.length;
+  const rb = _dg(()=>routeBlocks); if(rb){ n += _dCount(rb.blocks); if(rb.enabled === false) n += 1; }
+  n += _dCount(_dg(()=>hexPaint));
+  const tga = _dg(()=>tradeGoodAdditions);
+  n += _dCount(_dg(()=>tradeGoodOverrides)) + (Array.isArray(tga) ? tga.length : 0) + _dCount(_dg(()=>tradeGoodDeletions));
+  n += _dCount(_dg(()=>generatorOverrides));
+  n += _dCount(_dg(()=>rulesOverrides));
+  n += _dCount(_dg(()=>contractOverrides));
+  n += _dCount(_dg(()=>themeOverrides)) + _dCount(_dg(()=>panelFlags));
+  n += _dCount(_dg(()=>npcPortraits)) + _dCount(_dg(()=>sceneImages));
+  return n;
+}
+
+// One list row: a label, a snippet, and a revert button (revertCall is a string
+// of JS to run — the specific revert helper for this store).
+function _dEditRow(label, snippet, revertCall){
+  const s = (snippet || '').toString();
+  return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+    <div style="min-width:0;flex:1">
+      <div class="design-history-label">${escHtml(label)}</div>
+      <div class="design-history-snippet">${escHtml(s.slice(0,140))}${s.length>140?'…':''}</div>
+    </div>
+    <button class="design-tier-remove" style="flex:none" onclick="${revertCall}">↺ revert</button>
+  </div>`;
+}
+function _dSection(title, count, rowsHtml){
+  return `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(title)} <span style="color:var(--tx1);font-weight:400">· ${count}</span></div>${rowsHtml}`;
+}
+function _dq(s){ return String(s).replace(/'/g, "\\'"); }
+
+function openDesignEditsIndex(){
+  if(!isReferee() || !designModeOn) return;
+  const parts = [];
+
+  // ── Edited base content: read-aloud / desc / notes / checks / events / NPC rows
+  const ovKeys = Object.keys(contentOverrides || {});
+  if(ovKeys.length){
+    const rows = ovKeys.map(key =>
+      _dEditRow(key.replace(/^loc-/, '').replace(/-/g, ' › '), designEditSnippet(contentOverrides[key]),
+        `revertContentOverride('${_dq(key)}')`)).join('');
+    parts.push(_dSection('✏ Edited text & content', ovKeys.length, rows));
+  }
+
+  // ── Edited base bodies (planets / moons / belts) ──
+  const bpo = bodyPropertyOverrides || {};
+  const bodyRows = [];
+  Object.keys(bpo).forEach(sysId => Object.keys(bpo[sysId] || {}).forEach(bid => {
+    const fields = Object.keys(bpo[sysId][bid] || {}).join(', ');
+    bodyRows.push(_dEditRow('🪐 ' + designBodyName(sysId, bid), 'edited: ' + fields,
+      `revertBodyOverride('${_dq(sysId)}','${_dq(bid)}')`));
+  }));
+  if(bodyRows.length) parts.push(_dSection('🪐 Edited worlds', bodyRows.length, bodyRows.join('')));
+
+  // ── Edited base locations ──
+  const lpo = locationPropertyOverrides || {};
+  const locRows = [];
+  Object.keys(lpo).forEach(sysId => Object.keys(lpo[sysId] || {}).forEach(lid => {
+    const fields = Object.keys(lpo[sysId][lid] || {}).join(', ');
+    locRows.push(_dEditRow('📍 ' + designLocationName(sysId, lid), 'edited: ' + fields,
+      `revertLocationOverride('${_dq(sysId)}','${_dq(lid)}')`));
+  }));
+  if(locRows.length) parts.push(_dSection('📍 Edited locations', locRows.length, locRows.join('')));
+
+  // ── Edited base star systems (galaxy) ──
+  const spo = _dg(()=>systemPropertyOverrides) || {};
+  const sysRows = Object.keys(spo).map(id =>
+    _dEditRow('✦ ' + id, 'edited: ' + Object.keys(spo[id] || {}).join(', '), `revertSystemOverride('${_dq(id)}')`));
+  if(sysRows.length) parts.push(_dSection('✦ Edited star systems', sysRows.length, sysRows.join('')));
+
+  // ── Edited base regions / factions ──
+  const fpo = _dg(()=>factionPropertyOverrides) || {};
+  const facRows = Object.keys(fpo).map(id =>
+    _dEditRow('▰ ' + id, 'edited: ' + Object.keys(fpo[id] || {}).join(', '), `revertFactionOverride('${_dq(id)}')`));
+  if(facRows.length) parts.push(_dSection('▰ Edited regions', facRows.length, facRows.join('')));
+
+  // ── Edited base weapons ──
+  const wpo = _dg(()=>weaponPropertyOverrides) || {};
+  const wpnRows = Object.keys(wpo).map(id =>
+    _dEditRow('⚔ ' + id, 'edited: ' + Object.keys(wpo[id] || {}).join(', '), `revertWeaponOverride('${_dq(id)}')`));
+  if(wpnRows.length) parts.push(_dSection('⚔ Edited weapons', wpnRows.length, wpnRows.join('')));
+
+  // ── Additions & map layers (informational; deletions live in Removed Items) ──
+  const summary = [];
+  const addBodies = _dSumArrays(bodyAdditions), addLocs = _dSumNested(locationAdditions),
+        addChecks = _dSumArrays(contentAdditions),
+        addSys = Array.isArray(_dg(()=>systemAdditions)) ? _dg(()=>systemAdditions).length : 0,
+        addFac = _dCount(_dg(()=>factionAdditions)), addWpn = Array.isArray(_dg(()=>weaponAdditions)) ? _dg(()=>weaponAdditions).length : 0;
+  const laneN = (Array.isArray(_dg(()=>gxLaneAdditions)) ? _dg(()=>gxLaneAdditions).length : 0) + (Array.isArray(_dg(()=>gxLaneDeletions)) ? _dg(()=>gxLaneDeletions).length : 0);
+  const rb = _dg(()=>routeBlocks); const blockN = rb ? _dCount(rb.blocks) : 0;
+  const paintN = _dCount(_dg(()=>hexPaint));
+  const line = (n, label) => n ? `<div class="design-history-snippet" style="padding:2px 0">＋ ${n} ${label}</div>` : '';
+  const addHtml = line(addSys, 'new star system(s)') + line(addFac, 'new region(s)') + line(addBodies, 'new world(s)') +
+    line(addLocs, 'new location(s)') + line(addChecks, 'new check/event/NPC row(s)') + line(addWpn, 'new weapon(s)') +
+    line(laneN, 'jump-lane change(s)') + line(blockN, 'closed lane(s)') + line(paintN, 'painted hex(es)');
+  if(addHtml){
+    summary.push(`<div class="settings-section-lbl" style="margin-top:12px">＋ Added &amp; map layers</div>${addHtml}
+      <div class="se-note" style="margin-top:4px">Remove these from their own view, or restore deletions from 🗑 Show Removed Items.</div>`);
+  }
+
+  let html;
+  if(!parts.length && !summary.length){
+    html = '<div class="init-empty">No design edits yet. Turn on a pencil ✏ or add content, and it will be listed here.</div>';
+  } else {
+    const total = countAllDesignEdits();
+    html = parts.join('') + summary.join('') +
+      `<div class="archon-divider" style="margin:14px 0 10px"></div>
+       <button class="se-reset" style="width:100%;color:#d45050;border-color:#d45050" onclick="revertAllContentEdits()">⟲ Revert ALL ${total} content edit${total===1?'':'s'} to original</button>
+       <div class="se-note" style="margin-top:6px">Clears every edit to the shipped campaign. Does not touch reveals, the clock, initiative, whispers, your item catalogue, economy tuning, splash screens, or Campaign Studio settings.</div>`;
+  }
+  document.getElementById('design-edit-title').textContent = 'MY DESIGN EDITS';
+  document.getElementById('design-edit-body').innerHTML = html;
+  document.getElementById('design-edit-footer').classList.add('hidden');
+  designEditCurrentKey = null;
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
+// Snippet for a content-override value (string | check obj | event obj | nperow tuple).
+function designEditSnippet(v){
+  if(typeof v === 'string') return v;
+  if(Array.isArray(v)) return (v[0] || '') + ': ' + (v[1] || '');
+  if(v && v.skill) return '🎲 ' + v.skill;
+  if(v && v.t !== undefined && v.e !== undefined) return v.t + ' — ' + v.e;
+  try { return JSON.stringify(v); } catch(e){ return ''; }
+}
+// Friendly names, resolved through the effective (override-applied) sets.
+function designBodyName(sysId, bodyId){
+  try {
+    const props = (bodyPropertyOverrides[sysId] || {})[bodyId];
+    if(props && props.name) return props.name;
+    const b = effectiveBodies(sysId).find(x => x.id === bodyId);
+    if(b && b.name) return b.name;
+  } catch(e){}
+  return bodyId;
+}
+function designLocationName(sysId, locId){
+  try {
+    const props = (locationPropertyOverrides[sysId] || {})[locId];
+    if(props && props.name) return props.name;
+    if(typeof findLocation === 'function' && currentSystemId === sysId){ const hit = findLocation(locId); if(hit && hit.loc && hit.loc.name) return hit.loc.name; }
+  } catch(e){}
+  return locId;
+}
+
+// Shared re-render after any single revert, then repaint the index in place.
+function afterDesignRevert(){
+  if(typeof refreshDesignAffordances === 'function') refreshDesignAffordances();
+  if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+  showToast('Reverted to original');
+  openDesignEditsIndex();
+}
+async function revertContentOverride(key){
+  if(!Object.prototype.hasOwnProperty.call(contentOverrides, key)) return;
+  delete contentOverrides[key];
+  await saveContentOverrides();
+  afterDesignRevert();
+}
+async function revertBodyOverride(sysId, bodyId){
+  if(typeof recordDesignUndo === 'function') recordDesignUndo('Revert world edit');
+  if(bodyPropertyOverrides[sysId]){ delete bodyPropertyOverrides[sysId][bodyId]; if(!_dCount(bodyPropertyOverrides[sysId])) delete bodyPropertyOverrides[sysId]; }
+  await saveBodyPropertyOverrides();
+  afterDesignRevert();
+}
+async function revertLocationOverride(sysId, locId){
+  if(typeof recordDesignUndo === 'function') recordDesignUndo('Revert location edit');
+  if(locationPropertyOverrides[sysId]){ delete locationPropertyOverrides[sysId][locId]; if(!_dCount(locationPropertyOverrides[sysId])) delete locationPropertyOverrides[sysId]; }
+  await saveLocationPropertyOverrides();
+  afterDesignRevert();
+}
+async function revertSystemOverride(id){
+  const spo = _dg(()=>systemPropertyOverrides);
+  if(spo && spo[id]){ delete spo[id]; if(typeof saveSystemPropertyOverrides === 'function') await saveSystemPropertyOverrides(); }
+  afterDesignRevert();
+}
+async function revertFactionOverride(id){
+  const fpo = _dg(()=>factionPropertyOverrides);
+  if(fpo && fpo[id]){ delete fpo[id]; if(typeof saveFactionPropertyOverrides === 'function') await saveFactionPropertyOverrides(); if(typeof rebuildFactionsFromOverlay === 'function') rebuildFactionsFromOverlay(); }
+  afterDesignRevert();
+}
+async function revertWeaponOverride(id){
+  const wpo = _dg(()=>weaponPropertyOverrides);
+  if(wpo && wpo[id]){ delete wpo[id]; if(typeof saveWeaponPropertyOverrides === 'function') await saveWeaponPropertyOverrides(); }
+  afterDesignRevert();
+}
+
+// The big hammer — clear every design store that overlays the built-in campaign,
+// then reload so every loader/renderer re-reads pristine state (mirrors the
+// import/reset flow). Deliberately scoped: session state and separately-authored
+// assets are left alone (see confirm text + header comment).
+async function revertAllContentEdits(){
+  if(!isReferee() || !designModeOn) return;
+  const n = countAllDesignEdits();
+  if(!n){ showToast('No content edits to revert', 'info'); return; }
+  if(!confirm(
+    'Revert ALL ' + n + ' content edit' + (n === 1 ? '' : 's') + ' back to the original campaign?\n\n' +
+    'This clears every referee edit to star systems, regions, jump lanes, territory paint, worlds, locations, ' +
+    'station text / checks / events / NPCs, and the weapon catalogue — restoring the shipped campaign exactly.\n\n' +
+    'It does NOT touch: reveals, the clock, initiative, whispers, your item catalogue, economy tuning, ' +
+    'splash screens, or Campaign Studio settings.\n\n' +
+    'This cannot be undone. If you might want these back, Cancel and export your campaign first.\n\nContinue?')) return;
+
+  // In-file content / body / location stores.
+  contentOverrides = {}; contentHistory = {}; contentAdditions = {}; contentDeletions = {};
+  bodyAdditions = {}; bodyDeletions = {}; bodyPropertyOverrides = {};
+  locationAdditions = {}; locationDeletions = {}; locationPropertyOverrides = {};
+  await saveContentOverrides(); await saveContentHistory(); await saveContentAdditions(); await saveContentDeletions();
+  await saveBodyAdditions(); await saveBodyDeletions(); await saveBodyPropertyOverrides();
+  await saveLocationAdditions(); await saveLocationDeletions(); await saveLocationPropertyOverrides();
+
+  // Galaxy stores (js/10) — reset the live globals, then persist via their own savers.
+  if(typeof systemAdditions !== 'undefined'){ systemAdditions = []; systemDeletions = {}; systemPropertyOverrides = {};
+    if(typeof saveSystemAdditions === 'function') await saveSystemAdditions();
+    if(typeof saveSystemDeletions === 'function') await saveSystemDeletions();
+    if(typeof saveSystemPropertyOverrides === 'function') await saveSystemPropertyOverrides(); }
+  if(typeof factionAdditions !== 'undefined'){ factionAdditions = {}; factionDeletions = {}; factionPropertyOverrides = {};
+    if(typeof saveFactionAdditions === 'function') await saveFactionAdditions();
+    if(typeof saveFactionDeletions === 'function') await saveFactionDeletions();
+    if(typeof saveFactionPropertyOverrides === 'function') await saveFactionPropertyOverrides(); }
+  if(typeof gxLaneAdditions !== 'undefined'){ gxLaneAdditions = []; gxLaneDeletions = [];
+    if(typeof saveGalaxyLanes === 'function') await saveGalaxyLanes(); }
+  if(typeof routeBlocks !== 'undefined'){ routeBlocks = { enabled: true, blocks: {} };
+    if(typeof saveRouteBlocks === 'function') await saveRouteBlocks(); }
+  if(typeof hexPaint !== 'undefined'){ hexPaint = {};
+    if(typeof saveHexPaint === 'function') await saveHexPaint(); }
+  if(typeof tradeGoodOverrides !== 'undefined'){ tradeGoodOverrides = {}; tradeGoodAdditions = []; tradeGoodDeletions = {};
+    if(typeof saveTradeGoodOverrides === 'function') await saveTradeGoodOverrides();
+    if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions();
+    if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  if(typeof generatorOverrides !== 'undefined'){ generatorOverrides = {};
+    if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  if(typeof contractOverrides !== 'undefined'){ contractOverrides = {};
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides(); }
+  if(typeof rulesOverrides !== 'undefined'){ rulesOverrides = {};
+    if(typeof applyRulesOverrides === 'function') applyRulesOverrides();   // restore the shipped tables in place
+    if(typeof saveRulesOverrides === 'function') await saveRulesOverrides(); }
+  if(typeof themeOverrides !== 'undefined'){ themeOverrides = {};
+    if(typeof applyThemeOverrides === 'function') applyThemeOverrides();   // restore the shipped/pack colours
+    if(typeof saveThemeOverrides === 'function') await saveThemeOverrides(); }
+  if(typeof panelFlags !== 'undefined'){ panelFlags = {};
+    if(typeof applyPanelFlags === 'function') applyPanelFlags();           // show every panel again
+    if(typeof savePanelFlags === 'function') await savePanelFlags(); }
+  if(typeof npcPortraits !== 'undefined'){ npcPortraits = {};              // drop custom body/station NPC faces
+    if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+  if(typeof sceneImages !== 'undefined'){ sceneImages = {};                // drop location / area scene art
+    if(typeof saveSceneImages === 'function') await saveSceneImages(); }
+
+  // Combat / weapon stores (js/80).
+  if(typeof weaponAdditions !== 'undefined'){ weaponAdditions = []; weaponDeletions = {}; weaponPropertyOverrides = {};
+    if(typeof saveWeaponAdditions === 'function') await saveWeaponAdditions();
+    if(typeof saveWeaponDeletions === 'function') await saveWeaponDeletions();
+    if(typeof saveWeaponPropertyOverrides === 'function') await saveWeaponPropertyOverrides(); }
+
+  showToast('All content edits reverted — reloading…');
+  setTimeout(() => { try { location.reload(); } catch(e){} }, 700);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-LAYER EXPORT / IMPORT — portable backup of just the design edits
+// ═══════════════════════════════════════════════════════════════════════════
+// The whole-campaign export (js/60) is coarse, online-only and destructive on
+// import. This exports ONLY the Design-Mode layer — the referee's edits over the
+// shipped campaign — as a small JSON file, from the referee's full in-memory
+// data (so the "-ref" secrets travel too). Import replaces that layer and
+// reloads, writing each store redaction-aware (stripped public + full "-ref").
+// Session state (reveals, clock, initiative), the item catalogue, economy and
+// Campaign Studio config are deliberately NOT included.
+const DESIGN_LAYER_VERSION = 1;
+function collectDesignLayer(){
+  const d = {};
+  const put = (k, v) => { if(v !== undefined) d[k] = v; };
+  put('content-overrides', contentOverrides);
+  put('content-additions', contentAdditions);
+  put('content-deletions', contentDeletions);
+  put('content-history', contentHistory);
+  put('body-additions', bodyAdditions);
+  put('body-deletions', bodyDeletions);
+  put('body-prop-overrides', bodyPropertyOverrides);
+  put('location-additions', locationAdditions);
+  put('location-deletions', locationDeletions);
+  put('location-prop-overrides', locationPropertyOverrides);
+  if(typeof systemAdditions !== 'undefined'){ put('system-additions', systemAdditions); put('system-deletions', systemDeletions); put('system-prop-overrides', systemPropertyOverrides); }
+  if(typeof factionAdditions !== 'undefined'){ put('faction-additions', factionAdditions); put('faction-deletions', factionDeletions); put('faction-prop-overrides', factionPropertyOverrides); }
+  if(typeof weaponAdditions !== 'undefined'){ put('weapon-additions', weaponAdditions); put('weapon-deletions', weaponDeletions); put('weapon-prop-overrides', weaponPropertyOverrides); }
+  if(typeof gxLaneAdditions !== 'undefined') put('galaxy-lanes', { additions: gxLaneAdditions, deletions: gxLaneDeletions });
+  if(typeof routeBlocks !== 'undefined') put('route-blocks', routeBlocks);
+  if(typeof hexPaint !== 'undefined') put('hex-paint', hexPaint);
+  if(typeof tradeGoodOverrides !== 'undefined'){ put('trade-good-overrides', tradeGoodOverrides); put('trade-good-additions', tradeGoodAdditions); put('trade-good-deletions', tradeGoodDeletions); }
+  if(typeof generatorOverrides !== 'undefined') put('generator-overrides', generatorOverrides);
+  if(typeof contractOverrides !== 'undefined') put('contract-overrides', contractOverrides);
+  if(typeof rulesOverrides !== 'undefined') put('rules-overrides', rulesOverrides);
+  if(typeof themeOverrides !== 'undefined') put('theme-overrides', themeOverrides);
+  if(typeof panelFlags !== 'undefined') put('panel-flags', panelFlags);
+  if(typeof npcPortraits !== 'undefined') put('npc-portraits', npcPortraits);
+  if(typeof sceneImages !== 'undefined') put('scene-images', sceneImages);
+  if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
+  return d;
+}
+function exportDesignLayer(){
+  if(!isReferee()){ showToast('Referee only', 'error'); return; }
+  const data = collectDesignLayer();
+  const total = (typeof countAllDesignEdits === 'function') ? countAllDesignEdits() : Object.keys(data).length;
+  const blob = {
+    app: 'aurelia-design-layer', version: DESIGN_LAYER_VERSION, exportedAt: new Date().toISOString(),
+    campaignId: (typeof activeCampaignId !== 'undefined' ? activeCampaignId : 'archon-gambit'),
+    editCount: total, data,
+  };
+  const json = JSON.stringify(blob, null, 2);
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `aurelia-design-layer-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch(e){} }, 4000);
+  showToast(`Exported ${total} design edit${total === 1 ? '' : 's'}`);
+}
+// Write one imported store back, redaction-aware: split stores get the full copy
+// under "<key>-ref" and the stripped copy under the public key.
+async function writeImportedDesignStore(key, value){
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  if(split && typeof stripOverlayForPlayers === 'function'){
+    await supaStorage.set(key + '-ref', JSON.stringify(value), true);
+    await supaStorage.set(key, JSON.stringify(stripOverlayForPlayers(key, value)), true);
+  } else {
+    await supaStorage.set(key, JSON.stringify(value), true);
+  }
+}
+function importDesignLayer(){
+  if(!isReferee()){ showToast('Referee only', 'error'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if(!file) return;
+    let blob;
+    try { blob = JSON.parse(await file.text()); }
+    catch(e){ showToast('Import failed — not valid JSON', 'error'); return; }
+    if(!blob || blob.app !== 'aurelia-design-layer' || !blob.data || typeof blob.data !== 'object' || Array.isArray(blob.data)){
+      showToast('Import failed — not an Aurelia design-layer file', 'error'); return; }
+    const keys = Object.keys(blob.data);
+    if(!keys.length){ showToast('Import failed — file has no design edits', 'error'); return; }
+    if(!confirm(
+      'Import this design layer (' + (blob.editCount != null ? blob.editCount + ' edits, ' : '') + keys.length + ' store' + (keys.length === 1 ? '' : 's') + ') from "' + file.name + '"?\n\n' +
+      'This REPLACES all current Design-Mode edits over the shipped campaign (systems, regions, worlds, locations, station text / checks / events / NPCs, weapon catalogue, map layers).\n\n' +
+      'It does NOT touch reveals, the clock, session state, your item catalogue, economy tuning or Campaign Studio.\n\n' +
+      'Cannot be undone — export first if unsure. Continue?')) return;
+    showToast('Importing design layer…', 'info');
+    let ok = 0, fail = 0;
+    for(const k of keys){
+      try { await writeImportedDesignStore(k, blob.data[k]); ok++; } catch(e){ fail++; }
+    }
+    showToast(`Imported ${ok} store${ok === 1 ? '' : 's'}${fail ? ` (${fail} failed)` : ''} — reloading…`);
+    setTimeout(() => { try { location.reload(); } catch(e){} }, 900);
+  };
+  input.click();
 }
 
 
@@ -676,6 +1084,135 @@ function openDesignEditNpcRow(key, original){
   document.getElementById('design-edit-panel').classList.remove('hidden');
 }
 
+// Opens the structured editor for a whole NPC's name / role / skills / stats.
+// Stored as a PARTIAL override keyed "<nid>-npc" — the render Object.assigns it
+// over the base NPC, so detail rows (edited separately by row key) are untouched.
+// Works for base AND referee-added NPCs, on stations and bodies; the key is
+// referee-only (isRefOnlyContentKey) so it's redacted from players.
+function attrEsc(s){ return escHtml(s == null ? '' : s).replace(/"/g, '&quot;'); }
+function renderNpcEditForm(data){
+  const stats = (data && data.stats) || {};
+  const statCells = Object.keys(stats).map(k => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <input type="text" class="design-field-input design-npc-stat" data-stat="${attrEsc(k)}" value="${attrEsc(stats[k])}" style="width:54px;text-align:center;padding:6px 4px">
+      <div class="design-field-label" style="margin:0">${escHtml(k)}</div>
+    </div>`).join('');
+  // Portrait (players see this NPC, so the version stamp is in the shared
+  // npc-portraits store keyed by the nid — the design key minus the -npc suffix).
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  const pver = (typeof npcPortraitVer === 'function') ? npcPortraitVer(nid) : 0;
+  const avatar = (typeof npcMediaAvatar === 'function') ? npcMediaAvatar(nid, data && data.name, 48) : '';
+  const portraitRow = `
+    <div class="design-field-group" style="display:flex;align-items:center;gap:10px">
+      ${avatar}
+      <button class="design-edit-pencil-inline" onclick="triggerDesignNpcPortrait()">${pver ? 'Change photo' : 'Upload photo'}</button>
+      ${pver ? `<button class="design-edit-pencil-inline danger" onclick="removeDesignNpcPortrait()" title="Remove photo">✕</button>` : ''}
+      <input type="file" id="design-npc-portrait-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onDesignNpcPortraitFile(event)">
+    </div>`;
+  showDesignEditBody(portraitRow + `
+    <div class="design-field-group"><div class="design-field-label">Name</div>
+      <input type="text" id="design-npc-name" class="design-field-input" value="${attrEsc(data.name)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Role</div>
+      <input type="text" id="design-npc-role" class="design-field-input" value="${attrEsc(data.role)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Skills (comma-separated)</div>
+      <input type="text" id="design-npc-skills" class="design-field-input" value="${attrEsc(data.skills)}"></div>
+    <div class="design-field-group"><div class="design-field-label">Characteristics</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${statCells || '<span class="hx-small">This NPC has no characteristics.</span>'}</div></div>
+  `);
+}
+// Re-render whichever entity view is on screen after a design change.
+function rerenderDesignEntityView(){
+  if(currentView === 'station' && typeof cur !== 'undefined' && cur && typeof renderDetail === 'function') renderDetail();
+  else if(currentView === 'system' && selectedBody && typeof selectBody === 'function') selectBody(selectedBody);
+  else if(currentView === 'body' && selectedBody){ if(selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else if(typeof buildBodyView === 'function') buildBodyView(selectedBody); }
+  else if(currentView === 'galaxy' && typeof HX !== 'undefined'){ if(HX.refresh) HX.refresh(); if(typeof renderDesignPanel === 'function') renderDesignPanel(); }
+}
+function _reRenderNpcForm(){
+  const key = designEditCurrentKey; if(!key) return;
+  const original = designOriginalRegistry[key] || {};
+  const has = Object.prototype.hasOwnProperty.call(contentOverrides, key);
+  renderNpcEditForm(has ? Object.assign({}, original, contentOverrides[key]) : original);
+}
+function triggerDesignNpcPortrait(){ const f = document.getElementById('design-npc-portrait-file'); if(f) f.click(); }
+async function onDesignNpcPortraitFile(e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee()) return;
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  if(!nid) return;
+  if(typeof resizePortrait !== 'function' || typeof uploadNpcPortraitBlob !== 'function'){ if(typeof showToast === 'function') showToast('Portraits unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast === 'function') showToast('Uploading…', 'info');
+    const blob = await resizePortrait(file, 256);
+    await uploadNpcPortraitBlob(nid, blob);
+    if(typeof npcPortraits !== 'undefined'){ npcPortraits[nid] = Date.now(); if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+    _reRenderNpcForm();
+    rerenderDesignEntityView();
+    if(typeof showToast === 'function') showToast('Portrait updated');
+  } catch(err){ console.error('NPC portrait upload failed', err); if(typeof showToast === 'function') showToast('Portrait upload failed'); }
+}
+async function removeDesignNpcPortrait(){
+  if(!isReferee()) return;
+  const nid = (designEditCurrentKey || '').replace(/-npc$/, '');
+  if(typeof npcPortraits !== 'undefined' && npcPortraits[nid]){ delete npcPortraits[nid]; if(typeof saveNpcPortraits === 'function') await saveNpcPortraits(); }
+  _reRenderNpcForm();
+  rerenderDesignEntityView();
+}
+
+// ── Scene images (location / station-area establishing art) ──────────────────
+// Landscape banners, so — unlike the square portrait crop — this preserves the
+// aspect ratio and just caps the longest edge. See js/50 scene-images store.
+function resizeSceneImage(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if(Math.max(w, h) > maxDim){ const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+function triggerSceneImage(key){ const f = document.getElementById('scene-image-file-' + key); if(f) f.click(); }
+async function onSceneImageFile(key, e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee() || !key) return;
+  if(typeof uploadSceneImageBlob !== 'function'){ if(typeof showToast === 'function') showToast('Scene images unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast === 'function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast === 'function') showToast('Uploading…', 'info');
+    const blob = await resizeSceneImage(file, 1400);
+    await uploadSceneImageBlob(_sceneCampaign(), key, blob);
+    if(typeof sceneImages !== 'undefined'){ sceneImages[key] = Date.now(); if(typeof saveSceneImages === 'function') await saveSceneImages(); }
+    rerenderDesignEntityView();
+    if(typeof showToast === 'function') showToast('Scene image updated');
+  } catch(err){ console.error('Scene image upload failed', err); if(typeof showToast === 'function') showToast('Upload failed — is the scenes bucket set up? (migration 0015)'); }
+}
+async function removeSceneImage(key){
+  if(!isReferee()) return;
+  if(typeof sceneImages !== 'undefined' && sceneImages[key]){ delete sceneImages[key]; if(typeof saveSceneImages === 'function') await saveSceneImages(); }
+  rerenderDesignEntityView();
+}
+function openDesignEditNpc(key, original){
+  designEditCurrentKey = key;
+  designEditType = 'npc';
+  designOriginalRegistry[key] = original;
+  document.getElementById('design-edit-title').textContent = 'EDIT NPC';
+  const has = Object.prototype.hasOwnProperty.call(contentOverrides, key);
+  const data = has ? Object.assign({}, original, contentOverrides[key]) : (original || {});
+  renderNpcEditForm(data);
+  document.getElementById('design-history-list').innerHTML = '';
+  document.getElementById('design-history-list').classList.add('hidden');
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+
 function showDesignEditBody(formHTML){
   document.getElementById('design-edit-body').innerHTML = formHTML + '<div id="design-history-list"></div>';
 }
@@ -716,6 +1253,19 @@ function readDesignEditFormValue(){
   if(designEditType === 'nperow'){
     return [document.getElementById('design-row-label').value, document.getElementById('design-row-text').value];
   }
+  if(designEditType === 'npc'){
+    const stats = {};
+    document.querySelectorAll('.design-npc-stat').forEach(inp => {
+      const v = String(inp.value).trim();
+      stats[inp.dataset.stat] = (v !== '' && !isNaN(v)) ? Number(v) : v;   // keep numbers numeric, allow hex/text
+    });
+    return {
+      name: document.getElementById('design-npc-name').value,
+      role: document.getElementById('design-npc-role').value,
+      skills: document.getElementById('design-npc-skills').value,
+      stats,
+    };
+  }
   return null;
 }
 
@@ -729,6 +1279,10 @@ function renderDesignEditFormFromValue(value){
   }
   if(designEditType === 'check'){
     renderCheckEditForm(value);
+    return;
+  }
+  if(designEditType === 'npc'){
+    renderNpcEditForm(value);
     return;
   }
   if(designEditType === 'event'){

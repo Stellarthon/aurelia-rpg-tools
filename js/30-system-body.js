@@ -583,7 +583,7 @@ function renderBodyContentSections(body, pm){
   const sbDescKey = 'body-'+id+'-desc';
   designOriginalRegistry[sbDescKey] = body.desc;
   const sbDescText = resolveContent(sbDescKey, body.desc);
-  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, (sbDescText||'').replace(/\n/g,"<br>"))}</div></div>`;
+  html += `<div class="s-sec"><div class="s-sec-lbl">Overview</div><div class="s-desc">${designWrap(sbDescKey, body.desc, escHtmlBr(sbDescText))}</div></div>`;
 
   // Referee boxes (Read Aloud, Referee Note, + any custom box types) are
   // registry-driven so adding / removing / renaming a box propagates to every
@@ -606,14 +606,24 @@ function renderBodyContentSections(body, pm){
         const rdata = resolveContent(rkey, r);
         const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditNpcRow('${rkey}', ${JSON.stringify(r).replace(/"/g,'&quot;')})" title="Edit this detail">✏</button>` : '';
         const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${rkey}', ${JSON.stringify(rdata).replace(/"/g,'&quot;')})" title="Remove this detail">🗑</button>` : '';
-        return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${rdata[0]}</div><div class="nrv">${rdata[1]}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
+        return `<div class="npc-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px"><div><div class="nrl">${escHtml(rdata[0])}</div><div class="nrv">${escHtml(rdata[1])}</div></div><span style="display:flex;gap:4px;flex-shrink:0">${pencil}${trash}</span></div>`;
       }).join("");
       const addRowBtn = designModeOn ? `<button class="design-add-btn" style="margin-top:6px" onclick="addNewNpcRow('${rowListKey}')">+ Add Detail</button>` : '';
+      // Whole-NPC edit override (name/role/skills/stats), merged over the base.
+      const npcOvKey = nid+'-npc';
+      designOriginalRegistry[npcOvKey] = n;
+      const nEff = Object.prototype.hasOwnProperty.call(contentOverrides, npcOvKey) ? Object.assign({}, n, contentOverrides[npcOvKey]) : n;
+      const editNpcBtn = designModeOn ? `<button class="design-edit-pencil-inline" style="margin-left:6px" onclick="event.stopPropagation();openDesignEditNpc('${npcOvKey}', ${JSON.stringify(n).replace(/"/g,'&quot;')})" title="Edit NPC name/role/skills/stats">✎</button>` : '';
+      const statGrid = (nEff.stats && Object.keys(nEff.stats).length) ? `<div class="stat-grid">${Object.entries(nEff.stats).map(([k,v])=>`<div class="sc"><div class="sv">${escHtml(v)}</div><div class="sk">${escHtml(k)}</div></div>`).join("")}</div>` : '';
+      const npcNameBlock = `<div><div class="npc-name">${escHtml(nEff.name)}</div><div class="npc-role">${escHtml(nEff.role)}</div></div>`;
+      const npcLeft = (typeof npcPortraitVer === 'function' && npcPortraitVer(nid))
+        ? `<div style="display:flex;align-items:center;gap:8px;min-width:0">${npcMediaAvatar(nid, nEff.name, 34)}${npcNameBlock}</div>` : npcNameBlock;
       html += `<div class="npc-card"><div class="npc-hdr" onclick="toggleNPC('${nid}',this)">
-        <div><div class="npc-name">${n.name}</div><div class="npc-role">${n.role}</div></div>
-        <span class="chev" id="${nid}-chev">▾</span></div>
+        ${npcLeft}
+        <span style="display:flex;align-items:center;gap:2px">${editNpcBtn}<span class="chev" id="${nid}-chev">▾</span></span></div>
         <div class="npc-body" id="${nid}">
-          <div class="skill-row">${n.skills}</div>
+          ${statGrid}
+          <div class="skill-row">${escHtml(nEff.skills)}</div>
           ${rowsHTML}
           ${addRowBtn}
         </div></div>`;
@@ -621,26 +631,49 @@ function renderBodyContentSections(body, pm){
     html += `</div>`;
   }
 
-  if(!pm&&body.checks&&body.checks.length){
-    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
-    const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
-    body.checks.forEach(c=>{
-      html += `<div class="chk"><div class="chk-t">${c.skill}</div>`;
-      c.degrees.forEach(d=>{
-        const cls=d.cls||degCls[d.c]||"deg-p";
-        const lbl=d.label||d.l||"";
-        const txt=d.text||d.t||"";
-        html+=`<div class="deg-row"><div class="${cls}">${lbl}</div><div style="font-size:11px">${txt}</div></div>`;
-      });
+  // Skill checks — add/edit/remove in Design Mode, mirroring station areas.
+  // Keyed body-<id>-checks / body-<id>-check-<i>. The section shows whenever
+  // there are checks OR design mode is on (so the add button appears on a body
+  // that has none yet). Referee-only data (redacted from players + .ref-only).
+  {
+    const chkListKey = 'body-'+id+'-checks';
+    const mergedChecks = mergeListWithAdditions(body.checks, chkListKey, 'body-'+id+'-check-');
+    if(!pm && (mergedChecks.length || designModeOn)){
+      html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Skill Checks</div>`;
+      const degCls={ds:"deg-s",dp:"deg-p",df:"deg-f"};
+      html += mergedChecks.map(({item:c, key:ckey})=>{
+        designOriginalRegistry[ckey] = c;
+        const cdata = resolveContent(ckey, c);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditCheck('${ckey}', ${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit this check">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ckey}', ${JSON.stringify(cdata).replace(/"/g,'&quot;')})" title="Remove this check">🗑</button>` : '';
+        return `<div class="chk"><div class="chk-t" style="display:flex;align-items:center;justify-content:space-between"><span>${escHtml(cdata.skill)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${cdata.degrees.map(d=>{
+          const cls=d.cls||degCls[d.c]||"deg-p";
+          const lbl=d.label||d.l||"";
+          const txt=d.text||d.t||"";
+          return `<div class="deg-row"><div class="${cls}">${escHtml(lbl)}</div><div style="font-size:11px">${escHtml(txt)}</div></div>`;
+        }).join("")}</div>`;
+      }).join("");
+      if(designModeOn) html += `<button class="design-add-btn" onclick="addNewCheck('${chkListKey}')">+ Add Skill Check</button>`;
       html += `</div>`;
-    });
-    html += `</div>`;
+    }
   }
 
-  if(!pm&&body.events&&body.events.length){
-    html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
-    body.events.forEach(e=>html+=`<div class="evt"><div class="evt-t">${e.t}</div>${e.e}</div>`);
-    html += `</div>`;
+  // Timed events — add/edit/remove in Design Mode. Keyed body-<id>-events / -event-<i>.
+  {
+    const evtListKey = 'body-'+id+'-events';
+    const mergedEvents = mergeListWithAdditions(body.events, evtListKey, 'body-'+id+'-event-');
+    if(!pm && (mergedEvents.length || designModeOn)){
+      html += `<div class="s-sec ref-only"><div class="s-sec-lbl">Events</div>`;
+      html += mergedEvents.map(({item:e, key:ekey})=>{
+        designOriginalRegistry[ekey] = e;
+        const edata = resolveContent(ekey, e);
+        const pencil = designModeOn ? `<button class="design-edit-pencil-inline" onclick="openDesignEditEvent('${ekey}', ${JSON.stringify(e).replace(/"/g,'&quot;')})" title="Edit this event">✏</button>` : '';
+        const trash = designModeOn ? `<button class="design-edit-pencil-inline danger" onclick="deleteContentItem('${ekey}', ${JSON.stringify(edata).replace(/"/g,'&quot;')})" title="Remove this event">🗑</button>` : '';
+        return `<div class="evt"><div class="evt-t" style="display:flex;align-items:center;justify-content:space-between"><span>${escHtml(edata.t)}</span><span style="display:flex;gap:4px">${pencil}${trash}</span></div>${escHtml(edata.e)}</div>`;
+      }).join("");
+      if(designModeOn) html += `<button class="design-add-btn" onclick="addNewEvent('${evtListKey}')">+ Add Event</button>`;
+      html += `</div>`;
+    }
   }
   return html;
 }
@@ -1664,6 +1697,9 @@ function selectBodyLocation(locId){
 
   if(!pm){ html += revealToggleRowHTML(locId); }
 
+  // Establishing scene image (design-mode upload; players see it once revealed).
+  if(typeof sceneImageBlockHTML === 'function'){ html += sceneImageBlockHTML('bl-' + portraitSlug(found.bodyId) + '-' + portraitSlug(locId), loc.name); }
+
   // Interior entry. Built-in campaign: the hand-drawn Aurelia deck map.
   // Authored campaigns: a location whose interiorId points at a referee-
   // authored station (created in the Design Studio) opens ITS generated map.
@@ -1683,19 +1719,19 @@ function selectBodyLocation(locId){
   const dText = resolveContent(dKey, loc.desc);
   html += `<div class="s-blk" style="background:var(--bg1);padding:10px;border-radius:5px;margin-bottom:10px">
     <div class="s-sec-lbl" style="font-size:9px;color:var(--tx1);font-family:monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px">OVERVIEW</div>
-    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(dKey, loc.desc, (dText||'').split('\n').join('<br>'))}</div></div>`;
+    <div class="s-desc" style="font-size:12px;line-height:1.65">${designWrap(dKey, loc.desc, escHtmlBr(dText))}</div></div>`;
 
   if(!pm && loc.readAloud){
     const rKey = 'loc-'+locId+'-readAloud';
     designOriginalRegistry[rKey] = loc.readAloud;
     const rText = resolveContent(rKey, loc.readAloud);
-    html += `<div class="s-blk read"><div class="s-blk-lbl">READ ALOUD</div>${designWrap(rKey, loc.readAloud, rText)}</div>`;
+    html += `<div class="s-blk read"><div class="s-blk-lbl">READ ALOUD</div>${designWrap(rKey, loc.readAloud, escHtml(rText))}</div>`;
   }
   if(!pm && loc.refNote){
     const nKey = 'loc-'+locId+'-refNote';
     designOriginalRegistry[nKey] = loc.refNote;
     const nText = resolveContent(nKey, loc.refNote);
-    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(nKey, loc.refNote, (nText||'').split('\n').join('<br>'))}</div>`;
+    html += `<div class="s-blk ref ref-only"><div class="s-blk-lbl">REFEREE NOTE</div>${designWrap(nKey, loc.refNote, escHtmlBr(nText))}</div>`;
   }
 
   // Custom referee boxes (parity with the retired bespoke view) — keeps any

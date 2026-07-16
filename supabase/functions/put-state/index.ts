@@ -64,6 +64,9 @@ const REFEREE_ONLY = new Set([
   "faction-additions", "faction-deletions", "faction-prop-overrides", "faction-hidden",
   "weapon-additions", "weapon-deletions", "weapon-prop-overrides",
   "galaxy-lanes", "hex-paint", "route-blocks",
+  "trade-good-overrides", "trade-good-additions", "trade-good-deletions",
+  "generator-overrides", "rules-overrides", "contract-overrides",
+  "theme-overrides", "panel-flags", "npc-portraits", "scene-images",
 ]);
 const MAX_KEY = 256;
 const MAX_VALUE = 1_000_000;
@@ -175,7 +178,11 @@ Deno.serve(async (req) => {
     return json({ error: "forbidden", message: "Whispers accept append/resolve only — never a whole-array write." }, 403);
   }
 
-  if (REFEREE_ONLY.has(baseKey(key)) && player.role !== "referee") {
+  // Referee-only keys, plus every "<store>-ref" blob (the unredacted full copies
+  // of Design-Mode overlays — see get-content / migration 0014). A "-ref" suffix
+  // is a reserved marker for referee-only content, so a player token can never
+  // write one even though the base store isn't individually listed above.
+  if ((REFEREE_ONLY.has(baseKey(key)) || baseKey(key).endsWith("-ref")) && player.role !== "referee") {
     return json({ error: "forbidden", message: "This is a referee-only key." }, 403);
   }
 

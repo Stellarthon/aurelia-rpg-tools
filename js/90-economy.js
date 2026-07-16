@@ -481,7 +481,8 @@ window.ECON = (function(){
   function freshAgents(){
     const seed=[['private','free'],['private','far'],['hegemony','subm'],['omnisynth','fat'],['private','free']];
     if(authored()) seed.forEach(s=>{ s[0]='private'; });
-    return seed.map((s,i)=>({ id:'tr'+i, name:AGENT_NAMES[i], cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing:s[0], shipId:s[1], insolventWk:0, hist:[], capHist:[] }));
+    const AN = (typeof genList==='function') ? genList('trader.names', AGENT_NAMES) : AGENT_NAMES;
+    return seed.map((s,i)=>({ id:'tr'+i, name:(AN[i]||AGENT_NAMES[i]||('Trader '+(i+1))), cap:AGENT_START_CAP, pos:null, route:null, trips:0, profit:0, backing:s[0], shipId:s[1], insolventWk:0, hist:[], capHist:[] }));
   }
   // ── Corporations: a THIRD backing type (alongside `private` and the factions). Pooled-capital
   //    trading houses with an IDENTITY — a specialty good + home anchor that their ships favour and
@@ -1129,10 +1130,17 @@ window.ECON = (function(){
     { key:'foreign',  title:'Foreign Secretary' },
     { key:'interior', title:'Minister of the Interior' },
   ];
+  // Design-Mode editable via the generator overlay (js/85 genList — in global
+  // scope here). genList returns the referee's override list if set, else the
+  // shipped base. Edits only reshape NEWLY generated / reshuffled cabinet seats;
+  // names already stamped into faction state are kept.
+  function govFirsts(){ const l = (typeof genList==='function') ? genList('gov.firstNames', GOV_FIRST) : GOV_FIRST; return (l && l.length) ? l : GOV_FIRST; }
+  function govLasts(){  const l = (typeof genList==='function') ? genList('gov.lastNames',  GOV_LAST)  : GOV_LAST;  return (l && l.length) ? l : GOV_LAST; }
+  function govTraitList(){ const l = (typeof genList==='function') ? genList('gov.traits', GOV_TRAITS) : GOV_TRAITS; return (l && l.length) ? l : GOV_TRAITS; }
   function govHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
-  function govNameSeeded(seed){ return GOV_FIRST[govHash('f'+seed)%GOV_FIRST.length]+' '+GOV_LAST[govHash('l'+seed)%GOV_LAST.length]; }
-  function govTraitSeeded(seed){ return GOV_TRAITS[govHash('t'+seed)%GOV_TRAITS.length]; }
-  function govNameRandom(){ return pick(GOV_FIRST)+' '+pick(GOV_LAST); }
+  function govNameSeeded(seed){ const F=govFirsts(), L=govLasts(); return F[govHash('f'+seed)%F.length]+' '+L[govHash('l'+seed)%L.length]; }
+  function govTraitSeeded(seed){ const T=govTraitList(); return T[govHash('t'+seed)%T.length]; }
+  function govNameRandom(){ return pick(govFirsts())+' '+pick(govLasts()); }
   function freshCabinet(facId){ const gov=FAC_GOV[facId]||{head:'Head of State'};
     const out=[{ post:'head', title:gov.head, name:govNameSeeded(facId+':head'), trait:govTraitSeeded(facId+':head'), since:0 }];
     GOV_POSTS.forEach(p=> out.push({ post:p.key, title:p.title, name:govNameSeeded(facId+':'+p.key), trait:govTraitSeeded(facId+':'+p.key), since:0 }));
@@ -1319,7 +1327,7 @@ window.ECON = (function(){
         const gov=FAC_GOV[f.id]||{}, seat=pick(f.cabinet), outgoing=seat.name;
         const reason=pick(gov.style||['resigned','dismissed','retired']);
         let nm=govNameRandom(); for(let k=0;k<6 && f.cabinet.some(s=>s.name===nm);k++) nm=govNameRandom();
-        seat.name=nm; seat.trait=pick(GOV_TRAITS); seat.since=week;
+        seat.name=nm; seat.trait=pick(govTraitList()); seat.since=week;
         broadcastNews(week, f.id, 'cabinet', `🏛 ${facName2(f.id)}: ${seat.title} ${outgoing} ${GOV_REASONS[reason]||'steps down'} — ${nm} ${seat.post==='head'?'assumes office':'is appointed'} (${seat.trait}).`);
         log(week, `🏛 ${FAC_SHORT[f.id]||facName2(f.id)} — ${seat.title}: ${nm} replaces ${outgoing}`);
         state.history.unshift({ label:`🏛 ${FAC_SHORT[f.id]||facName2(f.id)} ${seat.title} — ${nm}`, kind:'cabinet', beganWk:week, endsWk:null, src:'faction' }); if(state.history.length>40) state.history.length=40;
@@ -1403,7 +1411,9 @@ window.ECON = (function(){
   // A lawless berth: frontier / independent / contested space, or a slumped (bust) world.
   function lawlessWorlds(){ return Object.keys(worlds).filter(id=>{ const f=worlds[id].fac, ws=state&&state.worldStatus&&state.worldStatus[id];
     return f==='independent'||f==='contested'||f==='vast'||f==='archon' || (ws&&ws.kind==='bust'); }); }
-  function pirateName(){ for(let i=0;i<8;i++){ const nm='The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); if(!Object.values(state.pirates||{}).some(b=>b.name===nm)) return nm; } return 'The '+pick(PIR_NAME_A)+' '+pick(PIR_NAME_B); }
+  function pirNameA(){ const l = (typeof genList==='function') ? genList('pirate.nameA', PIR_NAME_A) : PIR_NAME_A; return (l && l.length) ? l : PIR_NAME_A; }
+  function pirNameB(){ const l = (typeof genList==='function') ? genList('pirate.nameB', PIR_NAME_B) : PIR_NAME_B; return (l && l.length) ? l : PIR_NAME_B; }
+  function pirateName(){ for(let i=0;i<8;i++){ const nm='The '+pick(pirNameA())+' '+pick(pirNameB()); if(!Object.values(state.pirates||{}).some(b=>b.name===nm)) return nm; } return 'The '+pick(pirNameA())+' '+pick(pirNameB()); }
   function freshPirates(){ const out={};
     const berths = lawlessWorlds(); if(!berths.length) return out;
     // two deterministic starter bands at the first lawless berths (stable id order → same on every device)
@@ -2030,6 +2040,23 @@ window.ECON = (function(){
     setFactions(v){ ensure(); state.factionsOn=!!v; save(); },
     factions(){ ensure(); if(!state.factions) state.factions=freshFactions(); return state.factions; },
     factionIds:()=>FAC_AI_IDS.slice(),
+    // Design-Mode: the editable procedural-flavour name lists (minister names,
+    // trader / pirate names) surfaced to the generator-tables editor. Each rides
+    // the shared generator-overrides store via genList(key, base).
+    flavourLists(){ return [
+      { key:'gov.firstNames', label:'Minister first names',  group:'Government',       base:GOV_FIRST },
+      { key:'gov.lastNames',  label:'Minister surnames',     group:'Government',       base:GOV_LAST },
+      { key:'gov.traits',     label:'Minister traits',       group:'Government',       base:GOV_TRAITS },
+      { key:'trader.names',   label:'Hauler company names',  group:'Traders & pirates', base:AGENT_NAMES },
+      { key:'pirate.nameA',   label:'Pirate name — prefix',  group:'Traders & pirates', base:PIR_NAME_A },
+      { key:'pirate.nameB',   label:'Pirate name — suffix',  group:'Traders & pirates', base:PIR_NAME_B },
+    ]; },
+    // Design-Mode: live references to the structured GalNet / economy flavour
+    // tables, edited in place through the Rules & Tables editor. Same object
+    // references the sim's consumers (freshCabinet, the reshuffle tick,
+    // corpSeedList, pirateShipOf) read, so an in-place edit reaches them with
+    // no rewiring.
+    GOV_REASONS, GOV_POSTS, FAC_GOV, CORP_ARCHETYPES, MEGACORP, PIRATE_SHIPS,
     cabinetOf(id){ ensure(); const f=state.factions&&state.factions[id]; if(f&&(!f.cabinet||!f.cabinet.length)) f.cabinet=freshCabinet(id); return (f&&f.cabinet)||[]; },
     news(){ ensure(); return state.news||[]; },                               // GalNet feed — rolling headlines (cabinet changes, trade wars, détente, policy)
     relOf:(a,b)=>{ ensure(); return relOf(a,b); },                            // A→B stance (−100..+100)

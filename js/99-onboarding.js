@@ -674,3 +674,12 @@
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
   else schedule();
 })();
+
+// Rules & Tables overlay (Design Mode): loaded here, in the last script, so every
+// hardcoded rules const (js/00/60/80/91/92) exists before we snapshot pristine
+// defaults and apply the referee's overrides in place. See js/60.
+if(typeof loadRulesOverrides === 'function') loadRulesOverrides();
+// UI chrome overlays (Design Mode): theme colours + panel show/hide. Loaded on
+// EVERY device (players included) so the referee's look / hidden panels apply
+// table-wide; the pack theme is already applied by now so overrides layer on top.
+if(typeof loadDesignChrome === 'function') loadDesignChrome();

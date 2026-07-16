@@ -229,3 +229,50 @@ published — but do all three **before publishing v43**:
    Then run the acceptance pass from the plan §8 on two real devices, and
    `get_advisors` (security) — expect no new findings (the carve-out narrows
    an existing public policy; it grants nothing).
+
+## Step 10 — Design-Mode overlays & media (build v114)
+
+Design Mode grew a large set of referee overlays (reference tables, generators,
+economy flavour, UI theme/panels) and a **media layer** (portraits + scene art).
+Two server-side pieces:
+
+**1. Redeploy `put-state`** so its referee-only key list covers every new overlay.
+`supabase functions deploy put-state --no-verify-jwt`. The list now also gates:
+`content-*`, `body-*`, `location-*`, `system-*`, `faction-*`, `weapon-*`,
+`galaxy-lanes`, `hex-paint`, `route-blocks`, `trade-good-*`, `generator-overrides`,
+`rules-overrides`, `contract-overrides`, `theme-overrides`, `panel-flags`,
+`npc-portraits`, `scene-images`, and any `<key>-ref` suffix. These are
+public-**read** (they're the shared campaign look/data, not secrets — unlike the
+`-ref` blobs), referee-**write** only. Also redeploy `get-content` and apply
+migration `0014` per `../docs/design-mode-redaction.md` (the redaction split).
+
+**2. Apply `migrations/0015_scenes_bucket.sql`** (SQL editor) — a public `scenes`
+Storage bucket for the establishing images a referee attaches to a place. It backs
+scene art across **body locations, station areas, star systems, and regions**
+(same overlay, keyed `bl-*` / `sa-*` / `sys-*` / `region-*` in the shared
+`scene-images` version key). Public-read, referee-only upload gated client-side —
+the same honour-system model as the `portraits`/`handouts`/`deck-maps` buckets.
+Instant rollback is `delete from storage.buckets where id='scenes';`.
+
+**NPC portraits need no new migration** — they reuse the existing `portraits`
+bucket (migration 0002) under an `npc/` sub-path.
+
+Until 0015 is applied, scene-art uploads toast "is the scenes bucket set up?
+(migration 0015)" and missing images hide themselves; every other overlay
+(including NPC portraits) works from the `put-state` redeploy alone.
+
+Verify (referee token):
+
+```bash
+URL=https://rarxefzcqvgqvxutprcq.supabase.co
+# Upload a system scene image, then confirm the public object resolves.
+# (Easiest end-to-end: in the app, Design Mode → select a system → 🖼 Add scene
+#  image; a reload on a player device shows it under the system panel.)
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "$URL/storage/v1/object/public/scenes/<campaignSlug>/sys-<slug>.jpg"   # expect 200
+
+# A player token still cannot write the referee-only keys: expect 403.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/functions/v1/put-state \
+  -H "Authorization: Bearer <PLAYER_TOKEN>" -H 'Content-Type: application/json' \
+  -d '{"key":"scene-images","value":"{}"}'
+```

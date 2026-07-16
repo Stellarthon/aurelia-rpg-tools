@@ -206,7 +206,17 @@ let networkLockMessage = '';    // TASK 6: 403 lock-out message to surface to a 
 // The table display window (js/93) is NEVER a referee, whatever the shared
 // localStorage says — this one line at the choke point keeps every
 // referee-only surface (overlays, design mode, records) off the table TV.
-function isReferee(){ if(DISPLAY_MODE) return false; if(phonePlayerLock()) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+// previewAs: a real referee "Preview as player" state. null = not previewing;
+// '' = generic player; a name = as that identity. While set, isReferee() reports
+// false so ALL render/visibility gates (canSee, .ref-only, redaction) behave as
+// that player — but isRefereeReal() still reports true, and NETWORK/poll guards
+// use it so the referee never polls (which would overwrite their full in-memory
+// design data with the redacted public copies). Enter/exit below.
+let previewAs = null;
+function isReferee(){ if(DISPLAY_MODE) return false; if(previewAs !== null) return false; if(phonePlayerLock()) return false; return secureRole ? (secureRole === 'referee') : !pmCheck.checked; }
+// The device's REAL referee status, ignoring an active preview. Poll/load/write
+// guards use this; render gates use isReferee().
+function isRefereeReal(){ return (previewAs !== null) ? true : isReferee(); }
 
 // ── Permission model (V1) ────────────────────────────────────────────────
 // Per-viewer information gating. This is spoiler/visibility control, NOT
@@ -244,6 +254,78 @@ function applyIdentityClass(){
 // styling) when the viewer's role or identity changes.
 function refreshRoleGatedViews(){
   if(currentView === 'galaxy' && typeof HX!=='undefined') HX.refresh();
+}
+
+// ── Preview as player (referee) ─────────────────────────────────────────────
+// Lets a referee see the map exactly as a chosen player does — reveals,
+// per-player redaction, spoiler regions and referee-only content all applied —
+// without changing their token, role or data. It flips isReferee() (render
+// gates) while leaving isRefereeReal() true (network guards), so nothing is
+// fetched or overwritten; the view is rebuilt from the referee's own in-memory
+// data through the same canSee()/.ref-only gates a player's device uses.
+let _previewSaved = null;
+function _previewRerender(){
+  try {
+    if(currentView === 'station' && typeof renderDetail === 'function' && typeof cur !== 'undefined' && cur){ renderDetail(); if(typeof updateStationLocks === 'function') updateStationLocks(); }
+    else if(currentView === 'system'){ if(typeof selectedBody !== 'undefined' && selectedBody && typeof selectBody === 'function') selectBody(selectedBody); else if(typeof renderSystemOverview === 'function') renderSystemOverview(); }
+    else if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody){ if(typeof selectedBodyLoc !== 'undefined' && selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else if(typeof buildBodyView === 'function') buildBodyView(selectedBody); }
+    else if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh();
+  } catch(e){ if(typeof pushErr === 'function') pushErr('preview rerender failed', e && e.stack); }
+  if(typeof refreshSecureViews === 'function') refreshSecureViews();
+  if(typeof renderWhoAmI === 'function') renderWhoAmI();
+}
+function showPreviewBanner(identity){
+  let b = document.getElementById('preview-banner');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'preview-banner';
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9999;display:flex;align-items:center;gap:12px;background:#2A1A3B;color:#fff;border:1px solid #9B59B6;border-radius:8px;padding:8px 14px;font-family:monospace;font-size:12px;box-shadow:0 6px 22px rgba(0,0,0,.55)';
+    document.body.appendChild(b);
+  }
+  const who = identity ? escHtml(identity) : 'a generic player';
+  b.innerHTML = `<span>👁 Previewing as <b style="color:#C9A0FF">${who}</b></span>
+    <button onclick="exitPlayerPreview()" style="background:#9B59B6;border:none;border-radius:5px;color:#fff;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer">Exit preview</button>`;
+  b.style.display = 'flex';
+}
+function hidePreviewBanner(){ const b = document.getElementById('preview-banner'); if(b) b.style.display = 'none'; }
+function enterPlayerPreview(identity){
+  if(!isRefereeReal()) return;                 // real referees only
+  const fp = document.getElementById('float-panels');
+  if(previewAs === null){
+    _previewSaved = {
+      identity: myIdentity,
+      pmChecked: pmCheck ? pmCheck.checked : false,
+      pmActive: rootEl ? rootEl.classList.contains('pm-active') : false,
+      fpPmActive: fp ? fp.classList.contains('pm-active') : false,
+    };
+  }
+  previewAs = identity || '';
+  myIdentity = identity || null;
+  if(typeof designModeOn !== 'undefined' && designModeOn && typeof forceDesignModeOff === 'function') forceDesignModeOff();
+  if(pmCheck) pmCheck.checked = true;
+  if(rootEl) rootEl.classList.add('pm-active');
+  if(fp) fp.classList.add('pm-active');
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  showPreviewBanner(identity);
+  if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();   // preview → players' hidden panels bite
+  _previewRerender();
+}
+function exitPlayerPreview(){
+  if(previewAs === null) return;
+  const s = _previewSaved || {};
+  const fp = document.getElementById('float-panels');
+  previewAs = null;
+  myIdentity = (s.identity != null) ? s.identity : null;
+  if(pmCheck) pmCheck.checked = !!s.pmChecked;
+  if(rootEl) rootEl.classList.toggle('pm-active', !!s.pmActive);
+  if(fp) fp.classList.toggle('pm-active', !!s.fpPmActive);
+  _previewSaved = null;
+  hidePreviewBanner();
+  if(typeof applyIdentityClass === 'function') applyIdentityClass();
+  if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();   // back to referee → every panel returns
+  _previewRerender();
 }
 
 // ── Secure content (per-player redaction client · Stage 2) ───────────────────
@@ -368,6 +450,91 @@ function stripLocalSecrets(){
     if(typeof TIMED_EVENTS !== 'undefined') TIMED_EVENTS.length = 0; // whole GM timeline
   } catch(e){ console.error('stripLocalSecrets failed', e); }
 }
+
+// ── Design-Mode overlay redaction ───────────────────────────────────────────
+// stripLocalSecrets() above redacts the SHIPPED campaign data. But a referee's
+// Design-Mode edits live in overlay blobs in aurelia_state (body-*, location-*,
+// system-*, station-additions, content-*), which are publicly readable — so an
+// edited or added refNote / hook / Referee Context / NPC / check / event would
+// reach player devices unredacted. stripOverlayForPlayers() removes the SAME
+// fields (REDACT_FIELDS) from an overlay blob before it is exposed to players,
+// so the player-readable copy of every overlay carries no referee-only content.
+// Runs on the referee's device (which has full context incl. the box registry),
+// producing the player-safe blob written to the public key; the full blob is
+// written to a carved-out "<key>-ref" the referee reads back via get-content.
+function _stripFieldsFrom(obj, fields){ if(obj && typeof obj === 'object') fields.forEach(f => { delete obj[f]; }); return obj; }
+
+// Is a content-overrides KEY a referee-only field? content-overrides mixes
+// player-visible text (read-aloud, body/location Overview) and referee-only text
+// (Referee Context/Notes, refNote, check/event/NPC-row edits), keyed by content
+// key, so it must be classified per key rather than per field.
+function isRefOnlyContentKey(key){
+  if(typeof key !== 'string') return false;
+  if(/(^|[-_])refnotes$/i.test(key)) return true;                 // Referee Notes
+  if(/[-_]refNote$/.test(key)) return true;                       // body/location Referee Note box
+  if(/[-_](check|checks|event|events)([-_]|$)/i.test(key)) return true;  // skill checks / timed events
+  if(/[-_](row|rows)([-_]|$)/i.test(key)) return true;            // NPC detail rows (NPCs are referee-only)
+  if(/[-_]npc$/.test(key)) return true;                           // whole-NPC edit (name/role/skills/stats)
+  // Station "Referee Context" is an area `desc`; body/location `desc` is the
+  // player-visible Overview — so only a `-desc` that is NOT a body-/loc- key.
+  if(/[-_]desc$/.test(key) && !/^body-/.test(key) && !/^loc-/.test(key)) return true;
+  // Custom boxes: `…-box-<btKey>` is referee-only iff its box type is refOnly.
+  const bm = key.match(/[-_]box[-_](.+)$/);
+  if(bm && typeof getBoxTypes === 'function'){
+    const bt = getBoxTypes().find(t => t && t.key === bm[1]);
+    if(bt && bt.refOnly) return true;
+  }
+  return false;
+}
+
+// Per-store shape + the REDACT_FIELDS set to strip from each object it holds.
+// Stores NOT listed (faction-*, galaxy-lanes, route-blocks, hex-paint) carry no
+// referee-only fields, so they pass through unchanged.
+const _OVERLAY_STRIP = {
+  'body-additions':         { shape: 'sysArray',     fields: REDACT_FIELDS.body },
+  'body-prop-overrides':    { shape: 'sysIdMap',     fields: REDACT_FIELDS.body },
+  'body-deletions':         { shape: 'sysIdDel',     fields: REDACT_FIELDS.body,     sub: 'body' },
+  'location-additions':     { shape: 'sysBodyArray', fields: REDACT_FIELDS.location },
+  'location-prop-overrides':{ shape: 'sysIdMap',     fields: REDACT_FIELDS.location },
+  'location-deletions':     { shape: 'sysIdDel',     fields: REDACT_FIELDS.location, sub: 'loc' },
+  'system-additions':       { shape: 'array',        fields: REDACT_FIELDS.node },
+  'system-prop-overrides':  { shape: 'idMap',        fields: REDACT_FIELDS.node },
+  'system-deletions':       { shape: 'idDel',        fields: REDACT_FIELDS.node,     sub: 'node' },
+  'station-additions':      { shape: 'stations',     fields: REDACT_FIELDS.area },
+  'content-overrides':      { shape: 'contentOv' },
+  'content-additions':      { shape: 'wholesale' },
+  'content-deletions':      { shape: 'wholesale' },
+  'content-history':        { shape: 'wholesale' },
+};
+// Return a deep copy of an overlay store value with referee-only content removed.
+// Never mutates the input (the referee keeps the full data in memory).
+function stripOverlayForPlayers(storeName, value){
+  const spec = _OVERLAY_STRIP[storeName];
+  if(!spec) return value;                                   // secret-free store
+  if(spec.shape === 'wholesale') return Array.isArray(value) ? [] : {};
+  let v; try { v = JSON.parse(JSON.stringify(value == null ? (Array.isArray(value) ? [] : {}) : value)); }
+  catch(e){ return Array.isArray(value) ? [] : {}; }        // unparseable → fail closed (empty)
+  const F = spec.fields;
+  const each = o => _stripFieldsFrom(o, F);
+  switch(spec.shape){
+    case 'array':        if(Array.isArray(v)) v.forEach(each); break;
+    case 'idMap':        if(v) Object.keys(v).forEach(id => each(v[id])); break;
+    case 'sysArray':     if(v) Object.keys(v).forEach(s => { if(Array.isArray(v[s])) v[s].forEach(each); }); break;
+    case 'sysIdMap':     if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(id => each(inner[id])); }); break;
+    case 'sysBodyArray': if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(b => { if(Array.isArray(inner[b])) inner[b].forEach(each); }); }); break;
+    // Deletion tombstones carry the FULL removed object under .body/.loc/.node.
+    case 'sysIdDel':     if(v) Object.keys(v).forEach(s => { const inner = v[s] || {}; Object.keys(inner).forEach(id => { if(inner[id]) _stripFieldsFrom(inner[id][spec.sub], F); }); }); break;
+    case 'idDel':        if(v) Object.keys(v).forEach(id => { if(v[id]) _stripFieldsFrom(v[id][spec.sub], F); }); break;
+    case 'stations':     if(v) Object.keys(v).forEach(sid => { const st = v[sid] || {}; const areas = st.areas || {}; Object.keys(areas).forEach(ak => { const a = areas[ak]; each(a); if(a && a.subs) Object.keys(a.subs).forEach(sk => each(a.subs[sk])); }); }); break;
+    case 'contentOv':    if(v && typeof v === 'object') Object.keys(v).forEach(k => { if(isRefOnlyContentKey(k)) delete v[k]; }); break;
+  }
+  return v;
+}
+// A "split" store carries referee-only fields, so the referee writes a stripped
+// copy to the public key (players read that) and the FULL copy to "<key>-ref"
+// (referees read that back). Consulted by the data layer's mergedSaveStore /
+// getOverlayStore. Stores not listed here are secret-free and stay single-copy.
+function isSplitStore(key){ return Object.prototype.hasOwnProperty.call(_OVERLAY_STRIP, key); }
 function applySecureFragments(content){
   for(const frag of (content || [])){
     const p = String(frag.path || '').split('.'); const v = frag.value || {};
@@ -435,6 +602,19 @@ function applyHydratedData(data){
   // simply start with no thread until the first live poll).
   if(Array.isArray(data.whispers)) applyWhispers(data.whispers);
 }
+// After a referee's get-content response populates _refOverlays, re-run the
+// Design-Mode overlay loaders so they pick up the FULL blobs. The boot loaders
+// race hydrate (which is not awaited), so they may have read the redacted public
+// copies — or a direct "<key>-ref" read that migration 0014's carve-out blocks.
+// Players never reach this (referee-gated).
+async function reloadDesignOverlays(){
+  if(typeof isRefereeReal === 'function' && !isRefereeReal()) return;
+  for(const fn of ['loadContentOverrides','loadBodyStores','loadLocationStores','loadSystemStores','loadAuthoredStations']){
+    if(typeof window[fn] === 'function'){ try { await window[fn](); } catch(e){} }
+  }
+  if(typeof refreshDesignAffordances === 'function') refreshDesignAffordances();
+  else if(typeof currentView !== 'undefined' && currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+}
 async function hydrateSecureContent(){
   const token = getContentToken();
   if(!token) return false;                 // secure mode off → keep hardcoded data
@@ -443,7 +623,9 @@ async function hydrateSecureContent(){
     const res = await fetch(CONTENT_API, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: '{}',
+      // designPrefix lets get-content return this campaign's "<store>-ref" overlay
+      // blobs (referee only) keyed by bare store name for getOverlayStore().
+      body: JSON.stringify({ designPrefix: (typeof campaignKeyPrefix === 'function' ? campaignKeyPrefix() : '') }),
     });
     if(res.status === 403){
       // TASK 6: the venue-network lock blocked this device. Surface the referee's
@@ -460,6 +642,11 @@ async function hydrateSecureContent(){
     if(data.role === 'referee'){           // TASK 6/7: capture referee-only extras (never present for players)
       secureNetworkLock = data.networkLock || null;
       securePlayers = data.players || null;
+      // Full (unredacted) Design-Mode overlay blobs, delivered only to a referee
+      // over the token boundary. getOverlayStore() reads these back so the
+      // referee still sees their own refNotes/hooks/NPCs after the public copies
+      // are redacted and the "-ref" rows are carved out of public read.
+      if(typeof _refOverlays !== 'undefined') _refOverlays = data.designRef || {};
       if(secureNetworkLock && secureNetworkLock.repinned && typeof showToast === 'function')
         showToast('Network lock re-pinned to your current IP (' + (secureNetworkLock.pinned_ip || '?') + ').');
     }
@@ -476,6 +663,10 @@ async function hydrateSecureContent(){
     if(typeof showToast === 'function') showToast('Offline — using last saved content.');
   }
   applyHydratedData(data);
+  // Referee: now that _refOverlays holds the full overlay blobs, re-run the
+  // overlay loaders so any that raced this fetch swap their redacted reads for
+  // the full data. (Fire-and-forget; the loaders re-render on completion.)
+  if(data && data.role === 'referee') reloadDesignOverlays();
   return true;
 }
 
@@ -514,7 +705,7 @@ let pollBackoff = POLL_MS;     // current interval — grows when offline, snaps
 
 async function pollRevealState(){
   if(DISPLAY_MODE) return; // the table TV's only input is the BroadcastChannel (js/93)
-  if(isReferee()) return; // referee never polls — would be pointless and noisy
+  if(isRefereeReal()) return; // real referee never polls (preview reuses in-memory data)
   // Every block gates on res.ok: a failed fetch is a no-op (leaves in-memory
   // state intact), never an overwrite-with-empty-defaults that wipes the screen.
   try {
@@ -635,6 +826,117 @@ async function pollRevealState(){
       }
     }
   } catch(e){ /* silent — next poll will retry */ }
+
+  // Trade-goods catalogue — players see referee edits to the Station Trade desk
+  // (base prices, DMs, added/removed goods). Public overlay, like the map layers.
+  try {
+    if(typeof tradeGoodOverrides !== 'undefined'){
+      const [rto, rta, rtd] = await Promise.all([
+        supaStorage.get('trade-good-overrides', true), supaStorage.get('trade-good-additions', true), supaStorage.get('trade-good-deletions', true),
+      ]);
+      if(rto.ok && rta.ok && rtd.ok){
+        const no = rto.value != null ? JSON.parse(rto.value) : {};
+        const na = rta.value != null ? JSON.parse(rta.value) : [];
+        const nd = rtd.value != null ? JSON.parse(rtd.value) : {};
+        const changed = JSON.stringify(no) !== JSON.stringify(tradeGoodOverrides)
+          || JSON.stringify(na) !== JSON.stringify(tradeGoodAdditions)
+          || JSON.stringify(nd) !== JSON.stringify(tradeGoodDeletions);
+        if(changed){
+          tradeGoodOverrides = no; tradeGoodAdditions = Array.isArray(na) ? na : []; tradeGoodDeletions = nd;
+          if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+          if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // UI chrome — players see the referee's live theme-colour and panel-visibility
+  // edits (public overlays; applied table-wide). Two tiny keys, one round-trip.
+  try {
+    if(typeof themeOverrides !== 'undefined' && typeof panelFlags !== 'undefined'){
+      const [rth, rpf] = await Promise.all([
+        supaStorage.get('theme-overrides', true), supaStorage.get('panel-flags', true),
+      ]);
+      if(rth.ok && rpf.ok){
+        const nth = rth.value != null ? JSON.parse(rth.value) : {};
+        const npf = rpf.value != null ? JSON.parse(rpf.value) : {};
+        if(JSON.stringify(nth) !== JSON.stringify(themeOverrides)){
+          themeOverrides = nth; if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+        }
+        if(JSON.stringify(npf) !== JSON.stringify(panelFlags)){
+          panelFlags = npf; if(typeof applyPanelFlags === 'function') applyPanelFlags();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // NPC portraits + scene images — players see referee-uploaded faces on
+  // body/station NPCs and establishing art on locations live.
+  try {
+    if(typeof npcPortraits !== 'undefined' && typeof sceneImages !== 'undefined'){
+      const [rnp, rsi] = await Promise.all([
+        supaStorage.get('npc-portraits', true), supaStorage.get('scene-images', true),
+      ]);
+      let changed = false;
+      if(rnp.ok){ const nnp = rnp.value != null ? JSON.parse(rnp.value) : {};
+        if(JSON.stringify(nnp) !== JSON.stringify(npcPortraits)){ npcPortraits = nnp; changed = true; } }
+      if(rsi.ok){ const nsi = rsi.value != null ? JSON.parse(rsi.value) : {};
+        if(JSON.stringify(nsi) !== JSON.stringify(sceneImages)){ sceneImages = nsi; changed = true; } }
+      if(changed){
+        if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function'){
+          if(typeof selectedBodyLoc !== 'undefined' && selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc); else buildBodyView(selectedBody);
+        } else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+        else if(currentView === 'galaxy' && typeof HX !== 'undefined' && HX.refresh) HX.refresh();   // system / region scene art
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // Worlds & locations — players see referee-added / edited / removed bodies and
+  // locations live, the same way they already get system and content edits.
+  // Fetched ONLY while a system or body is on screen (the only views that render
+  // them), so the galaxy / station / combat polls stay lean; a fresh navigation
+  // into a system catches up on the next tick (≤4s). The six keys are fetched in
+  // parallel so this adds one round-trip, not six, to those ticks.
+  if(currentView === 'system' || currentView === 'body'){
+    try {
+      const [rba, rbd, rbp, rla, rld, rlp] = await Promise.all([
+        supaStorage.get('body-additions', true),      supaStorage.get('body-deletions', true),      supaStorage.get('body-prop-overrides', true),
+        supaStorage.get('location-additions', true),  supaStorage.get('location-deletions', true),  supaStorage.get('location-prop-overrides', true),
+      ]);
+      if(rba.ok && rbd.ok && rbp.ok && rla.ok && rld.ok && rlp.ok){
+        const nba = rba.value != null ? JSON.parse(rba.value) : {};
+        const nbd = rbd.value != null ? JSON.parse(rbd.value) : {};
+        const nbp = rbp.value != null ? JSON.parse(rbp.value) : {};
+        const nla = rla.value != null ? JSON.parse(rla.value) : {};
+        const nld = rld.value != null ? JSON.parse(rld.value) : {};
+        const nlp = rlp.value != null ? JSON.parse(rlp.value) : {};
+        const bodyChanged = JSON.stringify(nba) !== JSON.stringify(bodyAdditions)
+          || JSON.stringify(nbd) !== JSON.stringify(bodyDeletions)
+          || JSON.stringify(nbp) !== JSON.stringify(bodyPropertyOverrides);
+        const locChanged = JSON.stringify(nla) !== JSON.stringify(locationAdditions)
+          || JSON.stringify(nld) !== JSON.stringify(locationDeletions)
+          || JSON.stringify(nlp) !== JSON.stringify(locationPropertyOverrides);
+        if(bodyChanged){ bodyAdditions = nba; bodyDeletions = nbd; bodyPropertyOverrides = nbp; }
+        if(locChanged){ locationAdditions = nla; locationDeletions = nld; locationPropertyOverrides = nlp; }
+        if(bodyChanged || locChanged){
+          // Rebuild whichever view is on screen; if the body the player was
+          // looking at was removed under them, fall back a level rather than
+          // render a hole (mirrors the referee's own restoreDesign path).
+          if(currentView === 'system'){
+            if(typeof buildOrrery === 'function') buildOrrery();
+            if(selectedBody && typeof getBodies === 'function' && getBodies().find(b => b.id === selectedBody)){
+              if(typeof selectBody === 'function') selectBody(selectedBody);
+            } else if(typeof goSystemOverview === 'function') goSystemOverview();
+          } else if(currentView === 'body' && selectedBody){
+            if(typeof getBodies === 'function' && getBodies().find(b => b.id === selectedBody)){
+              if(selectedBodyLoc && typeof selectBodyLocation === 'function') selectBodyLocation(selectedBodyLoc);
+              else if(typeof buildBodyView === 'function') buildBodyView(selectedBody);
+            } else if(typeof goSystem === 'function') goSystem();
+          }
+        }
+      }
+    } catch(e){ /* silent — next poll will retry */ }
+  }
 
   // Authored station deck maps — players receive referee-authored interiors
   // (and live edits to them) the same way they receive galaxy edits.
@@ -1079,7 +1381,7 @@ function applyViewSpec(spec){
 function startPolling(){
   stopPolling();
   if(DISPLAY_MODE) return; // table TV: no polling, ever (js/93 drives it)
-  if(isReferee()) return;
+  if(isRefereeReal()) return;
   pollBackoff = POLL_MS;
   const tick = async () => {
     await pollRevealState();
@@ -1093,10 +1395,10 @@ function startPolling(){
 // focus events reliably fire when the app comes back — so this catches the gap
 // even without the player tapping Refresh.
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && !isReferee()) pollRevealState();
+  if(document.visibilityState === 'visible' && !isRefereeReal()) pollRevealState();
 });
 window.addEventListener('focus', () => {
-  if(!isReferee()) pollRevealState();
+  if(!isRefereeReal()) pollRevealState();
 });
 
 // Reconnect plumbing (referee included — the referee never runs the 4s player
@@ -1108,12 +1410,12 @@ window.addEventListener('focus', () => {
 window.addEventListener('online', () => {
   markOnline();
   flushQueue();
-  if(!isReferee()) pollRevealState(); else pollWhispers();
+  if(!isRefereeReal()) pollRevealState(); else pollWhispers();
 });
 window.addEventListener('offline', () => { markOffline(); });
 setInterval(() => {
   if(queueLength()) flushQueue();
-  if(isReferee()) pollWhispers();  // no-op on the TV (DISPLAY_MODE guard) and without a token
+  if(isRefereeReal()) pollWhispers();  // no-op on the TV (DISPLAY_MODE guard) and without a token
   updateConnPill(); // refresh the "last synced … ago" label
 }, 8000);
 

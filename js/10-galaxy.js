@@ -348,11 +348,15 @@ async function loadGalaxyLanes(){
     gxLaneAdditions = Array.isArray(v.additions) ? v.additions : [];
     gxLaneDeletions = Array.isArray(v.deletions) ? v.deletions : [];
   } catch(e){ gxLaneAdditions = []; gxLaneDeletions = []; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('galaxy-lanes', {additions:gxLaneAdditions, deletions:gxLaneDeletions});
   gxRebuildLanes();
 }
 async function saveGalaxyLanes(){
-  try { await supaStorage.set('galaxy-lanes', JSON.stringify({additions:gxLaneAdditions, deletions:gxLaneDeletions}), true); }
-  catch(e){ console.error('Galaxy lane save failed', e); }
+  try {
+    const merged = await mergedSaveStore('galaxy-lanes', {additions:gxLaneAdditions, deletions:gxLaneDeletions});
+    gxLaneAdditions = Array.isArray(merged.additions) ? merged.additions : [];
+    gxLaneDeletions = Array.isArray(merged.deletions) ? merged.deletions : [];
+  } catch(e){ console.error('Galaxy lane save failed', e); }
 }
 
 // ── Add / remove lanes (Design Mode, referee only) ──
@@ -419,13 +423,37 @@ let systemDeletions = {};
 let systemPropertyOverrides = {};
 
 async function loadSystemStores(){
-  try { const r = await supaStorage.get('system-additions', true);      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
-  try { const r = await supaStorage.get('system-deletions', true);      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
-  try { const r = await supaStorage.get('system-prop-overrides', true); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
+  try { const r = await getOverlayStore('system-additions');      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
+  try { const r = await getOverlayStore('system-deletions');      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
+  try { const r = await getOverlayStore('system-prop-overrides'); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('system-additions', systemAdditions); snapshotBaseline('system-deletions', systemDeletions); snapshotBaseline('system-prop-overrides', systemPropertyOverrides); }
 }
-async function saveSystemAdditions(){ try { await supaStorage.set('system-additions', JSON.stringify(systemAdditions), true); } catch(e){ console.error('System additions save failed', e); } }
-async function saveSystemDeletions(){ try { await supaStorage.set('system-deletions', JSON.stringify(systemDeletions), true); } catch(e){ console.error('System deletions save failed', e); } }
-async function saveSystemPropertyOverrides(){ try { await supaStorage.set('system-prop-overrides', JSON.stringify(systemPropertyOverrides), true); } catch(e){ console.error('System property overrides save failed', e); } }
+
+// ── Trade-goods catalogue overlay (Design Mode) ──────────────────────────────
+// Edit / add / remove the goods that drive the Station Trade desk — base Cr,
+// buy & sell trade-code DMs, and availability — layered over the built-in
+// MgT2e TRADE_GOODS table (closure-private in the HX engine; effectiveTradeGoods
+// there reads these). PUBLIC (the trade desk is player-visible), synced like the
+// other overlays. Keyed by good NAME so an override survives reordering.
+//   tradeGoodOverrides: { name: {name?,base?,buy?,sell?,avail?} }  edits to base goods
+//   tradeGoodAdditions: [ {name,base,buy,sell,avail}, … ]          referee-added goods
+//   tradeGoodDeletions: { name: true }                             tombstoned base goods
+let tradeGoodOverrides = {};
+let tradeGoodAdditions = [];
+let tradeGoodDeletions = {};
+async function loadTradeGoodStores(){
+  try { const r = await supaStorage.get('trade-good-overrides', true); tradeGoodOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ tradeGoodOverrides = {}; }
+  try { const r = await supaStorage.get('trade-good-additions', true); tradeGoodAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(tradeGoodAdditions)) tradeGoodAdditions = []; } catch(e){ tradeGoodAdditions = []; }
+  try { const r = await supaStorage.get('trade-good-deletions', true); tradeGoodDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ tradeGoodDeletions = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('trade-good-overrides', tradeGoodOverrides); snapshotBaseline('trade-good-additions', tradeGoodAdditions); snapshotBaseline('trade-good-deletions', tradeGoodDeletions); }
+}
+async function saveTradeGoodOverrides(){ try { tradeGoodOverrides = await mergedSaveStore('trade-good-overrides', tradeGoodOverrides); } catch(e){ console.error('Trade good overrides save failed', e); } }
+async function saveTradeGoodAdditions(){ try { tradeGoodAdditions = await mergedSaveStore('trade-good-additions', tradeGoodAdditions); } catch(e){ console.error('Trade good additions save failed', e); } }
+async function saveTradeGoodDeletions(){ try { tradeGoodDeletions = await mergedSaveStore('trade-good-deletions', tradeGoodDeletions); } catch(e){ console.error('Trade good deletions save failed', e); } }
+
+async function saveSystemAdditions(){ try { systemAdditions = await mergedSaveStore('system-additions', systemAdditions); } catch(e){ console.error('System additions save failed', e); } }
+async function saveSystemDeletions(){ try { systemDeletions = await mergedSaveStore('system-deletions', systemDeletions); } catch(e){ console.error('System deletions save failed', e); } }
+async function saveSystemPropertyOverrides(){ try { systemPropertyOverrides = await mergedSaveStore('system-prop-overrides', systemPropertyOverrides); } catch(e){ console.error('System property overrides save failed', e); } }
 
 // Live galaxy node set = base systems (minus tombstoned, with overrides applied)
 // followed by referee-added systems. Returns fresh clones so callers may mutate.
@@ -600,10 +628,11 @@ async function loadFactionStores(){
   try { const r = await supaStorage.get('faction-additions', true);      factionAdditions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionAdditions = {}; }
   try { const r = await supaStorage.get('faction-deletions', true);      factionDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionDeletions = {}; }
   try { const r = await supaStorage.get('faction-prop-overrides', true); factionPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionPropertyOverrides = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('faction-additions', factionAdditions); snapshotBaseline('faction-deletions', factionDeletions); snapshotBaseline('faction-prop-overrides', factionPropertyOverrides); }
 }
-async function saveFactionAdditions(){ try { await supaStorage.set('faction-additions', JSON.stringify(factionAdditions), true); } catch(e){ console.error('Faction additions save failed', e); } }
-async function saveFactionDeletions(){ try { await supaStorage.set('faction-deletions', JSON.stringify(factionDeletions), true); } catch(e){ console.error('Faction deletions save failed', e); } }
-async function saveFactionPropertyOverrides(){ try { await supaStorage.set('faction-prop-overrides', JSON.stringify(factionPropertyOverrides), true); } catch(e){ console.error('Faction prop overrides save failed', e); } }
+async function saveFactionAdditions(){ try { factionAdditions = await mergedSaveStore('faction-additions', factionAdditions); } catch(e){ console.error('Faction additions save failed', e); } }
+async function saveFactionDeletions(){ try { factionDeletions = await mergedSaveStore('faction-deletions', factionDeletions); } catch(e){ console.error('Faction deletions save failed', e); } }
+async function saveFactionPropertyOverrides(){ try { factionPropertyOverrides = await mergedSaveStore('faction-prop-overrides', factionPropertyOverrides); } catch(e){ console.error('Faction prop overrides save failed', e); } }
 
 // ── Player-facing faction visibility (referee-controlled) ────────────────────
 // Some regions are lore spoilers (The Vast, the Archon Collective). The referee
@@ -731,9 +760,10 @@ let routeBlocks = { enabled: true, blocks: {} };
 async function loadRouteBlocks(){
   try { const r = await supaStorage.get('route-blocks', true); if(r.value != null){ const v = JSON.parse(r.value); routeBlocks = { enabled: v.enabled !== false, blocks: v.blocks || {} }; } }
   catch(e){ routeBlocks = { enabled: true, blocks: {} }; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('route-blocks', routeBlocks);
 }
 async function saveRouteBlocks(){
-  try { await supaStorage.set('route-blocks', JSON.stringify(routeBlocks), true); }
+  try { routeBlocks = await mergedSaveStore('route-blocks', routeBlocks); }
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
@@ -748,9 +778,10 @@ let hexPaint = {};
 async function loadHexPaint(){
   try { const r = await supaStorage.get('hex-paint', true); hexPaint = (r.value != null) ? (JSON.parse(r.value) || {}) : {}; }
   catch(e){ hexPaint = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('hex-paint', hexPaint);
 }
 async function saveHexPaint(){
-  try { await supaStorage.set('hex-paint', JSON.stringify(hexPaint || {}), true); }
+  try { hexPaint = await mergedSaveStore('hex-paint', hexPaint || {}); }
   catch(e){ console.error('Hex paint save failed:', e); }
 }
 
@@ -1181,6 +1212,18 @@ const HX = (function(){
     {name:'Textiles',base:3000,buy:{Ag:7},sell:{Hi:3,Na:2},avail:['Ag','Ni']},
     {name:'Wood',base:1000,buy:{Ag:6},sell:{Ri:2,In:1},avail:['Ag','Ga']},
   ];
+  // Effective catalogue = base TRADE_GOODS (minus tombstoned, with overrides
+  // applied) then referee-added goods. Design Mode edits the module-scope stores
+  // (js/10 tradeGood*); every trade-desk read routes through here.
+  function effectiveTradeGoods(){
+    const dels = (typeof tradeGoodDeletions !== 'undefined' && tradeGoodDeletions) ? tradeGoodDeletions : {};
+    const ovs  = (typeof tradeGoodOverrides !== 'undefined' && tradeGoodOverrides) ? tradeGoodOverrides : {};
+    const adds = (typeof tradeGoodAdditions !== 'undefined' && Array.isArray(tradeGoodAdditions)) ? tradeGoodAdditions : [];
+    const out = [];
+    TRADE_GOODS.forEach(g => { if(dels[g.name]) return; const ov = ovs[g.name]; out.push(ov ? Object.assign({}, g, ov) : g); });
+    adds.forEach(g => { if(g && g.name && !dels[g.name]) out.push(g); });
+    return out;
+  }
   const PURCHASE_PCT=[3.0,2.5,2.0,1.75,1.5,1.35,1.25,1.20,1.15,1.10,1.05,1.00,0.95,0.90,0.85,0.80,0.75,0.70,0.65,0.60,0.55,0.50,0.45,0.40,0.35,0.30,0.25,0.20,0.15];
   const SALE_PCT=[0.10,0.20,0.30,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,1.00,1.05,1.10,1.15,1.20,1.25,1.30,1.40,1.50,1.60,1.75,2.00,2.50,3.00,4.00];
   function priceMult(arr,roll){ const i=clamp(Math.round(roll)+3,0,arr.length-1); return arr[i]; }
@@ -1243,7 +1286,7 @@ const HX = (function(){
     return simplePressure(sys.id||sys.label, goodName); }
   function tradeOpportunities(src,dst){ if(!hasMarket(src)||!hasMarket(dst)) return [];
     const sc=tradeCodes(src), dc=tradeCodes(dst), out=[];
-    TRADE_GOODS.forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
+    effectiveTradeGoods().forEach(g=>{ if(g.avail!=='all' && !g.avail.some(c=>sc.includes(c))) return;
       const buyRoll =AVG_ROLL+bestDM(g.buy,sc)-bestDM(g.sell,sc)+broker-COUNTERPARTY_BROKER+mktPressure(src,g.name),
             sellRoll=AVG_ROLL+bestDM(g.sell,dc)-bestDM(g.buy,dc)+broker-COUNTERPARTY_BROKER-mktPressure(dst,g.name);
       let buyP=g.base*priceMult(PURCHASE_PCT,buyRoll), sellP=g.base*priceMult(SALE_PCT,sellRoll);
@@ -1265,7 +1308,7 @@ const HX = (function(){
     if(!s) return null;
     if(!hasMarket(s)){ const f=effFac(s.fac); return { id:s.id, label:disp(s), noMarket:true, faction:(f&&f.name)||'' }; }
     const codes=tradeCodes(s);
-    const rows=TRADE_GOODS.map(g=>{
+    const rows=effectiveTradeGoods().map(g=>{
       const availHere = g.avail==='all' || g.avail.some(c=>codes.includes(c));
       const buyDM=bestDM(g.buy,codes), sellDM=bestDM(g.sell,codes), pr=mktPressure(s,g.name);
       const buyRoll =AVG_ROLL+buyDM-sellDM+broker-COUNTERPARTY_BROKER+pr,
@@ -1979,7 +2022,8 @@ const HX = (function(){
       if(regKeys.length){ html+=`<div class="hx-small" style="margin:8px 0 3px;color:var(--tx1)">Regions${ref()?' · <span style="opacity:.75">👁 tap to hide/reveal for players</span>':''}</div>`;
         regKeys.forEach(k=>{ const f=FAC[k]||{}; const hid=(typeof factionHidden!=='undefined'&&!!factionHidden[k]);
           const eye=ref()?`<button class="hx-fac-eye ${hid?'hidden-fac':'shown-fac'}" title="${hid?'Hidden from players — tap to reveal':'Visible to players — tap to hide'}" onclick="event.stopPropagation();toggleFactionHidden('${k}')">${hid?'🙈':'👁'}</button>`:'';
-          html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
+          const regThumb=(typeof sceneThumbHTML==='function'&&typeof portraitSlug==='function')?sceneThumbHTML('region-'+portraitSlug(k),16):'';
+          html+=`<div class="hx-reach-item${hid?' fac-hidden':''}" style="cursor:default"><span class="hx-reach-name">${regThumb?regThumb+'&nbsp;':''}<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color||'#888'};margin-right:6px;vertical-align:-1px"></span>${eh(f.name||k)}</span><span class="d" style="display:flex;align-items:center;gap:3px">${counts[k]}${eye}</span></div>`; }); }
       html+=document.documentElement.classList.contains('is-phone')
         ? `<div class="hx-small" style="margin-top:8px">Pick a system above to inspect it and plan a jump — the map itself is on the table display.</div>`
         : `<div class="hx-small" style="margin-top:8px">Tap a star to inspect it and plan a jump. Tap empty space to return here.</div>`;
@@ -1988,6 +2032,9 @@ const HX = (function(){
     html+=`<div style="font-size:14px;font-weight:700;color:var(--tx0)">${eh(disp(s))}</div>`;
     html+=`<div class="hx-small hx-mono" style="margin-top:2px">${s.deep?'Deep space — no fixed stellar position':eh(s.star)}</div>`;
     html+=`<span class="hx-tag" style="color:${fac.color};border-color:${fac.color}">${eh(fac.name)}</span>`;
+    // Establishing scene image for the system (design-mode upload; players see it).
+    if(typeof sceneImageBlockHTML==='function' && typeof portraitSlug==='function' && s.systemId){
+      const _sb=sceneImageBlockHTML('sys-'+portraitSlug(s.systemId), disp(s)); if(_sb) html+=`<div style="margin-top:8px">${_sb}</div>`; }
     if(s.uncharted) html+=`<div class="hx-small" style="color:var(--tx1);margin:-2px 0 6px">○ Uncharted — no charted worlds; estimated data only</div>`;
     else {
       html+=`<div class="hx-btn-row"><button class="hx-act-btn" onclick="enterSystem('${s.systemId}')">⊙ View close up of ${eh(disp(s))}</button></div>`;
@@ -2166,9 +2213,18 @@ const HX = (function(){
       const RF=(typeof GALAXY_FACTIONS!=='undefined')?GALAXY_FACTIONS:{};
       const ea2=(typeof escAttr==='function')?escAttr:eh;
       Object.keys(RF).forEach(fk=>{ const f=RF[fk]||{}; const builtin=(fk==='independent'||fk==='uncharted'); const mem=SYS.filter(x=>x.fac===fk&&!x.uncharted).length;
+        const rKey='region-'+((typeof portraitSlug==='function')?portraitSlug(fk):fk);
+        const rThumb=(typeof sceneThumbHTML==='function')?sceneThumbHTML(rKey,20):'';
+        const rArt=(typeof sceneImageVer==='function')
+          ? `<button class="hx-reg-del" title="Region art" onclick="triggerSceneImage('${rKey}')">🖼</button>`
+            + (sceneImageVer(rKey)?`<button class="hx-reg-del" title="Remove region art" onclick="removeSceneImage('${rKey}')">✕</button>`:'')
+            + `<input type="file" id="scene-image-file-${rKey}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${rKey}', event)">`
+          : '';
         html+=`<div class="hx-reg-row">`+
+          (rThumb?rThumb+'&nbsp;':'')+
           `<input type="color" class="hx-reg-col" value="${ea2(f.color||'#888888')}" onchange="hxEditFactionField('${fk}','color',this.value)" title="Region colour">`+
           `<input class="hx-edit-in" value="${ea2(f.name||fk)}" onchange="hxEditFactionField('${fk}','name',this.value)" title="${mem} system${mem===1?'':'s'} in this region">`+
+          rArt+
           (builtin?`<span class="hx-reg-lock" title="Built-in fallback region">🔒</span>`:`<button class="hx-reg-del" title="Remove region" onclick="hxRemoveFaction('${fk}')">🗑</button>`)+
         `</div>`; });
       html+=`<div class="hx-btn-row" style="margin-top:8px"><button class="hx-act-btn" onclick="hxAddFaction()">＋ Add region</button></div>`;
@@ -2434,6 +2490,10 @@ const HX = (function(){
   return { enter, ensure, refresh:externalRefresh, selectById, onResize, syncNodes, moveSystem, hexOf, effFac, facHidden, armPlace, cancelPlace, placing(){ return placeMode; }, worldFacts, localMarket, getCamera, setCamera, get origin(){ return origin; },
     // Bases (UWP Bases field) — id-based accessors in the localMarket/worldFacts style.
     basesOf(id){ const s=BY_ID[id]; return s?basesOf(s):[]; }, BASE_META,
+    // Trade-goods catalogue: base (built-in) list for the Design-Mode editor, and
+    // the effective list after overrides. Editing writes the module-scope stores.
+    tradeGoodsBase(){ return TRADE_GOODS.map(g => JSON.parse(JSON.stringify(g))); },
+    tradeGoodsEffective(){ return effectiveTradeGoods(); },
     designSectionsHTML };
 })();
 

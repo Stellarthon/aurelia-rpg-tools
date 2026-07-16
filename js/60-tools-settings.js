@@ -855,6 +855,25 @@ function renderRefereeMenu(){
     <div class="settings-row" style="pointer-events:none;padding-bottom:2px">
       <span class="settings-row-label" style="color:var(--tx1);font-weight:400">Signed in as <b style="color:var(--accentGold)">${escHtml(refName)}</b></span>
     </div>` : '';
+  // Preview-as-player: identities come from the token roster (players only) when
+  // available, else the known campaign characters. Entering exits Design Mode and
+  // renders the whole app through that player's visibility (reveals + redaction).
+  const previewNames = (typeof securePlayers !== 'undefined' && Array.isArray(securePlayers) && securePlayers.length)
+    ? securePlayers.filter(p => p && p.role !== 'referee' && p.identity).map(p => p.identity)
+    : ((typeof KNOWN_CHARACTERS !== 'undefined') ? KNOWN_CHARACTERS.slice() : []);
+  const previewSection = `
+    <div class="archon-divider"></div>
+    <div class="settings-section-lbl">👁 Preview as player</div>
+    <div class="se-note" style="padding:0 2px 6px">See the map exactly as a player does — reveals, redaction and spoiler regions applied. Design Mode turns off; exit from the banner.</div>
+    ${previewNames.map(nm => `
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();enterPlayerPreview('${String(nm).replace(/'/g,"\\'")}')">
+      <span class="settings-row-label">As ${escHtml(nm)}</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">preview →</span>
+    </div>`).join('')}
+    <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();enterPlayerPreview('')">
+      <span class="settings-row-label">As a generic player</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">preview →</span>
+    </div>`;
   card.innerHTML = `
     <div class="settings-section-lbl">${(typeof TERM==='function'?TERM('referee'):'Referee')} Tools</div>
     ${refNameRow}
@@ -871,6 +890,7 @@ function renderRefereeMenu(){
       <span class="settings-row-label">🪐 Orbital Rings${ringsShown ? '' : ' — hidden'}</span>
       <div class="theme-toggle ${ringsShown?'on':''}"><div class="theme-toggle-knob"></div></div>
     </div>
+    ${previewSection}
     <div class="archon-divider"></div>
     <div class="settings-section-lbl">Campaign Backup</div>
     <div class="settings-row" style="cursor:pointer" onclick="closeRefereeMenu();exportCampaign()">
@@ -948,13 +968,49 @@ function renderDesignMenu(){
       <span class="settings-row-label">🎒 Item Catalogue</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openTradeCatalogue()">
+      <span class="settings-row-label">💰 Trade Goods</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openGeneratorTables()">
+      <span class="settings-row-label">🎲 Generator Tables</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRulesTables()">
+      <span class="settings-row-label">📐 Rules &amp; Tables</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openContractTemplates()">
+      <span class="settings-row-label">📜 Contract Templates</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openThemeEditor()">
+      <span class="settings-row-label">🎨 Theme &amp; Colours</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openPanelToggles()">
+      <span class="settings-row-label">🪟 Panels &amp; Windows</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
       <span class="settings-row-label">🌠 Splash Screens</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openDesignEditsIndex()">
+      <span class="settings-row-label">🧭 My Design Edits</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openRemovedItemsPanel()">
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();exportDesignLayer()">
+      <span class="settings-row-label">⬇ Export Design Layer</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">JSON →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();importDesignLayer()">
+      <span class="settings-row-label">⬆ Import Design Layer</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
     </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();resetCampaign()">
       <span class="settings-row-label" style="color:#d45050">⟲ Reset Campaign</span>
@@ -971,6 +1027,180 @@ function refreshOpenMenus(){
   if(!document.getElementById('referee-menu').classList.contains('hidden')) renderRefereeMenu();
   if(!document.getElementById('design-menu').classList.contains('hidden')) renderDesignMenu();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULES & TABLES OVERLAY  (Design Mode) — edit the shipped reference tables
+// ═══════════════════════════════════════════════════════════════════════════
+// The rules/reference tables (task ladder, status conditions, fuel model, trade
+// rates, combat presets, quick-reference sheets) are `const` arrays/objects read
+// by reference across the app. Rather than rewire every consumer, an override is
+// APPLIED IN PLACE — the const's CONTENTS are replaced (array splice / Object
+// rewrite) so every existing reader sees the edit with no other change. A
+// pristine snapshot is captured at boot before any override, so "reset to
+// default" always works. Referee tool, synced. Combat internals too tightly
+// coupled to the engine (range bands, weapon-type keys) are deliberately omitted.
+let rulesOverrides = {};
+let _rulesDefaults = null;
+function rulesTableRegistry(){
+  const reg = [];
+  const add = (key, label, group, shape, ref, note) => { if(ref !== undefined && ref !== null) reg.push({ key, label, group, shape, ref, note }); };
+  add('task-ladder',    'Task-difficulty ladder', 'Rules',   'pairs',   typeof TASK_LADDER !== 'undefined' ? TASK_LADDER : null);
+  add('status-fx',      'Status conditions',      'Rules',   'json',    typeof TRAVELLER_STATUS_FX !== 'undefined' ? TRAVELLER_STATUS_FX : null);
+  add('qref',           'Quick-reference sheets', 'Rules',   'json',    typeof QREF_DATA !== 'undefined' ? QREF_DATA : null);
+  add('fuel-rules',     'Fuel model',             'Rules',   'json',    typeof FUEL_RULES !== 'undefined' ? FUEL_RULES : null);
+  add('freight-rates',  'Freight rates (Cr/ton)', 'Economy', 'kv',      typeof FREIGHT_RATES !== 'undefined' ? FREIGHT_RATES : null);
+  add('passage-rates',  'Passage rates',          'Economy', 'json',    typeof PASSAGE_RATES !== 'undefined' ? PASSAGE_RATES : null);
+  add('qr-outcomes',    'Combat quick-resolve',   'Combat',  'strings', typeof COMBAT_QR_OUTCOMES !== 'undefined' ? COMBAT_QR_OUTCOMES : null);
+  add('combat-hazards', 'Combat hazards',         'Combat',  'json',    typeof COMBAT_HAZARDS !== 'undefined' ? COMBAT_HAZARDS : null);
+  add('ship-crit-systems','Ship critical-hit systems','Ship','pairs',   typeof SHIP_CRIT_SYSTEMS !== 'undefined' ? SHIP_CRIT_SYSTEMS : null);
+  add('rep-bands',      'Reputation ladder',      'Social',  'json',    typeof REP_BANDS !== 'undefined' ? REP_BANDS : null);
+  add('contact-rels',   'Contact relationship types','Social','json',   typeof CONTACT_RELS !== 'undefined' ? CONTACT_RELS : null);
+  add('good-flavour',   'Trade-good dockside names','Economy','kv',     typeof GOOD_FLAVOR !== 'undefined' ? GOOD_FLAVOR : null);
+  add('disc-categories','Discovery-log categories','Content', 'pairs',  typeof DISC_CATEGORIES !== 'undefined' ? DISC_CATEGORIES : null);
+  add('equip-slots',    'Equipment slots',        'Content', 'pairs',   typeof EQUIP_SLOTS !== 'undefined' ? EQUIP_SLOTS : null);
+  if(typeof ECON !== 'undefined' && ECON){   // structured GalNet / economy flavour (edited in place through ECON's live refs)
+    add('gov-reasons',  'Cabinet-change reasons', 'Government', 'kv',   ECON.GOV_REASONS);
+    add('gov-posts',    'Ministerial posts',      'Government', 'json', ECON.GOV_POSTS);
+    add('fac-gov',      'Head-of-state titles',   'Government', 'json', ECON.FAC_GOV);
+    add('corp-houses',  'Rival corp houses',      'Economy',   'json', ECON.CORP_ARCHETYPES);
+    add('megacorp',     'Megacorp',               'Economy',   'json', ECON.MEGACORP);
+    add('pirate-ships', 'Raider hulls (stat-blocks)','Combat', 'json', ECON.PIRATE_SHIPS, 'Keep the ship ids (wolf / corsair / gazelle / fighter) — the sim spawns raiders by id.');
+  }
+  if(typeof HX !== 'undefined' && HX && HX.BASE_META) add('base-meta', 'Starport base types', 'Map', 'json', HX.BASE_META, 'The "pub" flag decides whether players see a base type on the map (false = referee-only, e.g. corsair bases).');
+  return reg;
+}
+function _rulesApplyInPlace(target, value){
+  if(Array.isArray(target)){ target.length = 0; if(Array.isArray(value)) value.forEach(v => target.push(v)); }
+  else if(target && typeof target === 'object'){ Object.keys(target).forEach(k => delete target[k]); if(value && typeof value === 'object') Object.assign(target, value); }
+}
+function _captureRulesDefaults(){
+  if(_rulesDefaults) return;
+  _rulesDefaults = {};
+  rulesTableRegistry().forEach(t => { try { _rulesDefaults[t.key] = JSON.parse(JSON.stringify(t.ref)); } catch(e){} });
+}
+function applyRulesOverrides(){
+  rulesTableRegistry().forEach(t => {
+    const val = Object.prototype.hasOwnProperty.call(rulesOverrides, t.key) ? rulesOverrides[t.key]
+      : (_rulesDefaults ? _rulesDefaults[t.key] : undefined);
+    if(val !== undefined) _rulesApplyInPlace(t.ref, val);
+  });
+}
+async function loadRulesOverrides(){
+  _captureRulesDefaults();   // pristine snapshot BEFORE any override is applied
+  try { const r = await supaStorage.get('rules-overrides', true); rulesOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ rulesOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('rules-overrides', rulesOverrides);
+  applyRulesOverrides();
+}
+async function saveRulesOverrides(){ try { rulesOverrides = await mergedSaveStore('rules-overrides', rulesOverrides); } catch(e){ console.error('Rules overrides save failed', e); } }
+// Shape-aware serialise / parse for the editor textarea.
+function rulesFormat(shape, value){
+  if(shape === 'strings') return (Array.isArray(value) ? value : []).join('\n');
+  if(shape === 'pairs')   return (Array.isArray(value) ? value : []).map(p => (p[0] + ' = ' + p[1])).join('\n');
+  if(shape === 'kv')      return Object.keys(value || {}).map(k => (k + ' = ' + value[k])).join('\n');
+  try { return JSON.stringify(value, null, 2); } catch(e){ return ''; }
+}
+function rulesParse(shape, text){
+  if(shape === 'strings') return String(text).split('\n').map(s => s.trim()).filter(Boolean);
+  if(shape === 'pairs')   return String(text).split('\n').map(s => s.trim()).filter(Boolean).map(line => { const i = line.indexOf('='); return i < 0 ? [line, ''] : [line.slice(0, i).trim(), line.slice(i + 1).trim()]; });
+  if(shape === 'kv'){ const o = {}; String(text).split('\n').map(s => s.trim()).filter(Boolean).forEach(line => { const i = line.indexOf('='); if(i < 0) return; const k = line.slice(0, i).trim(); const raw = line.slice(i + 1).trim(); o[k] = (raw !== '' && !isNaN(raw)) ? Number(raw) : raw; }); return o; }
+  return JSON.parse(text);   // json — throws on bad input (caught by caller)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-MODE UI CHROME  —  theme / colours + panel show-hide (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Two shared, per-campaign overlays that let the referee shape the whole table's
+// look, not just its data:
+//   • theme-overrides {'--token': value} → CSS custom properties on :root, layered
+//     over the pack theme. Applies to EVERYONE (the campaign's look).
+//   • panel-flags {btnId: true} → hides a panel's header entry point. Follows the
+//     redaction model: the real referee always sees every panel; players (and the
+//     referee previewing-as-player) get the hides, so the ref can design the
+//     player-facing UI and check it with Preview-as-player.
+// Both ride mergedSaveStore (referee-only write via put-state) but read on the
+// PUBLIC channel, so players load and apply them too; the poll live-syncs changes.
+
+// ── Theme / colour tokens ───────────────────────────────────────────────────
+let themeOverrides = {};        // {'--accentGold':'#ff0000', …}
+let _designThemeKeys = [];       // props we currently own on :root (for clean re-apply)
+// The editable design tokens, grouped. type:'text' → free-text (radius / font stack);
+// everything else is a colour.
+function themeTokenRegistry(){
+  return [
+    { group: 'Backgrounds', tokens: [['--bg0','Base'], ['--bg1','Raised'], ['--bg2','Higher']] },
+    { group: 'Text',        tokens: [['--tx0','Primary'], ['--tx1','Muted']] },
+    { group: 'Borders',     tokens: [['--bd0','Border'], ['--bd1','Border 2'], ['--bd2','Border 3']] },
+    { group: 'Accent',      tokens: [['--accentGold','Accent'], ['--accentGoldBg','Accent background']] },
+    { group: 'Status',      tokens: [['--txI','Info'], ['--bgI','Info bg'], ['--txS','Success'], ['--bgS','Success bg'], ['--txW','Warning'], ['--bgW','Warning bg'], ['--txD','Danger'], ['--bgD','Danger bg']] },
+    { group: 'Shape & type',tokens: [['--rad','Corner radius','text'], ['--font','Font stack','text']] },
+  ];
+}
+// A few tasteful, fully-reversible starting points (only the tokens they name are set).
+const THEME_PRESETS = {
+  'Terminal green': { '--bg0':'#0a0f0a', '--bg1':'#0f1a0f', '--bg2':'#132613', '--bd0':'#1f3a1f', '--tx0':'#c8f7c8', '--tx1':'#79b979', '--accentGold':'#5fe35f', '--accentGoldBg':'#0f2a0f' },
+  'Amber mono':     { '--bg0':'#120d05', '--bg1':'#1c1408', '--bg2':'#261b0a', '--bd0':'#3a2c12', '--tx0':'#f5d9a8', '--tx1':'#c79a5b', '--accentGold':'#ffb64a', '--accentGoldBg':'#2e1f0a' },
+  'Slate blue':     { '--bg0':'#0d1017', '--bg1':'#141926', '--bg2':'#1b2233', '--bd0':'#2b3550', '--tx0':'#e6ecff', '--tx1':'#9fb0d0', '--accentGold':'#5b8ef0', '--accentGoldBg':'#16223f' },
+};
+function applyThemeOverrides(){
+  const root = document.documentElement;
+  _designThemeKeys.forEach(k => root.style.removeProperty(k));   // drop what we owned
+  _designThemeKeys = [];
+  if(typeof applyPackTheme === 'function'){ try { applyPackTheme(); } catch(e){} }   // re-assert pack base under us
+  Object.keys(themeOverrides || {}).forEach(k => {
+    const prop = k.startsWith('--') ? k : ('--' + k);
+    root.style.setProperty(prop, themeOverrides[k]);
+    _designThemeKeys.push(prop);
+  });
+}
+// Effective current value of a token (override → computed), for seeding a picker.
+function themeTokenValue(tok){
+  if(themeOverrides && themeOverrides[tok] != null) return String(themeOverrides[tok]);
+  try { return getComputedStyle(document.documentElement).getPropertyValue(tok).trim(); } catch(e){ return ''; }
+}
+async function loadThemeOverrides(){
+  try { const r = await supaStorage.get('theme-overrides', true); themeOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ themeOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('theme-overrides', themeOverrides);
+  applyThemeOverrides();
+}
+async function saveThemeOverrides(){ try { themeOverrides = await mergedSaveStore('theme-overrides', themeOverrides); } catch(e){ console.error('Theme overrides save failed', e); } }
+
+// ── Panel show / hide ───────────────────────────────────────────────────────
+let panelFlags = {};            // {btnId: true}  (true = hidden from players)
+// Toggleable entry points — the header buttons that open panels/windows. The
+// module-governed ones (economy/combat/calendar/oracle) and core navigation
+// (settings/back/more) are deliberately excluded: modules have their own switch.
+const PANEL_TOGGLE_IDS = ['qref-btn','quest-btn','ship-btn','disc-btn','npc-btn','rep-btn','standing-btn','funds-btn','cargo-btn','contacts-btn','clocks-btn','downtime-btn','galnet-btn','handouts-btn','journal-btn','planner-btn','scenes-btn','session-btn','turnorder-btn','whisper-btn','wiki-btn'];
+function panelToggleRegistry(){
+  // Only ids that exist in this build; label from the button's own (terminology-
+  // adjusted) text, falling back to the id.
+  return PANEL_TOGGLE_IDS.map(id => {
+    const el = document.getElementById(id);
+    if(!el) return null;
+    const label = (el.textContent || '').trim() || id.replace(/-btn$/, '');
+    return { id, label };
+  }).filter(Boolean);
+}
+function panelHidden(id){ return !!(panelFlags && panelFlags[id]); }
+function applyPanelFlags(){
+  // Hides bite for players and the referee previewing-as-player; a real referee
+  // always sees every panel (so they can un-hide and still use their own tools).
+  const hideActive = (typeof isReferee !== 'function') || !isReferee();
+  panelToggleRegistry().forEach(p => {
+    const el = document.getElementById(p.id); if(!el) return;
+    el.style.display = (hideActive && panelHidden(p.id)) ? 'none' : '';
+  });
+}
+async function loadPanelFlags(){
+  try { const r = await supaStorage.get('panel-flags', true); panelFlags = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ panelFlags = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('panel-flags', panelFlags);
+  applyPanelFlags();
+}
+async function savePanelFlags(){ try { panelFlags = await mergedSaveStore('panel-flags', panelFlags); } catch(e){ console.error('Panel flags save failed', e); } }
+
+// Apply both chrome overlays. Safe to call anytime (no-ops before stores load).
+function applyDesignChrome(){ try { applyThemeOverrides(); } catch(e){} try { applyPanelFlags(); } catch(e){} }
+// Load both (all devices) — called at boot after the pack is applied.
+async function loadDesignChrome(){ await loadThemeOverrides(); await loadPanelFlags(); }
 
 // ── Bounded undo / redo for Design Mode ─────────────────────────────────────
 // Design edits/deletes (bodies, locations, economy profiles) mutate in-memory
@@ -1281,7 +1511,7 @@ function renderBoxTypesHTML(keyFor, builtinValue, pm, onlyCustom){
     if(!hasContent && !designModeOn) return;
     const cls = bt.cls === 'ref' ? 's-blk ref ref-only' : 's-blk read';
     const disp = hasContent
-      ? (text || '').replace(/\n/g, '<br>')
+      ? escHtmlBr(text)
       : '<span style="opacity:.45;font-style:italic">(empty — tap ✎ to add)</span>';
     html += `<div class="${cls}"><div class="s-blk-lbl">${escHtml(bt.label)}</div>${designWrap(key, original, disp)}</div>`;
   });

@@ -1600,10 +1600,11 @@ async function loadWeaponCatalog(){
   try { const r = await supaStorage.get('weapon-additions', true);      weaponAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(weaponAdditions)) weaponAdditions = []; } catch(e){ weaponAdditions = []; }
   try { const r = await supaStorage.get('weapon-deletions', true);      weaponDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponDeletions = {}; }
   try { const r = await supaStorage.get('weapon-prop-overrides', true); weaponPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ weaponPropertyOverrides = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('weapon-additions', weaponAdditions); snapshotBaseline('weapon-deletions', weaponDeletions); snapshotBaseline('weapon-prop-overrides', weaponPropertyOverrides); }
 }
-async function saveWeaponAdditions(){ try { await supaStorage.set('weapon-additions', JSON.stringify(weaponAdditions), true); } catch(e){ console.error('Weapon additions save failed', e); } }
-async function saveWeaponDeletions(){ try { await supaStorage.set('weapon-deletions', JSON.stringify(weaponDeletions), true); } catch(e){ console.error('Weapon deletions save failed', e); } }
-async function saveWeaponPropertyOverrides(){ try { await supaStorage.set('weapon-prop-overrides', JSON.stringify(weaponPropertyOverrides), true); } catch(e){ console.error('Weapon prop overrides save failed', e); } }
+async function saveWeaponAdditions(){ try { weaponAdditions = await mergedSaveStore('weapon-additions', weaponAdditions); } catch(e){ console.error('Weapon additions save failed', e); } }
+async function saveWeaponDeletions(){ try { weaponDeletions = await mergedSaveStore('weapon-deletions', weaponDeletions); } catch(e){ console.error('Weapon deletions save failed', e); } }
+async function saveWeaponPropertyOverrides(){ try { weaponPropertyOverrides = await mergedSaveStore('weapon-prop-overrides', weaponPropertyOverrides); } catch(e){ console.error('Weapon prop overrides save failed', e); } }
 
 // Effective catalog = seed (minus tombstoned, with overrides) + referee additions.
 function effectiveWeapons(){

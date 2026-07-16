@@ -550,12 +550,52 @@ function npcToEncounter(id){
 }
 function npcEditField(id, field, value){ if(!isReferee()) return; const n = npcById(id); if(!n) return; const numeric = ['str','dex','end','intl','edu','soc']; n[field] = numeric.includes(field) ? (parseInt(value)||0) : value; saveNpcRoster(); }
 
+// ── NPC portraits (Supabase Storage 'portraits' bucket, npc/ sub-path) ──
+// A face for each roster NPC. Reuses the character-portrait resize+upload flow
+// (js/50 uploadNpcPortraitBlob, js/60 resizePortrait); the version stamp lives on
+// the roster entry, so no new store / migration is needed.
+function npcAvatar(n, size){
+  const ver = n && n.portraitVer;
+  if(ver && typeof npcPortraitUrlFor === 'function'){
+    return `<img src="${npcPortraitUrlFor(n.id, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none;background:var(--bg2)" onerror="this.style.visibility='hidden'">`;
+  }
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;flex:none;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.4)}px;color:var(--tx1)">${escQH((n && n.name ? n.name.trim()[0] : '?').toUpperCase())}</span>`;
+}
+function triggerNpcPortraitUpload(id){ const f = document.getElementById('npc-portrait-file-' + id); if(f) f.click(); }
+async function onNpcPortraitFile(id, e){
+  const file = e && e.target && e.target.files && e.target.files[0];
+  if(e && e.target) e.target.value = '';
+  if(!file || !isReferee()) return;
+  const n = npcById(id); if(!n) return;
+  if(typeof resizePortrait !== 'function' || typeof uploadNpcPortraitBlob !== 'function'){ if(typeof showToast==='function') showToast('Portraits unavailable'); return; }
+  if(file.size > 12 * 1024 * 1024){ if(typeof showToast==='function') showToast('Image too large (max 12 MB)'); return; }
+  try {
+    if(typeof showToast==='function') showToast('Uploading…', 'info');
+    const blob = await resizePortrait(file, 256);
+    await uploadNpcPortraitBlob(id, blob);
+    n.portraitVer = Date.now();
+    saveNpcRoster();
+    renderNpcPanel();
+    if(typeof showToast==='function') showToast('Portrait updated');
+  } catch(err){
+    console.error('NPC portrait upload failed', err);
+    if(typeof showToast==='function') showToast('Portrait upload failed');
+  }
+}
+async function npcPortraitRemove(id){
+  if(!isReferee()) return;
+  const n = npcById(id); if(!n || !n.portraitVer) return;
+  delete n.portraitVer;                       // bucket object left as a harmless orphan (like handouts)
+  saveNpcRoster();
+  renderNpcPanel();
+}
+
 function renderNpcCard(n){
   const ea = (typeof escQH==='function') ? escQH : (x=>String(x==null?'':x));
   const ea2 = (typeof escAttr==='function') ? (v=>escAttr(v==null?'':String(v))) : (v=>String(v==null?'':v));
   const editing = npcEditingId === n.id;
   const meta = [n.role, n.faction, n.location].filter(Boolean).map(ea).join(' · ');
-  let hd = `<div class="disc-card-hd"><span class="disc-title">${ea(n.name||'(unnamed)')}</span>
+  let hd = `<div class="disc-card-hd"><span style="display:flex;align-items:center;gap:8px;min-width:0">${npcAvatar(n, 26)}<span class="disc-title">${ea(n.name||'(unnamed)')}</span></span>
     <div class="disc-ctl">
       <button class="disc-mini" onclick="npcToEncounter('${n.id}')" title="Add to encounter (initiative tracker)">⚔</button>
       <button class="disc-mini" onclick="npcEdit('${n.id}')" title="${editing?'Done':'Edit'}">${editing?'▾':'✏'}</button>
@@ -570,6 +610,12 @@ function renderNpcCard(n){
   const chars = ['str','dex','end','intl','edu','soc'].map(c =>
     `<label>${c.toUpperCase()}<input type="number" value="${parseInt(n[c])||0}" onchange="npcEditField('${n.id}','${c}',this.value)"></label>`).join('');
   const ed = `<div class="disc-add">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      ${npcAvatar(n, 48)}
+      <button class="disc-mini" onclick="triggerNpcPortraitUpload('${n.id}')" title="Upload a face">${n.portraitVer?'Change photo':'Upload photo'}</button>
+      ${n.portraitVer?`<button class="disc-mini del" onclick="npcPortraitRemove('${n.id}')" title="Remove photo">✕</button>`:''}
+      <input type="file" id="npc-portrait-file-${n.id}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onNpcPortraitFile('${n.id}', event)">
+    </div>
     <input value="${ea2(n.name)}" placeholder="Name" onchange="npcEditField('${n.id}','name',this.value)">
     <div class="disc-add-row">
       <input value="${ea2(n.role)}" placeholder="Role / title" onchange="npcEditField('${n.id}','role',this.value)">
@@ -1178,6 +1224,65 @@ const ENCOUNTER_DIFF = ['Trivial','Routine','Tricky','Dangerous','Deadly'];
 const ORACLE_WHERE = [['space','Space'],['port','Port'],['surface','Surface']];
 const ORACLE_DANGER = [['0','Calm'],['1','Normal'],['2','Tense'],['3','Hostile']];
 
+// ── Editable generator lists (Design Mode) ───────────────────────────────────
+// The oracle / rumour / encounter and random-NPC string lists are hardcoded and
+// setting-flavoured. This overlay lets the referee edit any of them (one entry
+// per line); genList(key, base) returns the override if set, else the built-in.
+// Referee tool (players don't roll the oracle), synced so it follows devices.
+let generatorOverrides = {};   // {listKey: [strings]}
+async function loadGeneratorOverrides(){
+  try { const r = await supaStorage.get('generator-overrides', true); generatorOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ generatorOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('generator-overrides', generatorOverrides);
+}
+async function saveGeneratorOverrides(){ try { generatorOverrides = await mergedSaveStore('generator-overrides', generatorOverrides); } catch(e){ console.error('Generator overrides save failed', e); } }
+function genList(key, base){ const o = generatorOverrides[key]; return (Array.isArray(o) && o.length) ? o : base; }
+// The living-economy rumour phrasings (MARKET_RUMOUR) editable through the same
+// overlay — one bucket per market signal. Returns the override if set, else the
+// shipped bucket (or [] for an unknown bucket, so callers keep their fallback).
+function marketRumours(bucket){ return genList('market.' + bucket, (typeof MARKET_RUMOUR !== 'undefined' && Array.isArray(MARKET_RUMOUR[bucket])) ? MARKET_RUMOUR[bucket] : []); }
+// Friendly labels for the MARKET_RUMOUR buckets in the Design-Mode editor.
+const MARKET_RUMOUR_LABELS = {
+  shock_output:'Output shock', shock_block:'Lane blocked', shock_embargo:'Embargo',
+  shock_crackdown:'Crackdown', shock_tariff:'Tariff', shock_demand:'Demand spike',
+  shortage:'Shortage', glut:'Glut', status_boom:'Boom', status_bust:'Bust',
+  status_unrest:'Unrest', status_rationing:'Rationing', blackmarket:'Black market',
+};
+// Registry of the editable string-list tables (for the Design-Mode editor). Base
+// arrays span js/85 (here) + js/96 (NPC_GEN); read defensively at call time.
+function generatorListRegistry(){
+  const reg = [];
+  const add = (key, label, group, base) => { if(Array.isArray(base)) reg.push({ key, label, group, base: base.slice() }); };
+  add('oracle.places', 'Places', 'Oracle', typeof ORACLE_PLACES !== 'undefined' ? ORACLE_PLACES : null);
+  add('oracle.goods',  'Goods',  'Oracle', typeof ORACLE_GOODS  !== 'undefined' ? ORACLE_GOODS  : null);
+  if(typeof RUMOUR_TEMPLATES !== 'undefined' && RUMOUR_TEMPLATES){
+    add('rumour.generic',  'Generic',  'Rumours', RUMOUR_TEMPLATES.generic);
+    add('rumour.hostile',  'Hostile',  'Rumours', RUMOUR_TEMPLATES.hostile);
+    add('rumour.friendly', 'Friendly', 'Rumours', RUMOUR_TEMPLATES.friendly);
+    add('rumour.neutral',  'Neutral',  'Rumours', RUMOUR_TEMPLATES.neutral);
+  }
+  if(typeof RUMOUR_RELIABILITY !== 'undefined') add('rumour.reliability', 'Reliability tags', 'Rumours', RUMOUR_RELIABILITY);
+  if(typeof MARKET_RUMOUR !== 'undefined' && MARKET_RUMOUR){   // the living-economy rumour phrasings
+    Object.keys(MARKET_RUMOUR).forEach(k => add('market.' + k, (MARKET_RUMOUR_LABELS && MARKET_RUMOUR_LABELS[k]) || k, 'Market rumours', MARKET_RUMOUR[k]));
+  }
+  if(typeof ENCOUNTER_TABLES !== 'undefined' && ENCOUNTER_TABLES){
+    add('encounter.space',   'Space',   'Encounters', ENCOUNTER_TABLES.space);
+    add('encounter.port',    'Port',    'Encounters', ENCOUNTER_TABLES.port);
+    add('encounter.surface', 'Surface', 'Encounters', ENCOUNTER_TABLES.surface);
+  }
+  if(typeof NPC_GEN !== 'undefined' && NPC_GEN){
+    add('npc.firstNames', 'First names', 'Random NPC', NPC_GEN.firstNames);
+    add('npc.lastNames',  'Last names',  'Random NPC', NPC_GEN.lastNames);
+    add('npc.roles',      'Roles',       'Random NPC', NPC_GEN.roles);
+    add('npc.manners',    'Manners',     'Random NPC', NPC_GEN.manners);
+    add('npc.wants',      'Wants',       'Random NPC', NPC_GEN.wants);
+    add('npc.hooks',      'Hooks',       'Random NPC', NPC_GEN.hooks);
+  }
+  if(typeof ECON !== 'undefined' && ECON && typeof ECON.flavourLists === 'function'){   // GalNet / trader / pirate name lists (economy sim)
+    try { ECON.flavourLists().forEach(t => add(t.key, t.label, t.group, t.base)); } catch(e){}
+  }
+  return reg;
+}
+
 let oracleWhere = 'space';
 let oracleDanger = 1;
 let oracleResult = null;   // {kind:'rumour'|'encounter', ...}
@@ -1194,13 +1299,13 @@ function oraclePlace(){
       .filter(n => !n.uninhabited).map(n => n.label || n.name).filter(Boolean);
     if(!p.length) p = ['the docks', 'the port concourse', 'the outer berths'];
   } else {
-    p = ORACLE_PLACES.slice();
+    p = genList('oracle.places', ORACLE_PLACES).slice();
   }
   if(shipState.destination) p.push(shipState.destination);
   return pick(p);
 }
 
-function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(ORACLE_GOODS)); }
+function goodFlavor(g){ return GOOD_FLAVOR[g] || (g ? g.toLowerCase() : pick(genList('oracle.goods', ORACLE_GOODS))); }
 // ── FACTION CONTRACTS — jobs the STATES post (parallel to CORP_CONTRACT; {faction} = the power). The
 //    faction AI (ECON.factionEvents) flags relief / patrol / bounty / development needs in its space;
 //    these resolve them into ready-to-run contracts, drafted + posted through the same pipeline. ──
@@ -1218,6 +1323,46 @@ const FACTION_CONTRACT = {
     'The {faction} has opened a {reward} development charter at {place} — surveyors, haulers and fixers all wanted for the build-up.',
     'A {faction} ministry is hiring for works at {place}: {reward} on the table for crews willing to sign a charter.' ]}
 };
+// ── Editable contract templates (Design Mode) ────────────────────────────────
+// CORP_CONTRACT / FACTION_CONTRACT are the shipped job-brief templates (title,
+// player briefs, referee note — with {corp}/{place}/{good}… placeholders). This
+// overlay lets the referee rewrite any one of them; contractTemplate() returns
+// the override merged over the shipped base, so draftCorpContract() picks it up
+// with no other rewiring. Referee tool (players never read these — contracts are
+// drafted only from isReferee()-gated paths), synced so it follows devices. New
+// contract *kinds* aren't addable: only the economy-flagged kinds ever fire.
+let contractOverrides = {};   // {'<scope>.<kind>': {title, refNote, briefs:[…]}}
+async function loadContractOverrides(){
+  try { const r = await supaStorage.get('contract-overrides', true); contractOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ contractOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('contract-overrides', contractOverrides);
+}
+async function saveContractOverrides(){ try { contractOverrides = await mergedSaveStore('contract-overrides', contractOverrides); } catch(e){ console.error('Contract overrides save failed', e); } }
+// Effective template for a scope ('corp'|'faction') + kind — override merged over
+// the shipped base (per-field, so a partial override still inherits the rest).
+// Returns null when neither a base nor an override exists (preserves the draft
+// fall-back chain).
+function contractTemplate(scope, kind){
+  const baseMap = scope === 'faction'
+    ? (typeof FACTION_CONTRACT !== 'undefined' ? FACTION_CONTRACT : {})
+    : (typeof CORP_CONTRACT !== 'undefined' ? CORP_CONTRACT : {});
+  const base = baseMap[kind] || null;
+  const ov = contractOverrides[scope + '.' + kind];
+  if(!ov) return base;
+  if(!base) return (ov.title || (Array.isArray(ov.briefs) && ov.briefs.length)) ? ov : null;
+  return {
+    title:   ov.title != null ? ov.title : base.title,
+    refNote: ov.refNote != null ? ov.refNote : base.refNote,
+    briefs:  (Array.isArray(ov.briefs) && ov.briefs.length) ? ov.briefs : base.briefs,
+  };
+}
+// Registry of the editable contract templates (for the Design-Mode editor).
+function contractTemplateRegistry(){
+  const reg = [];
+  const add = (scope, map, group) => { if(map) Object.keys(map).forEach(kind => reg.push({ key: scope + '.' + kind, scope, kind, group, base: map[kind] })); };
+  add('corp',    typeof CORP_CONTRACT    !== 'undefined' ? CORP_CONTRACT    : null, 'Corp jobs');
+  add('faction', typeof FACTION_CONTRACT !== 'undefined' ? FACTION_CONTRACT : null, 'Faction jobs');
+  return reg;
+}
 // Fill a CORP_CONTRACT / FACTION_CONTRACT template from a rich contract item (ECON.contractItem /
 // ECON.factionContractItem / an intel 'contract' item).
 function fillContract(s, item){
@@ -1235,7 +1380,10 @@ function fillContract(s, item){
 }
 // Roll a concrete contract from a flagged opportunity → {type,corp,target,reward,title,brief,refNote}.
 function draftCorpContract(item){
-  const t = (item.issuer==='faction' && FACTION_CONTRACT[item.contract]) || (CORP_CONTRACT[item.contract]) || FACTION_CONTRACT[item.contract] || CORP_CONTRACT.escort;
+  const t = ((item.issuer==='faction') && contractTemplate('faction', item.contract))
+    || contractTemplate('corp', item.contract)
+    || contractTemplate('faction', item.contract)
+    || contractTemplate('corp', 'escort');
   return { type:item.contract, corp:item.label, target:item.targetName||null, reward:item.reward, color:item.color||null,
     title: fillContract(t.title, item), brief: fillContract(pick(t.briefs), item), refNote: fillContract(t.refNote, item) };
 }
@@ -1279,15 +1427,15 @@ function pickMarketRumour(){
   if(item.kind === 'contract'){ const d = draftCorpContract(item);   // a corp job overheard on the docks
     return { kind:'rumour', text:d.brief, faction:null, source:'contract', contract:d,
       reliability:(item.contract==='sabotage'||item.contract==='espionage'||item.contract==='smuggle')?'Whispered':'Reliable' }; }
-  if(item.kind === 'status'){ const tmpl = MARKET_RUMOUR['status_'+item.status] || MARKET_RUMOUR.shortage;   // a world's mood/condition
+  if(item.kind === 'status'){ let tmpl = marketRumours('status_'+item.status); if(!tmpl.length) tmpl = marketRumours('shortage');   // a world's mood/condition
     return { kind:'rumour', text: pick(tmpl).replace(/{place}/g, item.label), faction:null, reliability:'Reliable', source:'market' }; }
-  if(item.kind === 'blackmarket'){ const text = pick(MARKET_RUMOUR.blackmarket).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
+  if(item.kind === 'blackmarket'){ const text = pick(marketRumours('blackmarket')).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
     return { kind:'rumour', text, faction:null, reliability:'Whispered', source:'market' }; }   // illicit, so sketchy intel
   if(item.kind === 'news'){ return { kind:'rumour', text:item.text, faction:null, reliability:'Reliable', source:'news' }; }   // a GalNet broadcast — government reshuffle, trade war, détente
   const key = item.kind === 'shock'
     ? (item.shock === 'output' ? 'shock_output' : item.shock === 'embargo' ? 'shock_embargo' : item.shock === 'crackdown' ? 'shock_crackdown' : item.shock === 'tariff' ? 'shock_tariff' : item.shock === 'demand' ? 'shock_demand' : 'shock_block')
     : (item.kind === 'glut' ? 'glut' : 'shortage');
-  const tmpl = MARKET_RUMOUR[key] || MARKET_RUMOUR.shortage;
+  let tmpl = marketRumours(key); if(!tmpl.length) tmpl = marketRumours('shortage');
   const text = pick(tmpl).replace(/{good}/g, goodFlavor(item.good)).replace(/{place}/g, item.label);
   return { kind:'rumour', text, faction:null, reliability:'Reliable', source:'market' };
 }
@@ -1311,17 +1459,17 @@ function generateRumour(){
   }
   let bucket = 'generic';
   if(faction){ const s = faction.standing; bucket = s <= -3 ? 'hostile' : s >= 3 ? 'friendly' : (Math.random() < 0.5 ? 'neutral' : 'generic'); }
-  let line = pick(RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic);
+  let line = pick(genList('rumour.'+bucket, (RUMOUR_TEMPLATES[bucket] && RUMOUR_TEMPLATES[bucket].length) ? RUMOUR_TEMPLATES[bucket] : RUMOUR_TEMPLATES.generic));
   line = line.replace(/{faction}/g, faction ? faction.name : 'Someone')
              .replace(/{ship}/g, shipState.name || 'the ship')
              .replace(/{place}/g, oraclePlace())
-             .replace(/{good}/g, pick(ORACLE_GOODS));
-  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(RUMOUR_RELIABILITY) };
+             .replace(/{good}/g, pick(genList('oracle.goods', ORACLE_GOODS)));
+  oracleResult = { kind:'rumour', text: line, faction: faction ? faction.name : null, reliability: pick(genList('rumour.reliability', RUMOUR_RELIABILITY)) };
   renderOraclePanel();
 }
 
 function generateEncounter(){
-  const base = pick(ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space);
+  const base = pick(genList('encounter.'+oracleWhere, ENCOUNTER_TABLES[oracleWhere] || ENCOUNTER_TABLES.space));
   const worst = (reputation.factions || []).reduce((m, f) => Math.min(m, f.standing), 0); // most-negative standing
   let diff = oracleDanger + Math.floor(Math.random() * 2);
   if(worst <= -3) diff += 1;
@@ -2864,4 +3012,16 @@ loadGalaxyLanes().then(() => { try{ if(typeof ECON!=='undefined') ECON.syncLanes
   if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadRouteBlocks().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });
 loadHexPaint().then(() => { if(currentView === 'galaxy' && typeof HX !== 'undefined') HX.refresh(); });   // referee-painted territory hexes (shared)
+if(typeof loadTradeGoodStores === 'function') loadTradeGoodStores().then(() => { if(typeof HX !== 'undefined' && HX.refresh) HX.refresh(); if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel(); });   // referee-edited trade-goods catalogue (shared)
+if(typeof loadGeneratorOverrides === 'function') loadGeneratorOverrides();   // referee-edited oracle / rumour / encounter / NPC generator lists
+if(typeof loadContractOverrides === 'function') loadContractOverrides();   // referee-edited corp / faction contract templates
+if(typeof loadNpcPortraits === 'function') loadNpcPortraits().then(() => {   // body/station NPC faces (all devices)
+  if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function') buildBodyView(selectedBody);
+  else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+});
+if(typeof loadSceneImages === 'function') loadSceneImages().then(() => {   // location / area / system / region establishing art (all devices)
+  if(currentView === 'body' && typeof selectedBody !== 'undefined' && selectedBody && typeof buildBodyView === 'function') buildBodyView(selectedBody);
+  else if(currentView === 'station' && typeof renderDetail === 'function') renderDetail();
+  else if(currentView === 'galaxy' && typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+});
 

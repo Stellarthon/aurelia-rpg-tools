@@ -58,8 +58,11 @@ function gen_2d6(){ return (Math.floor(Math.random()*6)+1) + (Math.floor(Math.ra
 
 // Build a random NPC object matching the schema.
 function generateRandomNpc(){
-  const name = gen_pick(NPC_GEN.firstNames) + ' ' + gen_pick(NPC_GEN.lastNames);
-  const role = gen_pick(NPC_GEN.roles);
+  // Read through the Design-Mode generator overrides (js/85 genList) so a
+  // referee's edited name/role/manner/want/hook lists drive random NPCs too.
+  const gl = (typeof genList === 'function') ? genList : (k, base) => base;
+  const name = gen_pick(gl('npc.firstNames', NPC_GEN.firstNames)) + ' ' + gen_pick(gl('npc.lastNames', NPC_GEN.lastNames));
+  const role = gen_pick(gl('npc.roles', NPC_GEN.roles));
   const stats = { STR:gen_2d6(), DEX:gen_2d6(), END:gen_2d6(), INT:gen_2d6(), EDU:gen_2d6(), SOC:gen_2d6() };
   // Skills: pick 2-3 plausible from role
   const skillPool = ['Admin','Streetwise','Persuade','Recon','Computers','Engineer','Gun Combat',
@@ -71,9 +74,9 @@ function generateRandomNpc(){
     if(!chosen.find(c => c.startsWith(s))) chosen.push(s + ' ' + (1 + Math.floor(Math.random()*2)));
   }
   const rows = [
-    ['Manner', gen_pick(NPC_GEN.manners)],
-    ['Wants', gen_pick(NPC_GEN.wants)],
-    ['Hook', gen_pick(NPC_GEN.hooks)]
+    ['Manner', gen_pick(gl('npc.manners', NPC_GEN.manners))],
+    ['Wants', gen_pick(gl('npc.wants', NPC_GEN.wants))],
+    ['Hook', gen_pick(gl('npc.hooks', NPC_GEN.hooks))]
   ];
   return { name, role, stats, skills: chosen.join(', '), rows };
 }
@@ -132,6 +135,10 @@ function setNpcCreatorMode(mode){
 
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Escape referee-authored text, THEN turn newlines into <br>. Used by the
+// content-render sites that want author line breaks but must not let authored
+// text inject markup (see the Design-Mode escaping pass).
+function escHtmlBr(s){ return escHtml(s).replace(/\n/g, '<br>'); }
 
 function renderNpcCreatorBody(){
   const body = document.getElementById('npc-creator-body');
@@ -261,6 +268,467 @@ function editDraftInManual(){
     if(!npcCreatorRows.length) npcCreatorRows = [['','']];
   }
   setNpcCreatorMode('manual');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRADE-GOODS CATALOGUE EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Edits the goods that drive the Station Trade desk: base Cr, buy/sell
+// trade-code DMs, and availability. Base goods (HX.tradeGoodsBase) get overrides
+// keyed by name; new goods are additions; base goods tombstone (restorable).
+// Stores + savers are module-scope in js/10; HX.tradeGoodsEffective reads them.
+function tgParseDMs(s){ const o = {}; String(s || '').split(',').forEach(p => { const m = p.split(':'); const code = (m[0] || '').trim(); const dm = parseInt((m[1] || '').trim(), 10); if(code && !isNaN(dm)) o[code] = dm; }); return o; }
+function tgFormatDMs(o){ if(!o || typeof o !== 'object') return ''; return Object.keys(o).map(k => k + ':' + o[k]).join(', '); }
+function tgParseAvail(s){ s = String(s || '').trim(); if(!s || s.toLowerCase() === 'all') return 'all'; const codes = s.split(',').map(x => x.trim()).filter(Boolean); return codes.length ? codes : 'all'; }
+function tgFormatAvail(a){ return (a === 'all' || !a) ? 'all' : (Array.isArray(a) ? a.join(', ') : String(a)); }
+function _tgPanel(title, bodyHTML){
+  document.getElementById('design-edit-title').textContent = title;
+  document.getElementById('design-edit-body').innerHTML = bodyHTML;
+  const f = document.getElementById('design-edit-footer'); if(f) f.classList.add('hidden');
+  if(typeof designEditCurrentKey !== 'undefined') designEditCurrentKey = null;
+  document.getElementById('design-edit-panel').classList.remove('hidden');
+}
+function openTradeCatalogue(){
+  if(!isReferee() || !designModeOn) return;
+  const eff = (typeof HX !== 'undefined' && HX.tradeGoodsEffective) ? HX.tradeGoodsEffective() : [];
+  const base = (typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : [];
+  const baseNames = new Set(base.map(g => g.name));
+  const dels = (typeof tradeGoodDeletions !== 'undefined' && tradeGoodDeletions) ? tradeGoodDeletions : {};
+  const ovs = (typeof tradeGoodOverrides !== 'undefined' && tradeGoodOverrides) ? tradeGoodOverrides : {};
+  const rows = eff.map(g => {
+    const isAdded = !baseNames.has(g.name);
+    const tag = isAdded ? ' <span style="color:#3f9d5a">+new</span>' : (ovs[g.name] ? ' <span style="color:#9B59B6">· edited</span>' : '');
+    const snippet = 'Cr' + (Number(g.base) || 0).toLocaleString() + ' · buy ' + (tgFormatDMs(g.buy) || '—') + ' · sell ' + (tgFormatDMs(g.sell) || '—') + ' · ' + tgFormatAvail(g.avail);
+    return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+      <div style="min-width:0;flex:1">
+        <div class="design-history-label">${escHtml(g.name)}${tag}</div>
+        <div class="design-history-snippet">${escHtml(snippet)}</div>
+      </div>
+      <span style="display:flex;gap:4px;flex:none">
+        <button class="design-edit-pencil-inline" onclick="openTradeGoodForm('${escAttr(g.name)}')" title="Edit">✎</button>
+        <button class="design-edit-pencil-inline danger" onclick="deleteTradeGood('${escAttr(g.name)}', ${isAdded})" title="Remove">🗑</button>
+      </span></div>`;
+  }).join('');
+  const delNames = Object.keys(dels).filter(n => dels[n]);
+  const delRows = delNames.length ? `<div class="settings-section-lbl" style="margin-top:12px">Removed</div>` + delNames.map(nm =>
+    `<div class="design-history-item" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div class="design-history-snippet">${escHtml(nm)}</div>
+      <button class="design-tier-remove" style="flex:none" onclick="restoreTradeGood('${escAttr(nm)}')">↺ restore</button></div>`).join('') : '';
+  const html = (rows || '<div class="init-empty">No trade goods.</div>') + delRows +
+    `<button class="design-add-btn" style="width:100%;margin-top:12px" onclick="openTradeGoodForm(null)">+ Add trade good</button>
+     <div class="se-note" style="margin-top:6px">Drives the Station Trade desk. Trade codes are MgT2e two-letter codes (Ag, In, Ht, Ri, …). Buy DMs = where it's produced/cheap; Sell DMs = where it's in demand.</div>`;
+  _tgPanel('TRADE GOODS', html);
+}
+function openTradeGoodForm(name){
+  if(!isReferee() || !designModeOn) return;
+  const base = (typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : [];
+  const baseNames = new Set(base.map(g => g.name));
+  let g;
+  if(name){
+    const eff = (typeof HX !== 'undefined' && HX.tradeGoodsEffective) ? HX.tradeGoodsEffective() : [];
+    g = eff.find(x => x.name === name) || { name, base: 1000, buy: {}, sell: {}, avail: 'all' };
+  } else {
+    g = { name: '', base: 1000, buy: {}, sell: {}, avail: 'all' };
+  }
+  const field = (id, label, val, ph) => `<div class="design-field-group"><div class="design-field-label">${label}</div><input id="${id}" class="design-field-input" value="${escAttr(val)}"${ph ? ` placeholder="${escAttr(ph)}"` : ''}></div>`;
+  const html =
+    field('tg-name', 'Name', g.name) +
+    `<div class="design-field-group"><div class="design-field-label">Base price (Cr)</div><input id="tg-base" type="number" min="0" class="design-field-input" value="${Number(g.base) || 0}"></div>` +
+    field('tg-buy', 'Buy DMs — where it\'s produced / cheap (code:DM)', tgFormatDMs(g.buy), 'In:2, Ht:3') +
+    field('tg-sell', 'Sell DMs — where it\'s in demand', tgFormatDMs(g.sell), 'Ni:2, Lt:1') +
+    field('tg-avail', 'Availability ("all" or trade codes)', tgFormatAvail(g.avail), 'all') +
+    `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="se-cancel" onclick="openTradeCatalogue()">Cancel</button>
+      <button class="se-save" onclick="commitTradeGood('${escAttr(name || '')}')">Save</button>
+    </div>`;
+  _tgPanel(name ? 'EDIT TRADE GOOD' : 'NEW TRADE GOOD', html);
+  setTimeout(() => { const i = document.getElementById('tg-name'); if(i && !name) i.focus(); }, 0);
+}
+async function commitTradeGood(origName){
+  const name = (document.getElementById('tg-name').value || '').trim();
+  if(!name){ showToast('Trade good needs a name', 'error'); return; }
+  const good = {
+    name,
+    base: Math.max(0, Math.round(Number(document.getElementById('tg-base').value) || 0)),
+    buy: tgParseDMs(document.getElementById('tg-buy').value),
+    sell: tgParseDMs(document.getElementById('tg-sell').value),
+    avail: tgParseAvail(document.getElementById('tg-avail').value),
+  };
+  const baseNames = new Set(((typeof HX !== 'undefined' && HX.tradeGoodsBase) ? HX.tradeGoodsBase() : []).map(g => g.name));
+  if(origName && baseNames.has(origName)){
+    tradeGoodOverrides[origName] = good;                 // override a built-in good (rename via good.name)
+    if(typeof saveTradeGoodOverrides === 'function') await saveTradeGoodOverrides();
+  } else {
+    const idx = origName ? tradeGoodAdditions.findIndex(x => x && x.name === origName) : -1;
+    if(idx >= 0) tradeGoodAdditions[idx] = good; else tradeGoodAdditions.push(good);
+    if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions();
+  }
+  _tgAfterEdit();
+  showToast('Trade good saved');
+  openTradeCatalogue();
+}
+async function deleteTradeGood(name, isAdded){
+  if(!confirm('Remove trade good "' + name + '"?' + (isAdded ? ' This deletes it.' : ' You can restore it later.'))) return;
+  if(isAdded){
+    const idx = tradeGoodAdditions.findIndex(x => x && x.name === name);
+    if(idx >= 0){ tradeGoodAdditions.splice(idx, 1); if(typeof saveTradeGoodAdditions === 'function') await saveTradeGoodAdditions(); }
+  } else {
+    if(typeof tradeGoodDeletions !== 'undefined'){ tradeGoodDeletions[name] = true; if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  }
+  _tgAfterEdit();
+  openTradeCatalogue();
+}
+async function restoreTradeGood(name){
+  if(typeof tradeGoodDeletions !== 'undefined'){ delete tradeGoodDeletions[name]; if(typeof saveTradeGoodDeletions === 'function') await saveTradeGoodDeletions(); }
+  _tgAfterEdit();
+  openTradeCatalogue();
+}
+// Repaint the map trade layer + the Station Trade desk (if open) after an edit.
+function _tgAfterEdit(){
+  if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
+  if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+  else if(typeof refreshTradeScreen === 'function') refreshTradeScreen();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERATOR TABLES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Edits the string-list tables behind the oracle/rumours/encounters and the
+// random-NPC generator (js/85 generatorListRegistry + genList). One entry per
+// line; an override replaces the built-in list. Reuses the trade editor's panel.
+function openGeneratorTables(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof generatorListRegistry === 'function') ? generatorListRegistry() : [];
+  const ovs = (typeof generatorOverrides !== 'undefined' && generatorOverrides) ? generatorOverrides : {};
+  const groups = {};
+  reg.forEach(item => { (groups[item.group] = groups[item.group] || []).push(item); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(item => {
+      const eff = (Array.isArray(ovs[item.key]) && ovs[item.key].length) ? ovs[item.key] : item.base;
+      const edited = Array.isArray(ovs[item.key]) && ovs[item.key].length;
+      const preview = (eff[0] || '').slice(0, 60);
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1">
+          <div class="design-history-label">${escHtml(item.label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+          <div class="design-history-snippet">${eff.length} entr${eff.length === 1 ? 'y' : 'ies'} · ${escHtml(preview)}${(eff[0] || '').length > 60 ? '…' : ''}</div>
+        </div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openGeneratorListForm('${escAttr(item.key)}')" title="Edit">✎</button>
+      </div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No generator tables available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">Edit any list — one entry per line. Rumour entries may use placeholders: {faction}, {ship}, {place}, {good}.</div>`;
+  _tgPanel('GENERATOR TABLES', html);
+}
+function openGeneratorListForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof generatorListRegistry === 'function') ? generatorListRegistry() : [];
+  const item = reg.find(x => x.key === key);
+  if(!item){ showToast('List not found', 'error'); return; }
+  const ovs = (typeof generatorOverrides !== 'undefined' && generatorOverrides) ? generatorOverrides : {};
+  const overridden = Array.isArray(ovs[key]) && ovs[key].length;
+  const eff = overridden ? ovs[key] : item.base;
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">${escHtml(item.group + ' · ' + item.label)} — one entry per line</div>
+      <textarea id="gen-list-text" class="design-field-textarea" style="min-height:220px">${escHtml(eff.join('\n'))}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetGeneratorList('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px">
+        <button class="se-cancel" onclick="openGeneratorTables()">Cancel</button>
+        <button class="se-save" onclick="commitGeneratorList('${escAttr(key)}')">Save</button>
+      </span>
+    </div>`;
+  _tgPanel('EDIT: ' + item.label.toUpperCase(), html);
+}
+async function commitGeneratorList(key){
+  const raw = document.getElementById('gen-list-text').value;
+  const list = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if(!list.length){ showToast('Add at least one entry', 'error'); return; }
+  if(typeof generatorOverrides !== 'undefined'){ generatorOverrides[key] = list; if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  showToast('Generator list saved');
+  openGeneratorTables();
+}
+async function resetGeneratorList(key){
+  if(typeof generatorOverrides !== 'undefined' && generatorOverrides[key]){ delete generatorOverrides[key]; if(typeof saveGeneratorOverrides === 'function') await saveGeneratorOverrides(); }
+  showToast('Reset to default', 'info');
+  openGeneratorTables();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULES & TABLES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// UI over the js/60 rules overlay: list the shipped reference tables, edit each
+// per its shape (strings / key=value pairs / raw JSON), applied in place so every
+// consumer picks it up. Reuses the trade editor's panel host (_tgPanel).
+function openRulesTables(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const ovs = (typeof rulesOverrides !== 'undefined' && rulesOverrides) ? rulesOverrides : {};
+  const groups = {};
+  reg.forEach(t => { (groups[t.group] = groups[t.group] || []).push(t); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(t => {
+      const edited = Object.prototype.hasOwnProperty.call(ovs, t.key);
+      const size = Array.isArray(t.ref) ? (t.ref.length + ' rows') : (t.ref && typeof t.ref === 'object' ? (Object.keys(t.ref).length + ' keys') : '');
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(t.label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+        <div class="design-history-snippet">${escHtml(size + ' · ' + t.shape)}</div></div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openRulesTableForm('${escAttr(t.key)}')" title="Edit">✎</button></div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No editable rules tables available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">The shipped rules / reference tables. "json" tables edit as raw JSON — keep the shape valid. Combat internals tied to the engine (range bands, weapon types) are deliberately not listed.</div>`;
+  _tgPanel('RULES & TABLES', html);
+}
+function openRulesTableForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key);
+  if(!t){ showToast('Table not found', 'error'); return; }
+  const ovs = (typeof rulesOverrides !== 'undefined' && rulesOverrides) ? rulesOverrides : {};
+  const overridden = Object.prototype.hasOwnProperty.call(ovs, key);
+  const text = (typeof rulesFormat === 'function') ? rulesFormat(t.shape, t.ref) : '';
+  const baseHint = t.shape === 'json' ? 'Raw JSON — keep it valid.' : (t.shape === 'strings' ? 'One entry per line.' : 'One "key = value" per line.');
+  const hint = t.note ? (baseHint + ' ' + t.note) : baseHint;
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">${escHtml(t.group + ' · ' + t.label)} — ${escHtml(hint)}</div>
+      <textarea id="rules-text" class="design-field-textarea" style="min-height:260px;font-family:monospace;font-size:11px">${escHtml(text)}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetRulesTable('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px"><button class="se-cancel" onclick="openRulesTables()">Cancel</button>
+      <button class="se-save" onclick="commitRulesTable('${escAttr(key)}')">Save</button></span>
+    </div>`;
+  _tgPanel('EDIT: ' + t.label.toUpperCase(), html);
+}
+async function commitRulesTable(key){
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key); if(!t) return;
+  let value;
+  try { value = rulesParse(t.shape, document.getElementById('rules-text').value); }
+  catch(e){ showToast('Invalid ' + (t.shape === 'json' ? 'JSON' : 'input') + ' — not saved', 'error'); return; }
+  if(t.shape === 'json' && (value === null || typeof value !== 'object')){ showToast('Top level must be an object or array', 'error'); return; }
+  rulesOverrides[key] = value;
+  if(typeof _rulesApplyInPlace === 'function') _rulesApplyInPlace(t.ref, value);   // live-apply to the const
+  if(typeof saveRulesOverrides === 'function') await saveRulesOverrides();
+  _rulesAfterEdit();
+  showToast('Rules table saved');
+  openRulesTables();
+}
+async function resetRulesTable(key){
+  const reg = (typeof rulesTableRegistry === 'function') ? rulesTableRegistry() : [];
+  const t = reg.find(x => x.key === key); if(!t) return;
+  if(typeof rulesOverrides !== 'undefined') delete rulesOverrides[key];
+  if(typeof _rulesDefaults !== 'undefined' && _rulesDefaults && _rulesDefaults[key] !== undefined && typeof _rulesApplyInPlace === 'function') _rulesApplyInPlace(t.ref, _rulesDefaults[key]);
+  if(typeof saveRulesOverrides === 'function') await saveRulesOverrides();
+  _rulesAfterEdit();
+  showToast('Reset to default', 'info');
+  openRulesTables();
+}
+// Re-render surfaces that read these tables, if open.
+function _rulesAfterEdit(){
+  if(typeof renderQref === 'function' && typeof qrefOpen !== 'undefined' && qrefOpen) renderQref();
+  if(typeof renderCombat === 'function' && typeof combatEncounter !== 'undefined' && combatEncounter) renderCombat();
+  if(typeof renderShipPanel === 'function' && typeof shipPanelOpen !== 'undefined' && shipPanelOpen) renderShipPanel();
+  if(typeof renderReputationPanel === 'function' && typeof repPanelOpen !== 'undefined' && repPanelOpen) renderReputationPanel();
+  if(typeof renderDiscoveryPanel === 'function' && typeof discPanelOpen !== 'undefined' && discPanelOpen) renderDiscoveryPanel();
+  if(typeof renderContactsPanel === 'function' && typeof contactsPanelOpen !== 'undefined' && contactsPanelOpen) renderContactsPanel();
+  if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();   // starport-base / territory tables on the map
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTRACT TEMPLATES EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Rewrites the shipped corp / faction job-brief templates (js/85 CORP_CONTRACT /
+// FACTION_CONTRACT via contractTemplateRegistry + contractOverrides). Each has a
+// referee title, one or more player briefs (one per line) and a referee note.
+// Placeholders in curly braces are filled at draft time. Reuses the trade panel.
+const CONTRACT_PLACEHOLDER_HINT = 'Placeholders: {corp} / {faction}, {target}, {place}, {from}, {to}, {good}, {vessel}, {reward}.';
+function openContractTemplates(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof contractTemplateRegistry === 'function') ? contractTemplateRegistry() : [];
+  const ovs = (typeof contractOverrides !== 'undefined' && contractOverrides) ? contractOverrides : {};
+  const groups = {};
+  reg.forEach(t => { (groups[t.group] = groups[t.group] || []).push(t); });
+  let html = '';
+  Object.keys(groups).forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp)}</div>`;
+    html += groups[grp].map(t => {
+      const eff = (typeof contractTemplate === 'function') ? (contractTemplate(t.scope, t.kind) || t.base) : t.base;
+      const edited = Object.prototype.hasOwnProperty.call(ovs, t.key);
+      const nBriefs = (eff && Array.isArray(eff.briefs)) ? eff.briefs.length : 0;
+      const label = t.kind.charAt(0).toUpperCase() + t.kind.slice(1);
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1">
+          <div class="design-history-label">${escHtml(label)}${edited ? ' <span style="color:#9B59B6">· edited</span>' : ''}</div>
+          <div class="design-history-snippet">${escHtml((eff && eff.title) || '')} · ${nBriefs} brief${nBriefs === 1 ? '' : 's'}</div>
+        </div>
+        <button class="design-edit-pencil-inline" style="flex:none" onclick="openContractTemplateForm('${escAttr(t.key)}')" title="Edit">✎</button></div>`;
+    }).join('');
+  });
+  if(!reg.length) html = '<div class="init-empty">No contract templates available.</div>';
+  else html += `<div class="se-note" style="margin-top:8px">Job briefs the economy sim posts as contracts. ${escHtml(CONTRACT_PLACEHOLDER_HINT)}</div>`;
+  _tgPanel('CONTRACT TEMPLATES', html);
+}
+function openContractTemplateForm(key){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof contractTemplateRegistry === 'function') ? contractTemplateRegistry() : [];
+  const t = reg.find(x => x.key === key);
+  if(!t){ showToast('Template not found', 'error'); return; }
+  const ovs = (typeof contractOverrides !== 'undefined' && contractOverrides) ? contractOverrides : {};
+  const overridden = Object.prototype.hasOwnProperty.call(ovs, key);
+  const eff = (typeof contractTemplate === 'function') ? (contractTemplate(t.scope, t.kind) || t.base) : t.base;
+  const briefs = (eff && Array.isArray(eff.briefs)) ? eff.briefs : [];
+  const label = t.kind.charAt(0).toUpperCase() + t.kind.slice(1);
+  const html = `
+    <div class="design-field-group"><div class="design-field-label">Title (referee)</div>
+      <input id="contract-title" class="design-field-input" value="${escAttr((eff && eff.title) || '')}"></div>
+    <div class="design-field-group"><div class="design-field-label">Player briefs — one per line (a random line is used per draft)</div>
+      <textarea id="contract-briefs" class="design-field-textarea" style="min-height:150px">${escHtml(briefs.join('\n'))}</textarea></div>
+    <div class="design-field-group"><div class="design-field-label">Referee note</div>
+      <textarea id="contract-refnote" class="design-field-textarea" style="min-height:110px">${escHtml((eff && eff.refNote) || '')}</textarea></div>
+    <div class="se-note">${escHtml(CONTRACT_PLACEHOLDER_HINT)}</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="se-reset" ${overridden ? '' : 'style="opacity:.4;pointer-events:none"'} onclick="resetContractTemplate('${escAttr(key)}')">Reset to default</button>
+      <span style="display:flex;gap:8px"><button class="se-cancel" onclick="openContractTemplates()">Cancel</button>
+      <button class="se-save" onclick="commitContractTemplate('${escAttr(key)}')">Save</button></span>
+    </div>`;
+  _tgPanel('EDIT: ' + label.toUpperCase() + ' CONTRACT', html);
+}
+async function commitContractTemplate(key){
+  const title = (document.getElementById('contract-title').value || '').trim();
+  const briefs = (document.getElementById('contract-briefs').value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const refNote = (document.getElementById('contract-refnote').value || '').trim();
+  if(!title){ showToast('Title required', 'error'); return; }
+  if(!briefs.length){ showToast('Add at least one player brief', 'error'); return; }
+  if(typeof contractOverrides !== 'undefined'){
+    contractOverrides[key] = { title, briefs, refNote };
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides();
+  }
+  _contractAfterEdit();
+  showToast('Contract template saved');
+  openContractTemplates();
+}
+async function resetContractTemplate(key){
+  if(typeof contractOverrides !== 'undefined' && Object.prototype.hasOwnProperty.call(contractOverrides, key)){
+    delete contractOverrides[key];
+    if(typeof saveContractOverrides === 'function') await saveContractOverrides();
+  }
+  _contractAfterEdit();
+  showToast('Reset to default', 'info');
+  openContractTemplates();
+}
+// Re-render the oracle panel (which can surface a live contract rumour) if open.
+function _contractAfterEdit(){
+  if(typeof renderOraclePanel === 'function' && typeof genPanelOpen !== 'undefined' && genPanelOpen) renderOraclePanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THEME / COLOUR EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Recolours the whole UI by overriding the CSS design tokens (js/60 theme
+// overlay). Live preview while editing; presets + reset. Reuses the trade panel.
+function _hex6(v){ v = (v || '').trim(); return /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#000000'; }
+function openThemeEditor(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof themeTokenRegistry === 'function') ? themeTokenRegistry() : [];
+  const ovs = (typeof themeOverrides !== 'undefined' && themeOverrides) ? themeOverrides : {};
+  const presetBtns = (typeof THEME_PRESETS !== 'undefined' ? Object.keys(THEME_PRESETS) : []).map(n =>
+    `<button class="design-tier-remove" style="flex:none" onclick="applyThemePreset('${escAttr(n)}')">${escHtml(n)}</button>`).join('');
+  let html = presetBtns
+    ? `<div class="settings-section-lbl">Presets</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">${presetBtns}</div>`
+    : '';
+  reg.forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp.group)}</div>`;
+    html += grp.tokens.map(t => {
+      const tok = t[0], label = t[1], isText = t[2] === 'text';
+      const val = (typeof themeTokenValue === 'function') ? themeTokenValue(tok) : '';
+      const edited = Object.prototype.hasOwnProperty.call(ovs, tok);
+      const swatch = isText ? '' :
+        `<input type="color" value="${_hex6(val)}" title="${escAttr(tok)}" style="width:34px;height:26px;padding:0;border:none;background:none;cursor:pointer" oninput="setThemeTokenLive('${escAttr(tok)}', this.value)" onchange="commitThemeToken('${escAttr(tok)}', this.value)">`;
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(label)}${edited ? ' <span style="color:#9B59B6">·</span>' : ''}</div>
+        <div class="design-history-snippet">${escHtml(tok)}</div></div>
+        <span style="display:flex;gap:6px;align-items:center;flex:none">${swatch}
+          <input class="design-field-input" style="width:${isText ? 150 : 92}px" value="${escAttr(val)}" onchange="commitThemeToken('${escAttr(tok)}', this.value)">
+          <button class="design-edit-pencil-inline" title="Reset" ${edited ? '' : 'style="opacity:.35;pointer-events:none"'} onclick="resetThemeToken('${escAttr(tok)}')">↺</button>
+        </span></div>`;
+    }).join('');
+  });
+  html += `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="se-reset" onclick="resetAllTheme()">Reset all colours</button></div>
+    <div class="se-note" style="margin-top:6px">Recolours the whole table's UI (players included). Drag a swatch for a live preview; every change saves. "Reset" restores the shipped value.</div>`;
+  _tgPanel('THEME & COLOURS', html);
+}
+function setThemeTokenLive(tok, val){ if(typeof themeOverrides === 'undefined') return; themeOverrides[tok] = val; if(typeof applyThemeOverrides === 'function') applyThemeOverrides(); }
+async function commitThemeToken(tok, val){
+  if(typeof themeOverrides === 'undefined') return;
+  val = (val || '').trim();
+  if(!val){ delete themeOverrides[tok]; } else { themeOverrides[tok] = val; }
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  openThemeEditor();
+}
+async function resetThemeToken(tok){
+  if(typeof themeOverrides !== 'undefined') delete themeOverrides[tok];
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  openThemeEditor();
+}
+async function applyThemePreset(name){
+  const p = (typeof THEME_PRESETS !== 'undefined') ? THEME_PRESETS[name] : null;
+  if(!p || typeof themeOverrides === 'undefined') return;
+  Object.keys(p).forEach(k => { themeOverrides[k] = p[k]; });
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  showToast('Applied "' + name + '"');
+  openThemeEditor();
+}
+async function resetAllTheme(){
+  if(!confirm('Reset every colour override back to the shipped theme?')) return;
+  if(typeof themeOverrides !== 'undefined') themeOverrides = {};
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  showToast('Theme reset', 'info');
+  openThemeEditor();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PANEL SHOW / HIDE  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Hide any panel's header entry point from players (js/60 panel-flags overlay).
+// The real referee keeps every panel; use Preview-as-player to see the result.
+function openPanelToggles(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof panelToggleRegistry === 'function') ? panelToggleRegistry() : [];
+  const rows = reg.map(p => {
+    const hidden = (typeof panelHidden === 'function') && panelHidden(p.id);
+    return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+      <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(p.label)}${hidden ? ' <span style="color:#e0b050">· hidden</span>' : ''}</div></div>
+      <label style="display:inline-flex;align-items:center;gap:6px;flex:none;cursor:pointer;font-size:11px;color:var(--tx1)">
+        <input type="checkbox" ${hidden ? '' : 'checked'} onchange="togglePanel('${escAttr(p.id)}', !this.checked)"> Visible
+      </label></div>`;
+  }).join('');
+  const html = (rows || '<div class="init-empty">No toggleable panels in this build.</div>') +
+    (reg.length ? `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="se-reset" onclick="resetPanelToggles()">Show all</button></div>
+     <div class="se-note" style="margin-top:6px">Unticking hides that panel's button for players (economy, combat, calendar &amp; oracle have their own switch under Modules). You keep every panel — use 🎭 Preview as player to see what they see.</div>` : '');
+  _tgPanel('PANELS & WINDOWS', html);
+}
+async function togglePanel(id, hidden){
+  if(typeof panelFlags === 'undefined') return;
+  if(hidden) panelFlags[id] = true; else delete panelFlags[id];
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();
+  if(typeof savePanelFlags === 'function') await savePanelFlags();
+  openPanelToggles();
+}
+async function resetPanelToggles(){
+  if(typeof panelFlags !== 'undefined') panelFlags = {};
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();
+  if(typeof savePanelFlags === 'function') await savePanelFlags();
+  showToast('All panels shown', 'info');
+  openPanelToggles();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

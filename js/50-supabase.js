@@ -100,6 +100,116 @@ async function uploadPortraitBlob(characterName, blob){
   if(!res.ok) throw new Error('Portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
   return true;
 }
+// NPC portraits share the same public 'portraits' bucket under an npc/ sub-path,
+// so no new migration is needed — the bucket's anon read/insert/update policies
+// (migration 0002) already cover it. Keyed by the NPC's stable id; a portraitVer
+// stamp on the roster entry cache-busts the shared public URL across devices.
+function npcPortraitPath(id){ return 'npc/' + portraitSlug(id) + '.jpg'; }
+function npcPortraitUrlFor(id, ver){
+  const url = PORTRAIT_BASE + 'npc/' + encodeURIComponent(portraitSlug(id)) + '.jpg';
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadNpcPortraitBlob(id, blob){
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/portraits/npc/' + encodeURIComponent(portraitSlug(id)) + '.jpg', {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('NPC portrait upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+// Body & station NPCs render for PLAYERS, so their portrait version stamps live
+// in a shared, public-read store (referee-write) keyed by the NPC's stable nid —
+// unlike the referee-only roster, whose stamp rides its own entry. The image
+// still lives in the same 'portraits' bucket (npc/ sub-path), so no new bucket.
+let npcPortraits = {};   // {nid: ver}
+function npcPortraitVer(nid){ return (npcPortraits && npcPortraits[nid]) || 0; }
+async function loadNpcPortraits(){
+  try { const r = await supaStorage.get('npc-portraits', true); npcPortraits = (r.value != null ? JSON.parse(r.value) : {}); if(!npcPortraits || typeof npcPortraits !== 'object') npcPortraits = {}; }
+  catch(e){ npcPortraits = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('npc-portraits', npcPortraits);
+}
+async function saveNpcPortraits(){
+  try { if(typeof mergedSaveStore === 'function') npcPortraits = await mergedSaveStore('npc-portraits', npcPortraits);
+        else await supaStorage.set('npc-portraits', JSON.stringify(npcPortraits), true); }
+  catch(e){ console.error('NPC portraits save failed', e); }
+}
+// A round avatar for an NPC card, keyed by nid: the portrait if one exists, else
+// an initial-letter placeholder. Callers that only want a face when one is set
+// (player-facing cards) should guard on npcPortraitVer(nid) first.
+function npcMediaAvatar(nid, name, size){
+  const ver = npcPortraitVer(nid);
+  const esc = (typeof escHtml === 'function') ? escHtml : (x => String(x == null ? '' : x));
+  if(ver && typeof npcPortraitUrlFor === 'function'){
+    return `<img src="${npcPortraitUrlFor(nid, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none;background:var(--bg2)" onerror="this.style.visibility='hidden'">`;
+  }
+  const init = (name && String(name).trim()[0]) || '?';
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;flex:none;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.42)}px;color:var(--tx1)">${esc(init.toUpperCase())}</span>`;
+}
+
+// ── Location / scene imagery (Supabase Storage 'scenes' bucket) ──────────────
+// A landscape establishing image a referee attaches to a place (body location or
+// station area), shown at the top of its detail where players see it. Own bucket
+// (migration 0015), public-read like handouts. One object per key, per campaign:
+// scenes/<campaignSlug>/<key>.jpg. Version stamps live in the shared, public-read
+// 'scene-images' KV so the public URL can be cache-busted across devices.
+const SCENE_BASE = SUPABASE_URL + '/storage/v1/object/public/scenes/';
+function sceneObjectPath(campaignId, key){
+  return rulebookSlug(campaignId) + '/' + String(key || '').replace(/[^a-z0-9_-]/gi, '') + '.jpg';
+}
+function sceneImageUrlFor(campaignId, key, ver){
+  const url = SCENE_BASE + sceneObjectPath(campaignId, key).split('/').map(encodeURIComponent).join('/');
+  return ver ? (url + '?v=' + ver) : url;
+}
+async function uploadSceneImageBlob(campaignId, key, blob){
+  const path = sceneObjectPath(campaignId, key).split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/scenes/' + path, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'x-upsert': 'true', 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('Scene image upload failed: HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
+  return true;
+}
+let sceneImages = {};   // {sceneKey: ver}
+function sceneImageVer(key){ return (sceneImages && sceneImages[key]) || 0; }
+function _sceneCampaign(){ return (typeof activeCampaignId !== 'undefined' ? activeCampaignId : 'default'); }
+async function loadSceneImages(){
+  try { const r = await supaStorage.get('scene-images', true); sceneImages = (r.value != null ? JSON.parse(r.value) : {}); if(!sceneImages || typeof sceneImages !== 'object') sceneImages = {}; }
+  catch(e){ sceneImages = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('scene-images', sceneImages);
+}
+async function saveSceneImages(){
+  try { if(typeof mergedSaveStore === 'function') sceneImages = await mergedSaveStore('scene-images', sceneImages);
+        else await supaStorage.set('scene-images', JSON.stringify(sceneImages), true); }
+  catch(e){ console.error('Scene images save failed', e); }
+}
+// The banner + (in design mode) upload/remove control for a place's scene image.
+// key is a stable per-place string; label names it in the upload hint.
+function sceneImageBlockHTML(key, label){
+  const ver = sceneImageVer(key);
+  const esc = (typeof escAttr === 'function') ? escAttr : (x => String(x == null ? '' : x));
+  const designOn = (typeof designModeOn !== 'undefined' && designModeOn && (typeof isReferee !== 'function' || isReferee()));
+  let html = '';
+  if(ver){
+    html += `<img src="${sceneImageUrlFor(_sceneCampaign(), key, ver)}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--rad,6px);display:block;margin-bottom:8px" onerror="this.style.display='none'">`;
+  }
+  if(designOn){
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <button class="design-add-btn" style="flex:1" onclick="triggerSceneImage('${esc(key)}')">${ver ? '🖼 Change scene image' : '🖼 Add scene image'}</button>
+      ${ver ? `<button class="design-tier-remove" onclick="removeSceneImage('${esc(key)}')">✕</button>` : ''}
+      <input type="file" id="scene-image-file-${esc(key)}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onSceneImageFile('${esc(key)}', event)">
+    </div>`;
+  }
+  return html;
+}
+// A small square thumbnail for a scene key (region list rows, editor rows) — the
+// image if set, else nothing.
+function sceneThumbHTML(key, size){
+  const ver = sceneImageVer(key);
+  if(!ver) return '';
+  return `<img src="${sceneImageUrlFor(_sceneCampaign(), key, ver)}" alt="" style="width:${size}px;height:${size}px;border-radius:4px;object-fit:cover;flex:none;vertical-align:middle" onerror="this.style.display='none'">`;
+}
 
 // ── BYO rulebook library (Supabase Storage 'rulebooks' bucket) ───────────────
 // The referee's OWN, legally-owned rulebook PDFs — one object per book per
@@ -397,6 +507,131 @@ const supaStorage = {
     }
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-STORE MERGE  —  field-level read-modify-write for Design-Mode edits
+// ───────────────────────────────────────────────────────────────────────────
+// Every Design-Mode store (content-overrides, body/location/system/faction/
+// weapon overlays, …) is one JSON blob in one aurelia_state row. A plain
+// supaStorage.set() is last-write-wins on that whole blob, so two referees (or
+// one referee on two devices, or an offline edit flushed late) editing DIFFERENT
+// fields silently clobbered each other's entire store.
+//
+// mergedSaveStore() does a 3-way merge before writing: it re-reads the current
+// remote blob and reconciles it against a BASELINE (the value this device last
+// loaded or saved) so that only the fields THIS device actually changed are
+// applied on top of whatever a co-editor committed meanwhile. Deletions are
+// honoured (a key present in the baseline but gone locally is removed); a key a
+// co-editor added is preserved. Object nodes merge recursively; arrays and
+// primitives are leaves (the side that changed wins — so two referees appending
+// to the SAME list still last-write-wins, but everything keyed by id/field
+// merges cleanly). If the pre-read fails (offline) it falls back to a plain
+// write — identical to the old behaviour, never worse.
+function _isPlainObj(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
+function _deepEq(a, b){
+  if(a === b) return true;
+  if(_isPlainObj(a) && _isPlainObj(b)){
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if(ka.length !== kb.length) return false;
+    return ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && _deepEq(a[k], b[k]));
+  }
+  if(Array.isArray(a) && Array.isArray(b)){
+    if(a.length !== b.length) return false;
+    return a.every((x, i) => _deepEq(x, b[i]));
+  }
+  return false;
+}
+// base = value at last sync · mine = this device's current value · theirs = the
+// freshly-read remote value. Returns the reconciled value.
+function threeWayMerge(base, mine, theirs){
+  // Leaf (array / primitive) or a type change: my edit wins if I changed it,
+  // otherwise defer to theirs.
+  if(!_isPlainObj(base) || !_isPlainObj(mine) || !_isPlainObj(theirs)){
+    return _deepEq(base, mine) ? theirs : mine;
+  }
+  const out = {};
+  const keys = new Set([...Object.keys(base), ...Object.keys(mine), ...Object.keys(theirs)]);
+  keys.forEach(k => {
+    const inBase = Object.prototype.hasOwnProperty.call(base, k);
+    const inMine = Object.prototype.hasOwnProperty.call(mine, k);
+    const inTheirs = Object.prototype.hasOwnProperty.call(theirs, k);
+    if(!inMine){
+      if(inBase) return;                 // I deleted it → stay deleted (local intent wins)
+      if(inTheirs) out[k] = theirs[k];   // a co-editor added it → keep theirs
+      return;
+    }
+    const locallyChanged = !inBase || !_deepEq(base[k], mine[k]);
+    if(locallyChanged){
+      out[k] = (_isPlainObj(base[k]) && _isPlainObj(mine[k]) && _isPlainObj(theirs[k]))
+        ? threeWayMerge(base[k], mine[k], theirs[k])
+        : mine[k];                       // my change wins at the leaf
+    } else if(inTheirs){
+      out[k] = theirs[k];                // untouched locally → take theirs (their edit / unchanged)
+    }
+    // untouched locally AND gone from theirs → a co-editor deleted it → honour that (omit)
+  });
+  return out;
+}
+// Per-key baseline of the last-synced value, so a save knows which fields this
+// device changed. Snapshotted on load and after every successful merged save.
+const _designBaselines = {};
+function snapshotBaseline(key, val){
+  try { _designBaselines[key] = JSON.parse(JSON.stringify(val == null ? {} : val)); }
+  catch(e){ _designBaselines[key] = Array.isArray(val) ? [] : {}; }
+}
+async function mergedSaveStore(key, current){
+  // A referee-only-bearing store keeps its FULL data under "<key>-ref" (carved
+  // out of public read) and a REDACTED copy under the public key that players
+  // read. The merge re-reads the full ref blob; single-copy stores use the key.
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  const fullKey = split ? (key + '-ref') : key;
+  let merged = current;
+  try {
+    const res = await supaStorage.get(fullKey, true);   // re-read the authoritative FULL remote blob
+    // Merge only against a remote blob that actually EXISTS. An absent row
+    // (value === null) is "no co-editor state to preserve", not "everything was
+    // deleted" — merging against {} there would wrongly drop unchanged keys of a
+    // store with a non-empty default (e.g. route-blocks {enabled:true}).
+    if(res.ok && res.value != null){
+      const empty = Array.isArray(current) ? [] : {};
+      let remote = empty;
+      try { remote = JSON.parse(res.value); } catch(e){ remote = empty; }
+      const base = Object.prototype.hasOwnProperty.call(_designBaselines, key) ? _designBaselines[key] : empty;
+      merged = threeWayMerge(base, current, remote);
+    }
+  } catch(e){ merged = current; /* offline / parse fail → plain write, no worse than before */ }
+  if(split && typeof stripOverlayForPlayers === 'function'){
+    await supaStorage.set(fullKey, JSON.stringify(merged), true);                            // full → referee-only "<key>-ref"
+    await supaStorage.set(key, JSON.stringify(stripOverlayForPlayers(key, merged)), true);   // redacted → public "<key>"
+  } else {
+    await supaStorage.set(key, JSON.stringify(merged), true);
+  }
+  snapshotBaseline(key, merged);
+  return merged;
+}
+
+// Read an overlay store for the CURRENT role. A referee reads the full data from
+// "<key>-ref": preferring the copy get-content delivered over the token boundary
+// (populated in _refOverlays), then a direct read (works until the migration
+// carves "<key>-ref" out of public read), then the public key as a pre-migration
+// / pre-first-save fallback. A player always reads the public (redacted) key.
+// Returns the same { ok, value } shape as supaStorage.get.
+let _refOverlays = {};   // {key: rawJsonString} delivered to referees by get-content
+async function getOverlayStore(key){
+  // Use the REAL role: a referee previewing-as-player must still read their full
+  // "-ref" data, not the redacted public copy.
+  const isRef = (typeof isRefereeReal === 'function') ? isRefereeReal() : ((typeof isReferee === 'function') && isReferee());
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  if(isRef && split){
+    if(Object.prototype.hasOwnProperty.call(_refOverlays, key) && _refOverlays[key] != null){
+      return { ok: true, value: _refOverlays[key], fromCache: false };
+    }
+    const r = await supaStorage.get(key + '-ref', true);
+    if(r.ok && r.value != null) return r;
+    // else fall through to the public key (no ref blob yet / not migrated)
+  }
+  return supaStorage.get(key, true);
+}
 
 // ── Outbound write queue (last-write-wins per key) ───────────────────────────
 function loadQueue(){ try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '{}') || {}; } catch(e){ return {}; } }

@@ -6,3 +6,6 @@
 
 # Self-contained local-viewing bundle (built by tools/build-local.mjs; the modular index.html is the source of truth)
 index.local.html
+
+# Node deps (only ever installed locally/CI for the Playwright harnesses — never committed)
+node_modules/
