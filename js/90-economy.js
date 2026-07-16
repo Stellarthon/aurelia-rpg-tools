@@ -2054,8 +2054,9 @@ window.ECON = (function(){
     // Design-Mode: live references to the structured GalNet / economy flavour
     // tables, edited in place through the Rules & Tables editor. Same object
     // references the sim's consumers (freshCabinet, the reshuffle tick,
-    // corpSeedList) read, so an in-place edit reaches them with no rewiring.
-    GOV_REASONS, GOV_POSTS, FAC_GOV, CORP_ARCHETYPES, MEGACORP,
+    // corpSeedList, pirateShipOf) read, so an in-place edit reaches them with
+    // no rewiring.
+    GOV_REASONS, GOV_POSTS, FAC_GOV, CORP_ARCHETYPES, MEGACORP, PIRATE_SHIPS,
     cabinetOf(id){ ensure(); const f=state.factions&&state.factions[id]; if(f&&(!f.cabinet||!f.cabinet.length)) f.cabinet=freshCabinet(id); return (f&&f.cabinet)||[]; },
     news(){ ensure(); return state.news||[]; },                               // GalNet feed — rolling headlines (cabinet changes, trade wars, détente, policy)
     relOf:(a,b)=>{ ensure(); return relOf(a,b); },                            // A→B stance (−100..+100)

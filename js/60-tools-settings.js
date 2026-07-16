@@ -1035,7 +1035,7 @@ let rulesOverrides = {};
 let _rulesDefaults = null;
 function rulesTableRegistry(){
   const reg = [];
-  const add = (key, label, group, shape, ref) => { if(ref !== undefined && ref !== null) reg.push({ key, label, group, shape, ref }); };
+  const add = (key, label, group, shape, ref, note) => { if(ref !== undefined && ref !== null) reg.push({ key, label, group, shape, ref, note }); };
   add('task-ladder',    'Task-difficulty ladder', 'Rules',   'pairs',   typeof TASK_LADDER !== 'undefined' ? TASK_LADDER : null);
   add('status-fx',      'Status conditions',      'Rules',   'json',    typeof TRAVELLER_STATUS_FX !== 'undefined' ? TRAVELLER_STATUS_FX : null);
   add('qref',           'Quick-reference sheets', 'Rules',   'json',    typeof QREF_DATA !== 'undefined' ? QREF_DATA : null);
@@ -1056,7 +1056,9 @@ function rulesTableRegistry(){
     add('fac-gov',      'Head-of-state titles',   'Government', 'json', ECON.FAC_GOV);
     add('corp-houses',  'Rival corp houses',      'Economy',   'json', ECON.CORP_ARCHETYPES);
     add('megacorp',     'Megacorp',               'Economy',   'json', ECON.MEGACORP);
+    add('pirate-ships', 'Raider hulls (stat-blocks)','Combat', 'json', ECON.PIRATE_SHIPS, 'Keep the ship ids (wolf / corsair / gazelle / fighter) — the sim spawns raiders by id.');
   }
+  if(typeof HX !== 'undefined' && HX && HX.BASE_META) add('base-meta', 'Starport base types', 'Map', 'json', HX.BASE_META, 'The "pub" flag decides whether players see a base type on the map (false = referee-only, e.g. corsair bases).');
   return reg;
 }
 function _rulesApplyInPlace(target, value){

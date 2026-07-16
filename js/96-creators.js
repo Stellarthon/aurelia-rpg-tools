@@ -492,7 +492,8 @@ function openRulesTableForm(key){
   const ovs = (typeof rulesOverrides !== 'undefined' && rulesOverrides) ? rulesOverrides : {};
   const overridden = Object.prototype.hasOwnProperty.call(ovs, key);
   const text = (typeof rulesFormat === 'function') ? rulesFormat(t.shape, t.ref) : '';
-  const hint = t.shape === 'json' ? 'Raw JSON — keep it valid.' : (t.shape === 'strings' ? 'One entry per line.' : 'One "key = value" per line.');
+  const baseHint = t.shape === 'json' ? 'Raw JSON — keep it valid.' : (t.shape === 'strings' ? 'One entry per line.' : 'One "key = value" per line.');
+  const hint = t.note ? (baseHint + ' ' + t.note) : baseHint;
   const html = `
     <div class="design-field-group"><div class="design-field-label">${escHtml(t.group + ' · ' + t.label)} — ${escHtml(hint)}</div>
       <textarea id="rules-text" class="design-field-textarea" style="min-height:260px;font-family:monospace;font-size:11px">${escHtml(text)}</textarea></div>
