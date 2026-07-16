@@ -348,11 +348,15 @@ async function loadGalaxyLanes(){
     gxLaneAdditions = Array.isArray(v.additions) ? v.additions : [];
     gxLaneDeletions = Array.isArray(v.deletions) ? v.deletions : [];
   } catch(e){ gxLaneAdditions = []; gxLaneDeletions = []; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('galaxy-lanes', {additions:gxLaneAdditions, deletions:gxLaneDeletions});
   gxRebuildLanes();
 }
 async function saveGalaxyLanes(){
-  try { await supaStorage.set('galaxy-lanes', JSON.stringify({additions:gxLaneAdditions, deletions:gxLaneDeletions}), true); }
-  catch(e){ console.error('Galaxy lane save failed', e); }
+  try {
+    const merged = await mergedSaveStore('galaxy-lanes', {additions:gxLaneAdditions, deletions:gxLaneDeletions});
+    gxLaneAdditions = Array.isArray(merged.additions) ? merged.additions : [];
+    gxLaneDeletions = Array.isArray(merged.deletions) ? merged.deletions : [];
+  } catch(e){ console.error('Galaxy lane save failed', e); }
 }
 
 // ── Add / remove lanes (Design Mode, referee only) ──
@@ -422,10 +426,11 @@ async function loadSystemStores(){
   try { const r = await supaStorage.get('system-additions', true);      systemAdditions = (r.value!=null ? JSON.parse(r.value) : []); if(!Array.isArray(systemAdditions)) systemAdditions = []; } catch(e){ systemAdditions = []; }
   try { const r = await supaStorage.get('system-deletions', true);      systemDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemDeletions = {}; }
   try { const r = await supaStorage.get('system-prop-overrides', true); systemPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ systemPropertyOverrides = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('system-additions', systemAdditions); snapshotBaseline('system-deletions', systemDeletions); snapshotBaseline('system-prop-overrides', systemPropertyOverrides); }
 }
-async function saveSystemAdditions(){ try { await supaStorage.set('system-additions', JSON.stringify(systemAdditions), true); } catch(e){ console.error('System additions save failed', e); } }
-async function saveSystemDeletions(){ try { await supaStorage.set('system-deletions', JSON.stringify(systemDeletions), true); } catch(e){ console.error('System deletions save failed', e); } }
-async function saveSystemPropertyOverrides(){ try { await supaStorage.set('system-prop-overrides', JSON.stringify(systemPropertyOverrides), true); } catch(e){ console.error('System property overrides save failed', e); } }
+async function saveSystemAdditions(){ try { systemAdditions = await mergedSaveStore('system-additions', systemAdditions); } catch(e){ console.error('System additions save failed', e); } }
+async function saveSystemDeletions(){ try { systemDeletions = await mergedSaveStore('system-deletions', systemDeletions); } catch(e){ console.error('System deletions save failed', e); } }
+async function saveSystemPropertyOverrides(){ try { systemPropertyOverrides = await mergedSaveStore('system-prop-overrides', systemPropertyOverrides); } catch(e){ console.error('System property overrides save failed', e); } }
 
 // Live galaxy node set = base systems (minus tombstoned, with overrides applied)
 // followed by referee-added systems. Returns fresh clones so callers may mutate.
@@ -600,10 +605,11 @@ async function loadFactionStores(){
   try { const r = await supaStorage.get('faction-additions', true);      factionAdditions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionAdditions = {}; }
   try { const r = await supaStorage.get('faction-deletions', true);      factionDeletions = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionDeletions = {}; }
   try { const r = await supaStorage.get('faction-prop-overrides', true); factionPropertyOverrides = (r.value!=null ? JSON.parse(r.value) : {}); } catch(e){ factionPropertyOverrides = {}; }
+  if(typeof snapshotBaseline === 'function'){ snapshotBaseline('faction-additions', factionAdditions); snapshotBaseline('faction-deletions', factionDeletions); snapshotBaseline('faction-prop-overrides', factionPropertyOverrides); }
 }
-async function saveFactionAdditions(){ try { await supaStorage.set('faction-additions', JSON.stringify(factionAdditions), true); } catch(e){ console.error('Faction additions save failed', e); } }
-async function saveFactionDeletions(){ try { await supaStorage.set('faction-deletions', JSON.stringify(factionDeletions), true); } catch(e){ console.error('Faction deletions save failed', e); } }
-async function saveFactionPropertyOverrides(){ try { await supaStorage.set('faction-prop-overrides', JSON.stringify(factionPropertyOverrides), true); } catch(e){ console.error('Faction prop overrides save failed', e); } }
+async function saveFactionAdditions(){ try { factionAdditions = await mergedSaveStore('faction-additions', factionAdditions); } catch(e){ console.error('Faction additions save failed', e); } }
+async function saveFactionDeletions(){ try { factionDeletions = await mergedSaveStore('faction-deletions', factionDeletions); } catch(e){ console.error('Faction deletions save failed', e); } }
+async function saveFactionPropertyOverrides(){ try { factionPropertyOverrides = await mergedSaveStore('faction-prop-overrides', factionPropertyOverrides); } catch(e){ console.error('Faction prop overrides save failed', e); } }
 
 // ── Player-facing faction visibility (referee-controlled) ────────────────────
 // Some regions are lore spoilers (The Vast, the Archon Collective). The referee
@@ -731,9 +737,10 @@ let routeBlocks = { enabled: true, blocks: {} };
 async function loadRouteBlocks(){
   try { const r = await supaStorage.get('route-blocks', true); if(r.value != null){ const v = JSON.parse(r.value); routeBlocks = { enabled: v.enabled !== false, blocks: v.blocks || {} }; } }
   catch(e){ routeBlocks = { enabled: true, blocks: {} }; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('route-blocks', routeBlocks);
 }
 async function saveRouteBlocks(){
-  try { await supaStorage.set('route-blocks', JSON.stringify(routeBlocks), true); }
+  try { routeBlocks = await mergedSaveStore('route-blocks', routeBlocks); }
   catch(e){ console.error('Route blocks save failed:', e); }
 }
 
@@ -748,9 +755,10 @@ let hexPaint = {};
 async function loadHexPaint(){
   try { const r = await supaStorage.get('hex-paint', true); hexPaint = (r.value != null) ? (JSON.parse(r.value) || {}) : {}; }
   catch(e){ hexPaint = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('hex-paint', hexPaint);
 }
 async function saveHexPaint(){
-  try { await supaStorage.set('hex-paint', JSON.stringify(hexPaint || {}), true); }
+  try { hexPaint = await mergedSaveStore('hex-paint', hexPaint || {}); }
   catch(e){ console.error('Hex paint save failed:', e); }
 }
 

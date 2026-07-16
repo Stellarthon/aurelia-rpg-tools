@@ -398,6 +398,98 @@ const supaStorage = {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-STORE MERGE  —  field-level read-modify-write for Design-Mode edits
+// ───────────────────────────────────────────────────────────────────────────
+// Every Design-Mode store (content-overrides, body/location/system/faction/
+// weapon overlays, …) is one JSON blob in one aurelia_state row. A plain
+// supaStorage.set() is last-write-wins on that whole blob, so two referees (or
+// one referee on two devices, or an offline edit flushed late) editing DIFFERENT
+// fields silently clobbered each other's entire store.
+//
+// mergedSaveStore() does a 3-way merge before writing: it re-reads the current
+// remote blob and reconciles it against a BASELINE (the value this device last
+// loaded or saved) so that only the fields THIS device actually changed are
+// applied on top of whatever a co-editor committed meanwhile. Deletions are
+// honoured (a key present in the baseline but gone locally is removed); a key a
+// co-editor added is preserved. Object nodes merge recursively; arrays and
+// primitives are leaves (the side that changed wins — so two referees appending
+// to the SAME list still last-write-wins, but everything keyed by id/field
+// merges cleanly). If the pre-read fails (offline) it falls back to a plain
+// write — identical to the old behaviour, never worse.
+function _isPlainObj(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
+function _deepEq(a, b){
+  if(a === b) return true;
+  if(_isPlainObj(a) && _isPlainObj(b)){
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if(ka.length !== kb.length) return false;
+    return ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && _deepEq(a[k], b[k]));
+  }
+  if(Array.isArray(a) && Array.isArray(b)){
+    if(a.length !== b.length) return false;
+    return a.every((x, i) => _deepEq(x, b[i]));
+  }
+  return false;
+}
+// base = value at last sync · mine = this device's current value · theirs = the
+// freshly-read remote value. Returns the reconciled value.
+function threeWayMerge(base, mine, theirs){
+  // Leaf (array / primitive) or a type change: my edit wins if I changed it,
+  // otherwise defer to theirs.
+  if(!_isPlainObj(base) || !_isPlainObj(mine) || !_isPlainObj(theirs)){
+    return _deepEq(base, mine) ? theirs : mine;
+  }
+  const out = {};
+  const keys = new Set([...Object.keys(base), ...Object.keys(mine), ...Object.keys(theirs)]);
+  keys.forEach(k => {
+    const inBase = Object.prototype.hasOwnProperty.call(base, k);
+    const inMine = Object.prototype.hasOwnProperty.call(mine, k);
+    const inTheirs = Object.prototype.hasOwnProperty.call(theirs, k);
+    if(!inMine){
+      if(inBase) return;                 // I deleted it → stay deleted (local intent wins)
+      if(inTheirs) out[k] = theirs[k];   // a co-editor added it → keep theirs
+      return;
+    }
+    const locallyChanged = !inBase || !_deepEq(base[k], mine[k]);
+    if(locallyChanged){
+      out[k] = (_isPlainObj(base[k]) && _isPlainObj(mine[k]) && _isPlainObj(theirs[k]))
+        ? threeWayMerge(base[k], mine[k], theirs[k])
+        : mine[k];                       // my change wins at the leaf
+    } else if(inTheirs){
+      out[k] = theirs[k];                // untouched locally → take theirs (their edit / unchanged)
+    }
+    // untouched locally AND gone from theirs → a co-editor deleted it → honour that (omit)
+  });
+  return out;
+}
+// Per-key baseline of the last-synced value, so a save knows which fields this
+// device changed. Snapshotted on load and after every successful merged save.
+const _designBaselines = {};
+function snapshotBaseline(key, val){
+  try { _designBaselines[key] = JSON.parse(JSON.stringify(val == null ? {} : val)); }
+  catch(e){ _designBaselines[key] = Array.isArray(val) ? [] : {}; }
+}
+async function mergedSaveStore(key, current){
+  let merged = current;
+  try {
+    const res = await supaStorage.get(key, true);   // re-read the authoritative remote blob
+    // Merge only against a remote blob that actually EXISTS. An absent row
+    // (value === null) is "no co-editor state to preserve", not "everything was
+    // deleted" — merging against {} there would wrongly drop unchanged keys of a
+    // store with a non-empty default (e.g. route-blocks {enabled:true}).
+    if(res.ok && res.value != null){
+      const empty = Array.isArray(current) ? [] : {};
+      let remote = empty;
+      try { remote = JSON.parse(res.value); } catch(e){ remote = empty; }
+      const base = Object.prototype.hasOwnProperty.call(_designBaselines, key) ? _designBaselines[key] : empty;
+      merged = threeWayMerge(base, current, remote);
+    }
+  } catch(e){ merged = current; /* offline / parse fail → plain write, no worse than before */ }
+  await supaStorage.set(key, JSON.stringify(merged), true);
+  snapshotBaseline(key, merged);
+  return merged;
+}
+
 // ── Outbound write queue (last-write-wins per key) ───────────────────────────
 function loadQueue(){ try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '{}') || {}; } catch(e){ return {}; } }
 function saveQueue(q){ try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }

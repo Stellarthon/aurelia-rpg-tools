@@ -64,25 +64,30 @@ async function loadContentOverrides(){
     const res4 = await supaStorage.get('content-deletions', true);
     contentDeletions = res4.value != null ? JSON.parse(res4.value) : {};
   } catch(e){ contentDeletions = {}; }
+  // Baselines for the field-level merge-on-save (see mergedSaveStore).
+  snapshotBaseline('content-overrides', contentOverrides);
+  snapshotBaseline('content-history', contentHistory);
+  snapshotBaseline('content-additions', contentAdditions);
+  snapshotBaseline('content-deletions', contentDeletions);
 }
 
 async function saveContentOverrides(){
-  try { await supaStorage.set('content-overrides', JSON.stringify(contentOverrides), true); }
+  try { contentOverrides = await mergedSaveStore('content-overrides', contentOverrides); }
   catch(e){ console.error('Content override save failed', e); }
 }
 
 async function saveContentHistory(){
-  try { await supaStorage.set('content-history', JSON.stringify(contentHistory), true); }
+  try { contentHistory = await mergedSaveStore('content-history', contentHistory); }
   catch(e){ console.error('Content history save failed', e); }
 }
 
 async function saveContentAdditions(){
-  try { await supaStorage.set('content-additions', JSON.stringify(contentAdditions), true); }
+  try { contentAdditions = await mergedSaveStore('content-additions', contentAdditions); }
   catch(e){ console.error('Content additions save failed', e); }
 }
 
 async function saveContentDeletions(){
-  try { await supaStorage.set('content-deletions', JSON.stringify(contentDeletions), true); }
+  try { contentDeletions = await mergedSaveStore('content-deletions', contentDeletions); }
   catch(e){ console.error('Content deletions save failed', e); }
 }
 
@@ -107,17 +112,20 @@ async function loadBodyStores(){
   catch(e){ bodyDeletions = {}; }
   try { const r = await supaStorage.get('body-prop-overrides', true); bodyPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ bodyPropertyOverrides = {}; }
+  snapshotBaseline('body-additions', bodyAdditions);
+  snapshotBaseline('body-deletions', bodyDeletions);
+  snapshotBaseline('body-prop-overrides', bodyPropertyOverrides);
 }
 async function saveBodyAdditions(){
-  try { await supaStorage.set('body-additions', JSON.stringify(bodyAdditions), true); }
+  try { bodyAdditions = await mergedSaveStore('body-additions', bodyAdditions); }
   catch(e){ console.error('Body additions save failed', e); }
 }
 async function saveBodyDeletions(){
-  try { await supaStorage.set('body-deletions', JSON.stringify(bodyDeletions), true); }
+  try { bodyDeletions = await mergedSaveStore('body-deletions', bodyDeletions); }
   catch(e){ console.error('Body deletions save failed', e); }
 }
 async function saveBodyPropertyOverrides(){
-  try { await supaStorage.set('body-prop-overrides', JSON.stringify(bodyPropertyOverrides), true); }
+  try { bodyPropertyOverrides = await mergedSaveStore('body-prop-overrides', bodyPropertyOverrides); }
   catch(e){ console.error('Body property overrides save failed', e); }
 }
 
@@ -175,17 +183,20 @@ async function loadLocationStores(){
   catch(e){ locationDeletions = {}; }
   try { const r = await supaStorage.get('location-prop-overrides', true); locationPropertyOverrides = r.value != null ? JSON.parse(r.value) : {}; }
   catch(e){ locationPropertyOverrides = {}; }
+  snapshotBaseline('location-additions', locationAdditions);
+  snapshotBaseline('location-deletions', locationDeletions);
+  snapshotBaseline('location-prop-overrides', locationPropertyOverrides);
 }
 async function saveLocationAdditions(){
-  try { await supaStorage.set('location-additions', JSON.stringify(locationAdditions), true); }
+  try { locationAdditions = await mergedSaveStore('location-additions', locationAdditions); }
   catch(e){ console.error('Location additions save failed', e); }
 }
 async function saveLocationDeletions(){
-  try { await supaStorage.set('location-deletions', JSON.stringify(locationDeletions), true); }
+  try { locationDeletions = await mergedSaveStore('location-deletions', locationDeletions); }
   catch(e){ console.error('Location deletions save failed', e); }
 }
 async function saveLocationPropertyOverrides(){
-  try { await supaStorage.set('location-prop-overrides', JSON.stringify(locationPropertyOverrides), true); }
+  try { locationPropertyOverrides = await mergedSaveStore('location-prop-overrides', locationPropertyOverrides); }
   catch(e){ console.error('Location property overrides save failed', e); }
 }
 
