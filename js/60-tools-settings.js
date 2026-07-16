@@ -980,6 +980,14 @@ function renderDesignMenu(){
       <span class="settings-row-label">🗑 Show Removed Items</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();exportDesignLayer()">
+      <span class="settings-row-label">⬇ Export Design Layer</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">JSON →</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();importDesignLayer()">
+      <span class="settings-row-label">⬆ Import Design Layer</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">← JSON</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();resetCampaign()">
       <span class="settings-row-label" style="color:#d45050">⟲ Reset Campaign</span>
       <span style="font-size:9px;color:#d45050;font-family:monospace">→</span>

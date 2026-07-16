@@ -689,6 +689,97 @@ async function revertAllContentEdits(){
   setTimeout(() => { try { location.reload(); } catch(e){} }, 700);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-LAYER EXPORT / IMPORT — portable backup of just the design edits
+// ═══════════════════════════════════════════════════════════════════════════
+// The whole-campaign export (js/60) is coarse, online-only and destructive on
+// import. This exports ONLY the Design-Mode layer — the referee's edits over the
+// shipped campaign — as a small JSON file, from the referee's full in-memory
+// data (so the "-ref" secrets travel too). Import replaces that layer and
+// reloads, writing each store redaction-aware (stripped public + full "-ref").
+// Session state (reveals, clock, initiative), the item catalogue, economy and
+// Campaign Studio config are deliberately NOT included.
+const DESIGN_LAYER_VERSION = 1;
+function collectDesignLayer(){
+  const d = {};
+  const put = (k, v) => { if(v !== undefined) d[k] = v; };
+  put('content-overrides', contentOverrides);
+  put('content-additions', contentAdditions);
+  put('content-deletions', contentDeletions);
+  put('content-history', contentHistory);
+  put('body-additions', bodyAdditions);
+  put('body-deletions', bodyDeletions);
+  put('body-prop-overrides', bodyPropertyOverrides);
+  put('location-additions', locationAdditions);
+  put('location-deletions', locationDeletions);
+  put('location-prop-overrides', locationPropertyOverrides);
+  if(typeof systemAdditions !== 'undefined'){ put('system-additions', systemAdditions); put('system-deletions', systemDeletions); put('system-prop-overrides', systemPropertyOverrides); }
+  if(typeof factionAdditions !== 'undefined'){ put('faction-additions', factionAdditions); put('faction-deletions', factionDeletions); put('faction-prop-overrides', factionPropertyOverrides); }
+  if(typeof weaponAdditions !== 'undefined'){ put('weapon-additions', weaponAdditions); put('weapon-deletions', weaponDeletions); put('weapon-prop-overrides', weaponPropertyOverrides); }
+  if(typeof gxLaneAdditions !== 'undefined') put('galaxy-lanes', { additions: gxLaneAdditions, deletions: gxLaneDeletions });
+  if(typeof routeBlocks !== 'undefined') put('route-blocks', routeBlocks);
+  if(typeof hexPaint !== 'undefined') put('hex-paint', hexPaint);
+  if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
+  return d;
+}
+function exportDesignLayer(){
+  if(!isReferee()){ showToast('Referee only', 'error'); return; }
+  const data = collectDesignLayer();
+  const total = (typeof countAllDesignEdits === 'function') ? countAllDesignEdits() : Object.keys(data).length;
+  const blob = {
+    app: 'aurelia-design-layer', version: DESIGN_LAYER_VERSION, exportedAt: new Date().toISOString(),
+    campaignId: (typeof activeCampaignId !== 'undefined' ? activeCampaignId : 'archon-gambit'),
+    editCount: total, data,
+  };
+  const json = JSON.stringify(blob, null, 2);
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `aurelia-design-layer-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch(e){} }, 4000);
+  showToast(`Exported ${total} design edit${total === 1 ? '' : 's'}`);
+}
+// Write one imported store back, redaction-aware: split stores get the full copy
+// under "<key>-ref" and the stripped copy under the public key.
+async function writeImportedDesignStore(key, value){
+  const split = (typeof isSplitStore === 'function') && isSplitStore(key);
+  if(split && typeof stripOverlayForPlayers === 'function'){
+    await supaStorage.set(key + '-ref', JSON.stringify(value), true);
+    await supaStorage.set(key, JSON.stringify(stripOverlayForPlayers(key, value)), true);
+  } else {
+    await supaStorage.set(key, JSON.stringify(value), true);
+  }
+}
+function importDesignLayer(){
+  if(!isReferee()){ showToast('Referee only', 'error'); return; }
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if(!file) return;
+    let blob;
+    try { blob = JSON.parse(await file.text()); }
+    catch(e){ showToast('Import failed — not valid JSON', 'error'); return; }
+    if(!blob || blob.app !== 'aurelia-design-layer' || !blob.data || typeof blob.data !== 'object' || Array.isArray(blob.data)){
+      showToast('Import failed — not an Aurelia design-layer file', 'error'); return; }
+    const keys = Object.keys(blob.data);
+    if(!keys.length){ showToast('Import failed — file has no design edits', 'error'); return; }
+    if(!confirm(
+      'Import this design layer (' + (blob.editCount != null ? blob.editCount + ' edits, ' : '') + keys.length + ' store' + (keys.length === 1 ? '' : 's') + ') from "' + file.name + '"?\n\n' +
+      'This REPLACES all current Design-Mode edits over the shipped campaign (systems, regions, worlds, locations, station text / checks / events / NPCs, weapon catalogue, map layers).\n\n' +
+      'It does NOT touch reveals, the clock, session state, your item catalogue, economy tuning or Campaign Studio.\n\n' +
+      'Cannot be undone — export first if unsure. Continue?')) return;
+    showToast('Importing design layer…', 'info');
+    let ok = 0, fail = 0;
+    for(const k of keys){
+      try { await writeImportedDesignStore(k, blob.data[k]); ok++; } catch(e){ fail++; }
+    }
+    showToast(`Imported ${ok} store${ok === 1 ? '' : 's'}${fail ? ` (${fail} failed)` : ''} — reloading…`);
+    setTimeout(() => { try { location.reload(); } catch(e){} }, 900);
+  };
+  input.click();
+}
+
 
 // Resolves the text actually shown for a given key — override if one
 // exists, otherwise the original hardcoded value passed in.
