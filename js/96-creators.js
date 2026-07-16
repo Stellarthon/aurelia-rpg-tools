@@ -627,6 +627,111 @@ function _contractAfterEdit(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// THEME / COLOUR EDITOR  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Recolours the whole UI by overriding the CSS design tokens (js/60 theme
+// overlay). Live preview while editing; presets + reset. Reuses the trade panel.
+function _hex6(v){ v = (v || '').trim(); return /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#000000'; }
+function openThemeEditor(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof themeTokenRegistry === 'function') ? themeTokenRegistry() : [];
+  const ovs = (typeof themeOverrides !== 'undefined' && themeOverrides) ? themeOverrides : {};
+  const presetBtns = (typeof THEME_PRESETS !== 'undefined' ? Object.keys(THEME_PRESETS) : []).map(n =>
+    `<button class="design-tier-remove" style="flex:none" onclick="applyThemePreset('${escAttr(n)}')">${escHtml(n)}</button>`).join('');
+  let html = presetBtns
+    ? `<div class="settings-section-lbl">Presets</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">${presetBtns}</div>`
+    : '';
+  reg.forEach(grp => {
+    html += `<div class="settings-section-lbl" style="margin-top:12px">${escHtml(grp.group)}</div>`;
+    html += grp.tokens.map(t => {
+      const tok = t[0], label = t[1], isText = t[2] === 'text';
+      const val = (typeof themeTokenValue === 'function') ? themeTokenValue(tok) : '';
+      const edited = Object.prototype.hasOwnProperty.call(ovs, tok);
+      const swatch = isText ? '' :
+        `<input type="color" value="${_hex6(val)}" title="${escAttr(tok)}" style="width:34px;height:26px;padding:0;border:none;background:none;cursor:pointer" oninput="setThemeTokenLive('${escAttr(tok)}', this.value)" onchange="commitThemeToken('${escAttr(tok)}', this.value)">`;
+      return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(label)}${edited ? ' <span style="color:#9B59B6">·</span>' : ''}</div>
+        <div class="design-history-snippet">${escHtml(tok)}</div></div>
+        <span style="display:flex;gap:6px;align-items:center;flex:none">${swatch}
+          <input class="design-field-input" style="width:${isText ? 150 : 92}px" value="${escAttr(val)}" onchange="commitThemeToken('${escAttr(tok)}', this.value)">
+          <button class="design-edit-pencil-inline" title="Reset" ${edited ? '' : 'style="opacity:.35;pointer-events:none"'} onclick="resetThemeToken('${escAttr(tok)}')">↺</button>
+        </span></div>`;
+    }).join('');
+  });
+  html += `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="se-reset" onclick="resetAllTheme()">Reset all colours</button></div>
+    <div class="se-note" style="margin-top:6px">Recolours the whole table's UI (players included). Drag a swatch for a live preview; every change saves. "Reset" restores the shipped value.</div>`;
+  _tgPanel('THEME & COLOURS', html);
+}
+function setThemeTokenLive(tok, val){ if(typeof themeOverrides === 'undefined') return; themeOverrides[tok] = val; if(typeof applyThemeOverrides === 'function') applyThemeOverrides(); }
+async function commitThemeToken(tok, val){
+  if(typeof themeOverrides === 'undefined') return;
+  val = (val || '').trim();
+  if(!val){ delete themeOverrides[tok]; } else { themeOverrides[tok] = val; }
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  openThemeEditor();
+}
+async function resetThemeToken(tok){
+  if(typeof themeOverrides !== 'undefined') delete themeOverrides[tok];
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  openThemeEditor();
+}
+async function applyThemePreset(name){
+  const p = (typeof THEME_PRESETS !== 'undefined') ? THEME_PRESETS[name] : null;
+  if(!p || typeof themeOverrides === 'undefined') return;
+  Object.keys(p).forEach(k => { themeOverrides[k] = p[k]; });
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  showToast('Applied "' + name + '"');
+  openThemeEditor();
+}
+async function resetAllTheme(){
+  if(!confirm('Reset every colour override back to the shipped theme?')) return;
+  if(typeof themeOverrides !== 'undefined') themeOverrides = {};
+  if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+  if(typeof saveThemeOverrides === 'function') await saveThemeOverrides();
+  showToast('Theme reset', 'info');
+  openThemeEditor();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PANEL SHOW / HIDE  (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Hide any panel's header entry point from players (js/60 panel-flags overlay).
+// The real referee keeps every panel; use Preview-as-player to see the result.
+function openPanelToggles(){
+  if(!isReferee() || !designModeOn) return;
+  const reg = (typeof panelToggleRegistry === 'function') ? panelToggleRegistry() : [];
+  const rows = reg.map(p => {
+    const hidden = (typeof panelHidden === 'function') && panelHidden(p.id);
+    return `<div class="design-history-item" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+      <div style="min-width:0;flex:1"><div class="design-history-label">${escHtml(p.label)}${hidden ? ' <span style="color:#e0b050">· hidden</span>' : ''}</div></div>
+      <label style="display:inline-flex;align-items:center;gap:6px;flex:none;cursor:pointer;font-size:11px;color:var(--tx1)">
+        <input type="checkbox" ${hidden ? '' : 'checked'} onchange="togglePanel('${escAttr(p.id)}', !this.checked)"> Visible
+      </label></div>`;
+  }).join('');
+  const html = (rows || '<div class="init-empty">No toggleable panels in this build.</div>') +
+    (reg.length ? `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="se-reset" onclick="resetPanelToggles()">Show all</button></div>
+     <div class="se-note" style="margin-top:6px">Unticking hides that panel's button for players (economy, combat, calendar &amp; oracle have their own switch under Modules). You keep every panel — use 🎭 Preview as player to see what they see.</div>` : '');
+  _tgPanel('PANELS & WINDOWS', html);
+}
+async function togglePanel(id, hidden){
+  if(typeof panelFlags === 'undefined') return;
+  if(hidden) panelFlags[id] = true; else delete panelFlags[id];
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();
+  if(typeof savePanelFlags === 'function') await savePanelFlags();
+  openPanelToggles();
+}
+async function resetPanelToggles(){
+  if(typeof panelFlags !== 'undefined') panelFlags = {};
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();
+  if(typeof savePanelFlags === 'function') await savePanelFlags();
+  showToast('All panels shown', 'info');
+  openPanelToggles();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // BODY CREATOR  —  add planets / moons / asteroid belts in design mode
 // ═══════════════════════════════════════════════════════════════════════════
 // Mirrors the NPC creator's structure: a modal with Manual and Random (UWP)

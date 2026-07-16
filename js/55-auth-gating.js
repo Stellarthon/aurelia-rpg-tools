@@ -308,6 +308,7 @@ function enterPlayerPreview(identity){
   if(typeof applyIdentityClass === 'function') applyIdentityClass();
   showPreviewBanner(identity);
   if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();   // preview → players' hidden panels bite
   _previewRerender();
 }
 function exitPlayerPreview(){
@@ -323,6 +324,7 @@ function exitPlayerPreview(){
   hidePreviewBanner();
   if(typeof applyIdentityClass === 'function') applyIdentityClass();
   if(typeof refreshOpenMenus === 'function') refreshOpenMenus();
+  if(typeof applyPanelFlags === 'function') applyPanelFlags();   // back to referee → every panel returns
   _previewRerender();
 }
 
@@ -843,6 +845,26 @@ async function pollRevealState(){
           tradeGoodOverrides = no; tradeGoodAdditions = Array.isArray(na) ? na : []; tradeGoodDeletions = nd;
           if(typeof HX !== 'undefined' && HX.refresh) HX.refresh();
           if(typeof renderTradePanel === 'function' && typeof tradePanelOpen !== 'undefined' && tradePanelOpen) renderTradePanel();
+        }
+      }
+    }
+  } catch(e){ /* silent — next poll will retry */ }
+
+  // UI chrome — players see the referee's live theme-colour and panel-visibility
+  // edits (public overlays; applied table-wide). Two tiny keys, one round-trip.
+  try {
+    if(typeof themeOverrides !== 'undefined' && typeof panelFlags !== 'undefined'){
+      const [rth, rpf] = await Promise.all([
+        supaStorage.get('theme-overrides', true), supaStorage.get('panel-flags', true),
+      ]);
+      if(rth.ok && rpf.ok){
+        const nth = rth.value != null ? JSON.parse(rth.value) : {};
+        const npf = rpf.value != null ? JSON.parse(rpf.value) : {};
+        if(JSON.stringify(nth) !== JSON.stringify(themeOverrides)){
+          themeOverrides = nth; if(typeof applyThemeOverrides === 'function') applyThemeOverrides();
+        }
+        if(JSON.stringify(npf) !== JSON.stringify(panelFlags)){
+          panelFlags = npf; if(typeof applyPanelFlags === 'function') applyPanelFlags();
         }
       }
     }

@@ -470,6 +470,7 @@ function countAllDesignEdits(){
   n += _dCount(_dg(()=>generatorOverrides));
   n += _dCount(_dg(()=>rulesOverrides));
   n += _dCount(_dg(()=>contractOverrides));
+  n += _dCount(_dg(()=>themeOverrides)) + _dCount(_dg(()=>panelFlags));
   return n;
 }
 
@@ -694,6 +695,12 @@ async function revertAllContentEdits(){
   if(typeof rulesOverrides !== 'undefined'){ rulesOverrides = {};
     if(typeof applyRulesOverrides === 'function') applyRulesOverrides();   // restore the shipped tables in place
     if(typeof saveRulesOverrides === 'function') await saveRulesOverrides(); }
+  if(typeof themeOverrides !== 'undefined'){ themeOverrides = {};
+    if(typeof applyThemeOverrides === 'function') applyThemeOverrides();   // restore the shipped/pack colours
+    if(typeof saveThemeOverrides === 'function') await saveThemeOverrides(); }
+  if(typeof panelFlags !== 'undefined'){ panelFlags = {};
+    if(typeof applyPanelFlags === 'function') applyPanelFlags();           // show every panel again
+    if(typeof savePanelFlags === 'function') await savePanelFlags(); }
 
   // Combat / weapon stores (js/80).
   if(typeof weaponAdditions !== 'undefined'){ weaponAdditions = []; weaponDeletions = {}; weaponPropertyOverrides = {};
@@ -739,6 +746,8 @@ function collectDesignLayer(){
   if(typeof generatorOverrides !== 'undefined') put('generator-overrides', generatorOverrides);
   if(typeof contractOverrides !== 'undefined') put('contract-overrides', contractOverrides);
   if(typeof rulesOverrides !== 'undefined') put('rules-overrides', rulesOverrides);
+  if(typeof themeOverrides !== 'undefined') put('theme-overrides', themeOverrides);
+  if(typeof panelFlags !== 'undefined') put('panel-flags', panelFlags);
   if(typeof stationAdditions !== 'undefined') put('station-additions', stationAdditions);
   return d;
 }

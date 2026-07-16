@@ -420,6 +420,9 @@ function applyPackToUI(){
   try { applyPackTheme(); } catch(e){}
   try { applyModuleFlags(); } catch(e){}
   try { applyTerminology(); } catch(e){}
+  // Re-assert the referee's Design-Mode chrome (theme colours / hidden panels)
+  // on top of the freshly-applied pack (e.g. after a campaign switch).
+  try { if(typeof applyDesignChrome === 'function') applyDesignChrome(); } catch(e){}
 }
 
 // ── Boot entry point (called from the 85-records.js boot block) ─────────────

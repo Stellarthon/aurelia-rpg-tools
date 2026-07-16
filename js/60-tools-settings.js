@@ -984,6 +984,14 @@ function renderDesignMenu(){
       <span class="settings-row-label">📜 Contract Templates</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
     </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openThemeEditor()">
+      <span class="settings-row-label">🎨 Theme &amp; Colours</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openPanelToggles()">
+      <span class="settings-row-label">🪟 Panels &amp; Windows</span>
+      <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
+    </div>
     <div class="settings-row" style="cursor:pointer" onclick="closeDesignMenu();openSplashEditor()">
       <span class="settings-row-label">🌠 Splash Screens</span>
       <span style="font-size:9px;color:var(--tx1);font-family:monospace">→</span>
@@ -1097,6 +1105,102 @@ function rulesParse(shape, text){
   if(shape === 'kv'){ const o = {}; String(text).split('\n').map(s => s.trim()).filter(Boolean).forEach(line => { const i = line.indexOf('='); if(i < 0) return; const k = line.slice(0, i).trim(); const raw = line.slice(i + 1).trim(); o[k] = (raw !== '' && !isNaN(raw)) ? Number(raw) : raw; }); return o; }
   return JSON.parse(text);   // json — throws on bad input (caught by caller)
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN-MODE UI CHROME  —  theme / colours + panel show-hide (design mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// Two shared, per-campaign overlays that let the referee shape the whole table's
+// look, not just its data:
+//   • theme-overrides {'--token': value} → CSS custom properties on :root, layered
+//     over the pack theme. Applies to EVERYONE (the campaign's look).
+//   • panel-flags {btnId: true} → hides a panel's header entry point. Follows the
+//     redaction model: the real referee always sees every panel; players (and the
+//     referee previewing-as-player) get the hides, so the ref can design the
+//     player-facing UI and check it with Preview-as-player.
+// Both ride mergedSaveStore (referee-only write via put-state) but read on the
+// PUBLIC channel, so players load and apply them too; the poll live-syncs changes.
+
+// ── Theme / colour tokens ───────────────────────────────────────────────────
+let themeOverrides = {};        // {'--accentGold':'#ff0000', …}
+let _designThemeKeys = [];       // props we currently own on :root (for clean re-apply)
+// The editable design tokens, grouped. type:'text' → free-text (radius / font stack);
+// everything else is a colour.
+function themeTokenRegistry(){
+  return [
+    { group: 'Backgrounds', tokens: [['--bg0','Base'], ['--bg1','Raised'], ['--bg2','Higher']] },
+    { group: 'Text',        tokens: [['--tx0','Primary'], ['--tx1','Muted']] },
+    { group: 'Borders',     tokens: [['--bd0','Border'], ['--bd1','Border 2'], ['--bd2','Border 3']] },
+    { group: 'Accent',      tokens: [['--accentGold','Accent'], ['--accentGoldBg','Accent background']] },
+    { group: 'Status',      tokens: [['--txI','Info'], ['--bgI','Info bg'], ['--txS','Success'], ['--bgS','Success bg'], ['--txW','Warning'], ['--bgW','Warning bg'], ['--txD','Danger'], ['--bgD','Danger bg']] },
+    { group: 'Shape & type',tokens: [['--rad','Corner radius','text'], ['--font','Font stack','text']] },
+  ];
+}
+// A few tasteful, fully-reversible starting points (only the tokens they name are set).
+const THEME_PRESETS = {
+  'Terminal green': { '--bg0':'#0a0f0a', '--bg1':'#0f1a0f', '--bg2':'#132613', '--bd0':'#1f3a1f', '--tx0':'#c8f7c8', '--tx1':'#79b979', '--accentGold':'#5fe35f', '--accentGoldBg':'#0f2a0f' },
+  'Amber mono':     { '--bg0':'#120d05', '--bg1':'#1c1408', '--bg2':'#261b0a', '--bd0':'#3a2c12', '--tx0':'#f5d9a8', '--tx1':'#c79a5b', '--accentGold':'#ffb64a', '--accentGoldBg':'#2e1f0a' },
+  'Slate blue':     { '--bg0':'#0d1017', '--bg1':'#141926', '--bg2':'#1b2233', '--bd0':'#2b3550', '--tx0':'#e6ecff', '--tx1':'#9fb0d0', '--accentGold':'#5b8ef0', '--accentGoldBg':'#16223f' },
+};
+function applyThemeOverrides(){
+  const root = document.documentElement;
+  _designThemeKeys.forEach(k => root.style.removeProperty(k));   // drop what we owned
+  _designThemeKeys = [];
+  if(typeof applyPackTheme === 'function'){ try { applyPackTheme(); } catch(e){} }   // re-assert pack base under us
+  Object.keys(themeOverrides || {}).forEach(k => {
+    const prop = k.startsWith('--') ? k : ('--' + k);
+    root.style.setProperty(prop, themeOverrides[k]);
+    _designThemeKeys.push(prop);
+  });
+}
+// Effective current value of a token (override → computed), for seeding a picker.
+function themeTokenValue(tok){
+  if(themeOverrides && themeOverrides[tok] != null) return String(themeOverrides[tok]);
+  try { return getComputedStyle(document.documentElement).getPropertyValue(tok).trim(); } catch(e){ return ''; }
+}
+async function loadThemeOverrides(){
+  try { const r = await supaStorage.get('theme-overrides', true); themeOverrides = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ themeOverrides = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('theme-overrides', themeOverrides);
+  applyThemeOverrides();
+}
+async function saveThemeOverrides(){ try { themeOverrides = await mergedSaveStore('theme-overrides', themeOverrides); } catch(e){ console.error('Theme overrides save failed', e); } }
+
+// ── Panel show / hide ───────────────────────────────────────────────────────
+let panelFlags = {};            // {btnId: true}  (true = hidden from players)
+// Toggleable entry points — the header buttons that open panels/windows. The
+// module-governed ones (economy/combat/calendar/oracle) and core navigation
+// (settings/back/more) are deliberately excluded: modules have their own switch.
+const PANEL_TOGGLE_IDS = ['qref-btn','quest-btn','ship-btn','disc-btn','npc-btn','rep-btn','standing-btn','funds-btn','cargo-btn','contacts-btn','clocks-btn','downtime-btn','galnet-btn','handouts-btn','journal-btn','planner-btn','scenes-btn','session-btn','turnorder-btn','whisper-btn','wiki-btn'];
+function panelToggleRegistry(){
+  // Only ids that exist in this build; label from the button's own (terminology-
+  // adjusted) text, falling back to the id.
+  return PANEL_TOGGLE_IDS.map(id => {
+    const el = document.getElementById(id);
+    if(!el) return null;
+    const label = (el.textContent || '').trim() || id.replace(/-btn$/, '');
+    return { id, label };
+  }).filter(Boolean);
+}
+function panelHidden(id){ return !!(panelFlags && panelFlags[id]); }
+function applyPanelFlags(){
+  // Hides bite for players and the referee previewing-as-player; a real referee
+  // always sees every panel (so they can un-hide and still use their own tools).
+  const hideActive = (typeof isReferee !== 'function') || !isReferee();
+  panelToggleRegistry().forEach(p => {
+    const el = document.getElementById(p.id); if(!el) return;
+    el.style.display = (hideActive && panelHidden(p.id)) ? 'none' : '';
+  });
+}
+async function loadPanelFlags(){
+  try { const r = await supaStorage.get('panel-flags', true); panelFlags = (r.value != null ? JSON.parse(r.value) : {}); } catch(e){ panelFlags = {}; }
+  if(typeof snapshotBaseline === 'function') snapshotBaseline('panel-flags', panelFlags);
+  applyPanelFlags();
+}
+async function savePanelFlags(){ try { panelFlags = await mergedSaveStore('panel-flags', panelFlags); } catch(e){ console.error('Panel flags save failed', e); } }
+
+// Apply both chrome overlays. Safe to call anytime (no-ops before stores load).
+function applyDesignChrome(){ try { applyThemeOverrides(); } catch(e){} try { applyPanelFlags(); } catch(e){} }
+// Load both (all devices) — called at boot after the pack is applied.
+async function loadDesignChrome(){ await loadThemeOverrides(); await loadPanelFlags(); }
 
 // ── Bounded undo / redo for Design Mode ─────────────────────────────────────
 // Design edits/deletes (bodies, locations, economy profiles) mutate in-memory
