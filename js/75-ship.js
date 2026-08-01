@@ -380,6 +380,7 @@ function renderShipPanel(){
   }
 
   body.innerHTML = sec.join('');
+  if(typeof dkePzSync === 'function') dkePzSync('ship-deck-svg');
 }
 
 function updateShipField(field, value){

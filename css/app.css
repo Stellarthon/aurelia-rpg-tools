@@ -662,6 +662,19 @@ textarea{font-family:var(--font)}
 .dke-deck.on{background:#5b8ef0;color:#0f1117;border-color:#5b8ef0}
 .dke-deck.dke-deck-add{border-style:dashed;color:var(--tx1)}
 .dke-deck.dke-danger{border-color:#c0506e;color:#ff9bb6}
+/* Read-only deck-plan zoom — pinch/scroll/button zoom for the station map and
+   the Ship Status deck plan (js/41-deck-editor.js dkePz*). Bottom-right so it
+   doesn't collide with the ruler/ranges/ping stack (top-right) or the deck
+   switcher (top-left). */
+.pz-wrap{position:relative;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.pz-wrap.pz-zoomed{cursor:grab}
+.pz-wrap.pz-zoomed.pz-panning{cursor:grabbing}
+.pz-ctl{position:absolute;right:8px;bottom:8px;z-index:5;display:flex;flex-direction:column;gap:4px}
+.pz-ctl button{width:26px;height:26px;padding:0;font-size:13px;font-weight:600;font-family:inherit;line-height:1;
+  background:var(--bg1);color:var(--tx0);border:.5px solid var(--bd0);border-radius:6px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.pz-ctl button.pz-reset{display:none}
+.pz-wrap.pz-zoomed .pz-ctl button.pz-reset{display:flex}
 #right-panel{
   width:460px;flex-shrink:0;background:var(--bg0);border-left:.5px solid var(--bd2);
   display:flex;flex-direction:column;overflow:hidden

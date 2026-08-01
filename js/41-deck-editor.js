@@ -1711,7 +1711,13 @@ function dkeShipStudioRowHTML(){
   let inner = '';
   if(has){
     inner += `<button class="cbt-btn${dkeShipRuler?' on':''}" style="margin-bottom:6px;padding:5px 10px" onclick="dkeShipToggleRuler()">📏 Range ruler</button>`
-      + `<svg id="ship-deck-svg" viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block${dkeShipRuler?';touch-action:none':''}">${dkeShipDeckSVG(deck)}</svg>`;
+      + `<div class="pz-wrap" style="border-radius:6px">`
+      + `<svg id="ship-deck-svg" viewBox="${deckStationViewBox(deck)}" style="width:100%;height:auto;max-height:60vh;display:block;touch-action:none">${dkeShipDeckSVG(deck)}</svg>`
+      + `<div class="pz-ctl">`
+      + `<button type="button" onclick="dkePlanZoomStep('ship-deck-svg',1.4)" title="Zoom in">＋</button>`
+      + `<button type="button" class="pz-reset" onclick="dkePlanZoomReset('ship-deck-svg')" title="Reset zoom">⤢</button>`
+      + `<button type="button" onclick="dkePlanZoomStep('ship-deck-svg',1/1.4)" title="Zoom out">－</button>`
+      + `</div></div>`;
   }
   if(ref){   // players with no deck see nothing (no empty section clutter)
     inner += `<button class="cbt-btn" style="width:100%;margin-top:${has ? '8px' : '0'}" onclick="dkeOpenShip()">🗺 ${has ? 'Edit' : 'Draw'} ship deck plan</button>`;
@@ -3219,3 +3225,180 @@ function dkeKeyDown(ev){
     dkeSetTool(DKE_KEYS[k]); ev.preventDefault();
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Read-only deck-plan zoom (station map + Ship Status deck plan)
+// Pinch / scroll-wheel / button zoom for the SVGs players actually look at
+// during play — distinct from the referee's own editor above (dkeZoomAt),
+// which pans/zooms an editable canvas. State lives on the CSS transform of
+// the <svg> itself, keyed by its id; #ship-deck-svg is rebuilt on every
+// renderShipPanel(), so dkePzSync() reapplies the stored transform afterward.
+// ═══════════════════════════════════════════════════════════════════════════
+const DKE_PZ_MIN = 1, DKE_PZ_MAX = 4;
+const dkePzState = {};    // svgId -> {scale, tx, ty}
+const dkePzPointers = {}; // svgId -> Map<pointerId, {x,y}> mid-gesture
+const dkePzPinch = {};    // svgId -> {d,mx,my,s0,tx0,ty0} | null
+const dkePzDrag = {};     // svgId -> {sx,sy,tx0,ty0,moved} | null
+
+function dkePzGet(id){ return dkePzState[id] || (dkePzState[id] = { scale: 1, tx: 0, ty: 0 }); }
+function dkePzClamp(wrap, st){
+  const r = wrap.getBoundingClientRect();
+  const minTx = Math.min(0, r.width - r.width * st.scale);
+  const minTy = Math.min(0, r.height - r.height * st.scale);
+  st.tx = Math.max(minTx, Math.min(0, st.tx));
+  st.ty = Math.max(minTy, Math.min(0, st.ty));
+}
+function dkePzApply(id){
+  const svg = document.getElementById(id); if(!svg) return;
+  const wrap = svg.parentElement; if(!wrap) return;
+  const st = dkePzGet(id);
+  svg.style.transformOrigin = '0 0';
+  svg.style.transform = st.scale > 1.001 ? `translate(${st.tx}px,${st.ty}px) scale(${st.scale})` : '';
+  wrap.classList.toggle('pz-zoomed', st.scale > 1.001);
+}
+// Re-apply stored zoom after a full innerHTML rebuild recreated the <svg> node
+// (the Ship Status panel does this on every render) — call after such renders.
+function dkePzSync(id){ if(dkePzState[id]) dkePzApply(id); }
+
+function dkePzAt(id, clientX, clientY, factor){
+  const svg = document.getElementById(id), wrap = svg && svg.parentElement;
+  if(!svg || !wrap) return;
+  const st = dkePzGet(id), r = wrap.getBoundingClientRect();
+  const lx = clientX - r.left, ly = clientY - r.top;
+  const s0 = st.scale, s1 = Math.max(DKE_PZ_MIN, Math.min(DKE_PZ_MAX, s0 * factor));
+  if(s1 === s0) return;
+  st.tx = lx - s1 * (lx - st.tx) / s0;
+  st.ty = ly - s1 * (ly - st.ty) / s0;
+  st.scale = s1;
+  dkePzClamp(wrap, st);
+  dkePzApply(id);
+}
+// Zoom step from a control button — centred on the wrap, since there's no cursor position.
+function dkePlanZoomStep(id, factor){
+  const svg = document.getElementById(id), wrap = svg && svg.parentElement; if(!wrap) return;
+  const r = wrap.getBoundingClientRect();
+  dkePzAt(id, r.left + r.width / 2, r.top + r.height / 2, factor);
+}
+function dkePlanZoomReset(id){
+  const st = dkePzGet(id);
+  st.scale = 1; st.tx = 0; st.ty = 0;
+  dkePzApply(id);
+}
+function dkePzWheel(id, ev){
+  ev.preventDefault();
+  dkePzAt(id, ev.clientX, ev.clientY, Math.pow(1.0015, -ev.deltaY));
+}
+
+// Single-pointer drag-to-pan (only once zoomed in) plus two-pointer pinch
+// (zoom + pan together, touch). `blocked(ev)` lets each surface veto a pan
+// start when one of its own gestures — token drag, range ruler, door/link
+// taps — should own the pointer instead.
+function dkePzPointerDown(id, ev, blocked){
+  const pts = dkePzPointers[id] || (dkePzPointers[id] = new Map());
+  pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if(pts.size === 2){
+    dkePzDrag[id] = null;   // a 2nd finger joining cancels any single-pointer pan
+    const [a, b] = [...pts.values()], st = dkePzGet(id);
+    dkePzPinch[id] = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2,
+      s0: st.scale, tx0: st.tx, ty0: st.ty };
+    return;
+  }
+  if(pts.size > 2) return;
+  const st = dkePzGet(id);
+  if(st.scale <= 1.001) return;               // nothing to pan at 1x
+  if(blocked && blocked(ev)) return;
+  dkePzDrag[id] = { sx: ev.clientX, sy: ev.clientY, tx0: st.tx, ty0: st.ty, moved: false };
+}
+function dkePzPointerMove(id, ev){
+  const pts = dkePzPointers[id];
+  if(pts && pts.has(ev.pointerId)){
+    pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const p = dkePzPinch[id];
+    if(pts.size === 2 && p){
+      const svg = document.getElementById(id), wrap = svg && svg.parentElement; if(!wrap) return;
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const st = dkePzGet(id);
+      st.scale = Math.max(DKE_PZ_MIN, Math.min(DKE_PZ_MAX, p.s0 * (d / (p.d || 1))));
+      st.tx = p.tx0 + (mx - p.mx);
+      st.ty = p.ty0 + (my - p.my);
+      dkePzClamp(wrap, st);
+      dkePzApply(id);
+      ev.preventDefault();
+      return;
+    }
+  }
+  const g = dkePzDrag[id]; if(!g) return;
+  if(!g.moved && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < 6) return;
+  g.moved = true;
+  ev.preventDefault();
+  const svg = document.getElementById(id), wrap = svg && svg.parentElement; if(!wrap) return;
+  const st = dkePzGet(id);
+  st.tx = g.tx0 + (ev.clientX - g.sx);
+  st.ty = g.ty0 + (ev.clientY - g.sy);
+  dkePzClamp(wrap, st);
+  wrap.classList.add('pz-panning');
+  dkePzApply(id);
+}
+function dkePzPointerUp(id, ev){
+  const pts = dkePzPointers[id];
+  if(pts){ pts.delete(ev.pointerId); if(pts.size < 2) dkePzPinch[id] = null; }
+  if(dkePzDrag[id]){
+    dkePzDrag[id] = null;
+    const svg = document.getElementById(id), wrap = svg && svg.parentElement;
+    if(wrap) wrap.classList.remove('pz-panning');
+  }
+}
+
+// ── Station map wiring ───────────────────────────────────────────────────────
+// Veto a pan start exactly where the map's own pointer handlers (above) would
+// otherwise claim the gesture — ruler / range-rings / ping tools, or dragging
+// a token — so the two systems never fight over the same drag.
+function dkeStationPzBlocked(ev){
+  if(typeof dkeIsOpen !== 'undefined' && dkeIsOpen) return true;
+  if(typeof dkeMapRuler !== 'undefined' && dkeMapRuler) return true;
+  if(typeof dkeMapRanges !== 'undefined' && dkeMapRanges) return true;
+  if(typeof dkeMapPing !== 'undefined' && dkeMapPing) return true;
+  const deck = (typeof dkeMapDeck === 'function') ? dkeMapDeck() : null;
+  if(deck && typeof isReferee === 'function' && isReferee()){
+    const tg = ev.target && ev.target.closest && ev.target.closest('g[data-tk]');
+    if(tg) return true;
+  }
+  return false;
+}
+(function dkeStationPzInit(){
+  const svg = document.getElementById('mapsvg'); if(!svg) return;
+  svg.addEventListener('wheel', ev => dkePzWheel('mapsvg', ev), { passive: false });
+  svg.addEventListener('pointerdown', function(ev){
+    dkePzPointerDown('mapsvg', ev, dkeStationPzBlocked);
+    if(dkePzDrag['mapsvg'] || (dkePzPointers['mapsvg'] && dkePzPointers['mapsvg'].size === 2)){
+      try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    }
+  });
+  svg.addEventListener('pointermove', ev => dkePzPointerMove('mapsvg', ev));
+  svg.addEventListener('pointerup', ev => dkePzPointerUp('mapsvg', ev));
+  svg.addEventListener('pointercancel', ev => dkePzPointerUp('mapsvg', ev));
+})();
+
+// ── Ship Status deck-plan wiring ─────────────────────────────────────────────
+// #ship-deck-svg is rebuilt on every renderShipPanel(), so listeners delegate
+// on the stable #ship-body (mirrors dkeShipRulerInit above) and dkePzSync()
+// re-applies the stored transform after each rebuild.
+function dkeShipPzBlocked(){ return typeof dkeShipRuler !== 'undefined' && dkeShipRuler; }
+(function dkeShipPzInit(){
+  const body = document.getElementById('ship-body'); if(!body) return;
+  body.addEventListener('wheel', function(ev){
+    if(ev.target && ev.target.closest && ev.target.closest('#ship-deck-svg')) dkePzWheel('ship-deck-svg', ev);
+  }, { passive: false });
+  body.addEventListener('pointerdown', function(ev){
+    const svg = ev.target && ev.target.closest && ev.target.closest('#ship-deck-svg');
+    if(!svg) return;
+    dkePzPointerDown('ship-deck-svg', ev, dkeShipPzBlocked);
+    if(dkePzDrag['ship-deck-svg'] || (dkePzPointers['ship-deck-svg'] && dkePzPointers['ship-deck-svg'].size === 2)){
+      try { svg.setPointerCapture(ev.pointerId); } catch(e){}
+    }
+  });
+  body.addEventListener('pointermove', ev => dkePzPointerMove('ship-deck-svg', ev));
+  body.addEventListener('pointerup', ev => dkePzPointerUp('ship-deck-svg', ev));
+  body.addEventListener('pointercancel', ev => dkePzPointerUp('ship-deck-svg', ev));
+})();
