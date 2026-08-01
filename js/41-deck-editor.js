@@ -38,29 +38,85 @@ const DKE_MAXDIM = 96;   // max deck size in cells (raised from 64 for drag-resi
 function dkeEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ── Prop stamp catalogue (generic engine set — glyphs centred on origin) ─────
+// Keys are PERSISTED on placed props (prop.t) — never rename one or existing
+// decks lose that furniture. `c` is the palette CATEGORY (DKE_PROP_CATS below);
+// it only drives grouping in the Props palette, never the datum.
+// Multi-cell stamps carry w/h in cells; the glyph is authored centred on origin,
+// spanning ±w·16 × ±h·16. Rotation swaps the footprint for non-square shapes;
+// see dkePropFootprint. Colour language: #5b8ef0 screens/electronics ·
+// #a3a9bf plain furniture · #4caf82 life support & berths · #d4913a cargo &
+// power · #7f93b8 fittings & structure · #D4A843 hazard/critical ·
+// #c0506e weapons & medical.
 const DKE_PROPS = {
-  console : { n:'Console',  g:'<rect x="-12" y="-8" width="24" height="16" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><rect x="-9" y="-5" width="18" height="7" rx="1" fill="#5b8ef033" stroke="#5b8ef0" stroke-width=".7"/><circle cx="-6" cy="5" r="1.2" fill="#5b8ef0"/><circle cx="0" cy="5" r="1.2" fill="#5b8ef0"/><circle cx="6" cy="5" r="1.2" fill="#5b8ef0"/>' },
-  terminal: { n:'Terminal', g:'<rect x="-11" y="-4" width="22" height="8" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.3"/><path d="M-8,0 h6" stroke="#5b8ef0" stroke-width="1"/><circle cx="7" cy="0" r="1.3" fill="#5b8ef0"/>' },
-  crate   : { n:'Crate',    g:'<rect x="-10" y="-10" width="20" height="20" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-10,-10 L10,10 M10,-10 L-10,10" stroke="#d4913a" stroke-width=".8"/>' },
-  table   : { n:'Table',    g:'<circle r="10" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><circle r="3" fill="none" stroke="#a3a9bf" stroke-width=".7"/>' },
-  chair   : { n:'Chair',    g:'<rect x="-6" y="-3" width="12" height="10" rx="2" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-6,-6 h12" stroke="#a3a9bf" stroke-width="2.5" stroke-linecap="round"/>' },
-  bunk    : { n:'Bunk',     g:'<rect x="-12" y="-7" width="24" height="14" rx="2" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><rect x="-10" y="-5" width="6" height="10" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".7"/>' },
-  locker  : { n:'Locker',   g:'<rect x="-7" y="-11" width="14" height="22" rx="1" fill="#0f1117" stroke="#7f93b8" stroke-width="1.5"/><path d="M0,-11 v22" stroke="#7f93b8" stroke-width=".7"/><path d="M-3,-2 v4 M3,-2 v4" stroke="#7f93b8" stroke-width="1.2"/>' },
-  airlock : { n:'Airlock',  g:'<circle r="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><circle r="4" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-11,0 h22 M0,-11 v22" stroke="#D4A843" stroke-width=".7"/>' },
-  plant   : { n:'Plant',    g:'<circle cy="5" r="4" fill="#0f1117" stroke="#4caf82" stroke-width="1.3"/><path d="M0,3 C-6,-2 -7,-8 -2,-9 M0,3 C6,-2 7,-8 2,-9 M0,3 v-10" stroke="#4caf82" stroke-width="1.1" fill="none"/>' },
-  stairs  : { n:'Stairs',   g:'<rect x="-11" y="-11" width="22" height="22" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-11,-5.5 h22 M-11,0 h22 M-11,5.5 h22" stroke="#a3a9bf" stroke-width="1"/>' },
-  // Multi-cell stamps (w/h in cells; glyph authored centred on origin, spanning
-  // ±w·16 × ±h·16). Rotation swaps the footprint for 2×1 shapes; see dkePropFootprint.
-  dblbunk : { n:'Double bunk', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><line x1="0" y1="-13" x2="0" y2="13" stroke="#4caf82" stroke-width=".8"/><rect x="-27" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><rect x="18" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/>' },
-  container:{ n:'Cargo container', w:2, h:1, g:'<rect x="-30" y="-12" width="60" height="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-18,-12 v24 M-6,-12 v24 M6,-12 v24 M18,-12 v24" stroke="#d4913a" stroke-width=".6"/><rect x="-30" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/><rect x="25" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/>' },
-  shuttle : { n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' },
-  medbay  : { n:'Medbay bed', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><rect x="-27" y="-10" width="11" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><path d="M16,-6 h10 M21,-11 v10" stroke="#c0506e" stroke-width="2.6" stroke-linecap="round"/>' },
-  wlocker : { n:'Weapons locker', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#c0506e" stroke-width="1.5"/><circle r="4.5" fill="none" stroke="#c0506e" stroke-width="1.2"/><path d="M0,-8 v3 M0,8 v-3 M-8,0 h3 M8,0 h-3" stroke="#c0506e" stroke-width="1.2"/>' },
-  reactor : { n:'Reactor', w:2, h:2, g:'<circle r="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.6"/><circle r="10" fill="none" stroke="#d4913a" stroke-width="1.3"/><circle r="3" fill="#d4913a"/><path d="M0,-24 v6 M0,24 v-6 M-24,0 h6 M24,0 h-6 M-17,-17 l4.2,4.2 M17,17 l-4.2,-4.2 M17,-17 l-4.2,4.2 M-17,17 l4.2,-4.2" stroke="#d4913a" stroke-width="1.1"/>' },
-  turret  : { n:'Turret', g:'<circle r="8" fill="#0f1117" stroke="#9aa7c7" stroke-width="1.5"/><rect x="-2" y="-15" width="4" height="9" rx="1" fill="#9aa7c7"/><circle r="3" fill="none" stroke="#9aa7c7" stroke-width="1"/>' },
-  computer: { n:'Computer core', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><path d="M-6,-8 h12 M-6,-4 h12 M-6,0 h12 M-6,4 h8" stroke="#5b8ef0" stroke-width=".9"/><circle cx="5" cy="7" r="1.4" fill="#5b8ef0"/>' },
-  pod     : { n:'Escape pod', g:'<ellipse rx="8" ry="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><ellipse cy="-2" rx="4" ry="5" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-8,6 h16" stroke="#D4A843" stroke-width=".9"/>' }
+  // — Crew & common areas —
+  table   : { c:'crew', n:'Table',    g:'<circle r="10" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><circle r="3" fill="none" stroke="#a3a9bf" stroke-width=".7"/>' },
+  chair   : { c:'crew', n:'Chair',    g:'<rect x="-6" y="-3" width="12" height="10" rx="2" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-6,-6 h12" stroke="#a3a9bf" stroke-width="2.5" stroke-linecap="round"/>' },
+  longtable:{ c:'crew', n:'Mess table', w:2, h:1, g:'<rect x="-26" y="-8" width="52" height="16" rx="2" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><rect x="-22" y="-13" width="44" height="4" rx="1.5" fill="#0f1117" stroke="#a3a9bf" stroke-width="1"/><rect x="-22" y="9" width="44" height="4" rx="1.5" fill="#0f1117" stroke="#a3a9bf" stroke-width="1"/>' },
+  sofa    : { c:'crew', n:'Couch', w:2, h:1, g:'<rect x="-27" y="-11" width="54" height="22" rx="3" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><rect x="-24" y="-8" width="48" height="6" rx="2" fill="#a3a9bf22" stroke="#a3a9bf" stroke-width=".7"/><path d="M-9,-2 v11 M9,-2 v11" stroke="#a3a9bf" stroke-width=".9"/>' },
+  bunk    : { c:'crew', n:'Bunk',     g:'<rect x="-12" y="-7" width="24" height="14" rx="2" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><rect x="-10" y="-5" width="6" height="10" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".7"/>' },
+  dblbunk : { c:'crew', n:'Double bunk', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><line x1="0" y1="-13" x2="0" y2="13" stroke="#4caf82" stroke-width=".8"/><rect x="-27" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><rect x="18" y="-10" width="9" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/>' },
+  locker  : { c:'crew', n:'Locker',   g:'<rect x="-7" y="-11" width="14" height="22" rx="1" fill="#0f1117" stroke="#7f93b8" stroke-width="1.5"/><path d="M0,-11 v22" stroke="#7f93b8" stroke-width=".7"/><path d="M-3,-2 v4 M3,-2 v4" stroke="#7f93b8" stroke-width="1.2"/>' },
+  shelf   : { c:'crew', n:'Shelving', g:'<rect x="-11" y="-8" width="22" height="16" rx="1" fill="#0f1117" stroke="#7f93b8" stroke-width="1.4"/><path d="M-11,-2.7 h22 M-11,2.7 h22" stroke="#7f93b8" stroke-width=".8"/><path d="M-4,-8 v16 M4,-8 v16" stroke="#7f93b8" stroke-width=".6"/>' },
+  galley  : { c:'crew', n:'Galley counter', w:2, h:1, g:'<rect x="-28" y="-10" width="56" height="20" rx="2" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><circle cx="-16" cy="-3" r="4" fill="none" stroke="#d4913a" stroke-width="1.1"/><circle cx="-5" cy="-3" r="4" fill="none" stroke="#d4913a" stroke-width="1.1"/><circle cx="-16" cy="5" r="2.4" fill="none" stroke="#d4913a" stroke-width=".9"/><circle cx="-5" cy="5" r="2.4" fill="none" stroke="#d4913a" stroke-width=".9"/><rect x="6" y="-7" width="19" height="14" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.1"/><path d="M15.5,-4 v-1.5" stroke="#5b8ef0" stroke-width="1"/>' },
+  bar     : { c:'crew', n:'Bar counter', w:2, h:1, g:'<path d="M-28,8 v-12 a4,4 0 0 1 4,-4 h48 a4,4 0 0 1 4,4 v12 z" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-28,1 h56" stroke="#d4913a" stroke-width=".8"/><circle cx="-14" cy="-3" r="1.6" fill="#d4913a"/><circle cx="-7" cy="-3" r="1.6" fill="#d4913a"/><circle cx="0" cy="-3" r="1.6" fill="#d4913a"/><circle cx="7" cy="-3" r="1.6" fill="#d4913a"/>' },
+  vend    : { c:'crew', n:'Dispenser', g:'<rect x="-8" y="-11" width="16" height="22" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.4"/><rect x="-5.5" y="-8.5" width="11" height="10" rx="1" fill="#5b8ef033" stroke="#5b8ef0" stroke-width=".7"/><path d="M-5.5,-5 h11 M-5.5,-1.5 h11" stroke="#5b8ef0" stroke-width=".6"/><rect x="-5" y="4" width="10" height="4.5" rx="1" fill="none" stroke="#5b8ef0" stroke-width="1"/>' },
+  fresher : { c:'crew', n:'Fresher', g:'<rect x="-11" y="-11" width="22" height="22" rx="2" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><ellipse cx="-4.5" cy="3" rx="4.2" ry="5.5" fill="none" stroke="#5b8ef0" stroke-width="1.2"/><rect x="-8.7" y="-9.5" width="8.4" height="4" rx="1" fill="none" stroke="#5b8ef0" stroke-width="1"/><circle cx="6" cy="-3" r="3.6" fill="none" stroke="#5b8ef0" stroke-width="1.1"/><path d="M6,-8.5 v1.8" stroke="#5b8ef0" stroke-width="1"/>' },
+  shower  : { c:'crew', n:'Shower', g:'<rect x="-11" y="-11" width="22" height="22" rx="2" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><circle cy="-1" r="5.5" fill="none" stroke="#5b8ef0" stroke-width="1.2"/><circle cy="-1" r="1.3" fill="#5b8ef0"/><circle cx="-3" cy="-4" r=".8" fill="#5b8ef0"/><circle cx="3" cy="-4" r=".8" fill="#5b8ef0"/><circle cx="-3" cy="2" r=".8" fill="#5b8ef0"/><circle cx="3" cy="2" r=".8" fill="#5b8ef0"/><path d="M-6,8 h12" stroke="#7f93b8" stroke-width="1"/>' },
+  plant   : { c:'crew', n:'Plant',    g:'<circle cy="5" r="4" fill="#0f1117" stroke="#4caf82" stroke-width="1.3"/><path d="M0,3 C-6,-2 -7,-8 -2,-9 M0,3 C6,-2 7,-8 2,-9 M0,3 v-10" stroke="#4caf82" stroke-width="1.1" fill="none"/>' },
+  // — Ops & command —
+  console : { c:'ops', n:'Console',  g:'<rect x="-12" y="-8" width="24" height="16" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><rect x="-9" y="-5" width="18" height="7" rx="1" fill="#5b8ef033" stroke="#5b8ef0" stroke-width=".7"/><circle cx="-6" cy="5" r="1.2" fill="#5b8ef0"/><circle cx="0" cy="5" r="1.2" fill="#5b8ef0"/><circle cx="6" cy="5" r="1.2" fill="#5b8ef0"/>' },
+  terminal: { c:'ops', n:'Terminal', g:'<rect x="-11" y="-4" width="22" height="8" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.3"/><path d="M-8,0 h6" stroke="#5b8ef0" stroke-width="1"/><circle cx="7" cy="0" r="1.3" fill="#5b8ef0"/>' },
+  computer: { c:'ops', n:'Computer core', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><path d="M-6,-8 h12 M-6,-4 h12 M-6,0 h12 M-6,4 h8" stroke="#5b8ef0" stroke-width=".9"/><circle cx="5" cy="7" r="1.4" fill="#5b8ef0"/>' },
+  captchair:{ c:'ops', n:'Command chair', g:'<path d="M-7,-4 a7,7 0 0 1 14,0 v9 a2,2 0 0 1 -2,2 h-10 a2,2 0 0 1 -2,-2 z" fill="#0f1117" stroke="#D4A843" stroke-width="1.4"/><path d="M-7,-7 h14" stroke="#D4A843" stroke-width="2.6" stroke-linecap="round"/><rect x="-10.5" y="-2" width="3" height="7" rx="1" fill="#0f1117" stroke="#D4A843" stroke-width="1"/><rect x="7.5" y="-2" width="3" height="7" rx="1" fill="#0f1117" stroke="#D4A843" stroke-width="1"/>' },
+  charttable:{ c:'ops', n:'Chart table', w:2, h:1, g:'<rect x="-28" y="-11" width="56" height="22" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><rect x="-24" y="-8" width="48" height="16" rx="1" fill="#5b8ef01a" stroke="#5b8ef0" stroke-width=".7"/><path d="M-24,0 h48 M-12,-8 v16 M0,-8 v16 M12,-8 v16" stroke="#5b8ef0" stroke-width=".5"/><circle cx="-6" cy="-4" r="1.6" fill="#5b8ef0"/><circle cx="9" cy="4" r="1.6" fill="#5b8ef0"/>' },
+  holotable:{ c:'ops', n:'Holo table', w:2, h:2, g:'<circle r="22" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.6"/><circle r="15" fill="#5b8ef01a" stroke="#5b8ef0" stroke-width=".8" stroke-dasharray="3,3"/><ellipse rx="11" ry="4.5" fill="none" stroke="#5b8ef0" stroke-width="1"/><ellipse rx="4.5" ry="11" fill="none" stroke="#5b8ef0" stroke-width="1"/><circle r="2.4" fill="#5b8ef0"/>' },
+  comms   : { c:'ops', n:'Comms rack', g:'<rect x="-9" y="-11" width="18" height="22" rx="1.5" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.4"/><path d="M0,2 v-7" stroke="#5b8ef0" stroke-width="1.2"/><path d="M-3.5,-5 a5,5 0 0 1 7,0" fill="none" stroke="#5b8ef0" stroke-width=".9"/><path d="M-6,-7.5 a9,9 0 0 1 12,0" fill="none" stroke="#5b8ef0" stroke-width=".9"/><path d="M-6,7 h12" stroke="#5b8ef0" stroke-width=".8"/>' },
+  viewscreen:{ c:'ops', n:'Viewscreen', w:2, h:1, g:'<rect x="-28" y="-6" width="56" height="12" rx="2" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.5"/><rect x="-25" y="-3.5" width="50" height="7" rx="1" fill="#5b8ef033" stroke="#5b8ef0" stroke-width=".6"/><path d="M-6,6 h12 v3 h-12 z" fill="#0f1117" stroke="#5b8ef0" stroke-width=".9"/>' },
+  // — Medical & science —
+  medbay  : { c:'med', n:'Medbay bed', w:2, h:1, g:'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="#0f1117" stroke="#4caf82" stroke-width="1.5"/><rect x="-27" y="-10" width="11" height="20" rx="1" fill="#4caf8233" stroke="#4caf82" stroke-width=".6"/><path d="M16,-6 h10 M21,-11 v10" stroke="#c0506e" stroke-width="2.6" stroke-linecap="round"/>' },
+  autodoc : { c:'med', n:'Autodoc', w:1, h:2, g:'<rect x="-13" y="-28" width="26" height="56" rx="12" fill="#0f1117" stroke="#4caf82" stroke-width="1.6"/><rect x="-9" y="-23" width="18" height="34" rx="8" fill="#4caf8226" stroke="#4caf82" stroke-width=".8"/><path d="M-5,19 h10 M0,14 v10" stroke="#c0506e" stroke-width="2.4" stroke-linecap="round"/>' },
+  cryopod : { c:'med', n:'Low berth', w:2, h:1, g:'<rect x="-29" y="-12" width="58" height="24" rx="11" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.6"/><rect x="-22" y="-8" width="36" height="16" rx="7" fill="#5b8ef026" stroke="#5b8ef0" stroke-width=".8"/><path d="M-8,0 h8 M-4,-4 v8 M-6.8,-2.8 l5.6,5.6 M-1.2,-2.8 l-5.6,5.6" stroke="#5b8ef0" stroke-width=".9"/><path d="M18,-6 v12 M22,-6 v12 M26,-6 v12" stroke="#5b8ef0" stroke-width=".9"/>' },
+  labbench: { c:'med', n:'Lab bench', w:2, h:1, g:'<rect x="-28" y="-10" width="56" height="20" rx="2" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.5"/><circle cx="-17" cy="0" r="4.5" fill="none" stroke="#4caf82" stroke-width="1.1"/><path d="M-17,-4.5 v-3" stroke="#4caf82" stroke-width="1"/><rect x="-6" y="-6" width="9" height="12" rx="1" fill="#4caf8226" stroke="#4caf82" stroke-width=".9"/><rect x="8" y="-7" width="17" height="14" rx="1.5" fill="none" stroke="#5b8ef0" stroke-width="1"/><circle cx="12" cy="-3" r="1.6" fill="#5b8ef0"/><circle cx="16.5" cy="-3" r="1.6" fill="#5b8ef0"/><circle cx="21" cy="-3" r="1.6" fill="#5b8ef0"/><circle cx="12" cy="3" r="1.6" fill="#5b8ef0"/><circle cx="16.5" cy="3" r="1.6" fill="#5b8ef0"/><circle cx="21" cy="3" r="1.6" fill="#5b8ef0"/>' },
+  // — Engineering —
+  reactor : { c:'eng', n:'Reactor', w:2, h:2, g:'<circle r="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.6"/><circle r="10" fill="none" stroke="#d4913a" stroke-width="1.3"/><circle r="3" fill="#d4913a"/><path d="M0,-24 v6 M0,24 v-6 M-24,0 h6 M24,0 h-6 M-17,-17 l4.2,4.2 M17,17 l-4.2,-4.2 M17,-17 l-4.2,4.2 M-17,17 l4.2,-4.2" stroke="#d4913a" stroke-width="1.1"/>' },
+  jumpdrive:{ c:'eng', n:'Jump drive', w:2, h:2, g:'<circle r="23" fill="#0f1117" stroke="#5b8ef0" stroke-width="1.6"/><circle r="18.5" fill="none" stroke="#5b8ef0" stroke-width=".7" stroke-dasharray="4,4"/><path d="M0,-15 L13,-7.5 L13,7.5 L0,15 L-13,7.5 L-13,-7.5 Z" fill="none" stroke="#5b8ef0" stroke-width="1.2"/><path d="M2,-11 L-5,1 h5 l-2,10 L7,-1 h-5 z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1.1" stroke-linejoin="round"/>' },
+  mdrive  : { c:'eng', n:'Manoeuvre drive', w:2, h:1, g:'<rect x="-28" y="-12" width="34" height="24" rx="3" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-24,-6 h10 M-24,0 h10 M-24,6 h10" stroke="#d4913a" stroke-width="1"/><path d="M6,-12 L20,-7 L20,7 L6,12 Z" fill="#0f1117" stroke="#d4913a" stroke-width="1.4"/><path d="M22,-5 v10 M25.5,-3 v6 M28,-1.5 v3" stroke="#D4A843" stroke-width="1.6" stroke-linecap="round"/>' },
+  fueltank: { c:'eng', n:'Fuel tank', w:2, h:1, g:'<rect x="-29" y="-11" width="58" height="22" rx="10" fill="#0f1117" stroke="#d4913a" stroke-width="1.6"/><path d="M-15,-11 v22 M15,-11 v22" stroke="#d4913a" stroke-width=".8"/><rect x="-8" y="-5" width="16" height="10" rx="1.5" fill="none" stroke="#d4913a" stroke-width="1"/><path d="M-5,0 h10" stroke="#d4913a" stroke-width="1.6"/>' },
+  scrubber: { c:'eng', n:'Air scrubber', g:'<rect x="-11" y="-11" width="22" height="22" rx="2" fill="#0f1117" stroke="#4caf82" stroke-width="1.4"/><circle r="7" fill="none" stroke="#4caf82" stroke-width="1"/><path d="M0,0 L0,-7 A7,7 0 0 1 6.1,-3.5 Z" fill="#4caf8244"/><path d="M0,0 L6.1,3.5 A7,7 0 0 1 0,7 Z" fill="#4caf8244"/><path d="M0,0 L-6.1,3.5 A7,7 0 0 1 -6.1,-3.5 Z" fill="#4caf8244"/><circle r="1.6" fill="#4caf82"/>' },
+  workbench:{ c:'eng', n:'Workbench', w:2, h:1, g:'<rect x="-28" y="-10" width="56" height="20" rx="2" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><rect x="-24" y="-6" width="20" height="12" rx="1" fill="#d4913a1f" stroke="#d4913a" stroke-width=".8"/><circle cx="-14" cy="0" r="3" fill="none" stroke="#d4913a" stroke-width=".9"/><path d="M2,-6 h20 M2,0 h20 M2,6 h14" stroke="#d4913a" stroke-width="1"/>' },
+  // — Cargo & industry —
+  crate   : { c:'cargo', n:'Crate',    g:'<rect x="-10" y="-10" width="20" height="20" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-10,-10 L10,10 M10,-10 L-10,10" stroke="#d4913a" stroke-width=".8"/>' },
+  container:{ c:'cargo', n:'Cargo container', w:2, h:1, g:'<rect x="-30" y="-12" width="60" height="24" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><path d="M-18,-12 v24 M-6,-12 v24 M6,-12 v24 M18,-12 v24" stroke="#d4913a" stroke-width=".6"/><rect x="-30" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/><rect x="25" y="-12" width="5" height="24" fill="none" stroke="#d4913a" stroke-width="1"/>' },
+  barrel  : { c:'cargo', n:'Fuel drum', g:'<circle r="9" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><circle r="5.5" fill="none" stroke="#d4913a" stroke-width=".8"/><path d="M-9,0 h18" stroke="#d4913a" stroke-width=".6"/><circle r="1.8" fill="#d4913a"/>' },
+  cargolift:{ c:'cargo', n:'Cargo lift', w:2, h:2, g:'<rect x="-24" y="-24" width="48" height="48" rx="2" fill="#0f1117" stroke="#D4A843" stroke-width="1.6"/><path d="M-24,-14 L-14,-24 M-24,-4 L-4,-24 M-24,6 L6,-24 M-24,16 L16,-24 M-24,24 L24,-24 M-14,24 L24,14 M-4,24 L24,4 M6,24 L24,-6 M16,24 L24,-16" stroke="#D4A84333" stroke-width="3"/><path d="M0,-11 l6,7 h-12 z" fill="#D4A843"/><path d="M0,11 l6,-7 h-12 z" fill="#D4A843"/>' },
+  loader  : { c:'cargo', n:'Cargo loader', w:2, h:1, g:'<rect x="-27" y="-11" width="29" height="22" rx="3" fill="#0f1117" stroke="#d4913a" stroke-width="1.5"/><rect x="-22" y="-6.5" width="13" height="13" rx="1.5" fill="#d4913a22" stroke="#d4913a" stroke-width=".8"/><path d="M4,-10 v20" stroke="#d4913a" stroke-width="1.6"/><path d="M5,-6 h20 M5,6 h20" stroke="#d4913a" stroke-width="2.4" stroke-linecap="round"/>' },
+  // — Security —
+  turret  : { c:'sec', n:'Turret', g:'<circle r="8" fill="#0f1117" stroke="#9aa7c7" stroke-width="1.5"/><rect x="-2" y="-15" width="4" height="9" rx="1" fill="#9aa7c7"/><circle r="3" fill="none" stroke="#9aa7c7" stroke-width="1"/>' },
+  wlocker : { c:'sec', n:'Weapons locker', g:'<rect x="-9" y="-12" width="18" height="24" rx="1.5" fill="#0f1117" stroke="#c0506e" stroke-width="1.5"/><circle r="4.5" fill="none" stroke="#c0506e" stroke-width="1.2"/><path d="M0,-8 v3 M0,8 v-3 M-8,0 h3 M8,0 h-3" stroke="#c0506e" stroke-width="1.2"/>' },
+  armrack : { c:'sec', n:'Armour rack', g:'<rect x="-9" y="-11" width="18" height="22" rx="1.5" fill="#0f1117" stroke="#c0506e" stroke-width="1.4"/><circle cy="-5" r="3" fill="none" stroke="#c0506e" stroke-width="1.1"/><path d="M-5,-1 h10 v7 h-10 z" fill="none" stroke="#c0506e" stroke-width="1.1"/><path d="M-5,1 h-2.5 v5 M5,1 h2.5 v5" fill="none" stroke="#c0506e" stroke-width="1"/>' },
+  scanner : { c:'sec', n:'Security scanner', g:'<rect x="-11" y="-6" width="4" height="12" rx="1" fill="#0f1117" stroke="#c0506e" stroke-width="1.3"/><rect x="7" y="-6" width="4" height="12" rx="1" fill="#0f1117" stroke="#c0506e" stroke-width="1.3"/><path d="M-7,0 h14" stroke="#c0506e" stroke-width="1" stroke-dasharray="2.5,2.5"/><circle cx="-9" cy="-8.5" r="1.4" fill="#c0506e"/><circle cx="9" cy="-8.5" r="1.4" fill="#c0506e"/>' },
+  barricade:{ c:'sec', n:'Barricade', w:2, h:1, g:'<path d="M-28,-5 h56 v10 h-56 z" fill="#0f1117" stroke="#9aa7c7" stroke-width="1.5"/><path d="M-24,5 L-18,-5 M-14,5 L-8,-5 M-4,5 L2,-5 M6,5 L12,-5 M16,5 L22,-5" stroke="#D4A843" stroke-width="2"/><path d="M-28,-8 h6 v16 h-6 z M22,-8 h6 v16 h-6 z" fill="#0f1117" stroke="#9aa7c7" stroke-width="1.2"/>' },
+  // — Access & structure —
+  airlock : { c:'access', n:'Airlock',  g:'<circle r="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><circle r="4" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-11,0 h22 M0,-11 v22" stroke="#D4A843" stroke-width=".7"/>' },
+  hatch   : { c:'access', n:'Deck hatch', g:'<rect x="-10" y="-10" width="20" height="20" rx="2" fill="#0f1117" stroke="#7f93b8" stroke-width="1.5"/><path d="M-10,-6.5 h20" stroke="#7f93b8" stroke-width="1.2"/><circle cy="2" r="5" fill="none" stroke="#7f93b8" stroke-width="1.1"/><path d="M-3.5,-1.5 l7,7 M3.5,-1.5 l-7,7" stroke="#7f93b8" stroke-width="1"/>' },
+  stairs  : { c:'access', n:'Stairs',   g:'<rect x="-11" y="-11" width="22" height="22" fill="#0f1117" stroke="#a3a9bf" stroke-width="1.3"/><path d="M-11,-5.5 h22 M-11,0 h22 M-11,5.5 h22" stroke="#a3a9bf" stroke-width="1"/>' },
+  // Open rails (no floor box) so a ladder never reads as the filled stairs stamp.
+  ladder  : { c:'access', n:'Ladder', g:'<path d="M-6.5,-11 v22 M6.5,-11 v22" stroke="#7f93b8" stroke-width="1.9" stroke-linecap="round"/><path d="M-6.5,-7.4 h13 M-6.5,-2.5 h13 M-6.5,2.5 h13 M-6.5,7.4 h13" stroke="#7f93b8" stroke-width="1.1"/>' },
+  lift    : { c:'access', n:'Lift', g:'<rect x="-11" y="-11" width="22" height="22" rx="2" fill="#0f1117" stroke="#D4A843" stroke-width="1.4"/><path d="M0,-11 v22" stroke="#D4A843" stroke-width=".8" stroke-dasharray="3,2"/><path d="M-8.5,1.5 l3,-5 l3,5 z" fill="#D4A843"/><path d="M2.5,-1.5 l3,5 l3,-5 z" fill="#D4A843"/>' },
+  pod     : { c:'access', n:'Escape pod', g:'<ellipse rx="8" ry="11" fill="#0f1117" stroke="#D4A843" stroke-width="1.5"/><ellipse cy="-2" rx="4" ry="5" fill="none" stroke="#D4A843" stroke-width="1"/><path d="M-8,6 h16" stroke="#D4A843" stroke-width=".9"/>' },
+  shuttle : { c:'access', n:'Shuttle', w:2, h:2, g:'<path d="M0,-28 L9,-8 L12,16 L7,25 L-7,25 L-12,16 L-9,-8 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.6"/><path d="M-9,2 L-27,15 L-27,20 L-10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M9,2 L27,15 L27,20 L10,13 Z" fill="#0f1117" stroke="#7f93b8" stroke-width="1.2"/><path d="M0,-24 L5,-10 L-5,-10 Z" fill="#5b8ef033" stroke="#5b8ef0" stroke-width="1"/><rect x="-7" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/><rect x="2.5" y="23" width="4.5" height="4" rx="1" fill="#D4A843"/>' }
 };
+// Palette categories, in tab order. 'custom' is not a DKE_PROPS category — it
+// holds the deck's referee-uploaded image props plus the upload button.
+const DKE_PROP_CATS = [
+  ['crew','Crew'], ['ops','Ops'], ['med','Medical'], ['eng','Engineering'],
+  ['cargo','Cargo'], ['sec','Security'], ['access','Access'], ['custom','Custom']
+];
+function dkePropCatOf(t){
+  const def = DKE_PROPS[t];
+  if(def) return def.c || 'crew';
+  return dkeIsCustomProp(t) ? 'custom' : 'ops';
+}
 // Prop footprint (in cells) at its rotation AND scale — 90°/270° swap w↔h so a
 // 2×1 stamp turns; an optional `s` (1–3) multiplies both dimensions. Missing
 // def / s absent stays the catalogue size, so pre-existing props are unchanged.
@@ -1505,6 +1561,10 @@ function dkeInGroup(hit){ return !!hit && dkeGroup.some(s => s.kind === hit.kind
 let dkeLayers = { grid:true, image:true, labels:true };   // editor-only layer visibility
 function dkeToggleLayer(k){ dkeLayers[k] = dkeLayers[k] === false; dkeRenderTools(); dkeRenderContent(); }
 let dkePropType = 'console', dkeLinkArea = '', dkeTokenName = '';
+let dkePropCat = dkePropCatOf(dkePropType);   // Props palette: visible category tab
+// Single entry point for choosing a stamp, so the palette tab always follows the
+// selection (incl. programmatic picks after a custom-prop upload/delete).
+function dkeSetPropPick(t){ dkePropType = t; dkePropCat = dkePropCatOf(t); dkeRenderSub(); }
 let dkeRuler = null;         // last completed editor measurement {a:{x,y}, b:{x,y}}
 let dkeRulerAnchor = null;   // pending first cell for a tap-tap measurement
 let dkeTplMode = 'stamp';    // Rooms tool: 'stamp' (place a template) | 'copy' (grab a region)
@@ -1535,7 +1595,7 @@ const DKE_HINTS = {
   poly:'Tap corner after corner to chain walls. Tap the glowing start dot to close the loop into a room, or End the run from the bar above.',
   merge:'Tap one room, then tap an adjacent room — the wall between them is removed so they become a single room.',
   door:'Pick door or window + a length above, then tap a wall edge — or an angled wall — to place it; a coloured ghost shows exactly where it lands. Tap a door to cycle closed → open → locked; tap a window to remove it. Erase or Select+Delete removes doors.',
-  prop:'Pick a stamp + a size (1×–3×) above, then tap a cell — or ＋ Custom to upload your own image as a prop. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
+  prop:'Pick a category, then a stamp + a size (1×–3×) above, then tap a cell — or Custom ▸ ＋ Custom to upload your own image as a prop. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
   link:'Pick an area above, then tap a room — players tap the marker to open that area.',
@@ -2044,8 +2104,8 @@ function dkeSubmitPropUpload(){
       dkeSnapshot();
       if(!Array.isArray(d.customProps)) d.customProps = [];
       d.customProps.push({ id, n: name, w, h, ver: Date.now() });
-      dkePropType = 'custom:' + id;
-      dkeCommit(); dkeRenderSub();
+      dkeCommit();
+      dkeSetPropPick('custom:' + id);   // re-renders the palette, on the Custom tab
       dkeClosePropUpload();
       toast('Custom prop added — tap the map to place it');
     })
@@ -2060,7 +2120,7 @@ function dkeDeleteCustomProp(id){
   if(typeof confirm === 'function' && !confirm(msg)) return;
   dkeSnapshot();
   d.customProps = (d.customProps || []).filter(c => c.id !== id);
-  if(dkePropType === 'custom:' + id) dkePropType = 'console';
+  if(dkePropType === 'custom:' + id) dkePropType = 'console';   // tab stays on Custom — they may be tidying up several
   dkeCommit(); dkeRenderSub();   // bucket object left as a harmless orphan (like handouts/underlay)
 }
 function dkeRenderHint(){
@@ -2086,23 +2146,37 @@ function dkeRenderSub(){
     html = ty('door','🚪 Door') + ty('window','⊟ Window')
       + `<span class="dke-note" style="margin:0 2px 0 8px">length</span>` + ln(1) + ln(2) + ln(3);
   } else if(dkeTool === 'prop'){
+    // Two rows: category tabs (+ what's currently loaded), then that category's
+    // stamps. The catalogue is far too big for one flat strip.
     const dk = dkeD();
-    html = Object.keys(DKE_PROPS).map(k => {
-      const dp = DKE_PROPS[k], gw = dp.w || 1, gh = dp.h || 1, m = Math.max(gw, gh), half = m * 16;
-      const size = (gw > 1 || gh > 1) ? ` <span style="opacity:.55">${gw}×${gh}</span>` : '';
-      return `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkePropType='${k}';dkeRenderSub()" title="${eh(dp.n)}">`
-        + `<svg viewBox="${-half} ${-half} ${m*32} ${m*32}" width="20" height="20" style="vertical-align:middle">${dp.g}</svg> ${eh(dp.n)}${size}</button>`;
-    }).join('')
-      + ((dk && dk.customProps) || []).map(cp => {
+    const cats = DKE_PROP_CATS.map(([k, l]) =>
+      `<button class="dke-tool${dkePropCat===k?' on':''}" onclick="dkePropCat='${k}';dkeRenderSub()">${eh(l)}</button>`).join('');
+    const curDef = DKE_PROPS[dkePropType] || dkeCustomDef(dk, dkePropType);
+    let stamps;
+    if(dkePropCat === 'custom'){
+      const mine = (dk && dk.customProps) || [];
+      stamps = mine.map(cp => {
         const key = 'custom:' + cp.id, url = dkeCustomImgUrl(dk, cp), on = dkePropType === key;
         const thumb = url ? `<img src="${eh(url)}" width="20" height="20" style="vertical-align:middle;object-fit:contain" onerror="this.style.display='none'">` : '🗿';
-        return `<button class="dke-tool${on?' on':''}" onclick="dkePropType='${eh(key)}';dkeRenderSub()" title="${eh(cp.n)}">`
+        return `<button class="dke-tool${on?' on':''}" onclick="dkeSetPropPick('${eh(key)}')" title="${eh(cp.n)}">`
           + `${thumb} ${eh(cp.n)} <span style="opacity:.55">${cp.w}×${cp.h}</span>`
           + `<span onclick="event.stopPropagation();dkeDeleteCustomProp('${eh(cp.id)}')" title="Remove this custom prop" style="margin-left:5px;opacity:.6;cursor:pointer">✕</span></button>`;
       }).join('')
-      + `<button class="dke-tool" onclick="dkeOpenPropUpload()" title="Upload your own image as a prop" style="border-color:#4caf82;color:#8fe0b8">＋ Custom</button>`
-      + `<span class="dke-note" style="margin:0 2px 0 8px">size</span>`
-      + [1,2,3].map(n => `<button class="dke-tool${dkePropScale===n?' on':''}" onclick="dkePropScale=${n};dkeRenderSub()">${n}×</button>`).join('');
+        + `<button class="dke-tool" onclick="dkeOpenPropUpload()" title="Upload your own image as a prop" style="border-color:#4caf82;color:#8fe0b8">＋ Custom</button>`
+        + (mine.length ? '' : `<span class="dke-note">Upload an image and it places like any other stamp.</span>`);
+    } else {
+      stamps = Object.keys(DKE_PROPS).filter(k => (DKE_PROPS[k].c || 'crew') === dkePropCat).map(k => {
+        const dp = DKE_PROPS[k], gw = dp.w || 1, gh = dp.h || 1, m = Math.max(gw, gh), half = m * 16;
+        const size = (gw > 1 || gh > 1) ? ` <span style="opacity:.55">${gw}×${gh}</span>` : '';
+        return `<button class="dke-tool${dkePropType===k?' on':''}" onclick="dkeSetPropPick('${k}')" title="${eh(dp.n)}">`
+          + `<svg viewBox="${-half} ${-half} ${m*32} ${m*32}" width="20" height="20" style="vertical-align:middle">${dp.g}</svg> ${eh(dp.n)}${size}</button>`;
+      }).join('');
+    }
+    html = `<div class="dke-pal">`
+      + `<div class="dke-palrow">${cats}<span class="dke-note" style="margin-left:6px">placing <b style="color:var(--accentGold)">${eh(curDef ? curDef.n : '—')}</b></span></div>`
+      + `<div class="dke-palrow">${stamps}<span class="dke-note" style="margin:0 2px 0 8px">size</span>`
+      + [1,2,3].map(n => `<button class="dke-tool${dkePropScale===n?' on':''}" onclick="dkePropScale=${n};dkeRenderSub()">${n}×</button>`).join('')
+      + `</div></div>`;
   } else if(dkeTool === 'token'){
     const crew = (typeof crewRoster === 'function') ? crewRoster() : [];
     if(!dkeTokenName && crew.length) dkeTokenName = crew[0];
