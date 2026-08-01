@@ -175,10 +175,46 @@ function dkeRectWalls(w, h){
 function dkeMkRoom(w, h, doors, props){
   return { w, h, floors:[{ x:0,y:0,w,h }], walls:dkeRectWalls(w,h), doors:doors||[], props:props||[], labels:[] };
 }
+// Prefab rooms, furnished from the DKE_PROPS catalogue. Prop coords are the
+// fragment's own top-left cell and every footprint must fit inside w×h — a stamp
+// that overhangs would be clamped by dkeStampTemplate's origin, not by itself.
+// Multi-cell props are placed at their ANCHOR (top-left) cell; keep an aisle
+// clear to the door so the stamped room is walkable. No w/h on the datum: the
+// footprint comes from the catalogue (see dkeSetPropType).
 const DKE_TEMPLATES = {
-  cabin:   { n:'Cabin',            t:dkeMkRoom(3,3,[{ x:1,y:3,o:'h' }],[{ t:'bunk',x:0,y:0 },{ t:'locker',x:2,y:0 }]) },
-  airlock: { n:'Airlock corridor', t:dkeMkRoom(2,5,[{ x:0,y:0,o:'h' },{ x:0,y:5,o:'h' }],[{ t:'airlock',x:0,y:0 },{ t:'airlock',x:1,y:4 }]) },
-  bridge:  { n:'Bridge',           t:dkeMkRoom(4,3,[{ x:1,y:3,o:'h' }],[{ t:'console',x:0,y:0 },{ t:'console',x:1,y:0 },{ t:'console',x:2,y:0 },{ t:'console',x:3,y:0 },{ t:'chair',x:1,y:1 },{ t:'chair',x:2,y:1 }]) }
+  cabin:    { n:'Cabin',            t:dkeMkRoom(3,3,[{ x:1,y:3,o:'h' }],[{ t:'bunk',x:0,y:0 },{ t:'locker',x:2,y:0 }]) },
+  stateroom:{ n:'Stateroom',        t:dkeMkRoom(4,3,[{ x:0,y:1,o:'v' }],[
+    { t:'dblbunk',x:0,y:0 },{ t:'locker',x:2,y:0 },{ t:'shelf',x:3,y:0 },
+    { t:'table',x:0,y:2 },{ t:'chair',x:1,y:2 },{ t:'fresher',x:3,y:2 }]) },
+  head:     { n:'Fresher',          t:dkeMkRoom(2,2,[{ x:0,y:2,o:'h' }],[{ t:'shower',x:0,y:0 },{ t:'fresher',x:1,y:0 }]) },
+  lounge:   { n:'Lounge',           t:dkeMkRoom(5,4,[{ x:2,y:4,o:'h' }],[
+    { t:'viewscreen',x:0,y:0 },{ t:'bar',x:3,y:0 },
+    { t:'sofa',x:0,y:2 },{ t:'table',x:3,y:2 },{ t:'chair',x:4,y:2 },{ t:'plant',x:0,y:3 }]) },
+  galley:   { n:'Galley & mess',    t:dkeMkRoom(5,4,[{ x:4,y:4,o:'h' }],[
+    { t:'galley',x:0,y:0 },{ t:'shelf',x:2,y:0 },{ t:'vend',x:3,y:0 },
+    { t:'longtable',x:1,y:2 },{ t:'chair',x:1,y:3,r:180 },{ t:'chair',x:2,y:3,r:180 }]) },
+  medbay:   { n:'Medbay',           t:dkeMkRoom(5,4,[{ x:2,y:4,o:'h' }],[
+    { t:'medbay',x:0,y:0 },{ t:'medbay',x:0,y:2 },{ t:'autodoc',x:3,y:0 },
+    { t:'terminal',x:4,y:0 },{ t:'labbench',x:3,y:3 }]) },
+  lowberth: { n:'Low berth bay',    t:dkeMkRoom(5,3,[{ x:2,y:3,o:'h' }],[
+    { t:'cryopod',x:0,y:0 },{ t:'cryopod',x:0,y:1 },{ t:'cryopod',x:0,y:2 },
+    { t:'cryopod',x:3,y:0 },{ t:'cryopod',x:3,y:1 },{ t:'cryopod',x:3,y:2 }]) },
+  bridge:   { n:'Bridge',           t:dkeMkRoom(4,3,[{ x:1,y:3,o:'h' }],[{ t:'console',x:0,y:0 },{ t:'console',x:1,y:0 },{ t:'console',x:2,y:0 },{ t:'console',x:3,y:0 },{ t:'chair',x:1,y:1 },{ t:'chair',x:2,y:1 }]) },
+  ops:      { n:'Ops centre',       t:dkeMkRoom(5,4,[{ x:2,y:4,o:'h' }],[
+    { t:'charttable',x:0,y:0 },{ t:'comms',x:2,y:0 },{ t:'holotable',x:3,y:0 },
+    { t:'console',x:0,y:1 },{ t:'console',x:0,y:2 },{ t:'captchair',x:0,y:3 },{ t:'terminal',x:4,y:3 }]) },
+  armoury:  { n:'Ship’s locker',    t:dkeMkRoom(3,3,[{ x:1,y:3,o:'h' }],[
+    { t:'wlocker',x:0,y:0 },{ t:'wlocker',x:1,y:0 },{ t:'armrack',x:2,y:0 },
+    { t:'armrack',x:0,y:2 },{ t:'scanner',x:2,y:2 }]) },
+  engine:   { n:'Engine room',      t:dkeMkRoom(6,5,[{ x:2,y:5,o:'h' }],[
+    { t:'reactor',x:0,y:0 },{ t:'jumpdrive',x:3,y:0 },{ t:'scrubber',x:5,y:0 },
+    { t:'fueltank',x:0,y:3 },{ t:'workbench',x:3,y:3 },{ t:'console',x:5,y:3 }]) },
+  cargo:    { n:'Cargo hold',       t:dkeMkRoom(6,5,[{ x:2,y:5,o:'h' }],[
+    { t:'container',x:0,y:0 },{ t:'container',x:0,y:1 },
+    { t:'container',x:3,y:0 },{ t:'container',x:3,y:1 },
+    { t:'crate',x:5,y:0 },{ t:'crate',x:5,y:1 },
+    { t:'loader',x:0,y:3 },{ t:'cargolift',x:3,y:3 },{ t:'barrel',x:5,y:4 }]) },
+  airlock:  { n:'Airlock corridor', t:dkeMkRoom(2,5,[{ x:0,y:0,o:'h' },{ x:0,y:5,o:'h' }],[{ t:'airlock',x:0,y:0 },{ t:'airlock',x:1,y:4 }]) }
 };
 function dkeStampTemplate(d, tpl, ax, ay){
   if(!d || !tpl) return null;
@@ -2129,7 +2165,7 @@ function dkeRenderHint(){
   if(dkeTool === 'template'){
     el.textContent = dkeTplMode === 'copy'
       ? 'Drag a box over the map to copy that area — it becomes a stamp you can paste.'
-      : 'Tap to stamp the selected room (grows right/down from the tap). Copy area duplicates part of the map.';
+      : 'Pick a prefab above — each one comes furnished — then tap to stamp it (it grows right/down from the tap). Copy area duplicates part of the map instead.';
     return;
   }
   el.textContent = DKE_HINTS[dkeTool] || '';
@@ -2210,11 +2246,19 @@ function dkeRenderSub(){
       + `<label class="dke-dim">weapon range m <input id="dke-refrange" type="number" min="1" max="9999" step="1" value="${rr}" style="width:64px"></label>`
       + `<span class="dke-note" id="dke-ruler-out">📏 ${eh(readout)}</span>`;
   } else if(dkeTool === 'template'){
+    // Copy/paste pinned to the first row so they stay reachable now that the
+    // prefab row is long enough to scroll off the right edge.
     const stampOn = k => dkeTplMode === 'stamp' && dkeTplSel === k;
-    html = Object.keys(DKE_TEMPLATES).map(k =>
-      `<button class="dke-tool${stampOn(k)?' on':''}" onclick="dkeTplPick('${k}')">${eh(DKE_TEMPLATES[k].n)}</button>`).join('')
-      + (dkeClipTpl ? `<button class="dke-tool${stampOn('__clip')?' on':''}" onclick="dkeTplPick('__clip')">📋 Paste ${dkeClipTpl.w}×${dkeClipTpl.h}</button>` : '')
-      + `<button class="dke-tool${dkeTplMode==='copy'?' on':''}" onclick="dkeTplCopyMode()">▭ Copy area</button>`;
+    const acts = `<button class="dke-tool${dkeTplMode==='copy'?' on':''}" onclick="dkeTplCopyMode()">▭ Copy area</button>`
+      + (dkeClipTpl ? `<button class="dke-tool${stampOn('__clip')?' on':''}" onclick="dkeTplPick('__clip')">📋 Paste ${dkeClipTpl.w}×${dkeClipTpl.h}</button>` : '');
+    const cur = dkeTplMode === 'copy' ? 'drag a box to copy that area'
+      : `stamping <b style="color:var(--accentGold)">${eh(dkeTplSel === '__clip' ? 'the copied area' : ((DKE_TEMPLATES[dkeTplSel] || {}).n || '—'))}</b>`;
+    const stamps = Object.keys(DKE_TEMPLATES).map(k => {
+      const tp = DKE_TEMPLATES[k];
+      return `<button class="dke-tool${stampOn(k)?' on':''}" onclick="dkeTplPick('${k}')">${eh(tp.n)} <span style="opacity:.55">${tp.t.w}×${tp.t.h}</span></button>`;
+    }).join('');
+    html = `<div class="dke-pal"><div class="dke-palrow">${acts}<span class="dke-note" style="margin-left:6px">${cur}</span></div>`
+      + `<div class="dke-palrow">${stamps}</div></div>`;
   } else if(dkeTool === 'image'){
     const d = dkeD(), hasImg = !!(d && d.img && d.img.id);
     const op = (d && d.img && typeof d.img.op === 'number') ? d.img.op : 0.55;
