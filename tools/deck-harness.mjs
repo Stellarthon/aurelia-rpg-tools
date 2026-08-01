@@ -53,7 +53,10 @@ const NAMES = [
   'dkeCaptureRegion','dkeStampTemplate','dkeAddWall',
   // custom props
   'dkeIsCustomProp','dkeCustomDef','dkeCustomImgUrl','dkeSetPropType',
-  'dkePropScaleOf','dkePropFootprint','dkePropCells','dkeClampProp','dkeNorm'
+  'dkePropScaleOf','dkePropFootprint','dkePropCells','dkeClampProp','dkeNorm',
+  // deck-to-deck links + link locks
+  'dkeDeckList','dkeDeckIndex','dkeDeckName','dkeNewDeckId','dkeEnsureDeckIds','dkeFindDeck','dkeEnsureDecks',
+  'dkeIsDeckLink','dkeDeckLinkId','dkeLinkLocked','dkeRescaleContent'
 ];
 
 const prelude = `
@@ -65,7 +68,7 @@ let __deck = null, __ghost = '', dkeOpenType = 'door', dkeOpenLen = 1;
 function dkeD(){ return __deck; }
 function dkeGhost(m){ __ghost = m; }
 // Room-record helpers reference these module globals / app functions at runtime.
-let dkeRoomSeq = 0;
+let dkeRoomSeq = 0, dkeDeckSeq = 0;
 const __revealed = new Set();
 function isRevealed(id){ return __revealed.has(id); }
 `;
@@ -392,6 +395,68 @@ const find = (arr, p) => arr.find(p);
   M.dkeSyncRooms(oct, true);
   ok(oct.rooms.length === 1, 'octagon auto-detected as one room ('+oct.rooms.length+')');
   ok(M.dkeRoomForCell(oct, 4, 4) === oct.rooms[0], 'octagon selectable from its centre');
+})();
+
+// ═══ GROUP 8 — deck-to-deck links + link locks ═══════════════════════════════
+(() => {
+  // Every deck gets a stable id, and it stays put across re-normalisation.
+  const atrium = M.dkeNorm({ w:8, h:8, name:'Atrium' });
+  ok(typeof atrium.id === 'string' && atrium.id.indexOf('deck-') === 0, 'dkeNorm mints a deck id');
+  const first = atrium.id;
+  M.dkeNorm(atrium);
+  ok(atrium.id === first, 're-normalising keeps the same deck id');
+  ok(M.dkeNewDeckId() !== M.dkeNewDeckId(), 'deck ids are unique');
+
+  // A legacy holder (single `.deck`, no ids) migrates AND picks up ids.
+  const legacy = { deck: { w:8, h:8, name:'Old' } };
+  const migrated = M.dkeEnsureDecks(legacy);
+  ok(migrated.length === 1 && legacy.deck === undefined && legacy.deckIdx === 0, 'legacy .deck migrates to .decks[]');
+  ok(typeof migrated[0].id === 'string', 'migrated deck gets an id');
+
+  const holder = { decks: [atrium, { w:8, h:8, name:'Medical' }, { w:8, h:8, name:'Security' }], deckIdx: 0 };
+  ok(M.dkeEnsureDeckIds(holder) === true, 'ensureDeckIds mints for decks that lack one');
+  ok(M.dkeEnsureDeckIds(holder) === false, 'ensureDeckIds is idempotent (nothing to mint twice)');
+  const med = holder.decks[1], sec = holder.decks[2];
+  ok(med.id !== sec.id, 'sibling decks get distinct ids');
+
+  // Resolution: by id, and by NAME when the id is foreign (export → import).
+  eq(M.dkeFindDeck(holder, med.id).i, 1, 'deck resolves by id');
+  eq(M.dkeFindDeck(holder, 'deck-nope', 'Security').i, 2, 'unknown id falls back to the name snapshot');
+  ok(M.dkeFindDeck(holder, 'deck-nope', 'Cargo') === null, 'no id and no name match → unresolved');
+  ok(M.dkeFindDeck(null, med.id) === null, 'no holder → unresolved');
+
+  // Reordering the decks must not repoint a link (the whole reason for ids).
+  holder.decks = [med, atrium, sec];
+  eq(M.dkeFindDeck(holder, med.id).i, 0, 'a reordered deck still resolves to the same deck');
+  ok(M.dkeFindDeck(holder, med.id).deck === med, 'resolution returns the deck object itself');
+  holder.decks = [atrium, med, sec];
+
+  // Target-prefix dispatch.
+  ok(M.dkeIsDeckLink('deck:' + med.id) === true, 'deck: prefix detected');
+  ok(M.dkeIsDeckLink('wiki:lore-1') === false, 'wiki link is not a deck link');
+  ok(M.dkeIsDeckLink('atrium') === false, 'plain area id is not a deck link');
+  ok(M.dkeIsDeckLink(null) === false, 'null target is not a deck link');
+  eq(M.dkeDeckLinkId('deck:' + med.id), med.id, 'deck id parsed back out of the target');
+
+  // Locks default off and are plain authored state.
+  ok(M.dkeLinkLocked({ a:'atrium' }) === false, 'links are unlocked unless authored otherwise');
+  ok(M.dkeLinkLocked({ a:'atrium', lock:1 }) === true, 'lock:1 reads as locked');
+  ok(M.dkeLinkLocked(null) === false, 'a missing link is not locked');
+
+  // Deck names fall back to the positional label, never to undefined.
+  eq(M.dkeDeckName(atrium, 0), 'Atrium', 'named deck keeps its name');
+  eq(M.dkeDeckName({ w:8, h:8 }, 2), 'Deck 3', 'unnamed deck falls back to its position');
+
+  // A resize must not silently drop a link's lock or its name snapshot.
+  const base = M.dkeNorm({ w:8, h:8, links:[{ a:'deck:' + med.id, n:'Medical', x:2, y:2, lock:1, hid:1 }] });
+  const grown = M.dkeNorm({ w:16, h:16 });
+  M.dkeRescaleContent(grown, base, 2, 2);
+  const moved = grown.links[0];
+  eq([moved.x, moved.y], [4, 4], 'rescale moves the link with the deck');
+  ok(moved.lock === 1, 'rescale preserves the lock');
+  eq(moved.n, 'Medical', 'rescale preserves the deck-name snapshot');
+  ok(moved.hid === 1, 'rescale still preserves fog state');
+  eq(moved.a, 'deck:' + med.id, 'rescale preserves the link target');
 })();
 
 // ── report ───────────────────────────────────────────────────────────────────

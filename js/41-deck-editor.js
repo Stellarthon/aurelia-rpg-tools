@@ -13,8 +13,22 @@
 // t = 'window' (else door), len = 1–3 cells, door s = 'open'|'locked' absent=closed
 // — referee-cycled), props:[{t,x,y,r}] (top-left cell +
 // rotation; multi-cell footprint comes from the DKE_PROPS catalogue, not the datum),
-// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1,mem?}] (areaId
-// marker; hid = fog of war), tokens:[{n,x,y}] (name + cell — PCs and NPCs) }.
+// labels:[{t,x,y}] (cell units, fractional), links:[{a,x,y,hid?:1,mem?,lock?:1,n?}]
+// (link marker; hid = fog of war; lock = sealed, see below), tokens:[{n,x,y}]
+// (name + cell — PCs and NPCs) }.
+// A LINK TARGET (`a`) is one of three forms, dispatched on its prefix:
+//   '<areaId>'      → tap opens that station area (or ship system on a ship deck)
+//   'wiki:<id>'     → tap opens that wiki article
+//   'deck:<deckId>' → tap moves the whole table to that deck of the SAME station
+// Deck links are how one deck plan connects to another (Atrium → Medical /
+// Security / Maintenance). They resolve against the holder's stable deck `id`
+// (minted in dkeNorm, like room ids), falling back to the name snapshot `n` so a
+// deck exported and re-imported elsewhere re-binds instead of dangling. Because
+// the active deck (`deckIdx`) is synced and referee-owned, traversal is too: the
+// referee taps and every player's map follows; a player's tap just names where it
+// leads. LOCK (`lock:1`) seals any link — nobody passes through until the referee
+// taps the padlock beside the marker. Locked is authored state (it syncs and
+// persists), the fiction's locked hatch, not a permission check.
 // FOG OF WAR rides the link marker: hid hides the marker's whole claimed room
 // from players (opaque fog with the grid redrawn over it — only boundary walls
 // and doors stay visible, like seeing a hull from outside) and removes the tap
@@ -194,6 +208,8 @@ function dkeNorm(d){
   ['floors','walls','doors','props','labels','links','tokens','customProps','rooms'].forEach(k => { if(!Array.isArray(d[k])) d[k] = []; });
   // Every room record needs a stable id (older decks / imported rooms may lack one).
   (d.rooms||[]).forEach(r => { if(!r.id) r.id = dkeNewRoomId(); });
+  // …and so does the deck itself, so 'deck:<id>' links survive reorder / rename.
+  if(!d.id) d.id = dkeNewDeckId();
   return d;
 }
 function deckHasContent(d){
@@ -222,6 +238,31 @@ function dkeCurrentDeck(s){
   return list.length ? list[dkeDeckIndex(s)] : null;
 }
 function dkeDeckName(deck, i){ return (deck && deck.name) || ('Deck ' + (i + 1)); }
+// ── Stable deck ids (the anchor 'deck:<id>' links point at) ──────────────────
+// Decks were originally addressed by array index, which reorder/insert/delete
+// would silently repoint. A link needs an anchor that survives all three, so every
+// deck carries an `id` — minted lazily (dkeNorm / dkeEnsureDeckIds) exactly like
+// room ids, so decks authored before this feature pick one up on their next edit.
+let dkeDeckSeq = 0;
+function dkeNewDeckId(){
+  const t = (typeof Date !== 'undefined' && Date.now) ? Date.now().toString(36) : 'd';
+  return 'deck-' + t + '-' + (dkeDeckSeq++).toString(36);
+}
+// Give every deck on a holder an id. Returns true when something was minted, so
+// the caller knows a save is owed.
+function dkeEnsureDeckIds(s){
+  let made = false;
+  dkeDeckList(s).forEach(d => { if(d && !d.id){ d.id = dkeNewDeckId(); made = true; } });
+  return made;
+}
+// Resolve a deck id on a holder → { deck, i }, or null when it's gone. `name` is
+// the fallback for decks that arrived by export/import (new holder, new ids).
+function dkeFindDeck(s, id, name){
+  const list = dkeDeckList(s);
+  let i = list.findIndex(d => d && d.id === id);
+  if(i < 0 && name) i = list.findIndex((d, j) => dkeDeckName(d, j) === name);
+  return i < 0 ? null : { deck: list[i], i };
+}
 // Migrate legacy `.deck` → `.decks[]` in place (mutates; caller saves).
 function dkeEnsureDecks(s){
   if(!s) return [];
@@ -230,6 +271,7 @@ function dkeEnsureDecks(s){
     delete s.deck;
     if(typeof s.deckIdx !== 'number') s.deckIdx = 0;
   }
+  dkeEnsureDeckIds(s);
   return s.decks;
 }
 // ── Edit target: a station (default) OR the party ship ───────────────────────
@@ -719,6 +761,20 @@ function dkeFogEyeSVG(cx, cy, li, state){
   return `<g transform="translate(${cx},${cy})" style="cursor:pointer" onclick="dkeToggleFog(${li})">`
     + `<title>${title}</title><circle r="9" fill="transparent"/>${glyph}</g>`;
 }
+// A padlock, centred on the origin — shut (full shackle) or sprung (one leg off).
+function dkeLockGlyph(col, locked, w){
+  const sw = w || 1.2;
+  return `<path d="M-3,-2 v-2.2 a3,3 0 0 1 6,0${locked ? ' v2.2' : ''}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>`
+    + `<rect x="-4.6" y="-2" width="9.2" height="7" rx="1.3" fill="none" stroke="${col}" stroke-width="${sw+.1}"/>`
+    + `<circle cy="1.4" r="1" fill="${col}"/>`;
+}
+// The referee's lock toggle, beside the fog eye under a link marker.
+function dkeLockToggleSVG(cx, cy, li, locked){
+  const col = locked ? '#c0506e' : '#7f93b8';
+  const title = locked ? 'Locked — nobody passes. Tap to unlock' : 'Unlocked — tap to seal this way through';
+  return `<g transform="translate(${cx},${cy})" style="cursor:pointer" onclick="event.stopPropagation();dkeToggleLinkLock(${li})">`
+    + `<title>${title}</title><circle r="9" fill="transparent"/>${dkeLockGlyph(col, locked)}</g>`;
+}
 function dkeToggleFog(li){
   if(typeof isReferee !== 'function' || !isReferee()) return;
   const deck = dkeMapDeck(); const lk = deck && (deck.links||[])[li]; if(!lk) return;
@@ -727,7 +783,7 @@ function dkeToggleFog(li){
   else if(st === 'remembered'){ delete lk.mem; lk.hid = 1; }                          // → hidden
   else {                                                                              // → revealed
     delete lk.hid; delete lk.mem;
-    if(typeof logEvent === 'function'){ const lbl = dkeLinkLabel(lk.a); logEvent('Referee revealed ' + lbl, dkeStationLabel()); }
+    if(typeof logEvent === 'function'){ const lbl = dkeLinkLabel(lk.a, lk); logEvent('Referee revealed ' + lbl, dkeStationLabel()); }
   }
   if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
   if(typeof renderStationMap === 'function') renderStationMap();
@@ -770,15 +826,13 @@ function dkeTokenIsPC(name){
 }
 function dkeFogAutoReveal(deck, token){
   if(!deck || !token || !dkeTokenIsPC(token.n)) return false;
-  const areas = (typeof stationAreas === 'function') ? stationAreas() : {};
   let revealed = null;
   (deck.links||[]).forEach(lk => {
     if(!lk.hid && !lk.mem) return;   // reveal hidden OR remembered rooms the party re-enters
     const room = dkeRoomCells(deck, lk.x, lk.y);
     if(room && room.some(c => c.x === token.x && c.y === token.y)){
       delete lk.hid; delete lk.mem;
-      const a = areas[lk.a];
-      revealed = (a && a.label) || lk.a;
+      revealed = dkeLinkLabel(lk.a, lk);
     }
   });
   if(revealed){
@@ -787,17 +841,103 @@ function dkeFogAutoReveal(deck, token){
   }
   return !!revealed;
 }
-// Small labels for the event log.
-function dkeLinkLabel(id){
+// ── Deck-to-deck links ───────────────────────────────────────────────────────
+// 'deck:<deckId>' targets another deck of the same station, so a lift shaft or
+// stairwell drawn on the Atrium can carry the table down to Medical.
+function dkeIsDeckLink(a){ return String(a == null ? '' : a).indexOf('deck:') === 0; }
+function dkeDeckLinkId(a){ return String(a).slice(5); }
+// The holder whose decks a link may point into: the deck under the editor while
+// it's open, the current station otherwise (same split as dkeRoomsDeck).
+function dkeStationHolder(){
+  if(typeof currentStationId === 'undefined' || typeof stationAdditions === 'undefined') return null;
+  return stationAdditions[currentStationId] || null;
+}
+function dkeLinkHolder(){ return dkeIsOpen ? dkeHolder() : dkeStationHolder(); }
+// Resolve a link's destination deck → { deck, i } (null when it's been deleted).
+function dkeDeckLinkTarget(lk){
+  if(!lk || !dkeIsDeckLink(lk.a)) return null;
+  return dkeFindDeck(dkeLinkHolder(), dkeDeckLinkId(lk.a), lk.n);
+}
+// <option>s for every OTHER deck on the holder — a deck can't link to itself.
+// Minting runs first so decks drawn before this feature get ids to point at.
+function dkeDeckLinkOptions(sel){
+  const s = dkeLinkHolder(); if(!s) return '';
+  if(dkeEnsureDeckIds(s)) dkeSave();
+  const cur = dkeDeckIndex(s), pick = (sel === undefined) ? dkeLinkArea : sel;
+  return dkeDeckList(s).map((dk, i) => i === cur ? '' :
+    `<option value="deck:${dkeEsc(dk.id)}"${pick === 'deck:' + dk.id ? ' selected' : ''}>⇅ ${dkeEsc(dkeDeckName(dk, i))}</option>`).join('');
+}
+// The record a link tool / re-target writes: deck links carry a name snapshot so
+// an exported deck can re-bind by name in a holder where the id doesn't exist.
+function dkeLinkRecordFields(a){
+  const out = { a };
+  if(dkeIsDeckLink(a)){
+    const t = dkeFindDeck(dkeLinkHolder(), dkeDeckLinkId(a));
+    if(t) out.n = dkeDeckName(t.deck, t.i);
+  }
+  return out;
+}
+// Small labels for the event log and markers. `lk` (optional) lets a deck link
+// name its destination — and still read sensibly once that deck is gone.
+function dkeLinkLabel(id, lk){
+  if(dkeIsDeckLink(id)){
+    const t = dkeDeckLinkTarget(lk || { a: id });
+    return t ? dkeDeckName(t.deck, t.i) : ((lk && lk.n) || 'Missing deck');
+  }
   const a = (typeof stationAreas === 'function') ? stationAreas()[id] : null;
   return (a && a.label) || id;
 }
 function dkeStationLabel(){
   return (typeof stationDef === 'function' && stationDef() && stationDef().name) || '';
 }
-// A room-link tap dispatches: 'wiki:<id>' opens that wiki article; anything else
-// opens the station area as before.
-function dkeOpenLink(id){
+// ── Link locks ───────────────────────────────────────────────────────────────
+// A locked link is a sealed way through: players can't follow it (and can't open
+// the area behind it), and the referee has to turn the padlock first — so the
+// lock stays a table beat rather than something a stray tap walks past. It's
+// spoiler/pacing control like the fog eye, not security: the deck still syncs.
+function dkeLinkLocked(lk){ return !!(lk && lk.lock); }
+function dkeToggleLinkLock(li){
+  if(typeof isReferee !== 'function' || !isReferee()) return;
+  const deck = dkeMapDeck(); const lk = deck && (deck.links||[])[li]; if(!lk) return;
+  if(lk.lock) delete lk.lock; else lk.lock = 1;
+  const lbl = dkeLinkLabel(lk.a, lk);
+  if(typeof saveAuthoredStations === 'function') saveAuthoredStations();
+  if(typeof renderStationMap === 'function') renderStationMap();
+  if(typeof updateNodes === 'function') updateNodes();
+  if(typeof logEvent === 'function') logEvent((lk.lock ? 'Locked ' : 'Unlocked ') + lbl, dkeStationLabel());
+  if(typeof showToast === 'function') showToast(lbl + (lk.lock ? ' locked 🔒' : ' unlocked 🔓'));
+}
+// Referee-only traversal: switch the station's SYNCED active deck, so every
+// player's map moves with the party instead of each device wandering off alone.
+function dkeGoToDeck(lk){
+  const t = dkeDeckLinkTarget(lk);
+  if(!t){ if(typeof showToast === 'function') showToast('That deck no longer exists'); return false; }
+  const name = dkeDeckName(t.deck, t.i);
+  dkeMapSwitchDeck(t.i);
+  if(typeof logEvent === 'function') logEvent('Party moved to ' + name, dkeStationLabel());
+  if(typeof showToast === 'function') showToast('→ ' + name);
+  return true;
+}
+// A room-link tap dispatches on the target's prefix: 'deck:<id>' walks the table
+// to another deck, 'wiki:<id>' opens that wiki article, anything else opens the
+// station area as before. `li` is the link's index on the live deck — it carries
+// the lock (and, for players, the "here's where this goes" read-out).
+function dkeOpenLink(id, li){
+  const ref = (typeof isReferee === 'function') && isReferee();
+  const deck = (li == null) ? null : dkeMapDeck();
+  const lk = deck ? (deck.links||[])[li] : null;
+  const label = dkeLinkLabel(id, lk);
+  if(dkeLinkLocked(lk)){
+    if(typeof showToast === 'function')
+      showToast('🔒 ' + label + ' is locked' + (ref ? ' — tap the padlock to unlock' : ''));
+    return;
+  }
+  if(dkeIsDeckLink(id)){
+    if(ref){ dkeGoToDeck(lk || { a: id }); return; }
+    // Players follow the referee's deck, so a tap tells them where it leads.
+    if(typeof showToast === 'function') showToast('↝ Way through to ' + label);
+    return;
+  }
   if(String(id).indexOf('wiki:') === 0){ dkeOpenWikiArticle(id.slice(5)); return; }
   if(typeof selArea === 'function') selArea(id);
 }
@@ -1267,9 +1407,19 @@ function dkeContentSVG(deck, opt){
       const w = wikiArticles.find(x => x.id === lk.a.slice(5));
       if(w) a = { label: w.title, ac: '#9B59B6', wiki: 1 };
     }
+    // …or to ANOTHER DECK of this station ('deck:<id>') → its live name + a teal
+    // accent. A deck that has since been deleted stays visible where it can be
+    // fixed (editor canvas + the referee's map) and is dropped everywhere else,
+    // so no handout or player map ever shows a broken way through.
+    if(!a && dkeIsDeckLink(lk.a)){
+      const tgt = dkeDeckLinkTarget(lk);
+      if(tgt) a = { label: dkeDeckName(tgt.deck, tgt.i), ac: '#2AABB8', deck: 1 };
+      else if(opt.editor || refView) a = { label: (lk.n || 'Missing deck'), ac: '#c0506e', deck: 1, gone: 1 };
+    }
     if(!a) return;
     const ac = a.ac || '#7f93b8', cx = (lk.x+.5)*C, cy = (lk.y+.5)*C;
-    const open = opt.interactive ? ` style="cursor:pointer" onclick="dkeOpenLink('${eh(lk.a)}')"` : '';
+    const locked = dkeLinkLocked(lk);
+    const open = opt.interactive ? ` style="cursor:pointer" onclick="dkeOpenLink('${eh(lk.a)}',${li})"` : '';
     const room = dkeRoomCells(deck, lk.x, lk.y);
     const state = dkeFogState(lk);   // 'revealed' | 'remembered' | 'hidden'
     const hid = state === 'hidden';  // remembered rooms render normally; tokens frozen below
@@ -1284,7 +1434,8 @@ function dkeContentSVG(deck, opt){
     // — on the room shape when the marker sits on floor, else on the marker
     // circle. Only the interactive station view emits ids: the editor canvas
     // can share the DOM with it, and duplicate ids would corrupt both.
-    const wantId = !!opt.interactive && !seenArea[lk.a]; seenArea[lk.a] = true;
+    // (deck links never claim one — they address a deck, not an area node.)
+    const wantId = !!opt.interactive && !a.deck && !seenArea[lk.a]; seenArea[lk.a] = true;
     if(room && opt.interactive){
       // Whole-room tap target; transparent fill still catches pointer events,
       // and updateNodes() swaps it for the accent glow when the area is open.
@@ -1298,11 +1449,23 @@ function dkeContentSVG(deck, opt){
       if(state === 'hidden') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#0f1117" opacity=".55" style="pointer-events:none"/>`;
       else if(state === 'remembered') fogDim += `<path d="${dkeRoomFillD(room)}" fill="#5b8ef0" opacity=".1" style="pointer-events:none"/><path d="${dkeRoomOutlineD(room)}" fill="none" stroke="#5b8ef0" stroke-width="1.5" stroke-dasharray="5,4" opacity=".6" style="pointer-events:none"/>`;
     }
-    markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"/>`
-         + `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`
-         + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}</text></g>`;
-    // Referee reveal toggle — an eye under the marker name on the station view.
-    if(refView) markerLayer += dkeFogEyeSVG(cx, cy + 31, li, state);
+    // A deck link reads as a way through (» = onward, to another deck); an
+    // area/wiki link keeps its solid dot.
+    const core = a.deck
+      ? `<path d="M${cx-3.8},${cy-3.4} l3,3.4 l-3,3.4 M${cx+.8},${cy-3.4} l3,3.4 l-3,3.4" fill="none" stroke="${eh(ac)}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="3" fill="${eh(ac)}"/>`;
+    // Locked markers wear a padlock badge — everyone sees the way is sealed.
+    const badge = locked
+      ? `<g transform="translate(${cx+9},${cy-8}) scale(.72)"><circle r="7.5" fill="#0f1117" stroke="#c0506e" stroke-width="1.2"/>${dkeLockGlyph('#c0506e', true, 1.4)}</g>`
+      : '';
+    markerLayer += `<g${open}><circle${(wantId && !room) ? ` id="r-${eh(lk.a)}"` : ''} cx="${cx}" cy="${cy}" r="9" fill="#0f1117" stroke="${eh(ac)}" stroke-width="2"${locked ? ' stroke-dasharray="3.5,2.5"' : ''}/>`
+         + core + badge
+         + `<text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="9" font-weight="600" fill="${eh(ac)}" font-family="system-ui,sans-serif">${eh(a.label||lk.a)}${a.gone ? ' ⚠' : ''}</text></g>`;
+    // Referee controls under the marker name on the station view: the fog eye
+    // (who can see it) and the padlock (who can pass), side by side.
+    if(refView){
+      markerLayer += dkeFogEyeSVG(cx - 11, cy + 31, li, state) + dkeLockToggleSVG(cx + 11, cy + 31, li, locked);
+    }
   });
   // Rooms under markers: a tap anywhere in the room opens the area, but each
   // marker stays individually tappable even inside another marker's room.
@@ -1524,11 +1687,11 @@ let dkeSaveTimer = null, dkeDirty = false;
 const DKE_TOOLS = [
   ['pan','✋ Pan'], ['select','➤ Select'], ['room','▭ Room'], ['floor','▦ Floor'],
   ['wall','─ Wall'], ['poly','⟋ Wall run'], ['merge','⋈ Merge'], ['door','🚪 Openings'], ['prop','📦 Props'],
-  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Area link'], ['template','⧉ Rooms'], ['image','🖼 Image'], ['ruler','📏 Range'], ['erase','⌫ Erase']
+  ['token','⬤ Tokens'], ['label','🏷 Label'], ['link','⊕ Links'], ['template','⧉ Rooms'], ['image','🖼 Image'], ['ruler','📏 Range'], ['erase','⌫ Erase']
 ];
 const DKE_HINTS = {
   pan:'Drag to pan · pinch or scroll to zoom.',
-  select:'Tap a room to select it — name it and add info (✎), reveal it to players (👁), or clear it (🗑). Tap a prop/label/token to select · drag to move · window selected → ❄ toggles frosted glass. Drag a box to marquee-select several.',
+  select:'Tap a room to select it — name it and add info (✎), reveal it to players (👁), or clear it (🗑). Tap a prop/label/token to select · drag to move · window selected → ❄ toggles frosted glass · link selected → re-point it or 🔒 lock it. Drag a box to marquee-select several.',
   room:'Drag a rectangle — floor and perimeter walls are placed in one go.',
   floor:'Drag to paint floor tiles cell by cell.',
   wall:'Drag from corner to corner to place a straight wall (diagonals allowed).',
@@ -1538,7 +1701,7 @@ const DKE_HINTS = {
   prop:'Pick a stamp + a size (1×–3×) above, then tap a cell — or ＋ Custom to upload your own image as a prop. Stamps grow right/down from the tap. Tap the same prop again to rotate it 15°; Select → ⟳ Rotate (15°) or ⤢ Size to resize.',
   token:'Pick a character above (or type any name), then tap to place. Tap a placed token to remove it; Select drags it around.',
   label:'Type the text above, then tap the map to place it.',
-  link:'Pick an area above, then tap a room — players tap the marker to open that area.',
+  link:'Pick a destination above, then tap a room. ⇅ another deck = a way through (you tap it on the map and the whole table follows); an area or wiki page opens in place. Select a placed link to re-point it, or 🔒 lock it so nobody passes until you unlock it.',
   ruler:'Tap two cells (or drag between them) to measure — distance in metres and the range band. Set the scale above.',
   image:'Upload a floorplan to trace over — draw walls, doors and links on top. Adjust opacity above; paint floors only where you want tap-to-open rooms.',
   erase:'Tap or drag over anything to delete it.'
@@ -2124,9 +2287,14 @@ function dkeRenderSub(){
       ? wikiArticles.map(w => `<option value="wiki:${eh(w.id)}"${dkeLinkArea==='wiki:'+w.id?' selected':''}>📖 ${eh(w.title||'Untitled')}</option>`).join('')
       : '';
     const areaOpts = Object.keys(areas).map(id => `<option value="${eh(id)}"${dkeLinkArea===id?' selected':''}>${eh(areas[id].label||id)}</option>`).join('');
-    html = (areaOpts || wikiOpts)
+    // …and to ANOTHER DECK of this station — the way through from one deck plan to
+    // the next. Ship decks are excluded: their render is read-only, so a deck link
+    // drawn there would have nothing to tap.
+    const deckOpts = ship ? '' : dkeDeckLinkOptions();
+    html = (areaOpts || wikiOpts || deckOpts)
       ? `<span class="dke-note" style="margin-right:4px">${ship ? 'system' : 'link to'}</span><select class="hx-edit-in" style="max-width:240px" onchange="dkeLinkArea=this.value">`
-        + `<option value="">— pick ${ship ? 'a system' : 'an area / wiki page'} —</option>` + areaOpts + wikiOpts + `</select>`
+        + `<option value="">— pick ${ship ? 'a system' : 'a deck / area / wiki page'} —</option>` + deckOpts + areaOpts + wikiOpts + `</select>`
+        + (dkeIsDeckLink(dkeLinkArea) ? `<span class="dke-note">tap a room to place the way through</span>` : '')
       : `<span class="dke-note">No areas yet — add areas in the Design Studio first.</span>`;
   } else if(dkeTool === 'ruler'){
     const d = dkeD();
@@ -2173,6 +2341,21 @@ function dkeRenderSub(){
       if(dkeSel.kind === 'label') html += `<input class="hx-edit-in" style="max-width:200px" value="${eh(it.t)}" onchange="dkeEditLabelSel(this.value)">`;
       if(dkeSel.kind === 'token') html += `<input class="hx-edit-in" style="max-width:180px" value="${eh(it.n)}" onchange="dkeEditTokenSel(this.value)"><button class="dke-tool" onclick="dkeCycleTokenStatus()">◍ ${it.st || 'status'}</button>`;
       if(dkeSel.kind === 'door' && dkeIsWindow(it)) html += `<button class="dke-tool${it.f?' on':''}" onclick="dkeToggleFrostSel()" title="Frosted glass blocks the see-through into the next room">❄ ${it.f?'Frosted':'Clear glass'}</button>`;
+      if(dkeSel.kind === 'link'){
+        const ship = dkeTarget === 'ship';
+        const lAreas = ship ? dkeShipSystemAreas() : ((typeof stationAreas === 'function') ? stationAreas() : {});
+        const lWiki = (!ship && typeof wikiArticles !== 'undefined' && wikiArticles.length)
+          ? wikiArticles.map(w => `<option value="wiki:${eh(w.id)}">📖 ${eh(w.title||'Untitled')}</option>`).join('') : '';
+        // The note shows where it points now; the select only ever re-points it,
+        // so a target that has since been deleted can't masquerade as a choice.
+        html += `<span class="dke-note">${dkeIsDeckLink(it.a) ? '⇅' : '⊕'} ${eh(dkeLinkLabel(it.a, it))}</span>`
+          + `<select class="hx-edit-in" style="max-width:220px" onchange="dkeRetargetLinkSel(this.value)">`
+          + `<option value="">— re-point this link —</option>`
+          + (ship ? '' : dkeDeckLinkOptions(''))
+          + Object.keys(lAreas).map(id => `<option value="${eh(id)}">${eh(lAreas[id].label||id)}</option>`).join('')
+          + lWiki + `</select>`
+          + `<button class="dke-tool${it.lock?' on':''}" onclick="dkeToggleLinkLockSel()" title="A locked way through stops players following it until you unlock it">${it.lock?'🔒 Locked':'🔓 Unlocked'}</button>`;
+      }
       if(dkeSel.kind === 'floor'){ const room = dkeRoomCells(d, it.x, it.y), mpc = dkeDeckMpc(d), cells = room ? room.length : it.w*it.h; html += `<span class="dke-note">Room ≈ ${Math.round(cells*mpc*mpc)} m² (${cells} cells)</span>`; }
       html += `<button class="dke-tool" onclick="dkeDuplicate()">⧉ Duplicate</button><button class="dke-tool dke-danger" onclick="dkeDeleteSel()">🗑 Delete</button>`;
     }
@@ -2332,6 +2515,23 @@ function dkeToggleFrostSel(){
   dkeSnapshot(); if(op.f) delete op.f; else op.f = 1; dkeCommit(); dkeRenderSub();
   if(typeof showToast === 'function') showToast('Window ' + (op.f ? 'frosted (opaque)' : 'clear (see-through)'));
 }
+// Lock / unlock a selected link in the editor (the live map has the padlock
+// beside the marker; this is the same flag, set while drawing).
+function dkeToggleLinkLockSel(){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'link') return;
+  const lk = d.links[dkeSel.i]; if(!lk) return;
+  dkeSnapshot(); if(lk.lock) delete lk.lock; else lk.lock = 1; dkeCommit(); dkeRenderSub();
+  if(typeof showToast === 'function') showToast(dkeLinkLabel(lk.a, lk) + (lk.lock ? ' locked 🔒' : ' unlocked 🔓'));
+}
+// Point a placed link somewhere else without redrawing it.
+function dkeRetargetLinkSel(v){
+  const d = dkeD(); if(!d || !dkeSel || dkeSel.kind !== 'link' || !v) return;
+  const lk = d.links[dkeSel.i]; if(!lk) return;
+  dkeSnapshot();
+  const f = dkeLinkRecordFields(v);
+  lk.a = f.a; if(f.n) lk.n = f.n; else delete lk.n;
+  dkeCommit(); dkeRenderSub();
+}
 
 // ── Undo / save ──────────────────────────────────────────────────────────────
 function dkeSnapshot(){
@@ -2347,7 +2547,8 @@ function dkeHistoryStep(from, onto){
   const decks = dkeEnsureDecks(s), cur = dkeCurrentDeck(s);
   if(cur) onto.push(JSON.stringify(cur));
   const d = dkeNorm(JSON.parse(from.pop()));
-  decks[dkeDeckIndex(s)] = d;
+  if(cur && cur.id) d.id = cur.id;   // undo swaps the deck's CONTENT, never its identity —
+  decks[dkeDeckIndex(s)] = d;        // a re-minted id would orphan every link pointing here
   dkeSel = null; dkePoly = null;
   const wEl = document.getElementById('dke-w'), hEl = document.getElementById('dke-h');
   if(wEl) wEl.value = d.w; if(hEl) hEl.value = d.h;
@@ -2388,6 +2589,7 @@ function dkeRescaleContent(d, base, fx, fy){
              const s = Math.max(1, Math.min(3, Math.round((o.s||1) * Math.min(fx,fy)))); if(s > 1) np.s = s; dkeClampProp(d, np); return np; });
   d.labels = (base.labels||[]).map(o => ({ t:o.t, x:o.x*fx, y:o.y*fy }));
   d.links  = (base.links||[]).map(o => { const nl = { a:o.a, x:rp(o.x,fx), y:rp(o.y,fy) }; if(o.hid) nl.hid = o.hid;
+             if(o.lock) nl.lock = o.lock; if(o.n) nl.n = o.n;
              if(o.mem) nl.mem = o.mem.map(m => ({ n:m.n, x:rp(m.x,fx), y:rp(m.y,fy) })); return nl; });
   d.tokens = (base.tokens||[]).map(o => ({ n:o.n, x:rp(o.x,fx), y:rp(o.y,fy) }));
 }
@@ -2891,10 +3093,10 @@ function dkeTapAction(p){
     d.labels.push({ t, x: Math.round(u.x*4)/4, y: Math.round(u.y*4)/4 });
     dkeCommit();
   } else if(dkeTool === 'link'){
-    if(!dkeLinkArea){ if(typeof showToast === 'function') showToast('Pick an area first'); return; }
+    if(!dkeLinkArea){ if(typeof showToast === 'function') showToast('Pick a deck or area first'); return; }
     const c = dkeCell(p); if(!c) return;
     dkeSnapshot();
-    d.links.push({ a: dkeLinkArea, x: c.x, y: c.y });
+    d.links.push(Object.assign(dkeLinkRecordFields(dkeLinkArea), { x: c.x, y: c.y }));
     dkeCommit();
   } else if(dkeTool === 'template'){
     const tpl = dkeActiveTpl();
